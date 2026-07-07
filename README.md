@@ -4,20 +4,21 @@ A living 3D creative workshop, built to be a place you return to rather than
 an app you launch. Runs entirely in the browser, no build step, no backend —
 just static files.
 
-This project has gone through six phases: an architectural foundation and
+This project has gone through seven phases: an architectural foundation and
 one believable room (phase 1), turning the computer into a real,
 self-contained creative workstation with a physical sit-down/stand-up
 transition (phase 2), turning the workbench into the workshop's visual
 storyteller via a Project Presence system (phase 3), giving the workshop a
 way to create its own new objects at runtime via a Builder app and a
 physical Build Mode (phase 4), fixing the workshop's doorway and turning it
-into the first building in a real, seamless, walkable world (phase 5), and
-— this phase — touch support, installability as a Progressive Web App, and
-a stability/bug-fixing pass across everything built so far (phase 6). See
-`docs/ROADMAP.md` for what's next, `docs/ARCHITECTURE.md` for how the
+into the first building in a real, seamless, walkable world (phase 5),
+touch support, installability as a Progressive Web App, and a stability
+pass across everything built so far (phase 6), and — this phase — a real
+personal music library replacing the stereo's placeholder track (phase 7).
+See `docs/ROADMAP.md` for what's next, `docs/ARCHITECTURE.md` for how the
 workshop as a whole is put together, and `docs/COMPUTER.md` /
 `docs/WORKBENCH.md` / `docs/WORLDBUILDER.md` / `docs/WORLD.md` /
-`docs/POLISH.md` for how those specifically work.
+`docs/POLISH.md` / `docs/MUSIC.md` for how those specifically work.
 
 ## Running it locally
 
@@ -79,7 +80,7 @@ There is no menu. Everything is a physical object — see the table below.
 | Pinboard | Full project planning board — every project, any status, pinned as cork notes |
 | Workbench | Physically shows whatever project you're currently focused on — lean in for a small panel to finish it, switch to another, or start something new. See below. |
 | Notebook (on the workbench) | A page of free-form notes, saved automatically — separate from whatever project is currently on the bench |
-| Stereo | Play/pause a track, adjust volume — all generative placeholder music for now |
+| Stereo | Opens the real music library — see "Music" below |
 | Shelving | Documentation & finished-project archive (honestly empty until there's something to archive) |
 | Tool storage | Labelled placeholder for a future inventory system |
 | Sitting area | A quiet corner, deliberately reserved for something calmer later |
@@ -104,7 +105,7 @@ it's meant to feel like it belongs to the object. Seven tabs live on it:
 - **Projects** — every project you've got, planning through done (the same
   data as the pinboard and workbench, just the full picture)
 - **Journal** — a page of notes, separate from the physical notebook
-- **Media** — reflects whatever the stereo is playing
+- **Media** — reflects the real music library, wherever you last left it
 - **Builder** — design new objects for the world (see below)
 - **Settings** — room lights and clock mode
 - **Browser** and **AI** — honestly labelled placeholders for later
@@ -191,17 +192,44 @@ See `docs/WORLD.md` for the full write-up, including what turned out to be
 an actual bug behind the old doorway (a wall with no real opening in it,
 not just a cosmetic simplification) and how it was fixed.
 
+## Music
+
+Interacting with the stereo opens a real personal music library, not a
+placeholder. Point it at a folder shaped like `Artist/Album/song.mp3`
+(with an optional `cover.png` per album) and it's scanned recursively —
+artists, albums, songs, and artwork, all discovered from the folder
+structure itself, no metadata tagging required. Browse by Artists, Albums,
+Songs, Recently Added, Recently Played, Most Played, or Favourites, search
+across all of them at once, and build playlists (create, rename, reorder,
+duplicate, delete). Full playback — play/pause/stop/previous/next, seek,
+volume, mute, shuffle, repeat, a real queue — keeps running in the
+background exactly like it would on a real device: close the panel, walk
+across the room or out into the world, and the music just keeps playing.
+
+The library remembers where you pointed it and reconnects automatically
+next time your browser still trusts the folder; if it doesn't, one tap
+reconnects it. This uses the File System Access API, which — as of this
+writing — only Chromium-based browsers (Chrome, Edge) support; the library
+manager says so plainly rather than showing a broken button anywhere else.
+
+Nothing about this is hardcoded to the stereo specifically — any object
+built with the Builder can carry a "Music player" behaviour and open the
+exact same library the exact same way. See `docs/MUSIC.md` for the full
+architecture.
+
 ## What persists
 
-Positions, lighting on/off, clock mode, current weather, what's playing on
-the stereo and at what volume, every project (including its physical
-presence on the bench) and note, every object you've designed and every
-copy you've placed in the room, which computer app and which bench project
-you last had active, and where you were standing — all saved automatically
-(on an interval, on tab-hide, and before the page closes) to
-`localStorage`, and restored exactly on your next visit. Two small buttons
-in the top-left corner export/import that same save data as a plain JSON
-file, for manual backup or moving to another browser.
+Positions, lighting on/off, clock mode, current weather, your music
+library (locations, favourites, play counts, playlists, and exactly where
+playback was) and every project (including its physical presence on the
+bench) and note, every object you've designed and every copy you've placed
+in the room, which computer app and which bench project you last had
+active, and where you were standing — all saved automatically (on an
+interval, on tab-hide, and before the page closes) to `localStorage` (plus
+IndexedDB for the music library's folder access — see `docs/MUSIC.md`),
+and restored exactly on your next visit. Two small buttons in the top-left
+corner export/import that same save data as a plain JSON file, for manual
+backup or moving to another browser.
 
 ## Project structure
 
@@ -218,6 +246,7 @@ src/entities/    furniture + room-shell builders (real openings + exterior shell
 src/computer/    the computer as one self-contained object — see docs/COMPUTER.md
 src/workbench/   the workbench + Project Presence system — see docs/WORKBENCH.md
 src/worldbuilder/ the world creation system (Builder + Build Mode + Construction Library) — see docs/WORLDBUILDER.md, docs/WORLD.md
+src/music/       the real music library + player — see docs/MUSIC.md
 src/data/        room layout data, project/notes stores
 src/ui/          overlays (the diegetic panels) + the minimal HUD
 src/utils/       placeholder factories, procedural textures/audio, input abstraction (touch + mouse + keyboard)
@@ -237,5 +266,8 @@ the interaction pipeline and event names every plugin builds on.
 
 Three.js (loaded from a CDN via an import map — see the comment in
 `index.html` for how to vendor it locally later), plain ES modules, no
-framework, no build tooling. Every visual and every sound in this phase is
-generated in code — see `assets/README.md`.
+framework, no build tooling. Every visual and every sound the workshop
+ships with is generated in code — see `assets/README.md` — the one
+exception being the music library, which plays whatever real files you
+point it at from your own device (see `docs/MUSIC.md`); nothing is bundled
+with the project itself.

@@ -198,7 +198,44 @@ Delivered:
   sensitivity constant renamed now that it governs two input modalities,
   and a full unused-import/duplicate-CSS sweep that came back clean.
 
-## Phase 7 — depth in the room that exists
+## Phase 7 — a real music library
+
+**Goal:** replace the stereo's generative placeholder with a genuine
+personal music library — scanning real folders, real playback, playlists,
+favourites, search — built as a reusable system any object can open, not
+code tied to the stereo. See `docs/MUSIC.md` for the full write-up.
+
+Delivered:
+- **Real folder scanning** via the File System Access API — `Artist/Album/
+  song.mp3` with an optional `cover.png`, recursively discovered, with
+  deterministic path-shaped ids that make rescanning idempotent and keep
+  favourites/play-counts/playlists stable across a rescan.
+- **A permanent playback engine** (`MusicSystem`), independent of any UI —
+  closing the music panel never pauses anything, and playback continues
+  walking around the room or out into the world, exactly like the brief
+  asked for.
+- **Full player**: play/pause/stop/previous/next/seek/volume/mute/repeat/
+  shuffle/queue, plus Artists/Albums/Songs/Recently Added/Recently Played/
+  Most Played/Favourites/Playlists browsing and live search.
+- **Reusable, not stereo-specific**: the stereo's interaction is just
+  `overlayId: "music"` — the same generic mechanism every piece of
+  furniture already uses. A new `musicPlayer` behaviour gives any future
+  Builder-designed object the identical capability with zero new code.
+- **A real fix found while wiring this up**: the Builder's "these
+  behaviours are mutually exclusive" rule used to be a hardcoded list that
+  every new interactable-owning behaviour needed remembering to update —
+  including a future plugin's own. It's derived from the registry now,
+  automatically.
+- **A calm interface** reusing the workshop's own overlay material system
+  (warm paper, dark wood, brass) rather than resembling a desktop media
+  player, sized roomier than a pinboard specifically because browsing a
+  real library needs the space.
+
+Explicitly *not* attempted yet, on purpose: ID3/embedded metadata (titles
+and art still come from the folder structure itself), and library scanning
+on non-Chromium browsers — see "Known limitations" in `docs/MUSIC.md`.
+
+## Phase 8 — depth in the room that exists
 
 Roughly in priority order, each independently shippable:
 
@@ -212,21 +249,23 @@ Roughly in priority order, each independently shippable:
    for custom objects, extend it (or a variant of it) to the hand-built
    furniture pieces too, writing back through the same `persistence:save`
    path `FurnitureSystem` already uses for furniture transforms.
-4. **Real audio** — swap `AudioSynth`'s generative pads for actual licensed
-   or recorded ambient tracks. Touches `AudioSynth.js` and the track list
-   only; `AudioSystem`, `StereoOverlay`, and the computer's Media app don't
-   change.
+4. **Real ID3/embedded metadata for the music library** — see "Future
+   extension points" in `docs/MUSIC.md`. `AudioSynth`'s generative pads
+   remain in use for weather ambience and the `audioSource` behaviour
+   specifically (a simpler, single-track use case the real library was
+   never meant to replace) — see `docs/MUSIC.md` for why those two stayed
+   separate on purpose.
 5. **Small-phone-width layout pass** — touch *input* is fully implemented
    (Phase 6), tuned for "reasonably large screens" per the brief; the
-   workstation/workbench/Build Mode panels' *sizing* hasn't had a dedicated
-   pass for genuinely narrow (phone-width, as opposed to tablet-width)
-   viewports yet.
+   workstation/workbench/Build Mode/music panels' *sizing* hasn't had a
+   dedicated pass for genuinely narrow (phone-width, as opposed to
+   tablet-width) viewports yet.
 6. **Occlusion-aware interaction checks** — a raycast between the player
    and a candidate interactable, so standing just outside a wall can no
    longer trigger something on the other side of it (see `docs/WORLD.md`'s
    known simplifications).
 
-## Phase 8 — the world becomes alive on its own
+## Phase 9 — the world becomes alive on its own
 
 1. **Weather that changes itself** — `WeatherSystem.autoCycle` already
    exists as a flag with no behaviour behind it yet; give it a slow,
@@ -247,7 +286,7 @@ Roughly in priority order, each independently shippable:
    (Phase 4) already emits a generic named event; the first system or
    plugin that actually listens for one is what proves the hook out.
 
-## Phase 9 — beyond one building
+## Phase 10 — beyond one building
 
 - **Additional buildings** — `RoomLayoutSystem` was written with this in
   mind (see its class comment), and `WorldObjectsStore` was made

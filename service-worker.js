@@ -27,7 +27,7 @@
  * (`username.github.io/repo-name/`).
  */
 
-const CACHE_NAME = "workshop-cache-v1";
+const CACHE_NAME = "workshop-cache-v2";
 
 const SHELL_URLS = [
   "./",
@@ -40,6 +40,7 @@ const SHELL_URLS = [
   "./css/builder.css",
   "./css/workbench.css",
   "./css/buildmode.css",
+  "./css/music.css",
   "./css/touch.css",
   "./src/main.js",
 ];

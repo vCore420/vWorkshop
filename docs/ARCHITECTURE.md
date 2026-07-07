@@ -42,12 +42,13 @@ src/
   worldbuilder/               the world creation system (Builder + Build Mode +
                               ConstructionLibrary.js, the permanent building-block
                               set) — see docs/WORLDBUILDER.md and docs/WORLD.md
+  music/                     the real music library + player — see docs/MUSIC.md
   data/                      plain state: layoutDefault.js, ProjectsStore.js, NotesStore.js
   ui/                        OverlayManager.js, HUD.js, overlays/*.js (one per physical panel)
   utils/                     PlaceholderFactory, ProceduralTexture, AudioSynth, InputManager, math, storage, ScreenProjector
   plugins/examples/          reference plugin(s) — see PLUGIN_GUIDE.md
   main.js                    wiring only — construct, register, start. No behaviour here.
-docs/                        this file, COMPUTER.md, WORKBENCH.md, WORLDBUILDER.md, WORLD.md, POLISH.md, ROADMAP.md, PLUGIN_GUIDE.md
+docs/                        this file, COMPUTER.md, WORKBENCH.md, WORLDBUILDER.md, WORLD.md, POLISH.md, MUSIC.md, ROADMAP.md, PLUGIN_GUIDE.md
 assets/                      README explaining the "no shipped binary assets yet" decision
 ```
 
@@ -89,6 +90,12 @@ InteractionSystem    → reads CameraSystem's position; also listens for
 WorldObjectsSystem   → no strict ordering requirement (only needs
                        engine.scene/engine.entities, present from
                        construction) — see docs/WORLDBUILDER.md
+MusicSystem          → same flexibility as WorldObjectsSystem — only needs
+                       engine.events at init() time. Its own
+                       finalizeInitialState() (root permission checks,
+                       queue restore) runs after engine.init() resolves,
+                       same reasoning as WorkbenchSystem's — see
+                       docs/MUSIC.md
 BuildModeSystem      → looks up CameraSystem/RoomLayoutSystem/
                        WorldObjectsSystem/InteractionSystem at the moment
                        it needs them, not at init() time
@@ -215,8 +222,11 @@ that reads/writes `localStorage`. Two ways state gets included in a save:
   object the pinboard and computer already save.
 - **Explicit providers**: `persistenceSystem.registerProvider(key, storeInstance)`
   for plain stores that aren't Engine systems (`ProjectsStore`, `NotesStore`,
-  `ObjectLibraryStore`, `WorldObjectsStore`, and `engine.plugins` itself, so
-  every registered plugin's own `save()`/`load()` runs too).
+  `ObjectLibraryStore`, `WorldObjectsStore`, `MusicLibraryStore`,
+  `PlaylistStore`, and `engine.plugins` itself, so every registered
+  plugin's own `save()`/`load()` runs too). `MusicSystem` itself, being a
+  real Engine system, saves/loads its own playback session (queue,
+  position, volume) the ordinary system way — see docs/MUSIC.md.
 
 The save envelope (`{ version, savedAt, systems: {...}, providers: {...} }`)
 is written to `localStorage` on an autosave interval, on tab-hide, and on
