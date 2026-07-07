@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>The Workshop</title>
+  <meta name="description" content="A living 3D creative workshop." />
+
+  <!-- PWA: installable, works offline once visited once (see service-worker.js). -->
+  <link rel="manifest" href="./manifest.json" />
+  <meta name="theme-color" content="#2b1d14" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="The Workshop" />
+  <link rel="apple-touch-icon" href="./assets/icons/icon-180.png" />
+  <link rel="icon" href="./assets/icons/icon-192.png" type="image/png" />
+  <link rel="icon" href="./assets/icons/icon-32.png" sizes="32x32" type="image/png" />
+
+  <link rel="stylesheet" href="./css/tokens.css" />
+  <link rel="stylesheet" href="./css/main.css" />
+  <link rel="stylesheet" href="./css/overlays.css" />
+  <link rel="stylesheet" href="./css/computer.css" />
+  <link rel="stylesheet" href="./css/builder.css" />
+  <link rel="stylesheet" href="./css/workbench.css" />
+  <link rel="stylesheet" href="./css/buildmode.css" />
+  <link rel="stylesheet" href="./css/touch.css" />
+
+  <!--
+    Three.js is loaded from a CDN at runtime via an import map. This keeps the
+    project as plain static files (no bundler, no build step) which is a hard
+    requirement for simple GitHub Pages hosting. If you later want the project
+    to work fully offline, vendor these two files into /vendor/three/ and swap
+    the URLs below for local paths — nothing else in the codebase needs to change.
+    (This is also why the service worker can't cache Three.js itself for true
+    offline use yet — see service-worker.js's own comment on that trade-off.)
+  -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+
+  <!-- Three.js renders into this canvas. Nothing else should touch it directly. -->
+  <canvas id="workshop-canvas"></canvas>
+
+  <!-- Diegetic UI lives here: HUD prompts, interaction hints, save indicator. -->
+  <div id="hud-root" aria-live="polite"></div>
+
+  <!-- Touch-only controls (virtual joystick) — created by InputManager, stays
+       empty/invisible until an actual touch happens, so desktop never sees it. -->
+  <div id="touch-controls"></div>
+
+  <!-- Soft focus/dim over the room while sitting at the computer — the room
+       stays rendered and visible, this just pulls attention toward the
+       monitor rather than replacing the world. See ComputerSystem.js. -->
+  <div id="computer-vignette"></div>
+
+  <!-- The computer's own panel, positioned every frame to track the
+       monitor's screen in 3D space — never a full-screen takeover. -->
+  <div id="computer-root"></div>
+
+  <!-- The workbench's small clipboard panel — same technique as the
+       computer's panel, scaled down. See src/workbench/. -->
+  <div id="workbench-root"></div>
+
+  <!-- Build Mode's two small docked strips (library browser, selected-object
+       properties) — never a full-screen editor. See src/worldbuilder/. -->
+  <div id="buildmode-root"></div>
+
+  <!-- Full-screen overlays (notebook, pinboard, stereo, archive, tool storage, window, rest nook). -->
+  <div id="overlay-root"></div>
+
+  <!-- First-run / pointer-lock invitation. Real UI, but honest about being a threshold, not a menu. -->
+  <div id="entry-screen">
+    <div class="entry-card">
+      <h1>The Workshop</h1>
+      <p>A place that remembers you.</p>
+      <button id="entry-button" type="button">Step inside</button>
+      <p class="entry-hint">WASD or the joystick to move &middot; mouse or drag to look &middot; E or tap to interact &middot; Esc to step back &middot; B for Build Mode</p>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+  <script>
+    // Registered from a plain script (not main.js) so it doesn't depend on
+    // the module graph loading successfully first, and failures here never
+    // block the workshop itself from starting.
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./service-worker.js").catch((err) => {
+          console.warn("[PWA] service worker registration failed:", err);
+        });
+      });
+    }
+  </script>
+</body>
+</html>

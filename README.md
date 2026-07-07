@@ -1,0 +1,241 @@
+# The Workshop
+
+A living 3D creative workshop, built to be a place you return to rather than
+an app you launch. Runs entirely in the browser, no build step, no backend —
+just static files.
+
+This project has gone through six phases: an architectural foundation and
+one believable room (phase 1), turning the computer into a real,
+self-contained creative workstation with a physical sit-down/stand-up
+transition (phase 2), turning the workbench into the workshop's visual
+storyteller via a Project Presence system (phase 3), giving the workshop a
+way to create its own new objects at runtime via a Builder app and a
+physical Build Mode (phase 4), fixing the workshop's doorway and turning it
+into the first building in a real, seamless, walkable world (phase 5), and
+— this phase — touch support, installability as a Progressive Web App, and
+a stability/bug-fixing pass across everything built so far (phase 6). See
+`docs/ROADMAP.md` for what's next, `docs/ARCHITECTURE.md` for how the
+workshop as a whole is put together, and `docs/COMPUTER.md` /
+`docs/WORKBENCH.md` / `docs/WORLDBUILDER.md` / `docs/WORLD.md` /
+`docs/POLISH.md` for how those specifically work.
+
+## Running it locally
+
+Because the code is plain ES modules, it needs to be served over HTTP (not
+opened as a `file://` URL — browsers block module imports from `file://`).
+Any static file server works:
+
+```bash
+npx serve .
+# or
+python3 -m http.server 8080
+```
+
+Then open the printed local URL. Click **Step inside**, and you're in.
+
+## Installing it
+
+The workshop is a Progressive Web App — open it in a browser tab, and
+you'll get an install prompt (or use the browser's own "Install app" /
+"Add to Home Screen" menu item). Installed, it opens in its own window with
+no browser chrome, and works offline after the first successful visit (see
+`docs/POLISH.md` for the honest limits of that: the very first load still
+needs a network connection, since Three.js loads from a CDN rather than
+being bundled into the repo).
+
+## Deploying to GitHub Pages
+
+There's nothing to build. Push this repository and point GitHub Pages at
+its root (Settings → Pages → Deploy from a branch → `/` root), or at a
+`docs/`-style branch if you prefer — no compilation step is involved either
+way.
+
+## Controls
+
+| Input | Action |
+|---|---|
+| Click "Step inside" | Enter the room, lock the mouse cursor |
+| W A S D / arrow keys | Walk |
+| Mouse | Look around |
+| E / Space | Interact with whatever's prompted at the bottom of the screen |
+| B | Toggle Build Mode (also a button, top-left) — see below |
+| Esc | Step back out of whatever's open |
+| Click the canvas | Re-lock the mouse cursor (after pressing Esc, for instance) |
+
+**On touch** (phones, tablets): a virtual joystick appears bottom-left the
+moment you first touch the screen (never shown on desktop) — drag it to
+walk, drag anywhere else on the screen to look around, and tap the prompt
+at the bottom of the screen to interact with whatever it's naming. Every
+button, form, and panel throughout the workshop (the computer, the
+workbench, Build Mode, the Builder's part editor) is already tap-friendly.
+
+There is no menu. Everything is a physical object — see the table below.
+
+## What's in the room right now
+
+| Object | What happens when you interact |
+|---|---|
+| Computer desk | Sit down — the monitor powers on, the room softly fades behind it. A real creative workstation: Projects, Journal, Browser, AI, Media, Settings. See below. |
+| Pinboard | Full project planning board — every project, any status, pinned as cork notes |
+| Workbench | Physically shows whatever project you're currently focused on — lean in for a small panel to finish it, switch to another, or start something new. See below. |
+| Notebook (on the workbench) | A page of free-form notes, saved automatically — separate from whatever project is currently on the bench |
+| Stereo | Play/pause a track, adjust volume — all generative placeholder music for now |
+| Shelving | Documentation & finished-project archive (honestly empty until there's something to archive) |
+| Tool storage | Labelled placeholder for a future inventory system |
+| Sitting area | A quiet corner, deliberately reserved for something calmer later |
+| Windows | Real glass now — see the actual sky/world outside. "Look outside" still checks and changes the weather, sees the current time |
+| Workshop door | Opens/closes, and now genuinely leads outside — walk through it into the world and back in freely |
+| Light switch (by the door) | Toggles the room's practical lighting |
+
+Everything above is either a real, working feature or an honestly-labelled
+placeholder for one — nothing fakes a feature that isn't there.
+
+## The computer
+
+Sitting down is a real transition, not a menu opening: walk to the chair,
+press interact, and the camera eases into a seated pose while the monitor
+powers on with it — the room dims and softly blurs behind the screen rather
+than disappearing. Standing up (Esc) reverses it exactly.
+
+The workstation panel itself is positioned every frame to match the
+monitor's actual position on your screen — it's not a full-screen overlay,
+it's meant to feel like it belongs to the object. Seven tabs live on it:
+
+- **Projects** — every project you've got, planning through done (the same
+  data as the pinboard and workbench, just the full picture)
+- **Journal** — a page of notes, separate from the physical notebook
+- **Media** — reflects whatever the stereo is playing
+- **Builder** — design new objects for the world (see below)
+- **Settings** — room lights and clock mode
+- **Browser** and **AI** — honestly labelled placeholders for later
+
+Whichever tab you had open is exactly where you'll land next time — see
+`docs/COMPUTER.md` for how that "waking from sleep" feeling works, and how
+the screen-projection technique behind the panel works.
+
+## The workbench
+
+The bench doesn't need to be touched to tell its story — that's the point.
+Whatever project you're currently focused on leaves real, visible evidence
+on it: an unfolded blueprint, an open notebook, a stack of reference books,
+a half-built prototype, a scattered handful of sketches — a different,
+recognisable combination depending on what kind of project it is. Glance at
+it from across the room and you already know roughly what you're in the
+middle of making.
+
+Leaning in (walk up, interact) is deliberately quieter than sitting at the
+computer: the camera just moves a little closer and lower, and a small
+panel fades in anchored to a clipboard on the bench — a title, a few notes,
+a "finish" button, a "start something new" button. No tabs, no big
+interface. Finishing a project packs its presence away (with a real
+shrink-down transition, not an instant swap) and it turns up in the
+shelving unit's archive; starting a new one grows a new arrangement into
+place, picked from a `kind` (woodworking, electronics, writing, software,
+or general) that decides its starting presence.
+
+Every piece of that presence is driven by project *metadata*, not a
+hand-built scene — see `docs/WORKBENCH.md` for the Project Presence system
+this is built on, and how a future project type can describe its own
+physical presence without the workbench itself ever changing.
+
+## The world creation system
+
+The computer has a seventh app now: **Builder**. It's a simple in-world
+modelling tool, not a Blender competitor — assemble primitives (boxes,
+cylinders, spheres, cones, planes) into an object, position/rotate/scale/
+colour each one with a live preview you can drag to orbit, give it a name
+and description, and attach behaviour (Interactable, Light Source, Seat,
+Storage, Door, Computer, Decoration, Trigger, Audio Source) purely through
+properties — no code. Save it, and it joins your permanent object library.
+
+Then press **B** anywhere in the room to enter **Build Mode**: the camera
+freezes right where you're standing, the cursor comes free, and a small
+library strip along the bottom lets you place anything you've designed —
+click a library item, click a spot in the room, and it's there. Click any
+placed object to select it and adjust its position, rotation, scale, or
+colour in a small side panel; duplicate or delete it. The room never stops
+being the room — there's no separate editor screen.
+
+Objects you design and place are permanent, save automatically, and reuse
+the same interaction pipeline every hand-built piece of furniture in the
+room already uses — a chair you design with a Seat behaviour works exactly
+like the workbench's own chair. See `docs/WORLDBUILDER.md` for the full
+architecture, including why it was built to generalise to future rooms and
+buildings without needing to change.
+
+Alongside your own designs, a small permanent **Construction Library**
+(Wall, Floor, Roof, Pillar, Doorway, Door, Window, Stairs, Ramp, Fence,
+Beam, and a few more) is always available in Build Mode — the alphabet
+everything else gets built from. The Door piece already swings open on
+its own; it's a real, if plain, building block, not a mockup.
+
+## The world
+
+The workshop's doors and windows now lead somewhere real. Open the door,
+and it opens onto an actual, continuous outdoor world — no loading, no
+fade, no separate scene. Walk outside, turn around, and the workshop is
+standing right there behind you, with a plain exterior shell and a roof.
+Walk back in and everything is exactly where you left it, because it never
+stopped existing.
+
+Outside is deliberately close to empty: flat ground as far as you can see,
+the same sky, weather, and time-of-day the interior already had (they were
+always scene-wide, so nothing needed to change there), and nothing else —
+no trees, no scenery, no other buildings. That's on purpose. This is meant
+to be a world you build into over time using the Builder and the
+Construction Library, not a landscape someone generated for you before you
+arrived. Build Mode places objects on the outdoor ground exactly the same
+way it places them on the workshop floor.
+
+See `docs/WORLD.md` for the full write-up, including what turned out to be
+an actual bug behind the old doorway (a wall with no real opening in it,
+not just a cosmetic simplification) and how it was fixed.
+
+## What persists
+
+Positions, lighting on/off, clock mode, current weather, what's playing on
+the stereo and at what volume, every project (including its physical
+presence on the bench) and note, every object you've designed and every
+copy you've placed in the room, which computer app and which bench project
+you last had active, and where you were standing — all saved automatically
+(on an interval, on tab-hide, and before the page closes) to
+`localStorage`, and restored exactly on your next visit. Two small buttons
+in the top-left corner export/import that same save data as a plain JSON
+file, for manual backup or moving to another browser.
+
+## Project structure
+
+See `docs/ARCHITECTURE.md` for the full explanation. Short version:
+
+```
+index.html       entry point + PWA meta tags
+manifest.json    PWA manifest
+service-worker.js  offline caching (stale-while-revalidate) — see docs/POLISH.md
+assets/icons/    generated app icons (see docs/POLISH.md)
+src/core/        engine primitives (Engine, EventBus, ECS-lite, PluginManager)
+src/systems/     one file per system (lighting, weather, camera, world environment, persistence...)
+src/entities/    furniture + room-shell builders (real openings + exterior shell), all placeholder geometry
+src/computer/    the computer as one self-contained object — see docs/COMPUTER.md
+src/workbench/   the workbench + Project Presence system — see docs/WORKBENCH.md
+src/worldbuilder/ the world creation system (Builder + Build Mode + Construction Library) — see docs/WORLDBUILDER.md, docs/WORLD.md
+src/data/        room layout data, project/notes stores
+src/ui/          overlays (the diegetic panels) + the minimal HUD
+src/utils/       placeholder factories, procedural textures/audio, input abstraction (touch + mouse + keyboard)
+src/plugins/     the extension system + a working example plugin
+docs/            architecture, roadmap, plugin guide (read these before extending)
+assets/          currently empty of artwork on purpose — see assets/README.md
+```
+
+## Extending this
+
+Read `docs/PLUGIN_GUIDE.md` first — most new ideas (a GitHub integration, a
+local AI companion, workshop calculators, whatever comes next) should arrive
+as a plugin, not as edits to core systems. `docs/ARCHITECTURE.md` explains
+the interaction pipeline and event names every plugin builds on.
+
+## Technology
+
+Three.js (loaded from a CDN via an import map — see the comment in
+`index.html` for how to vendor it locally later), plain ES modules, no
+framework, no build tooling. Every visual and every sound in this phase is
+generated in code — see `assets/README.md`.
