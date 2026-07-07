@@ -5,7 +5,12 @@ import { PreviewRenderer } from "./PreviewRenderer.js";
 const PART_TYPES = ["box", "cylinder", "sphere", "cone", "plane"];
 // Behaviours in this group can't be combined with each other — an entity
 // can only carry one InteractableComponent. See behaviours/registry.js.
-const INTERACTABLE_GROUP = new Set(["interactable", "seat", "storage", "door", "computer", "trigger", "audioSource"]);
+// Derived from the registry rather than hardcoded — every behaviour that
+// declares `ownsInteractable: true` (built-in or from a plugin, see
+// docs/PLUGIN_GUIDE.md) is automatically mutually exclusive with every
+// other one, with nothing to remember to update here when a new one is
+// added.
+const INTERACTABLE_GROUP = new Set(getBehaviourTypes().filter((type) => getBehaviourConfig(type).ownsInteractable));
 
 /**
  * createBuilderApp

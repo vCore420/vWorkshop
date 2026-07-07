@@ -18,6 +18,11 @@ import { WorldObjectsStore } from "./worldbuilder/WorldObjectsStore.js";
 import { WorldObjectsSystem } from "./worldbuilder/WorldObjectsSystem.js";
 import { BuildModeSystem } from "./worldbuilder/BuildModeSystem.js";
 
+import { MusicSystem } from "./music/MusicSystem.js";
+import { MusicLibraryStore } from "./music/MusicLibraryStore.js";
+import { PlaylistStore } from "./music/PlaylistStore.js";
+import { createMusicOverlay } from "./music/ui/MusicOverlay.js";
+
 import { ProjectsStore } from "./data/ProjectsStore.js";
 import { NotesStore } from "./data/NotesStore.js";
 
@@ -25,7 +30,6 @@ import { OverlayManager } from "./ui/OverlayManager.js";
 import { HUD } from "./ui/HUD.js";
 import { createPinboardOverlay } from "./ui/overlays/PinboardOverlay.js";
 import { createNotebookOverlay } from "./ui/overlays/NotebookOverlay.js";
-import { createStereoOverlay } from "./ui/overlays/StereoOverlay.js";
 import { createArchiveOverlay } from "./ui/overlays/ArchiveOverlay.js";
 import { createToolStorageOverlay } from "./ui/overlays/ToolStorageOverlay.js";
 import { createWindowOverlay } from "./ui/overlays/WindowOverlay.js";
@@ -74,12 +78,18 @@ const projectsStore = new ProjectsStore();
 const notesStore = new NotesStore();
 const objectLibraryStore = new ObjectLibraryStore();
 const worldObjectsStore = new WorldObjectsStore();
+const musicLibraryStore = new MusicLibraryStore();
+const playlistStore = new PlaylistStore();
 
 // WorldObjectsSystem has no dependency on other systems at init() time — it
 // only needs engine.scene/engine.entities, which exist from construction —
 // so its registration position is flexible; it's grouped here because it's
 // conceptually "world contents", alongside the room and furniture.
 const worldObjectsSystem = engine.addSystem(new WorldObjectsSystem({ objectLibraryStore, worldObjectsStore }));
+
+// Same flexibility as WorldObjectsSystem above — MusicSystem only needs
+// engine.events at init() time. See src/music/MusicSystem.js.
+const musicSystem = engine.addSystem(new MusicSystem({ libraryStore: musicLibraryStore, playlistStore }));
 
 // ComputerSystem needs FurnitureSystem (already registered, above) to have
 // *run* init() before it can find the desk — guaranteed by registering it
@@ -90,7 +100,7 @@ const computerSystem = engine.addSystem(
   new ComputerSystem({
     projectsStore,
     notesStore,
-    audioSystem,
+    musicSystem,
     lightingSystem,
     timeOfDaySystem,
     weatherSystem,
@@ -123,6 +133,8 @@ persistenceSystem.registerProvider("projects", projectsStore);
 persistenceSystem.registerProvider("notes", notesStore);
 persistenceSystem.registerProvider("objectLibrary", objectLibraryStore);
 persistenceSystem.registerProvider("worldObjects", worldObjectsStore);
+persistenceSystem.registerProvider("musicLibrary", musicLibraryStore);
+persistenceSystem.registerProvider("playlists", playlistStore);
 persistenceSystem.registerProvider("plugins", engine.plugins);
 
 // --- Overlays: one registration per physical object that opens a panel ---
@@ -132,7 +144,7 @@ persistenceSystem.registerProvider("plugins", engine.plugins);
 const overlayManager = new OverlayManager(document.getElementById("overlay-root"), engine);
 overlayManager.register("pinboard", createPinboardOverlay({ projectsStore }));
 overlayManager.register("notebook", createNotebookOverlay({ notesStore }));
-overlayManager.register("stereo", createStereoOverlay({ audioSystem }));
+overlayManager.register("music", createMusicOverlay({ musicSystem, libraryStore: musicLibraryStore, playlistStore }));
 overlayManager.register("archive", createArchiveOverlay({ projectsStore }));
 overlayManager.register("toolStorage", createToolStorageOverlay());
 overlayManager.register("window", createWindowOverlay({ weatherSystem, timeOfDaySystem }));
@@ -148,11 +160,13 @@ await engine.init();
 // Must happen after engine.init() resolves, not inside either system's own
 // init() — persistence loading happens synchronously as part of the
 // engine:ready event that fires at the end of engine.init(), so only
-// *after* awaiting it are ObjectLibraryStore/WorldObjectsStore/ProjectsStore
-// guaranteed to hold whatever was actually saved. See the comments on
-// WorldObjectsSystem.spawnAll() and WorkbenchSystem.finalizeInitialState().
+// *after* awaiting it are ObjectLibraryStore/WorldObjectsStore/ProjectsStore/
+// MusicLibraryStore guaranteed to hold whatever was actually saved. See the
+// comments on WorldObjectsSystem.spawnAll() and
+// WorkbenchSystem/MusicSystem's own finalizeInitialState().
 worldObjectsSystem.spawnAll();
 workbenchSystem.finalizeInitialState();
+await musicSystem.finalizeInitialState(); // async: checks each library root's still-live permission state
 engine.start();
 
 const entryScreen = document.getElementById("entry-screen");

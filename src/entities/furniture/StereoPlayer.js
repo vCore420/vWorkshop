@@ -3,9 +3,14 @@ import { box, cylinder, group, Materials } from "../../utils/PlaceholderFactory.
 /**
  * StereoPlayer
  * ------------
- * "Interacting with the stereo controls music." A small cabinet unit with
- * two speaker-ish shapes and a dial. AudioSystem is the actual source of
- * truth for playback state; this is just the physical control surface.
+ * A small cabinet unit with two speaker-ish shapes and a dial. Physically
+ * unchanged since it was first built — what changed is what interacting
+ * with it opens: the real music library (`overlayId: "music"`, see
+ * `docs/MUSIC.md`), through the exact same generic
+ * `interaction:trigger`/`OverlayManager` path every other piece of
+ * furniture already uses. There's no stereo-specific code anywhere in the
+ * music system — a future Builder object with a `musicPlayer` behaviour
+ * opens the identical overlay the identical way.
  */
 export const StereoPlayerDefinition = {
   id: "stereoPlayer",
@@ -50,6 +55,6 @@ export const StereoPlayerDefinition = {
   interaction: {
     prompt: "Play some music",
     radius: 2.0, // small object — see docs/WORLD.md's interaction-distance pass
-    overlayId: "stereo",
+    overlayId: "music",
   },
 };
