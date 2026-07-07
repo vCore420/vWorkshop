@@ -1,0 +1,66 @@
+/*
+  DESIGN TOKENS
+  =============
+  The workshop's interface borrows its material language from the room
+  itself: brass hardware, aged paper, cork, and dial-lit panels. Every
+  overlay reuses these tokens rather than inventing its own palette, so
+  the whole place feels like one continuous material world instead of a
+  stack of separate "apps".
+*/
+
+:root {
+  /* --- Palette --- */
+  --wood-dark:   #2b1d14;   /* deep walnut — structure, shadows */
+  --wood-mid:    #6b4a34;   /* warm oak — frames, borders */
+  --wood-light:  #a9764f;   /* light pine — highlights on wood */
+  --brass:       #b8863b;   /* hardware, focus rings, the signature accent */
+  --brass-bright:#e0ab5c;
+  --paper:       #ede3d0;   /* aged paper — notebook & pinboard surfaces */
+  --paper-dark:  #d8caa8;
+  --ink:         #2a231d;   /* primary text on light surfaces */
+  --ink-soft:    #55483b;
+  --teal:        #3c5a53;   /* muted workshop paint — secondary accent, calm state */
+  --teal-bright: #6b9c8e;
+  --screen-bg:   #10171a;   /* computer overlay background */
+  --screen-glow: #7fd8c4;
+
+  /* --- Surfaces (dark chrome for HUD, floating over the 3D scene) --- */
+  --surface-glass: rgba(20, 15, 10, 0.55);
+  --surface-glass-strong: rgba(15, 11, 8, 0.82);
+
+  /* --- Type --- */
+  --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.75rem;
+  --text-2xl: 2.5rem;
+
+  /* --- Layout --- */
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 12px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 40px;
+
+  /* --- Motion --- */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 120ms;
+  --duration-medium: 260ms;
+  --duration-slow: 480ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-medium: 0ms;
+    --duration-slow: 0ms;
+  }
+}

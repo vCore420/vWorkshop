@@ -1,0 +1,176 @@
+/*
+  WORKBENCH MODULE
+  ================
+  Unlike the computer's workstation panel, there's no vignette here and no
+  icon rail — leaning over the bench should feel like glancing at your own
+  notes, not entering a mode. The panel is small on purpose: it's sized and
+  positioned every frame to match the clipboard prop's projected position
+  (see src/utils/ScreenProjector.js), the same technique the computer uses,
+  scaled down to something you'd actually clip a single page to.
+*/
+
+.workbench-panel {
+  position: fixed;
+  z-index: 58;
+  overflow-y: auto;
+  opacity: 0;
+  pointer-events: none;
+  background: var(--paper);
+  background-image: linear-gradient(rgba(0, 0, 0, 0.02) 1px, transparent 1px);
+  background-size: 100% 22px;
+  border-radius: 3px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  padding: 12px 14px;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+}
+.workbench-panel.interactive {
+  pointer-events: auto;
+}
+
+.wb-stand-up {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: none;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-soft);
+  opacity: 0.6;
+  cursor: pointer;
+  padding: 3px 6px;
+}
+.wb-stand-up:hover,
+.wb-stand-up:active {
+  opacity: 1;
+}
+
+.wb-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.wb-title {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 500;
+  color: var(--ink);
+  border-bottom: 1px solid transparent;
+  min-width: 0;
+}
+.wb-title:hover, .wb-title:focus {
+  border-bottom-color: var(--wood-mid);
+  outline: none;
+}
+.wb-kind-tag {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.wb-notes {
+  width: 100%;
+  min-height: 64px;
+  border: none;
+  background: transparent;
+  resize: none;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  line-height: 22px;
+  color: var(--ink-soft);
+}
+.wb-notes:focus { outline: none; }
+
+.wb-switch-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--ink-soft);
+}
+.wb-switch-row button {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.wb-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.wb-actions button {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  background: var(--wood-mid);
+  color: var(--paper);
+  border: none;
+  border-radius: 4px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.wb-actions button:hover { background: var(--wood-dark); }
+
+.wb-empty {
+  text-align: center;
+  padding: 10px 4px;
+}
+.wb-empty p {
+  font-family: var(--font-display);
+  color: var(--ink-soft);
+  margin: 4px 0 10px;
+}
+.wb-empty button, .wb-new-form-row button {
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  background: var(--brass);
+  color: var(--wood-dark);
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.wb-new-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.wb-new-form input, .wb-new-form select {
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  padding: 6px 8px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--ink);
+}
+.wb-new-form-row {
+  display: flex;
+  gap: 8px;
+}
+.wb-cancel {
+  background: transparent !important;
+  color: var(--ink-soft) !important;
+  border: 1px solid rgba(0, 0, 0, 0.15) !important;
+}

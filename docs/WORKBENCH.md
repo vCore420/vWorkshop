@@ -1,0 +1,189 @@
+# The workbench
+
+Like the computer, the workbench is **one self-contained object**. Unlike
+the computer, most of what it does has nothing to do with an interface at
+all — the important part is visible from across the room, before anyone
+interacts with anything.
+
+If you only read one thing: a project carries a `kind` and a `presence` —
+plain metadata (see `ProjectsStore.js`) — and `src/workbench/` is the only
+code that turns that metadata into physical objects on the bench. Nothing
+about a "blueprint" or a "prototype" is hardcoded into the bench itself;
+`WorkbenchSystem` just asks a registry to build whatever the current
+project's `presence` array describes.
+
+## Files
+
+```
+src/entities/furniture/Workbench.js      geometry (vice, tray, lamp, clipboard) + interaction config
+src/data/ProjectsStore.js                 projects now carry kind + presence metadata
+src/workbench/
+  WorkbenchSystem.js                      the Engine system — current project, transitions, panel
+  WorkbenchPanel.js                        the small clipboard-sized DOM panel
+  slots.js                                 named positions on the bench surface + slot assignment
+  kindTemplates.js                         kind -> default presence recipe, for new projects
+  presence/
+    registry.js                            type -> builder map, mirrors entities/furniture/registry.js
+    builders/
+      BlueprintPresence.js, NotebookPresence.js, MeasuringToolsPresence.js,
+      ReferenceBooksPresence.js, MaterialSamplePresence.js, SketchPresence.js,
+      PrototypePresence.js, ProjectBoxPresence.js, PaperworkPresence.js
+```
+
+## The core idea: presence is metadata, not a scene
+
+A project looks like this (see `ProjectsStore.js`):
+
+```js
+{
+  id, title, status, notes, updatedAt,
+  kind: "woodworking",       // picks a default presence the first time it needs one
+  presence: [                 // the actual physical description, once resolved
+    { type: "blueprint", variant: "unfolded" },
+    { type: "materialSample", variant: "wood" },
+    { type: "measuringTools" },
+    { type: "sketch" },
+  ],
+}
+```
+
+`presence` is resolved once — `WorkbenchSystem._resolvePresenceArray()` — and
+then written back onto the project itself via `projectsStore.update()`, so
+it becomes real, persisted, editable-in-the-future metadata rather than a
+value re-derived from `kind` every time. A project can skip `kind`
+templates entirely and hand-author its own `presence` array from the start;
+the bench doesn't know or care which happened.
+
+Turning that array into actual geometry is two decoupled steps:
+
+1. **`presence/registry.js`** maps each item's `type` string to a builder —
+   `(item) => { object3D, size }`. Nine builders exist today, matching the
+   brief's own list (rolled/unfolded blueprints, notebooks, measuring
+   tools, reference books, material samples, sketches, prototypes, project
+   boxes, paperwork). A tenth is a new file in `presence/builders/` plus one
+   line in the registry (or a plugin calling `registerPresenceType()` —
+   see `docs/PLUGIN_GUIDE.md`). **Nothing about `WorkbenchSystem` or
+   `slots.js` needs to change** for a new presence type to exist.
+2. **`slots.js`** assigns each built item to one of six named positions on
+   the bench surface, matched by size (`small`/`medium`/`large`) with
+   graceful fallback if a category is full. Slots are hand-placed to avoid
+   the bench's permanent fixtures (vice, tray, lamp, clipboard) and the
+   standalone notebook prop nearby — see the comment at the top of
+   `slots.js` for the actual coordinates and why.
+
+## Why the bench doesn't "launch" anything
+
+Walking up and pressing interact does two independent things, and neither
+of them is "open an app":
+
+- `CameraSystem` eases into a closer, lower focus pose — leaning over your
+  work, not sitting down (contrast with the computer, which is a full
+  seated pose). This reuses the exact same generic mechanism the computer
+  and every focus-pose furniture piece already use; nothing new was added
+  to `CameraSystem` or `InteractionSystem` for this.
+- A small panel fades in, anchored to the clipboard prop's actual projected
+  position (`ScreenProjector.js` — see below). It holds exactly one
+  project's title, notes, a kind tag, and two buttons: finish, or start
+  something new. If more than one project happens to be active, a compact
+  switch list appears; otherwise it doesn't.
+
+There is deliberately no icon rail, no tabs, no vignette dimming the room.
+Leaning over the bench should feel like glancing at your own notes, not
+entering a mode — the room stays exactly as present as it always is.
+
+### The panel, mechanically
+
+`src/utils/ScreenProjector.js` (shared with the computer — see
+`docs/COMPUTER.md`) was generalized to support two kinds of anchor
+rectangle: face-on (a monitor you look at) and top-down
+(`makeTopDownRectCorners` — a clipboard lying flat that you look down at).
+The workbench panel uses the top-down variant, sized to the clipboard's own
+small dimensions, so it never has room to become "another application
+window" even if someone tried to add more to it later.
+
+## The presence *is* the interface, most of the time
+
+This is the part that matters more than the panel: `WorkbenchSystem`
+rebuilds the bench's physical arrangement — via `presenceAnchor`, an empty
+group `Workbench.js` exposes for exactly this — every time the current
+project changes, and that arrangement is visible and lit like any other
+object in the room, all the time, whether or not anyone is standing nearby.
+Glancing at the bench from across the room *is* the interaction the brief
+asked for; interacting with it is just how you go a level deeper.
+
+### Transitions ("packing away" and "growing in")
+
+Switching projects — by finishing one, starting a new one, or picking a
+different active project from the panel's switch list — never swaps
+geometry instantly. `_rebuildPresence()`:
+
+1. Scales every current presence item down to ~0 over `OUT_DURATION`
+   (0.32s), removing each as its own shrink finishes.
+2. After a short delay, builds the new project's items at zero scale and
+   grows them in over `IN_DURATION` (0.45s).
+
+These are pure `THREE.Object3D` scale tweens, not material opacity fades —
+deliberately. Presence builders reuse `PlaceholderFactory`'s cached
+materials (the same `Materials.wood("#...")` instance backs *every* wood
+surface in the whole room with that colour), so animating a material's
+opacity directly would fade unrelated objects across the workshop too.
+Scale has no such side effect, which is why every transition in this module
+is scale-based.
+
+## "Finished work leaves behind history, not nothing"
+
+Marking a project finished (`finishCurrentProject()`) sets its status to
+`"done"` in `ProjectsStore` — the exact same store the pinboard and the
+computer's Projects app already read — and packs its presence away from the
+bench. It does not need its own "archive" visual: the shelving unit's
+existing archive overlay (phase 1, untouched in this pass) already lists
+every `status === "done"` project. A finished project's story doesn't
+disappear; it just moves from "on the bench" to "in the archive", using
+infrastructure that already existed.
+
+## Persistence, and "waking from sleep" for a physical object
+
+`WorkbenchSystem` persists exactly one thing itself: `{ currentProjectId }`.
+Everything else — a project's title, notes, `kind`, and resolved
+`presence` array — already flows through `ProjectsStore`'s existing
+persistence. Reopening the workshop rebuilds the bench (instantly, no
+transition — see `finalizeInitialState()`) from whichever project was
+current, with its presence exactly as it was: nothing about "the bench
+remembers where you left it" needed new persistence machinery, because the
+metadata driving the bench's appearance was already durable data.
+
+### Why `finalizeInitialState()` is a separate step
+
+`WorkbenchSystem.init()` cannot safely decide "what's on the bench right
+now" — at that point in the boot sequence, a save file may not have been
+applied to `ProjectsStore` yet (loading happens synchronously inside the
+`engine:ready` event, which fires *after* every system's `init()` has
+already run). `main.js` calls `workbenchSystem.finalizeInitialState()`
+explicitly, once, right after `await engine.init()` resolves — by which
+point loading (if there was anything to load) has already finished. See
+the comment on that call in `main.js` and on the method itself.
+
+That method also seeds a single starter project ("Getting this workshop
+running") the very first time the workshop has no projects at all, so the
+bench never looks accidentally empty on a first visit — it looks lived-in
+immediately, the same way the rest of phase 1's room avoided empty
+placeholders wherever a believable default was cheap to provide.
+
+## Known simplifications (by design, for this phase)
+
+- **One project on the bench at a time.** Multiple projects can be
+  `"active"` at once (tracked in `ProjectsStore`), but only one physically
+  occupies the bench — this was a deliberate reading of "the workbench
+  should represent my current creative focus", singular. The panel's
+  switch list is the seam for moving between them.
+- **Six fixed slots, size-categorized.** Not a general bin-packing layout —
+  a project with more presence items than fit gets the overflow quietly
+  dropped (with a console warning), rather than the bench becoming
+  overcrowded. Six was chosen to comfortably fit the existing kind
+  templates without crowding the vice/tray/lamp/clipboard.
+- **No slot collision detection against the standalone notebook prop.**
+  `slots.js`'s coordinates were chosen by hand to clear it (see its
+  comment for the reasoning), not verified against real rendered geometry.
+- **Presence items don't cast/receive shadows specially** — they inherit
+  whatever `PlaceholderFactory.box()`/`cylinder()` set by default, same as
+  every other placeholder mesh in the room.

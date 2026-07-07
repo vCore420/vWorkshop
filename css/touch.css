@@ -1,0 +1,60 @@
+/*
+  TOUCH CONTROLS
+  ==============
+  Invisible on desktop by construction: #touch-controls starts empty of any
+  visible content and only gains `.touch-active` (see InputManager.js) the
+  first time an actual touch event happens. Nothing here should ever need a
+  separate "is this a touch device" check anywhere else in the codebase —
+  the joystick and the tappable HUD prompt (see main.css's .hud-prompt) are
+  the entire touch-specific surface.
+*/
+
+#workshop-canvas {
+  touch-action: none; /* we handle drag-to-look ourselves; stop the browser's own scroll/zoom/pull-to-refresh from competing with it */
+}
+
+#touch-controls {
+  position: fixed;
+  inset: 0;
+  z-index: 52;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--duration-medium) var(--ease-standard);
+}
+#touch-controls.touch-active {
+  opacity: 1;
+}
+#touch-controls.modal-hidden {
+  opacity: 0;
+}
+#touch-controls.modal-hidden #touch-joystick-base {
+  pointer-events: none;
+}
+
+#touch-joystick-base {
+  position: absolute;
+  left: max(28px, env(safe-area-inset-left));
+  bottom: max(28px, env(safe-area-inset-bottom));
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  background: var(--surface-glass);
+  border: 2px solid var(--wood-mid);
+  touch-action: none;
+  pointer-events: auto;
+}
+
+#touch-joystick-nub {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 46px;
+  height: 46px;
+  margin-left: -23px;
+  margin-top: -23px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--brass-bright), var(--brass));
+  border: 2px solid var(--wood-dark);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
