@@ -1,0 +1,238 @@
+import * as THREE from "three";
+
+/**
+ * ProceduralTexture
+ * -----------------
+ * Every texture in this phase is generated on a <canvas> at runtime rather
+ * than loaded from an image file. This satisfies two goals at once: zero
+ * asset-creation effort, and zero network dependency for the visuals that
+ * matter most. When real photographed/painted textures exist later, swap
+ * them in at the material-creation call site in PlaceholderFactory.js —
+ * nothing else in the codebase references these functions directly.
+ */
+
+function makeCanvas(size = 256) {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  return canvas;
+}
+
+export function woodGrainTexture(baseColor = "#6b4a34", grainColor = "#4a3120") {
+  const canvas = makeCanvas(256);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = baseColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = grainColor;
+  ctx.globalAlpha = 0.35;
+  for (let i = 0; i < 40; i++) {
+    const y = Math.random() * canvas.height;
+    ctx.lineWidth = 0.6 + Math.random() * 1.6;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    for (let x = 0; x <= canvas.width; x += 16) {
+      ctx.lineTo(x, y + Math.sin(x * 0.05 + i) * 4);
+    }
+    ctx.stroke();
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+export function paperTexture(base = "#ede3d0") {
+  const canvas = makeCanvas(256);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.globalAlpha = 0.06;
+  for (let i = 0; i < 2000; i++) {
+    ctx.fillStyle = Math.random() > 0.5 ? "#000" : "#fff";
+    ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 1, 1);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+export function concreteTexture(base = "#8d8577") {
+  const canvas = makeCanvas(256);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  for (let i = 0; i < 600; i++) {
+    const v = Math.random() * 0.1;
+    ctx.fillStyle = `rgba(0,0,0,${v})`;
+    ctx.beginPath();
+    ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(4, 4);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/** Vertical streak noise used by WeatherSystem to simulate rain on window glass. */
+export function rainStreakTexture() {
+  const canvas = makeCanvas(128);
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = "rgba(200,220,235,0.5)";
+  for (let i = 0; i < 60; i++) {
+    const x = Math.random() * canvas.width;
+    const len = 10 + Math.random() * 30;
+    const y = Math.random() * canvas.height;
+    ctx.lineWidth = 0.6 + Math.random() * 0.8;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - 2, y + len);
+    ctx.stroke();
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(1, 2);
+  return texture;
+}
+
+/** Blueprint-style texture: blue ground, white grid + a few "drawn" lines. */
+export function blueprintTexture() {
+  const canvas = makeCanvas(256);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#204a63";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.strokeStyle = "rgba(255,255,255,0.18)";
+  ctx.lineWidth = 1;
+  for (let i = 16; i < canvas.width; i += 16) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i, canvas.height);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, i);
+    ctx.lineTo(canvas.width, i);
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle = "rgba(255,255,255,0.75)";
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.rect(28, 28, canvas.width - 56, canvas.height - 56);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(28, canvas.height * 0.55);
+  ctx.lineTo(canvas.width * 0.6, canvas.height * 0.55);
+  ctx.lineTo(canvas.width * 0.6, canvas.height - 28);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(canvas.width * 0.72, canvas.height * 0.35, 28, 0, Math.PI * 2);
+  ctx.stroke();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/** Loose sketch-paper texture: cream ground, a few pencil-like scribbled lines. */
+export function sketchTexture() {
+  const canvas = makeCanvas(256);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#efe6d3";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.strokeStyle = "rgba(60,50,40,0.55)";
+  ctx.lineWidth = 1.6;
+  for (let i = 0; i < 5; i++) {
+    ctx.beginPath();
+    const y = 40 + i * 34 + Math.random() * 10;
+    ctx.moveTo(24, y);
+    for (let x = 24; x <= canvas.width - 24; x += 14) {
+      ctx.lineTo(x, y + (Math.random() - 0.5) * 10);
+    }
+    ctx.stroke();
+  }
+  ctx.strokeStyle = "rgba(60,50,40,0.35)";
+  ctx.beginPath();
+  ctx.arc(canvas.width * 0.7, canvas.height * 0.65, 30, 0, Math.PI * 1.4);
+  ctx.stroke();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+export function metalBrushedTexture(base = "#9a978f") {
+  const canvas = makeCanvas(128);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.globalAlpha = 0.2;
+  for (let i = 0; i < 200; i++) {
+    ctx.strokeStyle = Math.random() > 0.5 ? "#fff" : "#000";
+    ctx.lineWidth = 0.4;
+    const y = Math.random() * canvas.height;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y + (Math.random() - 0.5) * 2);
+    ctx.stroke();
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/**
+ * Mottled ground cover for the outdoor world — deliberately plain (a speckled
+ * green/brown, nothing resembling grass blades or path detail). The world
+ * outside the workshop is intentionally empty; this texture's only job is to
+ * keep a flat plane from reading as a solid, sterile color. Heavily repeated
+ * (see WorldEnvironmentSystem.js) across the "effectively infinite" ground.
+ */
+export function groundTexture() {
+  const canvas = makeCanvas(256);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#5c6b45";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  for (let i = 0; i < 900; i++) {
+    const shade = Math.random();
+    ctx.fillStyle = shade > 0.5 ? "rgba(70,84,50,0.35)" : "rgba(110,120,80,0.3)";
+    const x = Math.random() * canvas.width;
+    const y = Math.random() * canvas.height;
+    const r = 1 + Math.random() * 2.5;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/** Horizontal lapped-board siding, for the workshop's exterior walls. */
+export function sidingTexture(base = "#5a4a3d") {
+  const canvas = makeCanvas(256);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const boardHeight = 22;
+  for (let y = 0; y < canvas.height; y += boardHeight) {
+    ctx.fillStyle = "rgba(0,0,0,0.18)";
+    ctx.fillRect(0, y, canvas.width, 2);
+    ctx.fillStyle = "rgba(255,255,255,0.04)";
+    ctx.fillRect(0, y + 2, canvas.width, boardHeight - 2);
+  }
+  ctx.globalAlpha = 0.5;
+  for (let i = 0; i < 300; i++) {
+    ctx.fillStyle = Math.random() > 0.5 ? "#000" : "#fff";
+    ctx.globalAlpha = 0.03;
+    ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 2, 2);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
