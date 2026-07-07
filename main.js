@@ -1,0 +1,171 @@
+import { Engine } from "./core/Engine.js";
+import { InputManager } from "./utils/InputManager.js";
+
+import { RoomLayoutSystem } from "./systems/RoomLayoutSystem.js";
+import { FurnitureSystem } from "./systems/FurnitureSystem.js";
+import { WorldEnvironmentSystem } from "./systems/WorldEnvironmentSystem.js";
+import { LightingSystem } from "./systems/LightingSystem.js";
+import { TimeOfDaySystem } from "./systems/TimeOfDaySystem.js";
+import { WeatherSystem } from "./systems/WeatherSystem.js";
+import { AudioSystem } from "./systems/AudioSystem.js";
+import { CameraSystem } from "./systems/CameraSystem.js";
+import { InteractionSystem } from "./systems/InteractionSystem.js";
+import { PersistenceSystem } from "./systems/PersistenceSystem.js";
+import { ComputerSystem } from "./computer/ComputerSystem.js";
+import { WorkbenchSystem } from "./workbench/WorkbenchSystem.js";
+import { ObjectLibraryStore } from "./worldbuilder/ObjectLibraryStore.js";
+import { WorldObjectsStore } from "./worldbuilder/WorldObjectsStore.js";
+import { WorldObjectsSystem } from "./worldbuilder/WorldObjectsSystem.js";
+import { BuildModeSystem } from "./worldbuilder/BuildModeSystem.js";
+
+import { ProjectsStore } from "./data/ProjectsStore.js";
+import { NotesStore } from "./data/NotesStore.js";
+
+import { OverlayManager } from "./ui/OverlayManager.js";
+import { HUD } from "./ui/HUD.js";
+import { createPinboardOverlay } from "./ui/overlays/PinboardOverlay.js";
+import { createNotebookOverlay } from "./ui/overlays/NotebookOverlay.js";
+import { createStereoOverlay } from "./ui/overlays/StereoOverlay.js";
+import { createArchiveOverlay } from "./ui/overlays/ArchiveOverlay.js";
+import { createToolStorageOverlay } from "./ui/overlays/ToolStorageOverlay.js";
+import { createWindowOverlay } from "./ui/overlays/WindowOverlay.js";
+import { createRestNookOverlay } from "./ui/overlays/RestNookOverlay.js";
+
+import { dustMotesPlugin } from "./plugins/examples/dustMotesPlugin.js";
+
+/**
+ * main.js
+ * -------
+ * This file's only job is wiring: construct the Engine, register systems in
+ * the order their dependencies require (see comments below), construct the
+ * plain data stores, register every overlay, and start the render loop once
+ * the person clicks past the entry screen. No behaviour lives here that
+ * belongs in a system — if you're tempted to add logic to this file beyond
+ * "new X()" and "register Y with Z", it probably belongs in a system instead.
+ */
+
+const canvas = document.getElementById("workshop-canvas");
+const engine = new Engine(canvas);
+engine.input = new InputManager(canvas, document.getElementById("touch-controls"));
+
+// --- Systems, in dependency order ---
+// Room + furniture geometry must exist before Lighting attaches fixtures to
+// it, before Camera/Interaction can query furniture footprints, and before
+// WorldEnvironmentSystem/BuildModeSystem can reference the floor mesh and
+// wall colliders RoomLayoutSystem builds.
+const roomLayoutSystem = engine.addSystem(new RoomLayoutSystem());
+const furnitureSystem = engine.addSystem(new FurnitureSystem());
+// WorldEnvironmentSystem (ground + sky/fog) must be registered before
+// TimeOfDaySystem: TimeOfDaySystem.init() emits the first
+// "timeofday:changed" synchronously, and WorldEnvironmentSystem needs to
+// already be listening to paint the very first frame's sky correctly.
+const worldEnvironmentSystem = engine.addSystem(new WorldEnvironmentSystem());
+const lightingSystem = engine.addSystem(new LightingSystem());
+const timeOfDaySystem = engine.addSystem(new TimeOfDaySystem());
+const weatherSystem = engine.addSystem(new WeatherSystem());
+const audioSystem = engine.addSystem(new AudioSystem());
+const cameraSystem = engine.addSystem(new CameraSystem());
+
+void roomLayoutSystem;
+void furnitureSystem;
+
+// --- Plain data stores (not Engine systems — no scene/camera concerns) ---
+const projectsStore = new ProjectsStore();
+const notesStore = new NotesStore();
+const objectLibraryStore = new ObjectLibraryStore();
+const worldObjectsStore = new WorldObjectsStore();
+
+// WorldObjectsSystem has no dependency on other systems at init() time — it
+// only needs engine.scene/engine.entities, which exist from construction —
+// so its registration position is flexible; it's grouped here because it's
+// conceptually "world contents", alongside the room and furniture.
+const worldObjectsSystem = engine.addSystem(new WorldObjectsSystem({ objectLibraryStore, worldObjectsStore }));
+
+// ComputerSystem needs FurnitureSystem (already registered, above) to have
+// *run* init() before it can find the desk — guaranteed by registering it
+// after FurnitureSystem — and needs CameraSystem's update to have already
+// run each frame before it projects the screen — guaranteed by registering
+// it after CameraSystem too. See src/computer/ComputerSystem.js.
+const computerSystem = engine.addSystem(
+  new ComputerSystem({
+    projectsStore,
+    notesStore,
+    audioSystem,
+    lightingSystem,
+    timeOfDaySystem,
+    weatherSystem,
+    objectLibraryStore,
+    worldObjectsStore,
+    worldObjectsSystem,
+  })
+);
+void computerSystem;
+
+// Same reasoning as ComputerSystem, for the same two reasons (finding the
+// bench, projecting the clipboard against this frame's camera). See
+// src/workbench/WorkbenchSystem.js.
+const workbenchSystem = engine.addSystem(new WorkbenchSystem({ projectsStore }));
+
+const interactionSystem = engine.addSystem(new InteractionSystem());
+
+// BuildModeSystem suspends InteractionSystem purely over events (see both
+// files' comments) and looks up CameraSystem/RoomLayoutSystem/
+// WorldObjectsSystem at the moment it needs them, not at init() time, so it
+// has no strict ordering requirement beyond "after the systems it looks up
+// already exist in the list" (they do, above).
+const buildModeSystem = engine.addSystem(new BuildModeSystem({ objectLibraryStore, worldObjectsStore }));
+
+const persistenceSystem = engine.addSystem(new PersistenceSystem()); // last: loads after everyone has registered listeners
+
+void interactionSystem;
+
+persistenceSystem.registerProvider("projects", projectsStore);
+persistenceSystem.registerProvider("notes", notesStore);
+persistenceSystem.registerProvider("objectLibrary", objectLibraryStore);
+persistenceSystem.registerProvider("worldObjects", worldObjectsStore);
+persistenceSystem.registerProvider("plugins", engine.plugins);
+
+// --- Overlays: one registration per physical object that opens a panel ---
+// (The computer and the workbench no longer work this way — see
+// src/computer/ and src/workbench/ — but every other physical object in
+// the room still does.)
+const overlayManager = new OverlayManager(document.getElementById("overlay-root"), engine);
+overlayManager.register("pinboard", createPinboardOverlay({ projectsStore }));
+overlayManager.register("notebook", createNotebookOverlay({ notesStore }));
+overlayManager.register("stereo", createStereoOverlay({ audioSystem }));
+overlayManager.register("archive", createArchiveOverlay({ projectsStore }));
+overlayManager.register("toolStorage", createToolStorageOverlay());
+overlayManager.register("window", createWindowOverlay({ weatherSystem, timeOfDaySystem }));
+overlayManager.register("restNook", createRestNookOverlay());
+
+new HUD(document.getElementById("hud-root"), engine);
+
+// --- Example plugin (see /src/plugins/examples/dustMotesPlugin.js + docs/PLUGIN_GUIDE.md) ---
+engine.plugins.register(dustMotesPlugin());
+
+// --- Boot ---
+await engine.init();
+// Must happen after engine.init() resolves, not inside either system's own
+// init() — persistence loading happens synchronously as part of the
+// engine:ready event that fires at the end of engine.init(), so only
+// *after* awaiting it are ObjectLibraryStore/WorldObjectsStore/ProjectsStore
+// guaranteed to hold whatever was actually saved. See the comments on
+// WorldObjectsSystem.spawnAll() and WorkbenchSystem.finalizeInitialState().
+worldObjectsSystem.spawnAll();
+workbenchSystem.finalizeInitialState();
+engine.start();
+
+const entryScreen = document.getElementById("entry-screen");
+const entryButton = document.getElementById("entry-button");
+entryButton.addEventListener("click", () => {
+  audioSystem.resumeContext();
+  engine.input.requestPointerLock();
+  entryScreen.classList.add("hidden");
+});
+
+// Clicking the canvas re-acquires pointer lock (e.g. after Escape, or after
+// closing an overlay) whenever nothing else is open — including Build Mode,
+// which needs the free cursor for its own clicks (see BuildModeSystem).
+canvas.addEventListener("click", () => {
+  if (!interactionSystem.active && !buildModeSystem.active) engine.input.requestPointerLock();
+});
