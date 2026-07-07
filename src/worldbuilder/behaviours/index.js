@@ -16,5 +16,6 @@ import "./ComputerBehaviour.js";
 import "./DecorationBehaviour.js";
 import "./TriggerBehaviour.js";
 import "./AudioSourceBehaviour.js";
+import "./MusicPlayerBehaviour.js";
 
 export { registerBehaviour, getBehaviourTypes, getBehaviourConfig, applyBehaviour, defaultPropertiesFor } from "./registry.js";
