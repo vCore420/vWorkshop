@@ -3,10 +3,13 @@
  * ----------
  * Generates simple ambient pads and noise beds entirely with the Web Audio
  * API — no audio files to source, license, or download. Each "track" here
- * is a placeholder for a real recorded piece of music later: AudioSystem
- * and the stereo overlay only know about a track's id/title/duration
- * contract (see /src/data/tracks.js), not how the sound is produced, so
- * dropping in real .mp3/.ogg files later is a one-file change.
+ * (`TRACK_DEFS`, below) is a small, fixed set of generative ambient tunes
+ * for the `audioSource` world-object behaviour to choose from — not a
+ * placeholder for the real music library (see `src/music/`, docs/MUSIC.md),
+ * which reads actual audio files from disk and has no relationship to this
+ * file at all. `AudioSystem` only ever knows a track by its id/title
+ * contract, not how the sound is produced, so adding a new generative
+ * track here is a one-file change.
  */
 
 const TRACK_DEFS = [

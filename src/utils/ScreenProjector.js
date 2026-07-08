@@ -45,6 +45,8 @@ export function makeTopDownRectCorners(halfWidth, halfDepth, liftY = 0) {
   ];
 }
 
+const _scratch = new THREE.Vector3();
+
 /**
  * @param {THREE.Object3D} anchorMesh - corners are transformed through this mesh's world matrix
  * @param {THREE.Vector3[]} localCorners - four corners in anchorMesh's local space (see makeRectCorners)
@@ -53,15 +55,14 @@ export function makeTopDownRectCorners(halfWidth, halfDepth, liftY = 0) {
  */
 export function projectRect(anchorMesh, localCorners, camera, viewportWidth, viewportHeight) {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  const scratch = new THREE.Vector3();
 
   for (const corner of localCorners) {
-    scratch.copy(corner);
-    anchorMesh.localToWorld(scratch);
-    scratch.project(camera); // -> NDC, [-1, 1]
+    _scratch.copy(corner);
+    anchorMesh.localToWorld(_scratch);
+    _scratch.project(camera); // -> NDC, [-1, 1]
 
-    const x = (scratch.x * 0.5 + 0.5) * viewportWidth;
-    const y = (1 - (scratch.y * 0.5 + 0.5)) * viewportHeight;
+    const x = (_scratch.x * 0.5 + 0.5) * viewportWidth;
+    const y = (1 - (_scratch.y * 0.5 + 0.5)) * viewportHeight;
     if (x < minX) minX = x;
     if (x > maxX) maxX = x;
     if (y < minY) minY = y;

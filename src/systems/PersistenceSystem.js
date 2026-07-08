@@ -3,6 +3,7 @@ import { StorageUtils } from "../utils/StorageUtils.js";
 const SAVE_KEY = "workshop:save";
 const SAVE_VERSION = 1;
 const AUTOSAVE_INTERVAL_MS = 20000;
+const SAVE_DEBOUNCE_MS = 400; // see the "saveRequested" handler below
 
 /**
  * PersistenceSystem
@@ -36,13 +37,28 @@ export class PersistenceSystem {
     this.engine = engine;
 
     engine.events.on("engine:ready", () => this._loadFromStorage());
-    engine.events.on("persistence:saveRequested", () => this.save());
+    // Debounced, not immediate: this event can now fire very rapidly (a
+    // dragged Settings slider fires it on every pixel of movement) — an
+    // immediate save here would mean a full synchronous
+    // serialize-everything-and-write-to-localStorage on every single one
+    // of those. beforeunload/visibilitychange below, and the periodic
+    // autosave, all still save immediately and unconditionally, so nothing
+    // is ever actually at risk of being lost by waiting a moment here.
+    engine.events.on("persistence:saveRequested", () => this._scheduleSave());
 
     window.addEventListener("beforeunload", () => this.save());
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden") this.save();
     });
     this._autosaveTimer = setInterval(() => this.save(), AUTOSAVE_INTERVAL_MS);
+  }
+
+  _scheduleSave() {
+    if (this._saveDebounceTimer) clearTimeout(this._saveDebounceTimer);
+    this._saveDebounceTimer = setTimeout(() => {
+      this._saveDebounceTimer = null;
+      this.save();
+    }, SAVE_DEBOUNCE_MS);
   }
 
   registerProvider(key, provider) {

@@ -6,11 +6,13 @@ import { registerBehaviour } from "./registry.js";
 /**
  * Audio Source
  * ------------
- * "There's only one 'what's playing' in the workshop" — the same
- * philosophy MediaApp documents for the stereo/computer. This behaviour
- * doesn't spin up independent spatial audio; it plays a track through the
- * one shared AudioSystem channel, same as the stereo and the computer's
- * Media app already do.
+ * A simple "this custom object plays one ambient tune" behaviour, through
+ * the single shared `AudioSystem` channel — distinct from, and much
+ * simpler than, the real personal music library the music cabinet opens
+ * (`musicPlayer` behaviour, `src/music/`, see docs/MUSIC.md). Neither
+ * MediaApp nor the music cabinet route through `AudioSystem` at all
+ * anymore; this behaviour is the one remaining thing that does, alongside
+ * weather ambience.
  */
 registerBehaviour("audioSource", {
   label: "Audio source",

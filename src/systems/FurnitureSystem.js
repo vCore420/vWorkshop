@@ -24,6 +24,8 @@ export class FurnitureSystem {
   constructor() {
     /** @type {Map<string, {entity: Entity, definition: object, footprintBox: THREE.Box3}>} */
     this.pieces = new Map();
+    /** @type {THREE.Box3[]} cached, rebuilt only when a footprint actually changes (init, or a transform load) — see getFootprints() */
+    this._footprintList = [];
   }
 
   init(engine) {
@@ -74,9 +76,10 @@ export class FurnitureSystem {
 
       engine.entities.create(entity);
 
-      const footprintBox = this._computeFootprintBox(definition, layout);
+      const footprintBox = this._computeFootprintBox(definition, layout.position, layout.rotationY);
       this.pieces.set(definition.id, { entity, definition, footprintBox });
     }
+    this._rebuildFootprintList();
 
     engine.events.on("persistence:save", (bag) => {
       bag.furniture = {};
@@ -95,7 +98,16 @@ export class FurnitureSystem {
         if (!piece) continue;
         piece.entity.object3D.position.set(...transform.position);
         piece.entity.object3D.rotation.y = transform.rotationY;
+        // The footprint has to be recomputed here too, not just the visual
+        // transform — nothing lets the player actually move furniture yet,
+        // but the save/load path already round-trips a transform that
+        // could differ from the default one (see this class's own doc
+        // comment on that seam), and a stale footprint would mean
+        // colliding with where a piece *used* to be rather than where it
+        // visually is now.
+        piece.footprintBox = this._computeFootprintBox(piece.definition, transform.position, transform.rotationY);
       }
+      this._rebuildFootprintList();
     });
   }
 
@@ -110,10 +122,10 @@ export class FurnitureSystem {
     return { position: toWorld(local.position), lookAt: toWorld(local.lookAt) };
   }
 
-  _computeFootprintBox(definition, layout) {
+  _computeFootprintBox(definition, position, rotationY) {
     const { width = 0.6, depth = 0.6 } = definition.footprint ?? {};
-    const [x, , z] = layout.position;
-    const theta = layout.rotationY ?? 0;
+    const [x, , z] = position;
+    const theta = rotationY ?? 0;
     const hw0 = width / 2, hd0 = depth / 2;
     // Axis-aligned bounding box of a (hw0 x hd0) rectangle rotated by theta —
     // an approximation (a true oriented box would be tighter), which is fine
@@ -126,9 +138,15 @@ export class FurnitureSystem {
     );
   }
 
-  /** All footprint boxes, for CameraSystem's walk-collision. */
+  _rebuildFootprintList() {
+    this._footprintList = [...this.pieces.values()].map((p) => p.footprintBox);
+  }
+
+  /** All footprint boxes, for CameraSystem's walk-collision — cached (see
+   *  _rebuildFootprintList), not rebuilt on every call. This is read every
+   *  single frame while walking. */
   getFootprints() {
-    return [...this.pieces.values()].map((p) => p.footprintBox);
+    return this._footprintList;
   }
 
   getPiece(id) {

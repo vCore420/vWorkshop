@@ -46,6 +46,20 @@ export class CameraSystem {
   init(engine) {
     this.engine = engine;
     this._velocity = new THREE.Vector2();
+    // Resolved once — cheap references that never change after startup, so
+    // there's no reason for _resolveCollisions (which runs every frame
+    // while walking) to re-run Engine.getSystem's linear search on every
+    // single call. See docs/PERFORMANCE.md.
+    this._roomSystem = engine.getSystem(RoomLayoutSystem);
+    this._furnitureSystem = engine.getSystem(FurnitureSystem);
+    // Scratch objects reused every frame in _updateWalk/_resolveCollisions
+    // instead of allocating a fresh Vector2/Vector3 each call — walking is
+    // the workshop's default, continuous state, so this is the hottest
+    // per-frame path in the whole engine.
+    this._scratchForward = new THREE.Vector3();
+    this._scratchRight = new THREE.Vector3();
+    this._scratchWish = new THREE.Vector2();
+    this._scratchNext = new THREE.Vector3();
     this.engine.events.on("persistence:save", (bag) => {
       bag.camera = { position: this.position.toArray(), yaw: this.yaw, pitch: this.pitch };
     });
@@ -107,9 +121,9 @@ export class CameraSystem {
     }
 
     const move = input.moveVector; // x = strafe, y = forward
-    const forward = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)).multiplyScalar(-1);
-    const right = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
-    const wish = new THREE.Vector2(
+    const forward = this._scratchForward.set(Math.sin(this.yaw), 0, Math.cos(this.yaw)).multiplyScalar(-1);
+    const right = this._scratchRight.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
+    const wish = this._scratchWish.set(
       forward.x * move.y + right.x * move.x,
       forward.z * move.y + right.z * move.x
     );
@@ -118,7 +132,7 @@ export class CameraSystem {
     this._velocity.x = damp(this._velocity.x, wish.x * WALK_SPEED, 10, dt);
     this._velocity.y = damp(this._velocity.y, wish.y * WALK_SPEED, 10, dt);
 
-    const next = this.position.clone();
+    const next = this._scratchNext.copy(this.position);
     next.x += this._velocity.x * dt;
     next.z += this._velocity.y * dt;
 
@@ -129,13 +143,10 @@ export class CameraSystem {
   }
 
   _resolveCollisions(next) {
-    const roomSystem = this.engine.getSystem(RoomLayoutSystem);
-    for (const wallBox of roomSystem?.getWallColliders?.() ?? []) {
+    for (const wallBox of this._roomSystem?.getWallColliders?.() ?? []) {
       this._pushOutOfBox(next, wallBox);
     }
-
-    const furnitureSystem = this.engine.getSystem(FurnitureSystem);
-    for (const footprint of furnitureSystem?.getFootprints?.() ?? []) {
+    for (const footprint of this._furnitureSystem?.getFootprints?.() ?? []) {
       this._pushOutOfBox(next, footprint);
     }
   }
@@ -175,11 +186,10 @@ export class CameraSystem {
       return;
     }
 
-    const targetPos = new THREE.Vector3(...this._focusPose.position);
+    const targetPos = this._scratchNext.set(...this._focusPose.position);
     this.position.lerpVectors(this._focusFrom.position, targetPos, t);
 
-    const lookTarget = new THREE.Vector3(...this._focusPose.lookAt);
-    const dir = lookTarget.clone().sub(this.position).normalize();
+    const dir = this._scratchForward.set(...this._focusPose.lookAt).sub(this.position).normalize();
     const targetYaw = Math.atan2(-dir.x, -dir.z);
     const targetPitch = Math.asin(clamp(dir.y, -1, 1));
     this.yaw = shortestAngleLerp(this._focusFrom.yaw, targetYaw, t);

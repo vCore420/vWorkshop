@@ -29,6 +29,8 @@ export class LightingSystem {
     this.lightsOn = true;
     this.practicalLights = [];
     this._weatherDampening = 0;
+    this._lightingQuality = "medium"; // "low" | "medium" | "high" — see setLightingQuality
+    this._shadowQuality = "medium"; // "off" | "low" | "medium" | "high" — see setShadowQuality
   }
 
   init(engine) {
@@ -84,6 +86,7 @@ export class LightingSystem {
       const lampLight = new THREE.PointLight("#ffe9c2", 0.7, 3, 2);
       lampLight.position.copy(worldPos);
       lampLight.userData.baseIntensity = 0.7;
+      lampLight.userData.isLampLight = true; // see setLightingQuality — the one practical light "low" skips
       this.engine.scene.add(lampLight);
       this.practicalLights.push(lampLight);
     }
@@ -113,8 +116,51 @@ export class LightingSystem {
 
   _applyLightsOn() {
     for (const light of this.practicalLights) {
-      light.intensity = this.lightsOn ? light.userData.baseIntensity : 0;
+      const skippedForQuality = this._lightingQuality === "low" && light.userData.isLampLight;
+      light.intensity = this.lightsOn && !skippedForQuality ? light.userData.baseIntensity : 0;
     }
+  }
+
+  /** "low" | "medium" | "high" — resolution of the sun's shadow map, plus
+   *  (at "low") skipping the workbench lamp's own point light — a small,
+   *  honest reduction in per-fragment light count, not just a cosmetic
+   *  label. Distinct from shadow *quality* (whether shadows render at all,
+   *  and how soft their edges are) — see setShadowQuality. */
+  setLightingQuality(quality) {
+    if (quality === this._lightingQuality) return;
+    this._lightingQuality = quality;
+    const size = { low: 512, medium: 1024, high: 2048 }[quality] ?? 1024;
+    this.sun.shadow.mapSize.set(size, size);
+    // Three.js caches the shadow map render target at whatever size it was
+    // first created; changing mapSize alone has no effect until the
+    // existing one is thrown away so it gets rebuilt at the new size.
+    this.sun.shadow.map?.dispose();
+    this.sun.shadow.map = null;
+    this._applyLightsOn();
+  }
+
+  /** "off" | "low" | "medium" | "high" — whether shadows render at all,
+   *  and the filtering technique (hard-edged vs. soft) used if they do. */
+  setShadowQuality(quality) {
+    if (quality === this._shadowQuality) return;
+    this._shadowQuality = quality;
+    if (quality === "off") {
+      this.engine.renderer.shadowMap.enabled = false;
+      return;
+    }
+    this.engine.renderer.shadowMap.enabled = true;
+    this.engine.renderer.shadowMap.type = quality === "low" ? THREE.BasicShadowMap : THREE.PCFSoftShadowMap;
+    // Existing shadow materials need telling that the shadow technique
+    // itself changed, or they'll keep using whatever was baked in before.
+    for (const material of this._collectMaterials()) material.needsUpdate = true;
+  }
+
+  _collectMaterials() {
+    const materials = [];
+    this.engine.scene.traverse((obj) => {
+      if (obj.material) materials.push(...(Array.isArray(obj.material) ? obj.material : [obj.material]));
+    });
+    return materials;
   }
 
   _onTimeChanged({ sunDirection, sunIntensity, sunColor, hemiIntensity, ambientIntensity }) {

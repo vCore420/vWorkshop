@@ -23,6 +23,9 @@ import { MusicLibraryStore } from "./music/MusicLibraryStore.js";
 import { PlaylistStore } from "./music/PlaylistStore.js";
 import { createMusicOverlay } from "./music/ui/MusicOverlay.js";
 
+import { SettingsStore } from "./settings/SettingsStore.js";
+import { SettingsSystem } from "./settings/SettingsSystem.js";
+
 import { ProjectsStore } from "./data/ProjectsStore.js";
 import { NotesStore } from "./data/NotesStore.js";
 
@@ -80,6 +83,7 @@ const objectLibraryStore = new ObjectLibraryStore();
 const worldObjectsStore = new WorldObjectsStore();
 const musicLibraryStore = new MusicLibraryStore();
 const playlistStore = new PlaylistStore();
+const settingsStore = new SettingsStore();
 
 // WorldObjectsSystem has no dependency on other systems at init() time — it
 // only needs engine.scene/engine.entities, which exist from construction —
@@ -90,6 +94,13 @@ const worldObjectsSystem = engine.addSystem(new WorldObjectsSystem({ objectLibra
 // Same flexibility as WorldObjectsSystem above — MusicSystem only needs
 // engine.events at init() time. See src/music/MusicSystem.js.
 const musicSystem = engine.addSystem(new MusicSystem({ libraryStore: musicLibraryStore, playlistStore }));
+
+// SettingsSystem looks up LightingSystem/WorldEnvironmentSystem/
+// AudioSystem/MusicSystem via engine.getSystem() at init() time — safe
+// regardless of registration order (every system already exists in
+// engine.systems by the time engine.init() starts, since every
+// addSystem() call above already happened) — see its own comment.
+const settingsSystem = engine.addSystem(new SettingsSystem({ settingsStore }));
 
 // ComputerSystem needs FurnitureSystem (already registered, above) to have
 // *run* init() before it can find the desk — guaranteed by registering it
@@ -107,6 +118,7 @@ const computerSystem = engine.addSystem(
     objectLibraryStore,
     worldObjectsStore,
     worldObjectsSystem,
+    settingsStore,
   })
 );
 void computerSystem;
@@ -135,6 +147,7 @@ persistenceSystem.registerProvider("objectLibrary", objectLibraryStore);
 persistenceSystem.registerProvider("worldObjects", worldObjectsStore);
 persistenceSystem.registerProvider("musicLibrary", musicLibraryStore);
 persistenceSystem.registerProvider("playlists", playlistStore);
+persistenceSystem.registerProvider("settings", settingsStore);
 persistenceSystem.registerProvider("plugins", engine.plugins);
 
 // --- Overlays: one registration per physical object that opens a panel ---

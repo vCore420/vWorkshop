@@ -43,6 +43,7 @@ export class WorldEnvironmentSystem {
 
   init(engine) {
     this.engine = engine;
+    this._cameraSystem = engine.getSystem(CameraSystem); // resolved once — see CameraSystem.js's own init() comment on why this is safe regardless of registration order
 
     const groundMat = Materials.ground();
     const geometry = new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE);
@@ -65,8 +66,22 @@ export class WorldEnvironmentSystem {
     return this.groundMesh;
   }
 
+  /** Driven by the Settings app's "Render Distance" — scales both the
+   *  camera's far plane and the fog's far distance together, so the world
+   *  fades into the sky at roughly the same point it actually stops being
+   *  drawn, rather than either popping visibly or fading well before the
+   *  cutoff. See docs/PERFORMANCE.md. */
+  setRenderDistance(metres) {
+    this.engine.camera.far = metres;
+    this.engine.camera.updateProjectionMatrix();
+    if (this.engine.scene.fog) {
+      this.engine.scene.fog.far = metres;
+      this.engine.scene.fog.near = Math.min(18, metres * 0.2);
+    }
+  }
+
   update(_dt) {
-    const camera = this.engine.getSystem(CameraSystem);
+    const camera = this._cameraSystem;
     if (!camera) return;
     const dx = camera.position.x - this.groundMesh.position.x;
     const dz = camera.position.z - this.groundMesh.position.z;

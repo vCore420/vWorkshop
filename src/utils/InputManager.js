@@ -40,6 +40,16 @@ export class InputManager {
 
     this._joystickTouchId = null;
     this._joystickVector = new THREE.Vector2();
+    this._scratchMove = new THREE.Vector2();
+    // Settings-driven multipliers, applied at the point each input source
+    // accumulates into the shared `lookDelta` — see CameraSystem.js, which
+    // applies one more, source-agnostic base sensitivity on top of
+    // whatever's already been scaled here. Kept here (not in CameraSystem)
+    // specifically because InputManager is the one place that already
+    // knows which source produced a given frame's movement.
+    this._mouseSensitivity = 1;
+    this._touchSensitivity = 1;
+    this._invertLook = false;
     this._lookTouchId = null;
     this._lookLast = { x: 0, y: 0 };
 
@@ -71,10 +81,22 @@ export class InputManager {
     if (action) this._keys.delete(action);
   }
 
+  setMouseSensitivity(v) {
+    this._mouseSensitivity = v;
+  }
+
+  setTouchSensitivity(v) {
+    this._touchSensitivity = v;
+  }
+
+  setInvertLook(inverted) {
+    this._invertLook = inverted;
+  }
+
   _onMouseMove(e) {
     if (!this.pointerLocked) return;
-    this.lookDelta.x += e.movementX || 0;
-    this.lookDelta.y += e.movementY || 0;
+    this.lookDelta.x += (e.movementX || 0) * this._mouseSensitivity;
+    this.lookDelta.y += (e.movementY || 0) * this._mouseSensitivity * (this._invertLook ? -1 : 1);
   }
 
   /** True while rotation input should apply — pointer-locked mouse, or an
@@ -97,13 +119,16 @@ export class InputManager {
   }
 
   /** Normalized [-1..1] x/z movement vector — from the joystick if it's
-   *  currently in use, otherwise from whatever WASD keys are held. */
+   *  currently in use, otherwise from whatever WASD keys are held. Returns
+   *  a reused scratch vector (read-only by convention, not stored across
+   *  frames by its one caller, CameraSystem) rather than allocating a
+   *  fresh one on every call — this is read every single frame. */
   get moveVector() {
-    if (this._joystickTouchId !== null) return this._joystickVector.clone();
+    if (this._joystickTouchId !== null) return this._scratchMove.copy(this._joystickVector);
 
     const x = (this._keys.has("right") ? 1 : 0) - (this._keys.has("left") ? 1 : 0);
     const z = (this._keys.has("forward") ? 1 : 0) - (this._keys.has("backward") ? 1 : 0);
-    const v = new THREE.Vector2(x, z);
+    const v = this._scratchMove.set(x, z);
     if (v.lengthSq() > 1) v.normalize();
     return v;
   }
@@ -218,8 +243,8 @@ export class InputManager {
       this._lookLast.x = touch.clientX;
       this._lookLast.y = touch.clientY;
       if (Math.abs(dx) < LOOK_DEADZONE && Math.abs(dy) < LOOK_DEADZONE) return;
-      this.lookDelta.x += dx;
-      this.lookDelta.y += dy;
+      this.lookDelta.x += dx * this._touchSensitivity;
+      this.lookDelta.y += dy * this._touchSensitivity * (this._invertLook ? -1 : 1);
     };
     const end = (e) => {
       const touch = [...e.changedTouches].find((t) => t.identifier === this._lookTouchId);
