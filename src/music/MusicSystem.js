@@ -3,6 +3,7 @@ import { scanRoot, resolveFile, resolveCoverFile } from "./LibraryScanner.js";
 
 const PLAY_COUNT_THRESHOLD_SECONDS = 20; // a skip within the first 20s doesn't count as "played"
 const COVER_CACHE_LIMIT = 60;
+const MAX_CONCURRENT_DURATION_PROBES = 3; // see resolveDuration's own comment
 
 /**
  * MusicSystem
@@ -48,6 +49,14 @@ export class MusicSystem {
     this._currentObjectUrl = null;
     this._playCounted = false;
     this._pendingRestore = null; // {queue, queuePosition, shuffle, repeat, position, wasPlaying} from a loaded save, applied once metadata is ready
+
+    // Duration resolution — see resolveDuration()'s own comment for why
+    // this needs to be a small, reusable pool rather than "one new Audio()
+    // per song".
+    this._durationProbePool = []; // reusable, idle <audio> elements
+    this._durationActiveCount = 0;
+    this._durationQueue = []; // [{songId, resolve}]
+    this._durationQueued = new Set(); // songIds already queued or in flight, to skip duplicate enqueues
   }
 
   async init(engine) {
@@ -448,23 +457,79 @@ export class MusicSystem {
   // Duration + cover art (both resolved lazily, on demand from the UI)
   // ---------------------------------------------------------------------
 
-  async resolveDuration(songId) {
+  /**
+   * Resolves and caches a song's duration, lazily, the first time it's
+   * actually shown or played. Returns a promise that resolves once the
+   * duration is known (or gives up) — callers (see ui/domHelpers.js's
+   * buildSongRow) call this once per visible song row, with no shared
+   * coordination between them, so a view showing a few hundred songs
+   * calls this a few hundred times in a single burst.
+   *
+   * That used to mean a few hundred concurrent `new Audio()` probes, each
+   * holding a real native media-decoder resource — which is exactly what
+   * "Blocked attempt to create a WebMediaPlayer as there are too many
+   * WebMediaPlayers already in existence" is Chrome protecting against.
+   * Fixed with a small, bounded pool of reusable probe elements
+   * (`MAX_CONCURRENT_DURATION_PROBES`) and a queue: however many songs
+   * need a duration, at most that many temporary elements ever exist at
+   * once, and each one is reused for the next song once it's done rather
+   * than thrown away. See docs/MUSIC.md.
+   */
+  resolveDuration(songId) {
+    if (this._durationQueued.has(songId)) return Promise.resolve();
+    const song = this.libraryStore.getSong(songId);
+    if (!song || song.duration != null) return Promise.resolve();
+    this._durationQueued.add(songId);
+    return new Promise((resolve) => {
+      this._durationQueue.push({ songId, resolve });
+      this._pumpDurationQueue();
+    });
+  }
+
+  _pumpDurationQueue() {
+    while (this._durationActiveCount < MAX_CONCURRENT_DURATION_PROBES && this._durationQueue.length > 0) {
+      const { songId, resolve } = this._durationQueue.shift();
+      this._durationActiveCount++;
+      this._resolveOneDuration(songId)
+        .catch((err) => console.warn(`[MusicSystem] duration probe failed for "${songId}":`, err))
+        .finally(() => {
+          this._durationActiveCount--;
+          this._durationQueued.delete(songId);
+          resolve();
+          this._pumpDurationQueue();
+        });
+    }
+  }
+
+  async _resolveOneDuration(songId) {
     const song = this.libraryStore.getSong(songId);
     if (!song || song.duration != null) return;
     const rootHandle = await this._resolveRootHandle(song.rootId);
     if (!rootHandle) return;
     const file = await resolveFile(rootHandle, song.artist, this.libraryStore.getAlbum(song.album)?.name ?? "", song.filename);
     if (!file) return;
+
     const url = URL.createObjectURL(file);
-    const probe = new Audio();
+    const probe = this._durationProbePool.pop() ?? new Audio();
     probe.preload = "metadata";
-    await new Promise((resolve) => {
-      probe.addEventListener("loadedmetadata", resolve, { once: true });
-      probe.addEventListener("error", resolve, { once: true });
-      probe.src = url;
-    });
-    if (Number.isFinite(probe.duration)) this.libraryStore.setSongDuration(songId, probe.duration);
-    URL.revokeObjectURL(url);
+    try {
+      await new Promise((resolveLoad) => {
+        const onDone = () => {
+          probe.removeEventListener("loadedmetadata", onDone);
+          probe.removeEventListener("error", onDone);
+          resolveLoad();
+        };
+        probe.addEventListener("loadedmetadata", onDone, { once: true });
+        probe.addEventListener("error", onDone, { once: true });
+        probe.src = url;
+      });
+      if (Number.isFinite(probe.duration)) this.libraryStore.setSongDuration(songId, probe.duration);
+    } finally {
+      probe.removeAttribute("src");
+      probe.load(); // releases the previous src's underlying resource before this probe goes back in the pool
+      URL.revokeObjectURL(url);
+      this._durationProbePool.push(probe);
+    }
   }
 
   async getCoverUrl(albumId) {

@@ -87,16 +87,24 @@ function buildWallWithOpenings({ length, height, thickness, openings, exteriorFa
  * ---------
  * Builds the workshop as a real, walk-through-able structure: floor,
  * ceiling, four walls (two of them with genuine openings — see
- * buildWallWithOpenings above), a workshop door, two windows glazed with
- * real transparent glass, and — new in this pass — an exterior shell (the
- * same walls, seen from the outside, plus a simple roof) and a list of
- * wall collision boxes.
+ * buildWallWithOpenings above), a set of French doors, two windows glazed
+ * with real transparent glass, and an exterior shell (the same walls, seen
+ * from the outside, plus a simple roof) and a list of wall collision
+ * boxes.
  *
  * Returns everything RoomLayoutSystem/CameraSystem/WeatherSystem need:
- *   - windowPanes: now *real* glass (Materials.glass), not an opaque tint —
- *     the actual sky/exterior is what you see through them.
- *   - doorMesh / doorClosedY / doorOpenY: unchanged slide-up mechanism,
- *     now sliding across a real opening instead of an overlay.
+ *   - windowPanes: real glass (Materials.glass), not an opaque tint — the
+ *     actual sky/exterior is what you see through them.
+ *   - doorFrame: the (fixed, never-moving) door casing — used as the
+ *     interaction anchor for proximity checks, since it's already
+ *     positioned exactly at the doorway.
+ *   - doorPanels: { left, right } — each a THREE.Group pivoted at its own
+ *     hinge (the outer jamb), rotated by RoomLayoutSystem to swing the
+ *     doors open/closed. See buildDoorPanel's own comment above for why a
+ *     separate pivot, not the mesh's own centre.
+ *   - doorOpenAngle: how far open (radians) counts as "fully open" — the
+ *     left panel rotates to -doorOpenAngle, the right to +doorOpenAngle,
+ *     both swinging outward.
  *   - wallColliders: THREE.Box3 list for CameraSystem's walk-collision —
  *     derived directly from the same segments used to build the walls.
  *   - floorMesh: unchanged, used by BuildModeSystem's placement raycast.
@@ -259,16 +267,62 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
   root.add(doorFrame);
 
   const doorMat = new THREE.MeshStandardMaterial({ color: "#8d8577", roughness: 0.6, metalness: 0.5 });
-  const doorMesh = box(doorDef.width, doorDef.height, 0.08, doorMat);
-  const doorClosedY = doorDef.height / 2;
-  const doorOpenY = doorDef.height * 1.02; // slides up into a housing above the frame
-  doorMesh.position.set(doorDef.position[0], doorClosedY, southInteriorZ);
-  for (let i = 1; i < 5; i++) {
-    const ridge = box(doorDef.width, 0.02, 0.09, Materials.matte("#726c60"), { castShadow: false });
-    ridge.position.set(0, -doorDef.height / 2 + (doorDef.height / 5) * i, 0.001);
-    doorMesh.add(ridge);
+
+  // --- French doors: two outward-opening panels, hinged at the OUTER
+  // jambs, replacing the old single slab that slid straight up. Each
+  // panel's pivot sits at its hinge edge, not its own centre — the same
+  // "a pivot the mesh is offset from, not centred on" idea the player
+  // rig's joints already use — so rotating the pivot swings the whole
+  // panel around that edge like a real hinged door. See
+  // RoomLayoutSystem.js for the actual open/close animation.
+  const panelWidth = doorDef.width / 2;
+  const stileWidth = 0.09; // the solid frame strip around each panel's glass
+  const lowerPanelHeight = doorDef.height * 0.32; // solid wood kick panel at the bottom, divided-lite glass above — the classic French door look
+  const paneGlass = Materials.glass("#dceffc");
+
+  function buildDoorPanel(hingeSide) {
+    // hingeSide: -1 for the left panel (hinge on the left/outer jamb),
+    // +1 for the right panel (hinge on the right/outer jamb). Either way
+    // the panel mesh is offset from its own pivot toward the doorway's
+    // centre, so together the two panels meet in the middle when closed.
+    const pivot = new THREE.Group();
+    const mesh = box(panelWidth, doorDef.height, 0.06, doorMat);
+    mesh.position.set(-hingeSide * (panelWidth / 2), doorDef.height / 2, 0);
+    pivot.add(mesh);
+
+    const glassAreaHeight = doorDef.height - lowerPanelHeight - stileWidth * 2;
+    const glassAreaWidth = panelWidth - stileWidth * 2;
+    const paneRows = 4, paneCols = 2;
+    const paneCellW = glassAreaWidth / paneCols;
+    const paneCellH = glassAreaHeight / paneRows;
+    for (let row = 0; row < paneRows; row++) {
+      for (let col = 0; col < paneCols; col++) {
+        const pane = box(paneCellW - 0.02, paneCellH - 0.02, 0.015, paneGlass);
+        pane.position.set(
+          -panelWidth / 2 + stileWidth + paneCellW * col + paneCellW / 2,
+          doorDef.height / 2 - stileWidth - paneCellH * row - paneCellH / 2,
+          0.025
+        );
+        mesh.add(pane);
+      }
+    }
+
+    // A simple lever handle near the meeting edge (opposite the hinge).
+    const handle = cylinder(0.012, 0.012, 0.14, Materials.brass(), 10);
+    handle.rotation.z = Math.PI / 2;
+    handle.position.set(hingeSide * (panelWidth / 2 - 0.12), 0, 0.05);
+    mesh.add(handle);
+
+    return pivot;
   }
-  root.add(doorMesh);
+
+  const doorPanelLeft = buildDoorPanel(-1);
+  const doorPanelRight = buildDoorPanel(1);
+  doorPanelLeft.position.set(doorDef.position[0] - doorDef.width / 2, 0, southInteriorZ);
+  doorPanelRight.position.set(doorDef.position[0] + doorDef.width / 2, 0, southInteriorZ);
+  root.add(doorPanelLeft);
+  root.add(doorPanelRight);
+  const doorOpenAngle = 1.9; // ~109° — flung outward, past perpendicular, the way a real French door rests open rather than stopping exactly at 90°
 
   // --- Roof: a simple flat shell with a slight overhang — "believable", not "beautiful" ---
   const roofOverhang = 0.45;
@@ -315,9 +369,9 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
   return {
     group: root,
     windowPanes,
-    doorMesh,
-    doorClosedY,
-    doorOpenY,
+    doorFrame, // used as the interaction anchor — it's already positioned at the doorway itself, and never moves
+    doorPanels: { left: doorPanelLeft, right: doorPanelRight },
+    doorOpenAngle,
     ceilingLightSockets,
     bounds: { width, depth, height },
     floorMesh: floor,

@@ -38,6 +38,18 @@ export class PlayerAppearanceStore {
     this._emitChanged();
   }
 
+  /** Used by the Settings app's Danger Zone ("Reset Player Data") — back
+   *  to the default figure, wearing nothing customised. Doesn't touch
+   *  TextureStore itself; the caller is responsible for cleaning up any
+   *  textures this appearance (and every saved outfit) referenced, since
+   *  this store has no reference to OutfitStore/TextureStore to check
+   *  "is this texture still used elsewhere" against on its own. */
+  resetToDefaults() {
+    this.appearance = defaultAppearance();
+    this.currentOutfitId = null;
+    this._emitChanged();
+  }
+
   /** A deep copy, safe for an OutfitStore snapshot to own independently of further live edits. */
   snapshot() {
     return JSON.parse(JSON.stringify(this.appearance));

@@ -31,7 +31,7 @@ export const NotebookDefinition = {
 
   interaction: {
     prompt: "Open the notebook",
-    radius: 2.0, // small object — see docs/WORLD.md's interaction-distance pass
+    radius: 1.1, // a small book on the bench — deliberately tighter than the standard "small object" 2.0m tier; see docs/REFINEMENT.md
     overlayId: "notebook",
   },
 };

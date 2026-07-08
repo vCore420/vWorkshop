@@ -13,7 +13,7 @@
  * whole app now live in the "General" tab — preserved exactly as they
  * were, not removed, just no longer the only thing here.
  */
-export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySystem, weatherSystem, musicSystem }) {
+export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySystem, weatherSystem, musicSystem, dangerZoneActions }) {
   const engine = musicSystem.engine; // same trick MediaApp.js uses — avoids a dedicated engine dependency just for this
 
   const TABS = [
@@ -23,6 +23,7 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
     { id: "display", label: "Display" },
     { id: "controls", label: "Controls" },
     { id: "audio", label: "Audio" },
+    { id: "danger", label: "Danger Zone" },
   ];
 
   return {
@@ -60,7 +61,7 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         disposeCurrentTab?.();
         disposeCurrentTab = null;
         body.innerHTML = "";
-        const render = { general: renderGeneral, graphics: renderGraphics, performance: renderPerformance, display: renderDisplay, controls: renderControls, audio: renderAudio }[id];
+        const render = { general: renderGeneral, graphics: renderGraphics, performance: renderPerformance, display: renderDisplay, controls: renderControls, audio: renderAudio, danger: renderDangerZone }[id];
         disposeCurrentTab = render(body);
       }
 
@@ -212,6 +213,90 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         note.textContent = "Music Volume sits on top of the player's own volume slider, the same way a device's system volume sits on top of an app's — turning either down turns the music down.";
         el.appendChild(note);
         return null;
+      }
+
+      function renderDangerZone(el) {
+        const intro = document.createElement("p");
+        intro.className = "app-subtitle";
+        intro.textContent = "Maintenance actions for the Workshop itself. Everything below asks you to confirm before doing anything — nothing here happens by accident.";
+        el.appendChild(intro);
+
+        el.appendChild(
+          buildDangerRow(
+            "Clear Workshop Cache",
+            "Forces a fresh download of the Workshop next time it loads. Doesn't touch anything you've made or saved.",
+            "Clear the Workshop's cached files? Nothing you've made or saved will be affected \u2014 this only forces a fresh copy of the Workshop itself to be downloaded next time it loads.",
+            async () => dangerZoneActions.clearCache()
+          )
+        );
+
+        el.appendChild(
+          buildDangerRow(
+            "Reset Workshop Settings",
+            "Graphics, Performance, Display, Controls, and Audio all back to their defaults.",
+            "Reset all Workshop settings to their defaults? This won't affect your projects, notes, music library, outfits, or anything else you've made.",
+            () => dangerZoneActions.resetSettings()
+          )
+        );
+
+        el.appendChild(
+          buildDangerRow(
+            "Reset Player Data",
+            "Your character back to the default appearance, and every saved outfit deleted.",
+            "Reset your character to the default appearance and delete every saved outfit? This can't be undone.",
+            async () => dangerZoneActions.resetPlayerData(),
+            true
+          )
+        );
+
+        const factoryHeading = document.createElement("h2");
+        factoryHeading.textContent = "Factory Reset";
+        el.appendChild(factoryHeading);
+        el.appendChild(
+          buildDangerRow(
+            "Factory Reset Workshop",
+            "Deletes absolutely everything \u2014 every project, note, outfit, your music library and playlists, every object you've built, and every setting \u2014 and returns the Workshop to a completely fresh first-launch state. This cannot be undone.",
+            "This will permanently delete EVERYTHING: every project, note, saved outfit, your music library and playlists, every object you've built, and all settings. The Workshop will return to a completely fresh first-launch state. This cannot be undone. Continue?",
+            async () => dangerZoneActions.factoryReset(),
+            true,
+            "Are you completely sure? There is no way to undo a factory reset once it starts."
+          )
+        );
+
+        return null;
+      }
+
+      function buildDangerRow(label, description, confirmText, action, danger = false, secondConfirmText = null) {
+        const row = document.createElement("div");
+        row.className = "danger-zone-row";
+
+        const info = document.createElement("div");
+        info.className = "danger-zone-info";
+        const title = document.createElement("strong");
+        title.textContent = label;
+        const desc = document.createElement("p");
+        desc.textContent = description;
+        info.append(title, desc);
+        row.appendChild(info);
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = danger ? "danger-zone-button danger-zone-button-severe" : "danger-zone-button";
+        btn.textContent = label;
+        btn.addEventListener("click", async () => {
+          if (!window.confirm(confirmText)) return;
+          if (secondConfirmText && !window.confirm(secondConfirmText)) return;
+          btn.disabled = true;
+          btn.textContent = "Working\u2026";
+          try {
+            await action();
+          } finally {
+            btn.disabled = false;
+            btn.textContent = label;
+          }
+        });
+        row.appendChild(btn);
+        return row;
       }
 
       // ---- shared row builders ----

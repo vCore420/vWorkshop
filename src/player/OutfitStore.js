@@ -69,6 +69,14 @@ export class OutfitStore {
     return [...this.outfits];
   }
 
+  /** Used by the Settings app's Danger Zone ("Reset Player Data") — every
+   *  saved outfit gone. Doesn't touch TextureStore itself; see
+   *  PlayerAppearanceStore.resetToDefaults()'s identical note. */
+  resetToDefaults() {
+    this.outfits = [];
+    this._emitChanged();
+  }
+
   /** Every distinct textureId referenced by any saved outfit — used by
    *  PlayerCharacterSystem to decide whether a texture is safe to actually
    *  delete from TextureStore when it stops being used anywhere. */

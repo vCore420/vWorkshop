@@ -150,16 +150,27 @@ export class Engine {
   }
 
   _tick() {
-    const dt = Math.min(this.clock.getDelta(), 0.1); // clamp to avoid huge jumps on tab-switch
+    const rawDt = Math.min(this.clock.getDelta(), 0.1); // clamp to avoid huge jumps on tab-switch
 
     // Frame-rate cap: still called every display refresh (setAnimationLoop
     // can't be throttled itself), but skips the update+render work — and,
     // importantly, the *render* — until enough time has actually passed.
     // This is what makes a 30fps cap genuinely cheaper rather than just
     // rendering identical frames twice as often as needed.
+    //
+    // `dt` handed to systems below is the real elapsed time since the last
+    // *processed* tick (accumulated across however many ticks got skipped
+    // to get here), not just this single tick's own delta — using the raw
+    // per-tick delta here would silently undercount elapsed time on every
+    // capped frame (e.g. only ever passing ~1/60s per update at a 30fps
+    // cap, when ~1/30s had actually passed), making movement and every
+    // other dt-driven system quietly run too slowly the moment a cap was
+    // enabled.
+    let dt = rawDt;
     if (this._frameInterval > 0) {
-      this._frameAccumulator += dt;
+      this._frameAccumulator += rawDt;
       if (this._frameAccumulator < this._frameInterval) return;
+      dt = this._frameAccumulator;
       this._frameAccumulator %= this._frameInterval;
     }
 
