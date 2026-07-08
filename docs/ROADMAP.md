@@ -383,7 +383,42 @@ Delivered:
   near-black, without touching how much brighter a lamp or a sunlit window
   reads by comparison.
 
-## Phase 12 — depth in the room that exists
+## Phase 12 — the Builder Phone
+
+**Goal:** "I'll just move that chair" rather than "I'll open the editor" —
+not new Builder functionality, a redesign of how building *feels*. See
+`docs/WORLDBUILDER.md` for the full write-up.
+
+Delivered:
+- **The Builder Phone** replaces the old two-strip floating UI entirely —
+  a single device that slides up from the lower-right corner when Build
+  Mode opens and back down when it closes, with the room visible and
+  rendering behind it the whole time. Three screens (Library, Ghost,
+  Selection) share one shell rather than being three separate panels.
+- **One placement mechanic, not two** — placing something new from the
+  library and moving something that already exists produce the exact same
+  transparent, pointer-following, rotatable "ghost" (`GhostPreview.js`),
+  confirmed or cancelled through the exact same two functions either way.
+- **Workshop furniture is genuinely movable now**, through that identical
+  mechanic — the seam the previous pass's `FurnitureSystem` comment
+  specifically left waiting for. A small, explicit `overrides` map keeps
+  a moved piece's new position as real player data while every
+  un-moved piece keeps tracking the Workshop's own current default, so a
+  future Workshop layout change still reaches everything nobody has
+  personally repositioned.
+- **Collision for Builder-placed objects** — `WorldObjectsSystem` now
+  computes and caches a real collision footprint per instance
+  (`THREE.Box3.setFromObject()`, since a Builder object can be any shape
+  at all), feeding into `CameraSystem`'s existing walk-collision loop
+  alongside walls and furniture. A wall built from Construction Library
+  pieces is now real architecture, not decoration you can walk through.
+
+Explicitly *not* attempted yet, on purpose: multi-select, snapping, and
+undo/redo — see "Future extension points" in `docs/WORLDBUILDER.md` for
+why the current architecture is already shaped to support each of them
+without a rewrite.
+
+## Phase 13 — depth in the room that exists
 
 Roughly in priority order, each independently shippable:
 
@@ -393,43 +428,37 @@ Roughly in priority order, each independently shippable:
 2. **Tool storage → inventory** — replace the honest placeholder with a
    real item list (name, quantity, location), still using the same
    furniture definition and overlay slot.
-3. **Furniture rearrangement in Build Mode** — now that Build Mode exists
-   for custom objects, extend it (or a variant of it) to the hand-built
-   furniture pieces too. This is the feature `FurnitureSystem`'s own
-   comment already has a seam waiting for: a small, explicit *overrides*
-   map, persisted separately from (and layered on top of) the Workshop's
-   own current layout defaults — see docs/REFINEMENT.md for why that's
-   the right shape, not a return to saving every piece's transform
-   unconditionally the way an earlier version briefly, incorrectly, did.
-4. **Real ID3/embedded metadata for the music library** — see "Future
+3. **Real ID3/embedded metadata for the music library** — see "Future
    extension points" in `docs/MUSIC.md`. `AudioSynth`'s generative pads
    remain in use for weather ambience and the `audioSource` behaviour
    specifically (a simpler, single-track use case the real library was
    never meant to replace) — see `docs/MUSIC.md` for why those two stayed
    separate on purpose.
-5. **Small-phone-width layout pass** — touch *input* is fully implemented
+4. **Small-phone-width layout pass** — touch *input* is fully implemented
    (Phase 6), tuned for "reasonably large screens" per the brief; the
    workstation/workbench/Build Mode/music panels' *sizing* hasn't had a
    dedicated pass for genuinely narrow (phone-width, as opposed to
    tablet-width) viewports yet — distinct from Phase 9's UI Scale setting,
    which scales everything uniformly rather than reflowing it.
-6. **Occlusion-aware interaction checks** — a raycast between the player
+5. **Occlusion-aware interaction checks** — a raycast between the player
    and a candidate interactable, so standing just outside a wall can no
    longer trigger something on the other side of it (see `docs/WORLD.md`'s
    known simplifications).
-7. **A real performance benchmark**, if the heuristic in "Optimise For
+6. **A real performance benchmark**, if the heuristic in "Optimise For
    This Device" (Phase 9) ever proves unsatisfying — rendering a few
    sample frames and timing them, rather than inferring from device
    capability alone.
-8. **A mirror** — the first real payoff of Phase 10's "should normally
+7. **A mirror** — the first real payoff of Phase 10's "should normally
    never see themselves except in... mirrors": a reflective surface
    showing the live player rig from outside, likely a render-to-texture
    second camera rather than anything stencil/portal-based, given the
    room's modest size.
-9. **Clothing and wearable Builder objects** — attaching to the rig's
+8. **Clothing and wearable Builder objects** — attaching to the rig's
    existing pivots (see `docs/PLAYER.md`'s "ready for what comes next").
+9. **Multi-select, snapping, and undo/redo for Build Mode** — see "Future
+   extension points" in `docs/WORLDBUILDER.md`.
 
-## Phase 13 — the world becomes alive on its own
+## Phase 14 — the world becomes alive on its own
 
 1. **Weather that changes itself** — `WeatherSystem.autoCycle` already
    exists as a flag with no behaviour behind it yet; give it a slow,
@@ -450,7 +479,7 @@ Roughly in priority order, each independently shippable:
    (Phase 4) already emits a generic named event; the first system or
    plugin that actually listens for one is what proves the hook out.
 
-## Phase 14 — beyond one building
+## Phase 15 — beyond one building
 
 - **Additional buildings** — `RoomLayoutSystem` was written with this in
   mind (see its class comment), and `WorldObjectsStore` was made

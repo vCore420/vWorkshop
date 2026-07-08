@@ -108,9 +108,14 @@ PlayerCharacterSystem → same flexibility as WorldObjectsSystem/MusicSystem
                        runs after engine.init() resolves, same reasoning
                        as WorkbenchSystem's/MusicSystem's — see
                        docs/PLAYER.md
-BuildModeSystem      → looks up CameraSystem/RoomLayoutSystem/
-                       WorldObjectsSystem/InteractionSystem at the moment
-                       it needs them, not at init() time
+BuildModeSystem      → caches CameraSystem/FurnitureSystem/WorldObjectsSystem
+                       at init() (same reasoning as everything else on
+                       this list); still looks up RoomLayoutSystem/
+                       WorldEnvironmentSystem/InteractionSystem on demand,
+                       since those are only needed for specific,
+                       infrequent operations (entering, or gathering
+                       placement surfaces) rather than every interaction
+                       — see docs/WORLDBUILDER.md
 PersistenceSystem    → registered *last*, so every other system has already
                         registered its save/load listeners by the time it
                         loads the save file
@@ -235,16 +240,19 @@ that reads/writes `localStorage`. Two ways state gets included in a save:
   listens for `persistence:load` and reads its own key back out of the bag
   it's handed. This is how `RoomLayoutSystem`, `LightingSystem`,
   `TimeOfDaySystem`, `WeatherSystem`, `AudioSystem`, `CameraSystem`,
-  `ComputerSystem`, and `WorkbenchSystem` all persist state, with zero
-  coupling to `PersistenceSystem` beyond those two event names.
-  `WorkbenchSystem` persists only `{ currentProjectId }` this way — a
-  project's own `kind`/`presence`/`notes` ride along for free inside the
+  `ComputerSystem`, `WorkbenchSystem`, and `FurnitureSystem` all persist
+  state, with zero coupling to `PersistenceSystem` beyond those two event
+  names. `WorkbenchSystem` persists only `{ currentProjectId }` this way —
+  a project's own `kind`/`presence`/`notes` ride along for free inside the
   `projects` provider below, since they're just fields on the same project
   object the pinboard and computer already save. `FurnitureSystem`
-  deliberately does *not* do this for furniture position/rotation — see
-  its own comment and docs/REFINEMENT.md for why treating a Workshop
-  default as if it were player data was a real bug, not a design choice
-  worth keeping.
+  persists only its small `overrides` map (`{ pieceId: {position,
+  rotationY} }`, written only for a piece a player has actually moved in
+  Build Mode — see docs/WORLDBUILDER.md) — never a blanket save of every
+  piece's transform, which an earlier version of this system did and
+  which was a real bug: it treated a Workshop default (meant to improve
+  freely as the Workshop itself is updated) as if it were player-owned
+  data. See docs/REFINEMENT.md for the full account.
 - **Explicit providers**: `persistenceSystem.registerProvider(key, storeInstance)`
   for plain stores that aren't Engine systems (`ProjectsStore`, `NotesStore`,
   `ObjectLibraryStore`, `WorldObjectsStore`, `MusicLibraryStore`,

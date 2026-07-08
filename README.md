@@ -4,7 +4,7 @@ A living 3D creative workshop, built to be a place you return to rather than
 an app you launch. Runs entirely in the browser, no build step, no backend —
 just static files.
 
-This project has gone through eleven phases: an architectural foundation and
+This project has gone through twelve phases: an architectural foundation and
 one believable room (phase 1), turning the computer into a real,
 self-contained creative workstation with a physical sit-down/stand-up
 transition (phase 2), turning the workbench into the workshop's visual
@@ -20,12 +20,16 @@ as one intentional area alongside the computer desk (phase 8), a
 performance audit and a full Settings app, making everything feel smoother,
 especially on tablets, without turning down the visual quality (phase 9), a
 player identity system: a modular procedural character and a Wardrobe app
-to gradually become whoever you want to be (phase 10), and — this phase —
-a maintenance pass: two real bugs properly root-caused (a stuck-key
-movement bug, a music-library WebMediaPlayer exhaustion bug), a genuine
-save-versioning and migration framework, a Settings Danger Zone, and a
-round of interior/lighting refinement (phase 11). See `docs/ROADMAP.md`
-for what's next, `docs/ARCHITECTURE.md`
+to gradually become whoever you want to be (phase 10), a maintenance pass:
+two real bugs properly root-caused (a stuck-key movement bug, a
+music-library WebMediaPlayer exhaustion bug), a genuine save-versioning and
+migration framework, a Settings Danger Zone, and a
+round of interior/lighting refinement (phase 11), and — this phase — the
+Builder Phone: redesigning how building feels rather than adding new
+Builder functionality, with Workshop furniture now movable through the
+exact same mechanic as Builder objects, and Builder-placed objects now
+genuinely part of the physical world through real collision (phase 12).
+See `docs/ROADMAP.md` for what's next, `docs/ARCHITECTURE.md`
 for how the workshop as a whole is put together, and `docs/COMPUTER.md` /
 `docs/WORKBENCH.md` / `docs/WORLDBUILDER.md` / `docs/WORLD.md` /
 `docs/POLISH.md` / `docs/MUSIC.md` / `docs/PERFORMANCE.md` / `docs/PLAYER.md` / `docs/REFINEMENT.md` for how those specifically work.
@@ -162,19 +166,27 @@ Storage, Door, Computer, Decoration, Trigger, Audio Source) purely through
 properties — no code. Save it, and it joins your permanent object library.
 
 Then press **B** anywhere in the room to enter **Build Mode**: the camera
-freezes right where you're standing, the cursor comes free, and a small
-library strip along the bottom lets you place anything you've designed —
-click a library item, click a spot in the room, and it's there. Click any
-placed object to select it and adjust its position, rotation, scale, or
-colour in a small side panel; duplicate or delete it. The room never stops
-being the room — there's no separate editor screen.
+freezes right where you're standing, the cursor comes free, and a
+**Builder Phone** slides up from the lower-right corner — a small device
+you've taken out, not a separate editor screen; the room keeps rendering
+behind it the whole time. Tap something from its Construction Library or
+Saved Objects tabs and a transparent, rotatable preview follows your
+pointer (or your drag, on touch) until you confirm or cancel it. Click any
+placed object — or any piece of Workshop furniture — to select it,
+adjust its position/rotation/scale/colour precisely, or hit Move to pick
+it up and set it back down somewhere else, through that exact same
+transparent-preview mechanic. Furniture keeps tracking the Workshop's own
+layout unless you've actually moved it; only what you've personally
+repositioned is remembered as yours.
 
 Objects you design and place are permanent, save automatically, and reuse
 the same interaction pipeline every hand-built piece of furniture in the
 room already uses — a chair you design with a Seat behaviour works exactly
-like the workbench's own chair. See `docs/WORLDBUILDER.md` for the full
-architecture, including why it was built to generalise to future rooms and
-buildings without needing to change.
+like the workbench's own chair. They're also real obstacles now — walk
+into a wall you've built and you stop, the same as walking into any other
+piece of furniture. See `docs/WORLDBUILDER.md` for the full architecture,
+including why it was built to generalise to future rooms and buildings
+without needing to change.
 
 Alongside your own designs, a small permanent **Construction Library**
 (Wall, Floor, Roof, Pillar, Doorway, Door, Window, Stairs, Ramp, Fence,
