@@ -26,6 +26,11 @@ import { createMusicOverlay } from "./music/ui/MusicOverlay.js";
 import { SettingsStore } from "./settings/SettingsStore.js";
 import { SettingsSystem } from "./settings/SettingsSystem.js";
 
+import { PlayerAppearanceStore } from "./player/PlayerAppearanceStore.js";
+import { OutfitStore } from "./player/OutfitStore.js";
+import { TextureStore } from "./player/TextureStore.js";
+import { PlayerCharacterSystem } from "./player/PlayerCharacterSystem.js";
+
 import { ProjectsStore } from "./data/ProjectsStore.js";
 import { NotesStore } from "./data/NotesStore.js";
 
@@ -84,6 +89,9 @@ const worldObjectsStore = new WorldObjectsStore();
 const musicLibraryStore = new MusicLibraryStore();
 const playlistStore = new PlaylistStore();
 const settingsStore = new SettingsStore();
+const appearanceStore = new PlayerAppearanceStore();
+const outfitStore = new OutfitStore();
+const textureStore = new TextureStore();
 
 // WorldObjectsSystem has no dependency on other systems at init() time — it
 // only needs engine.scene/engine.entities, which exist from construction —
@@ -101,6 +109,13 @@ const musicSystem = engine.addSystem(new MusicSystem({ libraryStore: musicLibrar
 // engine.systems by the time engine.init() starts, since every
 // addSystem() call above already happened) — see its own comment.
 const settingsSystem = engine.addSystem(new SettingsSystem({ settingsStore }));
+void settingsSystem;
+
+// Same flexibility as WorldObjectsSystem/MusicSystem above — only needs
+// engine.scene/engine.events at init() time. Its finalizeInitialState()
+// (below, after engine.init()) does the first rig build, once the
+// appearance store has actually loaded. See src/player/PlayerCharacterSystem.js.
+const playerCharacterSystem = engine.addSystem(new PlayerCharacterSystem({ appearanceStore, textureStore }));
 
 // ComputerSystem needs FurnitureSystem (already registered, above) to have
 // *run* init() before it can find the desk — guaranteed by registering it
@@ -119,6 +134,9 @@ const computerSystem = engine.addSystem(
     worldObjectsStore,
     worldObjectsSystem,
     settingsStore,
+    appearanceStore,
+    outfitStore,
+    textureStore,
   })
 );
 void computerSystem;
@@ -148,6 +166,8 @@ persistenceSystem.registerProvider("worldObjects", worldObjectsStore);
 persistenceSystem.registerProvider("musicLibrary", musicLibraryStore);
 persistenceSystem.registerProvider("playlists", playlistStore);
 persistenceSystem.registerProvider("settings", settingsStore);
+persistenceSystem.registerProvider("playerAppearance", appearanceStore);
+persistenceSystem.registerProvider("outfits", outfitStore);
 persistenceSystem.registerProvider("plugins", engine.plugins);
 
 // --- Overlays: one registration per physical object that opens a panel ---
@@ -174,12 +194,13 @@ await engine.init();
 // init() — persistence loading happens synchronously as part of the
 // engine:ready event that fires at the end of engine.init(), so only
 // *after* awaiting it are ObjectLibraryStore/WorldObjectsStore/ProjectsStore/
-// MusicLibraryStore guaranteed to hold whatever was actually saved. See the
-// comments on WorldObjectsSystem.spawnAll() and
-// WorkbenchSystem/MusicSystem's own finalizeInitialState().
+// MusicLibraryStore/PlayerAppearanceStore guaranteed to hold whatever was
+// actually saved. See the comments on WorldObjectsSystem.spawnAll() and
+// WorkbenchSystem/MusicSystem/PlayerCharacterSystem's own finalizeInitialState().
 worldObjectsSystem.spawnAll();
 workbenchSystem.finalizeInitialState();
 await musicSystem.finalizeInitialState(); // async: checks each library root's still-live permission state
+await playerCharacterSystem.finalizeInitialState(); // async: resolves any part textures before the first rig build
 engine.start();
 
 const entryScreen = document.getElementById("entry-screen");
