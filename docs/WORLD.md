@@ -166,6 +166,12 @@ to confirm it's still reachable from at least one approach angle (the
 same check performed when these pieces were first placed — see
 `docs/ARCHITECTURE.md`'s furniture section).
 
+(The door, both windows, and the notebook were tightened further still in
+a later refinement pass — see docs/REFINEMENT.md — since none of them
+need triggering from as far away as a piece of furniture does; this
+section's values are what this phase itself introduced, not necessarily
+what's still current everywhere.)
+
 ## Known simplifications (by design, for this phase)
 
 - **Interaction checks are proximity-only** — there's no line-of-sight or

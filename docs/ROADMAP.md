@@ -345,7 +345,45 @@ accessories, mirrors, or animation — see "Architecture: ready for what
 comes next" in `docs/PLAYER.md` for how the rig was specifically built to
 support all of them later without a rewrite.
 
-## Phase 11 — depth in the room that exists
+## Phase 11 — Workshop Refinement
+
+**Goal:** a maintenance pass, not a feature pass — "will this make the
+Workshop easier to live in and easier to continue developing over the
+next several years?" See `docs/REFINEMENT.md` for the full write-up.
+
+Delivered:
+- **Two real bugs, properly root-caused rather than patched around.**
+  Movement occasionally locking up or continuing past a key release
+  traced to the well-known "held key never releases if the window loses
+  focus" class of bug (`keyup` only ever reaches a focused document), plus
+  a related bug where two keys mapped to the same action (`KeyW`/
+  `ArrowUp`) could cancel each other. Chrome's "too many WebMediaPlayers"
+  error traced to duration resolution creating one temporary `Audio()`
+  element per song shown in a list, unbounded — fixed with a small,
+  reusable, properly-released pool instead.
+- **A genuine save-versioning and migration framework**
+  (`src/systems/SaveMigrations.js`), replacing a single hard-coded version
+  number with a real registry future updates can keep adding to. Its first
+  real migration fixes the actual reported bug: furniture position was
+  being saved and blindly restored as if it were player data, meaning a
+  genuine Workshop layout improvement never reached an existing save.
+  Furniture placement is a Workshop default now, not something that
+  round-trips through the save file at all.
+- **A Danger Zone tab in Settings** — Clear Workshop Cache, Reset Workshop
+  Settings, Reset Player Data, and Factory Reset Workshop, each behind a
+  clear confirmation (Factory Reset asks twice) — the long-term
+  maintenance home the brief asked for, built as four functions calling
+  existing store methods rather than a new system of its own.
+- **Real outward-opening French doors**, replacing the placeholder slab
+  that used to slide straight up; the light switch moved to the correct
+  side of them; the reading chair rotated to face the corner it's meant to
+  be part of; the door/windows/notebook's interaction radius tightened
+  further than the standard tiers; the ambient lighting floor raised so
+  corners away from a direct light source read as dim rather than
+  near-black, without touching how much brighter a lamp or a sunlit window
+  reads by comparison.
+
+## Phase 12 — depth in the room that exists
 
 Roughly in priority order, each independently shippable:
 
@@ -357,8 +395,12 @@ Roughly in priority order, each independently shippable:
    furniture definition and overlay slot.
 3. **Furniture rearrangement in Build Mode** — now that Build Mode exists
    for custom objects, extend it (or a variant of it) to the hand-built
-   furniture pieces too, writing back through the same `persistence:save`
-   path `FurnitureSystem` already uses for furniture transforms.
+   furniture pieces too. This is the feature `FurnitureSystem`'s own
+   comment already has a seam waiting for: a small, explicit *overrides*
+   map, persisted separately from (and layered on top of) the Workshop's
+   own current layout defaults — see docs/REFINEMENT.md for why that's
+   the right shape, not a return to saving every piece's transform
+   unconditionally the way an earlier version briefly, incorrectly, did.
 4. **Real ID3/embedded metadata for the music library** — see "Future
    extension points" in `docs/MUSIC.md`. `AudioSynth`'s generative pads
    remain in use for weather ambience and the `audioSource` behaviour
@@ -387,7 +429,7 @@ Roughly in priority order, each independently shippable:
 9. **Clothing and wearable Builder objects** — attaching to the rig's
    existing pivots (see `docs/PLAYER.md`'s "ready for what comes next").
 
-## Phase 12 — the world becomes alive on its own
+## Phase 13 — the world becomes alive on its own
 
 1. **Weather that changes itself** — `WeatherSystem.autoCycle` already
    exists as a flag with no behaviour behind it yet; give it a slow,
@@ -408,7 +450,7 @@ Roughly in priority order, each independently shippable:
    (Phase 4) already emits a generic named event; the first system or
    plugin that actually listens for one is what proves the hook out.
 
-## Phase 13 — beyond one building
+## Phase 14 — beyond one building
 
 - **Additional buildings** — `RoomLayoutSystem` was written with this in
   mind (see its class comment), and `WorldObjectsStore` was made

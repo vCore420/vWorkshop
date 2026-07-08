@@ -4,7 +4,7 @@ A living 3D creative workshop, built to be a place you return to rather than
 an app you launch. Runs entirely in the browser, no build step, no backend —
 just static files.
 
-This project has gone through ten phases: an architectural foundation and
+This project has gone through eleven phases: an architectural foundation and
 one believable room (phase 1), turning the computer into a real,
 self-contained creative workstation with a physical sit-down/stand-up
 transition (phase 2), turning the workbench into the workshop's visual
@@ -18,13 +18,17 @@ library replacing the stereo's placeholder track (phase 7), giving that
 library a proper physical home: the reading and listening corner redesigned
 as one intentional area alongside the computer desk (phase 8), a
 performance audit and a full Settings app, making everything feel smoother,
-especially on tablets, without turning down the visual quality (phase 9),
-and — this phase — a player identity system: a modular procedural
-character and a Wardrobe app to gradually become whoever you want to be
-(phase 10). See `docs/ROADMAP.md` for what's next, `docs/ARCHITECTURE.md`
+especially on tablets, without turning down the visual quality (phase 9), a
+player identity system: a modular procedural character and a Wardrobe app
+to gradually become whoever you want to be (phase 10), and — this phase —
+a maintenance pass: two real bugs properly root-caused (a stuck-key
+movement bug, a music-library WebMediaPlayer exhaustion bug), a genuine
+save-versioning and migration framework, a Settings Danger Zone, and a
+round of interior/lighting refinement (phase 11). See `docs/ROADMAP.md`
+for what's next, `docs/ARCHITECTURE.md`
 for how the workshop as a whole is put together, and `docs/COMPUTER.md` /
 `docs/WORKBENCH.md` / `docs/WORLDBUILDER.md` / `docs/WORLD.md` /
-`docs/POLISH.md` / `docs/MUSIC.md` / `docs/PERFORMANCE.md` / `docs/PLAYER.md` for how those specifically work.
+`docs/POLISH.md` / `docs/MUSIC.md` / `docs/PERFORMANCE.md` / `docs/PLAYER.md` / `docs/REFINEMENT.md` for how those specifically work.
 
 ## Running it locally
 
@@ -91,8 +95,8 @@ There is no menu. Everything is a physical object — see the table below.
 | Tool storage | Labelled placeholder for a future inventory system |
 | Reading chair | Part of the same reading-and-listening corner as the bookshelf and music cabinet — a quiet spot, deliberately reserved for something calmer later |
 | Windows | Real glass now — see the actual sky/world outside. "Look outside" still checks and changes the weather, sees the current time |
-| Workshop door | Opens/closes, and now genuinely leads outside — walk through it into the world and back in freely |
-| Light switch (by the door) | Toggles the room's practical lighting |
+| Front doors | A proper pair of outward-opening French doors — opens/closes, and genuinely leads outside — walk through into the world and back in freely |
+| Light switch (left of the front doors) | Toggles the room's practical lighting |
 
 Everything above is either a real, working feature or an honestly-labelled
 placeholder for one — nothing fakes a feature that isn't there.
@@ -270,13 +274,16 @@ rate limit), Performance (Performance/Balanced/Quality presets, "Optimise
 For This Device", and a plain-language performance summary — current
 performance, current preset, approximate FPS, nothing more technical than
 that), Display (field of view, UI scale), Controls (mouse/touch
-sensitivity, invert look), and Audio (master/music/effects/ambient
-volume). Everything here is opt-in — the Workshop looks exactly as it
-always has until you change something, and every value you do change
-persists like everything else. See `docs/PERFORMANCE.md` for the full
-write-up, including a real performance audit (not guesswork) covering
-where the engine was doing unnecessary repeated work and how each was
-fixed architecturally rather than by turning anything down.
+sensitivity, invert look), Audio (master/music/effects/ambient volume),
+and a Danger Zone for long-term maintenance (clear the Workshop's cache,
+reset settings, reset your character, or a full factory reset back to a
+fresh first-launch state — every action confirms before doing anything,
+and factory reset asks twice). Everything except the Danger Zone is
+opt-in — the Workshop looks exactly as it always has until you change
+something, and every value you do change persists like everything else.
+See `docs/PERFORMANCE.md` for the graphics/performance write-up and
+`docs/REFINEMENT.md` for the Danger Zone and the save-versioning system
+behind "Factory Reset."
 
 ## What persists
 

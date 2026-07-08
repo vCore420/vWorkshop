@@ -50,7 +50,7 @@ src/
   utils/                     PlaceholderFactory, ProceduralTexture, AudioSynth, InputManager, math, storage, ScreenProjector
   plugins/examples/          reference plugin(s) — see PLUGIN_GUIDE.md
   main.js                    wiring only — construct, register, start. No behaviour here.
-docs/                        this file, COMPUTER.md, WORKBENCH.md, WORLDBUILDER.md, WORLD.md, POLISH.md, MUSIC.md, PERFORMANCE.md, PLAYER.md, ROADMAP.md, PLUGIN_GUIDE.md
+docs/                        this file, COMPUTER.md, WORKBENCH.md, WORLDBUILDER.md, WORLD.md, POLISH.md, MUSIC.md, PERFORMANCE.md, PLAYER.md, REFINEMENT.md, ROADMAP.md, PLUGIN_GUIDE.md
 assets/                      README explaining the "no shipped binary assets yet" decision
 ```
 
@@ -233,14 +233,18 @@ that reads/writes `localStorage`. Two ways state gets included in a save:
 - **Event-based** (most core systems): a system listens for
   `persistence:save` and writes onto the shared `bag` object it's handed;
   listens for `persistence:load` and reads its own key back out of the bag
-  it's handed. This is how `RoomLayoutSystem`, `FurnitureSystem`,
-  `LightingSystem`, `TimeOfDaySystem`, `WeatherSystem`, `AudioSystem`,
-  `CameraSystem`, `ComputerSystem`, and `WorkbenchSystem` all persist
-  state, with zero coupling to `PersistenceSystem` beyond those two event
-  names. `WorkbenchSystem` persists only `{ currentProjectId }` this way —
-  a project's own `kind`/`presence`/`notes` ride along for free inside the
+  it's handed. This is how `RoomLayoutSystem`, `LightingSystem`,
+  `TimeOfDaySystem`, `WeatherSystem`, `AudioSystem`, `CameraSystem`,
+  `ComputerSystem`, and `WorkbenchSystem` all persist state, with zero
+  coupling to `PersistenceSystem` beyond those two event names.
+  `WorkbenchSystem` persists only `{ currentProjectId }` this way — a
+  project's own `kind`/`presence`/`notes` ride along for free inside the
   `projects` provider below, since they're just fields on the same project
-  object the pinboard and computer already save.
+  object the pinboard and computer already save. `FurnitureSystem`
+  deliberately does *not* do this for furniture position/rotation — see
+  its own comment and docs/REFINEMENT.md for why treating a Workshop
+  default as if it were player data was a real bug, not a design choice
+  worth keeping.
 - **Explicit providers**: `persistenceSystem.registerProvider(key, storeInstance)`
   for plain stores that aren't Engine systems (`ProjectsStore`, `NotesStore`,
   `ObjectLibraryStore`, `WorldObjectsStore`, `MusicLibraryStore`,
@@ -260,6 +264,15 @@ HUD's backup buttons, which is the same envelope shape, just written to disk
 instead of `localStorage`. That symmetry means "cloud sync" later is a
 matter of sending/receiving this same envelope somewhere else, not a new
 save format.
+
+**Versioning and migration** (`src/systems/SaveMigrations.js`): every
+envelope's `version` field is checked against `CURRENT_SAVE_VERSION` on
+load, and walked forward one migration at a time until it's caught up —
+see docs/REFINEMENT.md for the full reasoning and the first real migration
+this introduced. A version only needs a migration entry if it changes what
+existing data *means*; a version that only adds a new field or provider
+doesn't need one, since every store already treats a missing field as "not
+set yet" the same way it does on a genuinely first-ever launch.
 
 ## Placeholder-first assets
 
