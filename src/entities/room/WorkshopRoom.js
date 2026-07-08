@@ -7,7 +7,7 @@ import { concreteTexture } from "../../utils/ProceduralTexture.js";
 // real geometry, but it's above head height, so it must never appear as a
 // collision obstacle. Matches FurnitureSystem's own footprint height
 // convention for the same reason.
-const COLLISION_HEIGHT_LIMIT = 2.2;
+export const COLLISION_HEIGHT_LIMIT = 2.2;
 
 // The wall was 0.12 thick before this pass, and every piece of furniture
 // that sits close to one (the pinboard, tool storage, the workbench) was
