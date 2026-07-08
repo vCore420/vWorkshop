@@ -1,8 +1,9 @@
+import * as THREE from "three";
 import { compileDefinition, makeDefaultPart } from "../../../worldbuilder/ObjectCompiler.js";
 import { getBehaviourTypes, getBehaviourConfig, defaultPropertiesFor } from "../../../worldbuilder/behaviours/index.js";
+import { PART_CATEGORIES, SEGMENTED_PART_TYPES, partLabel } from "../../../worldbuilder/PartTypes.js";
 import { PreviewRenderer } from "./PreviewRenderer.js";
 
-const PART_TYPES = ["box", "cylinder", "sphere", "cone", "plane"];
 // Behaviours in this group can't be combined with each other — an entity
 // can only carry one InteractableComponent. See behaviours/registry.js.
 // Derived from the registry rather than hardcoded — every behaviour that
@@ -21,6 +22,15 @@ const INTERACTABLE_GROUP = new Set(getBehaviourTypes().filter((type) => getBehav
  * pressed, so experimenting with parts costs nothing. See
  * docs/WORLDBUILDER.md for the full architecture this sits on top of
  * (ObjectCompiler, the behaviour registry, ObjectLibraryStore).
+ *
+ * **Workspace**: an even split — a large, always-visible live preview on
+ * the left, every editing control on the right. This uses its own layout
+ * classes (`.builder-workspace*`), not the `.builder-root`/`.builder-
+ * preview`/`.builder-form` triplet WardrobeApp also uses — the two apps'
+ * *content* sections (`.builder-section`, `.builder-library`, `.builder-
+ * field`...) still share styling, but the outer split is Builder's own,
+ * specifically so widening it here couldn't narrow the Wardrobe's own
+ * preview as a side effect.
  */
 export function createBuilderApp({ objectLibraryStore, worldObjectsStore, worldObjectsSystem }) {
   return {
@@ -29,21 +39,39 @@ export function createBuilderApp({ objectLibraryStore, worldObjectsStore, worldO
     glyph: "\uD83D\uDEE0",
     mount(container) {
       let draft = freshDraft();
+      let highlightMaterial = null; // the one cloned material used to tint whichever part is selected — see refreshPreview()
 
       const root = document.createElement("div");
-      root.className = "builder-root";
+      root.className = "builder-workspace";
       container.appendChild(root);
 
       const previewPane = document.createElement("div");
-      previewPane.className = "builder-preview";
+      previewPane.className = "builder-workspace-preview";
       const formPane = document.createElement("div");
-      formPane.className = "builder-form";
+      formPane.className = "builder-workspace-form";
       root.append(previewPane, formPane);
 
-      const preview = new PreviewRenderer(previewPane);
+      const preview = new PreviewRenderer(previewPane, { lookAtHeight: 0.3, distance: 3.2 });
 
       function refreshPreview() {
-        preview.setObject(compileDefinition(draft));
+        highlightMaterial?.dispose(); // the previous refresh's clone, if any — never the shared cached material other objects use
+        highlightMaterial = null;
+
+        const compiled = compileDefinition(draft);
+        if (draft.selectedPartId) {
+          compiled.traverse((child) => {
+            if (child.userData?.partId !== draft.selectedPartId || !child.isMesh) return;
+            // Cloned specifically so this never touches the shared, cached
+            // material every other object of this colour also uses (see
+            // ObjectCompiler.js/PlaceholderFactory.js) — the same care
+            // Build Mode's own ghost preview takes, for the same reason.
+            highlightMaterial = child.material.clone();
+            highlightMaterial.emissive = new THREE.Color("#b8863b");
+            highlightMaterial.emissiveIntensity = 0.55;
+            child.material = highlightMaterial;
+          });
+        }
+        preview.setObject(compiled);
       }
 
       function saveDraftToLibrary() {
@@ -178,26 +206,42 @@ function buildPartsSection(draft, onChange, onPreviewChange) {
   heading.textContent = "Parts";
   section.appendChild(heading);
 
+  // A dropdown grouped by category, not a wall of buttons — thirteen
+  // shapes is a genuinely useful set, but thirteen buttons would be
+  // exactly the "complicated interface" this pass was asked to avoid.
   const toolbar = document.createElement("div");
   toolbar.className = "builder-toolbar";
-  for (const type of PART_TYPES) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.textContent = `+ ${capitalize(type)}`;
-    btn.addEventListener("click", () => {
-      const part = makeDefaultPart(type, `part-${Date.now()}-${draft.nextPartNum++}`);
-      draft.parts.push(part);
-      draft.selectedPartId = part.id;
-      onChange();
-    });
-    toolbar.appendChild(btn);
+  const select = document.createElement("select");
+  select.className = "builder-shape-select";
+  for (const group of PART_CATEGORIES) {
+    const optgroup = document.createElement("optgroup");
+    optgroup.label = group.category;
+    for (const { id, label } of group.types) {
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent = label;
+      optgroup.appendChild(opt);
+    }
+    select.appendChild(optgroup);
   }
+  toolbar.appendChild(select);
+
+  const addBtn = document.createElement("button");
+  addBtn.type = "button";
+  addBtn.textContent = "+ Add Shape";
+  addBtn.addEventListener("click", () => {
+    const part = makeDefaultPart(select.value, `part-${Date.now()}-${draft.nextPartNum++}`);
+    draft.parts.push(part);
+    draft.selectedPartId = part.id;
+    onChange();
+  });
+  toolbar.appendChild(addBtn);
   section.appendChild(toolbar);
 
   if (draft.parts.length === 0) {
     const empty = document.createElement("div");
     empty.className = "builder-empty";
-    empty.textContent = "No parts yet — add a primitive above to start building.";
+    empty.textContent = "No parts yet — pick a shape above and add one to start building.";
     section.appendChild(empty);
     return section;
   }
@@ -209,7 +253,7 @@ function buildPartsSection(draft, onChange, onPreviewChange) {
     if (part.id === draft.selectedPartId) li.classList.add("selected");
 
     const label = document.createElement("span");
-    label.textContent = `${index + 1}. ${capitalize(part.type)}`;
+    label.textContent = `${index + 1}. ${partLabel(part.type)}`;
     label.addEventListener("click", () => { draft.selectedPartId = part.id; onChange(); });
     li.appendChild(label);
 
@@ -262,7 +306,7 @@ function buildPartEditor(part, onPreviewChange) {
   miscRow.className = "builder-inline-row";
   miscRow.appendChild(numberField("Rotation (\u00b0)", Math.round((part.rotationY * 180) / Math.PI), 1, (v) => { part.rotationY = (v * Math.PI) / 180; onPreviewChange(); }));
   miscRow.appendChild(colorField("Colour", part.color, (v) => { part.color = v; onPreviewChange(); }));
-  if (part.type === "cylinder" || part.type === "cone" || part.type === "sphere") {
+  if (SEGMENTED_PART_TYPES.has(part.type)) {
     miscRow.appendChild(numberField("Segments", part.segments ?? 16, 1, (v) => { part.segments = Math.max(3, Math.round(v)); onPreviewChange(); }));
   }
   editor.appendChild(miscRow);
@@ -498,10 +542,6 @@ function smallButton(label, onClick) {
 
 function swap(arr, i, j) {
   [arr[i], arr[j]] = [arr[j], arr[i]];
-}
-
-function capitalize(str) {
-  return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 function escapeHtml(str) {

@@ -17,7 +17,9 @@ import * as THREE from "three";
  * different kind of object. `lookAtHeight`/`distance` are configurable
  * specifically so the Wardrobe can frame a person-sized figure properly;
  * their defaults are exactly the Builder's original hardcoded values, so
- * its own usage is completely unaffected.
+ * its own usage is completely unaffected. Orbit (drag) and zoom (scroll,
+ * bounded to a sensible range around the starting `distance`) are both
+ * supported; either app gets both for free.
  */
 export class PreviewRenderer {
   constructor(container, { lookAtHeight = 0.3, distance = 3.2 } = {}) {
@@ -67,6 +69,17 @@ export class PreviewRenderer {
     window.addEventListener("pointermove", this._onPointerMove);
     window.addEventListener("pointerup", this._onPointerUp);
 
+    // Zoom — bounded so you can't scroll the object out of view entirely,
+    // or so close the near clip plane starts cutting through it.
+    this._minDistance = distance * 0.35;
+    this._maxDistance = distance * 3;
+    this._onWheel = (e) => {
+      e.preventDefault();
+      this._distance = Math.max(this._minDistance, Math.min(this._maxDistance, this._distance + e.deltaY * 0.003 * this._distance));
+      this._updateCameraPosition();
+    };
+    this.canvas.addEventListener("wheel", this._onWheel, { passive: false });
+
     this._resize();
     this._resizeObserver = new ResizeObserver(() => this._resize());
     this._resizeObserver.observe(container);
@@ -108,6 +121,7 @@ export class PreviewRenderer {
     this._running = false;
     this._resizeObserver.disconnect();
     this.canvas.removeEventListener("pointerdown", this._onPointerDown);
+    this.canvas.removeEventListener("wheel", this._onWheel);
     window.removeEventListener("pointermove", this._onPointerMove);
     window.removeEventListener("pointerup", this._onPointerUp);
     this.renderer.dispose();
