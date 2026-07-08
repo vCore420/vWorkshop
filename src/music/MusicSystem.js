@@ -10,14 +10,16 @@ const COVER_CACHE_LIMIT = 60;
  * Owns the one real `<audio>` element in the workshop and everything about
  * what it's doing — the queue, shuffle/repeat, volume, and which song is
  * current. This is a permanent Engine system, not something tied to
- * whether the music overlay happens to be open: playback continues exactly
- * as it would on a real device, whether you're standing at the stereo,
- * walking across the room, or out in the world (see `docs/MUSIC.md`).
+ * whether the music overlay happens to be open: playback continues
+ * exactly as it would on a real device, whether you're standing at the
+ * music cabinet, walking across the room, or out in the world (see
+ * `docs/MUSIC.md`).
  *
- * Nothing here is stereo-specific. Any interactable — the stereo today, a
- * future Builder object with a `musicPlayer` behaviour tomorrow — opens
- * the exact same UI the exact same way: by triggering the `"music"`
- * overlay (see `src/entities/furniture/StereoPlayer.js` and
+ * Nothing here is specific to any one object. Any interactable — the
+ * music cabinet today, a future Builder object with a `musicPlayer`
+ * behaviour tomorrow — opens the exact same UI the exact same way: by
+ * triggering the `"music"` overlay (see
+ * `src/entities/furniture/MusicCabinet.js` and
  * `src/worldbuilder/behaviours/MusicPlayerBehaviour.js`, which do nothing
  * but that).
  */
@@ -35,6 +37,10 @@ export class MusicSystem {
     this.isPlaying = false;
     this.volume = 0.7;
     this.muted = false;
+    // Settings app's Audio tab (master x music) — layered on top of the
+    // volume slider in the player itself, applied via _applyVolume()
+    // rather than each volume-related call site computing it separately.
+    this._settingsMultiplier = 1;
 
     this._rootHandleCache = new Map(); // rootId -> live FileSystemDirectoryHandle
     this._rootStatus = new Map(); // rootId -> "granted" | "needs-permission" | "missing" | "scanning" | "error"
@@ -48,7 +54,7 @@ export class MusicSystem {
     this.engine = engine;
     this.audio = new Audio();
     this.audio.preload = "auto";
-    this.audio.volume = this.volume;
+    this._applyVolume();
 
     this.audio.addEventListener("ended", () => this._onEnded());
     this.audio.addEventListener("timeupdate", () => this._onTimeUpdate());
@@ -73,7 +79,7 @@ export class MusicSystem {
       this.muted = !!bag.music.muted;
       this.shuffle = !!bag.music.shuffle;
       this.repeat = bag.music.repeat ?? "off";
-      this.audio.volume = this.muted ? 0 : this.volume;
+      this._applyVolume();
     });
 
     // Root status-checking and queue restoration both happen in
@@ -188,14 +194,27 @@ export class MusicSystem {
   setVolume(v) {
     this.volume = Math.max(0, Math.min(1, v));
     this.muted = false;
-    this.audio.volume = this.volume;
+    this._applyVolume();
     this._emitPlaybackState();
     this.engine.events.emit("persistence:saveRequested");
   }
 
+  /** Called by SettingsSystem whenever the Audio tab's master/music
+   *  sliders change — layered on top of the player's own volume slider,
+   *  not a replacement for it (same relationship AudioSystem's own
+   *  multipliers have to its existing volume/balance choices). */
+  setSettingsMultiplier(multiplier) {
+    this._settingsMultiplier = multiplier;
+    this._applyVolume();
+  }
+
+  _applyVolume() {
+    this.audio.volume = (this.muted ? 0 : this.volume) * this._settingsMultiplier;
+  }
+
   toggleMute() {
     this.muted = !this.muted;
-    this.audio.volume = this.muted ? 0 : this.volume;
+    this._applyVolume();
     this._emitPlaybackState();
   }
 

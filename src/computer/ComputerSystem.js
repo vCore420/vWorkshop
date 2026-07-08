@@ -34,7 +34,7 @@ const PANEL_REVEAL_END = 1.0; // ...and is fully shown by this progress
  */
 export class ComputerSystem {
   constructor(deps) {
-    this.deps = deps; // { projectsStore, notesStore, musicSystem, lightingSystem, timeOfDaySystem, weatherSystem }
+    this.deps = deps; // { projectsStore, notesStore, musicSystem, lightingSystem, timeOfDaySystem, weatherSystem, settingsStore }
     this.active = false;
     this.progress = 0;
     this.lastAppId = "projects";

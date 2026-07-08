@@ -4,7 +4,7 @@ import { ShelvingDefinition } from "./Shelving.js";
 import { ToolStorageDefinition } from "./ToolStorage.js";
 import { PinboardDefinition } from "./Pinboard.js";
 import { SittingAreaDefinition } from "./SittingArea.js";
-import { StereoPlayerDefinition } from "./StereoPlayer.js";
+import { MusicCabinetDefinition } from "./MusicCabinet.js";
 import { NotebookDefinition } from "./Notebook.js";
 
 /**
@@ -39,7 +39,7 @@ export const FURNITURE_REGISTRY = [
   ToolStorageDefinition,
   PinboardDefinition,
   SittingAreaDefinition,
-  StereoPlayerDefinition,
+  MusicCabinetDefinition,
   NotebookDefinition,
 ];
 

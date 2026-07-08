@@ -1,11 +1,11 @@
 /**
  * createMediaApp
  * ----------------
- * Reflects `MusicSystem` — the same real music library the stereo opens —
+ * Reflects `MusicSystem` — the same real music library the music cabinet opens —
  * rather than the old generative placeholder track. "There's only one
  * 'what's playing' in the workshop": whether you check from here or from
- * the stereo itself, you see and control the same session. Tapping the
- * title opens the full library the same way interacting with the stereo
+ * the music cabinet itself, you see and control the same session. Tapping the
+ * title opens the full library the same way interacting with the cabinet
  * does, since a "now playing" strip with no way to actually browse a
  * library isn't much of a Media app.
  *
@@ -23,7 +23,7 @@ export function createMediaApp({ musicSystem }) {
       heading.textContent = "Media";
       const subtitle = document.createElement("p");
       subtitle.className = "app-subtitle";
-      subtitle.textContent = "Shares the workshop's music library — control it here, or from the stereo across the room.";
+      subtitle.textContent = "Shares the workshop's music library — control it here, or from the music cabinet across the room.";
 
       const nowPlaying = document.createElement("div");
       nowPlaying.className = "now-playing";

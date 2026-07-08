@@ -28,15 +28,27 @@ export const DEFAULT_SPAWN = {
  * position: [x, y, z] in metres, y is usually 0 (furniture builders place
  * their own geometry relative to the floor).
  * rotationY: radians.
+ *
+ * The computer desk's side of the room (east, +x) reads top-to-bottom as
+ * one walk: sit at the desk, browse the reference shelf, settle into the
+ * reading chair, then the music cabinet at the end of the row — the quiet
+ * corner the brief asked to relocate here, not spread across the room in
+ * a line but grouped the way a real corner would be: shelf and chair close
+ * enough to actually use together, the cabinet an easy last few steps
+ * further on. Every pair here was checked against
+ * FurnitureSystem._computeFootprintBox's actual rotated-AABB math (not
+ * just eyeballed) to confirm no two footprints overlap and the walking
+ * gaps between them stay comfortable — see docs/WORKBENCH.md's sibling
+ * note in docs/ARCHITECTURE.md on how furniture footprints are computed.
  */
 export const FURNITURE_LAYOUT = {
   workbench: { position: [-3.35, 0, -0.6], rotationY: Math.PI / 2 },
   toolStorage: { position: [-3.9, 0, 1.35], rotationY: Math.PI / 2 },
   pinboard: { position: [-3.95, 1.55, -2.15], rotationY: Math.PI / 2 },
   computerDesk: { position: [3.15, 0, -2.35], rotationY: -Math.PI / 2 },
-  shelving: { position: [3.85, 0, 0.6], rotationY: -Math.PI / 2 },
-  sittingArea: { position: [-2.5, 0, 2.15], rotationY: -Math.PI * 0.75 },
-  stereoPlayer: { position: [-1.35, 0, 2.5], rotationY: -Math.PI * 0.6 },
+  shelving: { position: [3.8, 0, -0.8], rotationY: -Math.PI / 2 },
+  sittingArea: { position: [2.3, 0, 0.9], rotationY: -Math.PI * 0.6 },
+  musicCabinet: { position: [3.5, 0, 2.15], rotationY: -Math.PI / 2 },
   notebook: { position: [-2.95, 0, -0.15], rotationY: 0.3 },
 };
 

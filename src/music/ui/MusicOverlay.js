@@ -52,7 +52,7 @@ const NAV_SECTIONS = [
  * Registered exactly like every other overlay
  * (`overlayManager.register("music", ...)`), and opened exactly like every
  * other one too: any interactable that emits `interaction:trigger` with
- * `overlayId: "music"` opens this — the stereo today, a future Builder
+ * `overlayId: "music"` opens this — the music cabinet today, a future Builder
  * object with a `musicPlayer` behaviour tomorrow, with no object-specific
  * code anywhere in this file.
  */
