@@ -48,7 +48,19 @@ export class RoomLayoutSystem {
     doorEntity.addComponent(
       new InteractableComponent({
         prompt: "Open the front doors",
-        radius: 1.6, // deliberately tighter than the standard "large/structural" 2.4m tier; see docs/REFINEMENT.md
+        // The interaction anchor (doorFrame, below) sits at ground level
+        // (y=0) — but interaction distance is a real 3D distance from the
+        // camera's eye height (1.65m), not a horizontal-only one. A
+        // smaller radius here already broke the door entirely: even
+        // standing exactly in the doorway, the vertical distance *alone*
+        // (1.65m) already exceeded a 1.6m radius, so there was no
+        // position anywhere the door could actually be reached from. 2.2m
+        // comfortably covers that fixed vertical offset with real
+        // horizontal reach left over, while staying well below the
+        // original, untightened 2.4m "large/structural" tier — see
+        // docs/REFINEMENT.md for the pass that introduced the bug, and
+        // docs/WORLDBUILDER.md for this fix.
+        radius: 2.2,
         onInteract: () => this.toggleDoor(),
       })
     );
