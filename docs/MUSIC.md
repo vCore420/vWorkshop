@@ -181,9 +181,9 @@ playback at all.
 The music overlay is registered exactly like every other physical object's
 panel (`overlayManager.register("music", ...)`) and opened the exact same
 generic way: any interactable emitting `interaction:trigger` with
-`overlayId: "music"` opens it. The stereo does this via an ordinary
+`overlayId: "music"` opens it. The music cabinet does this via an ordinary
 `overlayId` on its furniture definition — no special code. See
-"Architecture: reusable, not stereo-specific" below.
+"Architecture: reusable, not cabinet-specific" below.
 
 Layout: a dark-wood sidebar (search, Artists/Albums/Songs/Recently
 Added/Recently Played/Most Played/Favourites, your playlists, Manage
@@ -204,14 +204,19 @@ popover: it expands inline within the row instead, specifically to avoid
 positioning/clipping logic inside a scrolling list that I have no way to
 visually verify without a real browser to test in.
 
-## Architecture: reusable, not stereo-specific
+## Architecture: reusable, not cabinet-specific
 
 "The current radio should simply become the first object using this
 system... avoid hardcoding object-specific behaviour" is implemented
-literally: `StereoPlayer.js`'s interaction is just
+literally: `MusicCabinet.js`'s interaction is just
 `overlayId: "music"` — the same generic mechanism the pinboard, notebook,
-and every other piece of furniture already uses. There's no stereo-aware
-code anywhere in `src/music/`.
+and every other piece of furniture already uses. There's no
+cabinet-aware code anywhere in `src/music/`. (The physical object itself
+was redesigned in a later pass, from a placeholder stereo into a proper
+wooden cabinet with a turntable, amplifier, bookshelf speakers, and vinyl
+storage — see `docs/ARCHITECTURE.md`'s furniture notes. Its interaction
+config didn't change at all in that pass, which is exactly the point:
+the furniture and the system it opens are genuinely independent.)
 
 A new `musicPlayer` behaviour (`src/worldbuilder/behaviours/MusicPlayerBehaviour.js`)
 gives any Builder-designed object the identical capability: its `apply()`

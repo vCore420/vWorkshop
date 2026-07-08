@@ -235,7 +235,75 @@ Explicitly *not* attempted yet, on purpose: ID3/embedded metadata (titles
 and art still come from the folder structure itself), and library scanning
 on non-Chromium browsers — see "Known limitations" in `docs/MUSIC.md`.
 
-## Phase 8 — depth in the room that exists
+## Phase 8 — the reading and listening corner
+
+**Goal:** not a systems pass — an interior-design pass. Give the music
+system a proper physical home instead of a placeholder stereo, and turn
+the surrounding furniture into one deliberate corner rather than several
+separate objects. See `docs/ARCHITECTURE.md`'s furniture layout notes for
+the full reasoning (this pass was about arrangement and geometry, not new
+architecture, so it doesn't have its own dedicated doc).
+
+Delivered:
+- **The music cabinet** replaces the placeholder stereo: a low wooden
+  cabinet with a turntable and amplifier on top, records stored in an open
+  shelf below, and a pair of bookshelf speakers on simple stands either
+  side — leaning into vinyl rather than a modern media centre, on purpose.
+  Its interaction (`overlayId: "music"`, radius, prompt text) is the only
+  part that changed; the real library it opens (`docs/MUSIC.md`) wasn't
+  touched at all, which is exactly what "the furniture is just the
+  physical object through which the system is accessed" means in practice.
+- **The whole quiet corner relocated** to the computer desk's side of the
+  room, reordered top-to-bottom as the brief asked: computer desk,
+  reference bookshelf, reading chair, music cabinet — grouped closely
+  enough to read as one corner rather than spread the length of the wall.
+- **Every new position checked against the real footprint math**
+  (`FurnitureSystem._computeFootprintBox`'s actual rotated-AABB formula,
+  not eyeballed) to confirm no two pieces overlap and each stays
+  comfortably reachable at its interaction radius — the same verification
+  standard the Phase 5 interaction-distance pass used.
+
+## Phase 9 — performance, responsiveness, and configuration
+
+**Goal:** an engineering pass, not a feature pass — make the existing
+workshop feel smoother across desktop and tablet, and give a person a real
+Settings app instead of hidden defaults, without reducing visual quality or
+removing anything. See `docs/PERFORMANCE.md` for the full write-up.
+
+Delivered:
+- **A real performance audit**, not guesswork: the proximity-scan system
+  was redoing a full-room, allocation-heavy scan 60 times a second
+  (fixed with a cached, invalidation-aware entity query plus throttling
+  to ~12.5Hz); the walk loop was allocating fresh vectors every frame
+  (fixed with reusable scratch objects); three systems were repeating an
+  `Engine.getSystem()` linear search every frame for a dependency that
+  never changes (fixed by resolving once); the World Creation system's
+  unit-primitive geometry was never actually shared across placed
+  instances the way materials already were (fixed); and a settings slider
+  drag would have triggered dozens of full synchronous saves per second
+  without a debounce that didn't exist yet (fixed).
+- **A genuine bug found along the way**: `FurnitureSystem`'s
+  `persistence:load` path updated a piece's visual transform without
+  recomputing its collision footprint to match — unreachable today (nothing
+  moves furniture yet) but exactly the bug a future "drag furniture"
+  feature would have hit immediately.
+- **A full Settings app** (inside the computer, alongside the existing
+  General tab, not a separate object): Graphics (render distance, shadow
+  quality, lighting quality, anti-aliasing, frame rate limit), Performance
+  (presets, "Optimise For This Device", plain-language performance
+  feedback), Display (field of view, UI scale), Controls (mouse/touch
+  sensitivity, invert look), and Audio (master/music/effects/ambient
+  volume, layered on top of each system's own existing volume rather than
+  replacing it).
+- **Everything persists** through the exact same `PersistenceSystem`
+  path every other store already uses.
+
+Explicitly *not* attempted yet, on purpose: a real performance benchmark
+(the device-optimisation button is an honest heuristic, not a benchmark),
+and a discrete sound-effects channel for Effects Volume to actually
+control — see "Known limitations" in `docs/PERFORMANCE.md`.
+
+## Phase 10 — depth in the room that exists
 
 Roughly in priority order, each independently shippable:
 
@@ -259,13 +327,18 @@ Roughly in priority order, each independently shippable:
    (Phase 6), tuned for "reasonably large screens" per the brief; the
    workstation/workbench/Build Mode/music panels' *sizing* hasn't had a
    dedicated pass for genuinely narrow (phone-width, as opposed to
-   tablet-width) viewports yet.
+   tablet-width) viewports yet — distinct from Phase 9's UI Scale setting,
+   which scales everything uniformly rather than reflowing it.
 6. **Occlusion-aware interaction checks** — a raycast between the player
    and a candidate interactable, so standing just outside a wall can no
    longer trigger something on the other side of it (see `docs/WORLD.md`'s
    known simplifications).
+7. **A real performance benchmark**, if the heuristic in "Optimise For
+   This Device" (Phase 9) ever proves unsatisfying — rendering a few
+   sample frames and timing them, rather than inferring from device
+   capability alone.
 
-## Phase 9 — the world becomes alive on its own
+## Phase 11 — the world becomes alive on its own
 
 1. **Weather that changes itself** — `WeatherSystem.autoCycle` already
    exists as a flag with no behaviour behind it yet; give it a slow,
@@ -286,7 +359,7 @@ Roughly in priority order, each independently shippable:
    (Phase 4) already emits a generic named event; the first system or
    plugin that actually listens for one is what proves the hook out.
 
-## Phase 10 — beyond one building
+## Phase 12 — beyond one building
 
 - **Additional buildings** — `RoomLayoutSystem` was written with this in
   mind (see its class comment), and `WorldObjectsStore` was made

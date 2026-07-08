@@ -4,7 +4,7 @@ A living 3D creative workshop, built to be a place you return to rather than
 an app you launch. Runs entirely in the browser, no build step, no backend —
 just static files.
 
-This project has gone through seven phases: an architectural foundation and
+This project has gone through nine phases: an architectural foundation and
 one believable room (phase 1), turning the computer into a real,
 self-contained creative workstation with a physical sit-down/stand-up
 transition (phase 2), turning the workbench into the workshop's visual
@@ -13,12 +13,16 @@ way to create its own new objects at runtime via a Builder app and a
 physical Build Mode (phase 4), fixing the workshop's doorway and turning it
 into the first building in a real, seamless, walkable world (phase 5),
 touch support, installability as a Progressive Web App, and a stability
-pass across everything built so far (phase 6), and — this phase — a real
-personal music library replacing the stereo's placeholder track (phase 7).
-See `docs/ROADMAP.md` for what's next, `docs/ARCHITECTURE.md` for how the
-workshop as a whole is put together, and `docs/COMPUTER.md` /
+pass across everything built so far (phase 6), a real personal music
+library replacing the stereo's placeholder track (phase 7), giving that
+library a proper physical home: the reading and listening corner redesigned
+as one intentional area alongside the computer desk (phase 8), and — this
+phase — a performance audit and a full Settings app, making everything feel
+smoother, especially on tablets, without turning down the visual quality
+(phase 9). See `docs/ROADMAP.md` for what's next, `docs/ARCHITECTURE.md`
+for how the workshop as a whole is put together, and `docs/COMPUTER.md` /
 `docs/WORKBENCH.md` / `docs/WORLDBUILDER.md` / `docs/WORLD.md` /
-`docs/POLISH.md` / `docs/MUSIC.md` for how those specifically work.
+`docs/POLISH.md` / `docs/MUSIC.md` / `docs/PERFORMANCE.md` for how those specifically work.
 
 ## Running it locally
 
@@ -80,10 +84,10 @@ There is no menu. Everything is a physical object — see the table below.
 | Pinboard | Full project planning board — every project, any status, pinned as cork notes |
 | Workbench | Physically shows whatever project you're currently focused on — lean in for a small panel to finish it, switch to another, or start something new. See below. |
 | Notebook (on the workbench) | A page of free-form notes, saved automatically — separate from whatever project is currently on the bench |
-| Stereo | Opens the real music library — see "Music" below |
-| Shelving | Documentation & finished-project archive (honestly empty until there's something to archive) |
+| Music cabinet | A proper vinyl listening setup — turntable, amplifier, bookshelf speakers, records stored below. Opens the real music library — see "Music" below |
+| Shelving | Documentation & finished-project archive (honestly empty until there's something to archive) — the reference bookshelf at the top of the reading corner |
 | Tool storage | Labelled placeholder for a future inventory system |
-| Sitting area | A quiet corner, deliberately reserved for something calmer later |
+| Reading chair | Part of the same reading-and-listening corner as the bookshelf and music cabinet — a quiet spot, deliberately reserved for something calmer later |
 | Windows | Real glass now — see the actual sky/world outside. "Look outside" still checks and changes the weather, sees the current time |
 | Workshop door | Opens/closes, and now genuinely leads outside — walk through it into the world and back in freely |
 | Light switch (by the door) | Toggles the room's practical lighting |
@@ -107,7 +111,7 @@ it's meant to feel like it belongs to the object. Seven tabs live on it:
 - **Journal** — a page of notes, separate from the physical notebook
 - **Media** — reflects the real music library, wherever you last left it
 - **Builder** — design new objects for the world (see below)
-- **Settings** — room lights and clock mode
+- **Settings** — the Workshop's full configuration: room lights and clock mode, plus Graphics, Performance, Display, Controls, and Audio — see "Settings" below
 - **Browser** and **AI** — honestly labelled placeholders for later
 
 Whichever tab you had open is exactly where you'll land next time — see
@@ -192,10 +196,20 @@ See `docs/WORLD.md` for the full write-up, including what turned out to be
 an actual bug behind the old doorway (a wall with no real opening in it,
 not just a cosmetic simplification) and how it was fixed.
 
+## The reading and listening corner
+
+The reference bookshelf, reading chair, and music cabinet share one side
+of the room with the computer desk now — walk from the desk south along
+the east wall and you pass the bookshelf, then the chair, then the
+cabinet, arranged as one deliberate corner rather than separate objects
+dropped into the room. It's meant to be somewhere you'd actually stop:
+put a record on, sit for a few minutes, read something, think about
+what's next — before heading back to the workbench or the desk.
+
 ## Music
 
-Interacting with the stereo opens a real personal music library, not a
-placeholder. Point it at a folder shaped like `Artist/Album/song.mp3`
+Interacting with the music cabinet opens a real personal music library,
+not a placeholder. Point it at a folder shaped like `Artist/Album/song.mp3`
 (with an optional `cover.png` per album) and it's scanned recursively —
 artists, albums, songs, and artwork, all discovered from the folder
 structure itself, no metadata tagging required. Browse by Artists, Albums,
@@ -212,24 +226,45 @@ reconnects it. This uses the File System Access API, which — as of this
 writing — only Chromium-based browsers (Chrome, Edge) support; the library
 manager says so plainly rather than showing a broken button anywhere else.
 
-Nothing about this is hardcoded to the stereo specifically — any object
+Nothing about this is hardcoded to the cabinet specifically — any object
 built with the Builder can carry a "Music player" behaviour and open the
-exact same library the exact same way. See `docs/MUSIC.md` for the full
-architecture.
+exact same library the exact same way. The cabinet itself — turntable,
+amplifier, bookshelf speakers, records stored below — is just the physical
+object that happens to open it; redesigning it entirely (which happened in
+a later pass, see `docs/ARCHITECTURE.md`'s furniture notes) never touched
+this system at all. See `docs/MUSIC.md` for the full architecture.
+
+## Settings
+
+The computer's Settings app is the Workshop's one central place to
+configure itself, rather than a browser menu or a hidden default: Graphics
+(render distance, shadow quality, lighting quality, anti-aliasing, frame
+rate limit), Performance (Performance/Balanced/Quality presets, "Optimise
+For This Device", and a plain-language performance summary — current
+performance, current preset, approximate FPS, nothing more technical than
+that), Display (field of view, UI scale), Controls (mouse/touch
+sensitivity, invert look), and Audio (master/music/effects/ambient
+volume). Everything here is opt-in — the Workshop looks exactly as it
+always has until you change something, and every value you do change
+persists like everything else. See `docs/PERFORMANCE.md` for the full
+write-up, including a real performance audit (not guesswork) covering
+where the engine was doing unnecessary repeated work and how each was
+fixed architecturally rather than by turning anything down.
 
 ## What persists
 
 Positions, lighting on/off, clock mode, current weather, your music
 library (locations, favourites, play counts, playlists, and exactly where
-playback was) and every project (including its physical presence on the
-bench) and note, every object you've designed and every copy you've placed
-in the room, which computer app and which bench project you last had
-active, and where you were standing — all saved automatically (on an
-interval, on tab-hide, and before the page closes) to `localStorage` (plus
-IndexedDB for the music library's folder access — see `docs/MUSIC.md`),
-and restored exactly on your next visit. Two small buttons in the top-left
-corner export/import that same save data as a plain JSON file, for manual
-backup or moving to another browser.
+playback was), every Workshop setting you've changed, and every project
+(including its physical presence on the bench) and note, every object
+you've designed and every copy you've placed in the room, which computer
+app and which bench project you last had active, and where you were
+standing — all saved automatically (on an interval, on tab-hide, and
+before the page closes) to `localStorage` (plus IndexedDB for the music
+library's folder access — see `docs/MUSIC.md`), and restored exactly on
+your next visit. Two small buttons in the top-left corner export/import
+that same save data as a plain JSON file, for manual backup or moving to
+another browser.
 
 ## Project structure
 
@@ -247,6 +282,7 @@ src/computer/    the computer as one self-contained object — see docs/COMPUTER
 src/workbench/   the workbench + Project Presence system — see docs/WORKBENCH.md
 src/worldbuilder/ the world creation system (Builder + Build Mode + Construction Library) — see docs/WORLDBUILDER.md, docs/WORLD.md
 src/music/       the real music library + player — see docs/MUSIC.md
+src/settings/    Workshop Settings (persisted data + the system that applies it) — see docs/PERFORMANCE.md
 src/data/        room layout data, project/notes stores
 src/ui/          overlays (the diegetic panels) + the minimal HUD
 src/utils/       placeholder factories, procedural textures/audio, input abstraction (touch + mouse + keyboard)

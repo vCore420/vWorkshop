@@ -241,6 +241,79 @@
   border-color: var(--screen-glow);
 }
 
+/* Settings app */
+.settings-tab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 8px 0 16px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 10px;
+}
+.settings-tab-bar button {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.6);
+  border-radius: 14px;
+  padding: 5px 12px;
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  cursor: pointer;
+}
+.settings-tab-bar button:hover {
+  border-color: var(--screen-glow);
+  color: var(--screen-glow);
+}
+.settings-tab-bar button.active {
+  background: rgba(127, 216, 196, 0.15);
+  border-color: var(--screen-glow);
+  color: var(--screen-glow);
+}
+.settings-tab-body h3 {
+  font-size: 0.85rem;
+  color: var(--screen-glow);
+  margin: 18px 0 10px 0;
+}
+.settings-range-value {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--screen-glow);
+  width: 46px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.settings-action-button {
+  background: rgba(127, 216, 196, 0.15);
+  border: 1px solid rgba(127, 216, 196, 0.4);
+  color: var(--screen-glow);
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 0.8rem;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  margin-bottom: 6px;
+}
+.settings-action-button:hover {
+  background: rgba(127, 216, 196, 0.25);
+}
+.settings-performance-feedback {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+.settings-feedback-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+}
+.settings-feedback-value {
+  font-family: var(--font-mono);
+  color: var(--screen-glow);
+}
+
 @media (max-width: 700px) {
   .workstation-rail { width: 48px; }
   .workstation-rail button .rail-glyph { font-size: 15px; }

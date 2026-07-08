@@ -43,12 +43,13 @@ src/
                               ConstructionLibrary.js, the permanent building-block
                               set) — see docs/WORLDBUILDER.md and docs/WORLD.md
   music/                     the real music library + player — see docs/MUSIC.md
+  settings/                  Workshop Settings: persisted data + the system that applies it — see docs/PERFORMANCE.md
   data/                      plain state: layoutDefault.js, ProjectsStore.js, NotesStore.js
   ui/                        OverlayManager.js, HUD.js, overlays/*.js (one per physical panel)
   utils/                     PlaceholderFactory, ProceduralTexture, AudioSynth, InputManager, math, storage, ScreenProjector
   plugins/examples/          reference plugin(s) — see PLUGIN_GUIDE.md
   main.js                    wiring only — construct, register, start. No behaviour here.
-docs/                        this file, COMPUTER.md, WORKBENCH.md, WORLDBUILDER.md, WORLD.md, POLISH.md, MUSIC.md, ROADMAP.md, PLUGIN_GUIDE.md
+docs/                        this file, COMPUTER.md, WORKBENCH.md, WORLDBUILDER.md, WORLD.md, POLISH.md, MUSIC.md, PERFORMANCE.md, ROADMAP.md, PLUGIN_GUIDE.md
 assets/                      README explaining the "no shipped binary assets yet" decision
 ```
 
@@ -96,6 +97,9 @@ MusicSystem          → same flexibility as WorldObjectsSystem — only needs
                        queue restore) runs after engine.init() resolves,
                        same reasoning as WorkbenchSystem's — see
                        docs/MUSIC.md
+SettingsSystem       → looks up LightingSystem/WorldEnvironmentSystem/
+                       AudioSystem/MusicSystem via getSystem() at init() —
+                       safe regardless of order, see docs/PERFORMANCE.md
 BuildModeSystem      → looks up CameraSystem/RoomLayoutSystem/
                        WorldObjectsSystem/InteractionSystem at the moment
                        it needs them, not at init() time
@@ -145,7 +149,7 @@ of tens of entities, never thousands — simplicity wins here.
 ## The interaction pipeline
 
 This is the mechanism every single "walk up and press E" feature in the
-brief is built from — sitting at the desk, the pinboard, the stereo, the
+brief is built from — sitting at the desk, the pinboard, the music cabinet, the
 workbench, the shelves, the notebook, the door, the light switch, the
 windows. Understanding this pipeline once means you understand all of them.
 
@@ -179,7 +183,7 @@ windows. Understanding this pipeline once means you understand all of them.
 
 Notice the separation: `InteractionSystem` handles *proximity, prompts, and
 camera focus*. `OverlayManager` handles *DOM and pointer-lock*. Neither
-needs to know what a "notebook" or "stereo" is. Adding a new physical
+needs to know what a "notebook" or "music cabinet" is. Adding a new physical
 interaction is: build geometry, attach an `InteractableComponent`, register
 an overlay if it needs one. Nothing in `InteractionSystem` or
 `OverlayManager` changes.
@@ -189,6 +193,15 @@ an overlay if it needs one. Nothing in `InteractionSystem` or
 - **Room shape & furniture placement**: `src/data/layoutDefault.js`.
   `RoomLayoutSystem` and `FurnitureSystem` are just interpreters of this
   data. A future layout editor only needs to produce data in this shape.
+  `FURNITURE_LAYOUT`'s own comment records the reasoning behind the
+  current arrangement (the reading/listening corner grouped on the
+  computer desk's side of the room, redesigned from an earlier, more
+  scattered layout — see `docs/MUSIC.md` and `docs/ROADMAP.md`'s Phase 8).
+  Repositioning furniture is a data-only change, but it's worth verifying
+  against `FurnitureSystem._computeFootprintBox`'s actual rotated-AABB
+  formula rather than eyeballing new coordinates — a footprint's world
+  extent swaps which of a piece's width/depth dominates depending on its
+  rotation, which is easy to get backwards by intuition alone.
 - **Furniture appearance & behaviour**: `src/entities/furniture/*.js`, each
   exporting a `{ id, label, footprint, build(), interaction }` definition,
   collected in `registry.js`. `registerFurniture()` lets a plugin add a new
@@ -223,9 +236,9 @@ that reads/writes `localStorage`. Two ways state gets included in a save:
 - **Explicit providers**: `persistenceSystem.registerProvider(key, storeInstance)`
   for plain stores that aren't Engine systems (`ProjectsStore`, `NotesStore`,
   `ObjectLibraryStore`, `WorldObjectsStore`, `MusicLibraryStore`,
-  `PlaylistStore`, and `engine.plugins` itself, so every registered
-  plugin's own `save()`/`load()` runs too). `MusicSystem` itself, being a
-  real Engine system, saves/loads its own playback session (queue,
+  `PlaylistStore`, `SettingsStore`, and `engine.plugins` itself, so every
+  registered plugin's own `save()`/`load()` runs too). `MusicSystem` itself,
+  being a real Engine system, saves/loads its own playback session (queue,
   position, volume) the ordinary system way — see docs/MUSIC.md.
 
 The save envelope (`{ version, savedAt, systems: {...}, providers: {...} }`)
@@ -247,11 +260,14 @@ Nothing in this phase was downloaded, painted, or recorded:
 - **Textures** — generated on an off-screen `<canvas>` at runtime
   (`ProceduralTexture.js`): wood grain, paper fibre, concrete speckle, brushed
   metal, rain streaks. Zero image files, zero network dependency.
-- **Audio** — generated with the Web Audio API (`AudioSynth.js`): ambient
-  pads for the stereo, filtered white noise for weather. The
-  contract (`{id, title}` for tracks) is asset-agnostic — swapping in real
-  recorded `.mp3`/`.ogg` files later only touches `AudioSynth.js` and
-  `AudioSystem`'s playback calls, never the overlay UI.
+- **Audio** — generated with the Web Audio API (`AudioSynth.js`): a small
+  set of ambient pads for the `audioSource` world-object behaviour, and
+  filtered white noise for weather. The workshop's real music — a proper
+  personal library reading actual audio files from disk — arrived later as
+  an entirely separate system (`src/music/`, see `docs/MUSIC.md`) rather
+  than by swapping files into this one; `AudioSynth.js` remains exactly
+  what it always was, a source of simple placeholder ambience, not a stand-in
+  for real recorded music.
 
 See `assets/README.md` for the plan for when real assets do arrive.
 

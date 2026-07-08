@@ -156,13 +156,15 @@ second building later is a matter of a different id, not a schema change.
 
 Every existing interactable — furniture, the door, the light switch, both
 windows — was individually retuned, not set to one blanket value:
-small objects (notebook, stereo, pinboard, the light switch, each window)
-to ~2.0m; medium furniture (tool storage, the sitting area) to ~2.2m;
-large furniture (the workbench, the computer desk, shelving) and the
-workshop door to ~2.4m. Every value was re-verified against each piece's
-own collision footprint to confirm it's still reachable from at least one
-approach angle (the same check performed when these pieces were first
-placed — see `docs/ARCHITECTURE.md`'s furniture section).
+small objects (notebook, pinboard, the light switch, each window) to
+~2.0m; medium furniture (tool storage, the sitting area) to ~2.2m; large
+furniture (the workbench, the computer desk, shelving, and — after its
+later redesign into a proper listening setup, see docs/MUSIC.md and
+docs/ARCHITECTURE.md — the music cabinet) and the workshop door to ~2.4m.
+Every value was re-verified against each piece's own collision footprint
+to confirm it's still reachable from at least one approach angle (the
+same check performed when these pieces were first placed — see
+`docs/ARCHITECTURE.md`'s furniture section).
 
 ## Known simplifications (by design, for this phase)
 
