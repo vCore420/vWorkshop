@@ -117,6 +117,29 @@ void settingsSystem;
 // appearance store has actually loaded. See src/player/PlayerCharacterSystem.js.
 const playerCharacterSystem = engine.addSystem(new PlayerCharacterSystem({ appearanceStore, textureStore }));
 
+// The Settings app's Danger Zone needs to reach across several stores
+// that don't otherwise know about each other (this is deliberately a
+// plain object of closures, not a new system — "resist adding new
+// systems" — since it's four buttons calling existing store methods, not
+// an ongoing responsibility). Referencing persistenceSystem/etc. here,
+// before their own `const` declarations below, is safe: these functions
+// are only ever *called* later, from a button click in the UI, long
+// after every one of those declarations has already run — a closure
+// captures the variable binding, not its value at this point in the file.
+const dangerZoneActions = {
+  clearCache: () => persistenceSystem.clearServiceWorkerCache(),
+  resetSettings: () => settingsStore.resetToDefaults(),
+  async resetPlayerData() {
+    const textureIds = new Set();
+    for (const part of Object.values(appearanceStore.appearance.parts)) if (part.textureId) textureIds.add(part.textureId);
+    for (const outfit of outfitStore.all()) for (const part of Object.values(outfit.appearance.parts)) if (part.textureId) textureIds.add(part.textureId);
+    appearanceStore.resetToDefaults();
+    outfitStore.resetToDefaults();
+    for (const id of textureIds) await textureStore.remove(id);
+  },
+  factoryReset: () => persistenceSystem.factoryReset(["workshop-player-textures", "workshop-music-handles"]),
+};
+
 // ComputerSystem needs FurnitureSystem (already registered, above) to have
 // *run* init() before it can find the desk — guaranteed by registering it
 // after FurnitureSystem — and needs CameraSystem's update to have already
@@ -137,6 +160,7 @@ const computerSystem = engine.addSystem(
     appearanceStore,
     outfitStore,
     textureStore,
+    dangerZoneActions,
   })
 );
 void computerSystem;

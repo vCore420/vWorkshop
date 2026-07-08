@@ -105,9 +105,18 @@ export class TimeOfDaySystem {
     else if (dayFactor > 0) sunColor = "#fff2df";
     else sunColor = "#405878";
 
-    const sunIntensity = 0.05 + dayFactor * 1.35;
-    const hemiIntensity = 0.15 + dayFactor * 0.55;
-    const ambientIntensity = 0.06 + dayFactor * 0.16;
+    // Ambient/hemisphere floor raised from what this system originally
+    // shipped with — the workshop read as too dark anywhere away from a
+    // direct light source, even at midday. A real room is rarely near-total
+    // darkness in its corners; this raises that floor without changing how
+    // much the sun or the practical lights (lamps, ceiling pendants)
+    // dominate near a window or a fixture — see LightingSystem.js, which
+    // is untouched. Daytime maximums only move a little; the point is
+    // fixing the dark corners and the night-time floor specifically, not
+    // making the room brighter overall.
+    const sunIntensity = 0.08 + dayFactor * 1.3;
+    const hemiIntensity = 0.28 + dayFactor * 0.5;
+    const ambientIntensity = 0.12 + dayFactor * 0.16;
 
     let skyColor;
     if (dayFactor > 0.15) skyColor = lerpColorHex("#ffb27a", "#bfe6ff", clamp((dayFactor - 0.15) / 0.4, 0, 1));

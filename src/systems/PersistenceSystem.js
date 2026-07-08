@@ -1,7 +1,7 @@
 import { StorageUtils } from "../utils/StorageUtils.js";
+import { CURRENT_SAVE_VERSION, migrateEnvelope } from "./SaveMigrations.js";
 
 const SAVE_KEY = "workshop:save";
-const SAVE_VERSION = 1;
 const AUTOSAVE_INTERVAL_MS = 20000;
 const SAVE_DEBOUNCE_MS = 400; // see the "saveRequested" handler below
 
@@ -73,7 +73,7 @@ export class PersistenceSystem {
     for (const [key, provider] of this.providers) providerData[key] = provider.save();
 
     return {
-      version: SAVE_VERSION,
+      version: CURRENT_SAVE_VERSION,
       savedAt: new Date().toISOString(),
       systems: bag,
       providers: providerData,
@@ -93,7 +93,10 @@ export class PersistenceSystem {
   _loadFromStorage() {
     const envelope = StorageUtils.get(SAVE_KEY);
     if (!envelope) return; // fresh workshop — every system already applied sensible defaults in init()
-    this._applyEnvelope(envelope);
+    const startingVersion = envelope.version ?? 1;
+    const migrated = migrateEnvelope(envelope);
+    this._applyEnvelope(migrated);
+    if (migrated.version !== startingVersion) this.save(); // persist the migrated shape immediately, not just once something else next triggers a save
   }
 
   _applyEnvelope(envelope) {
@@ -114,8 +117,52 @@ export class PersistenceSystem {
   async importBackup() {
     const envelope = await StorageUtils.uploadJSON();
     if (!envelope?.version) throw new Error("That file doesn't look like a workshop backup.");
-    StorageUtils.set(SAVE_KEY, envelope);
-    this._applyEnvelope(envelope);
+    const migrated = migrateEnvelope(envelope);
+    StorageUtils.set(SAVE_KEY, migrated);
+    this._applyEnvelope(migrated);
+  }
+
+  /** Settings app's Danger Zone — "Reset Workshop Settings" and "Reset
+   *  Player Data" reset their own specific stores directly (see
+   *  SettingsApp.js); this is for the two actions that are genuinely
+   *  PersistenceSystem's own concern. */
+
+  /** "Clear Workshop Cache" — the PWA's cached static assets, not any
+   *  saved data. Forces a fresh fetch of every file next load; useful if
+   *  the Workshop seems to be showing a stale version of itself. */
+  async clearServiceWorkerCache() {
+    if ("serviceWorker" in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((r) => r.unregister()));
+    }
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+  }
+
+  /** "Factory Reset Workshop" — every save key gone, both IndexedDB
+   *  databases (music folder handles, player textures) deleted, cache
+   *  cleared, then a reload. `dbNames` is passed in from main.js rather
+   *  than hardcoded here, since PersistenceSystem has no reason to
+   *  otherwise know HandleStore/TextureStore's specific database names —
+   *  see docs/PERFORMANCE.md's persistence section for why those two live
+   *  in IndexedDB at all. */
+  async factoryReset(dbNames = []) {
+    await this.clearServiceWorkerCache();
+    localStorage.clear();
+    await Promise.all(
+      dbNames.map(
+        (name) =>
+          new Promise((resolve) => {
+            const request = indexedDB.deleteDatabase(name);
+            request.onsuccess = () => resolve();
+            request.onerror = () => resolve();
+            request.onblocked = () => resolve();
+          })
+      )
+    );
+    window.location.reload();
   }
 
   update(_dt) {}

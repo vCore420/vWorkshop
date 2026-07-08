@@ -81,34 +81,26 @@ export class FurnitureSystem {
     }
     this._rebuildFootprintList();
 
-    engine.events.on("persistence:save", (bag) => {
-      bag.furniture = {};
-      for (const [id, piece] of this.pieces) {
-        const obj = piece.entity.object3D;
-        bag.furniture[id] = {
-          position: [obj.position.x, obj.position.y, obj.position.z],
-          rotationY: obj.rotation.y,
-        };
-      }
-    });
-    engine.events.on("persistence:load", (bag) => {
-      if (!bag?.furniture) return;
-      for (const [id, transform] of Object.entries(bag.furniture)) {
-        const piece = this.pieces.get(id);
-        if (!piece) continue;
-        piece.entity.object3D.position.set(...transform.position);
-        piece.entity.object3D.rotation.y = transform.rotationY;
-        // The footprint has to be recomputed here too, not just the visual
-        // transform — nothing lets the player actually move furniture yet,
-        // but the save/load path already round-trips a transform that
-        // could differ from the default one (see this class's own doc
-        // comment on that seam), and a stale footprint would mean
-        // colliding with where a piece *used* to be rather than where it
-        // visually is now.
-        piece.footprintBox = this._computeFootprintBox(piece.definition, transform.position, transform.rotationY);
-      }
-      this._rebuildFootprintList();
-    });
+    // Deliberately NOT registered here: a persistence:save/persistence:load
+    // pair that round-trips every piece's position/rotation. That used to
+    // exist, and was a real bug — furniture placement is a WORKSHOP
+    // default (it lives in src/data/layoutDefault.js and is meant to
+    // improve freely as the Workshop itself is updated), not player-owned
+    // data, but saving and blindly restoring it on every load treated it
+    // as the latter: once a save existed, a Workshop layout change (moving
+    // the reading chair, replacing the front door) would never actually
+    // reach it, because the frozen old position from whenever the save was
+    // first made always won. See docs/ARCHITECTURE.md's persistence
+    // section and SaveMigrations.js's v1->v2 entry, which clears the old
+    // frozen positions out of existing saves so this stops happening.
+    //
+    // If a future "move furniture in Build Mode" feature needs this data
+    // to actually be player-owned, the right shape is a small, explicit
+    // *overrides* map — `{ pieceId: {position, rotationY} }` — written only
+    // for pieces a player has actually repositioned, with every other
+    // piece continuing to use whatever the Workshop's current default is.
+    // That preserves a real customisation while still letting Workshop
+    // layout improvements reach every piece nobody has personally moved.
   }
 
   _resolveFocusPose(definition, object3D) {

@@ -97,12 +97,20 @@ export class LightingSystem {
   _buildLightSwitch() {
     const switchEntity = new Entity("lightSwitch").tag("structural");
     const plate = box(0.08, 0.12, 0.02, Materials.matte("#e7e2d6"));
-    plate.position.set(-3.9, 1.3, 2.6);
+    // On the south wall now, to the left of the front doors as you walk in
+    // facing into the room (the doors sit at x=0, spanning ±1.3 — see
+    // WORKSHOP_DOOR in layoutDefault.js; west, negative x, is your left
+    // walking in facing north). This also happens to fix a mismatch that
+    // was already there: the plate is thin along its own Z axis, which
+    // matches a wall whose face runs along X (north/south walls) — it
+    // used to sit on the *west* wall instead, whose face runs along Z, so
+    // moving it here is also the geometrically correct wall for its shape.
+    plate.position.set(-1.8, 1.3, 2.8);
     switchEntity.addComponent(new MeshComponent(plate, this.engine.scene));
     switchEntity.addComponent(
       new InteractableComponent({
         prompt: "Flip the light switch",
-        radius: 2.0, // small object — see docs/WORLD.md's interaction-distance pass
+        radius: 1.3, // deliberately tighter than the standard "small object" 2.0m tier; see docs/REFINEMENT.md
         onInteract: () => this.setLightsOn(!this.lightsOn),
       })
     );

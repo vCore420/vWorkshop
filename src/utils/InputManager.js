@@ -13,6 +13,29 @@
  * The touch joystick DOM is created here (not in HUD), since it's an input
  * device, not information — but it stays invisible until the first real
  * touch is seen, so desktop never shows it (see `_revealTouchControlsOnce`).
+ *
+ * Two real bugs, previously present, are fixed here — see
+ * docs/ARCHITECTURE.md's note on this file for the full account:
+ *
+ * 1. **Held keys never released.** A `keyup` is only ever dispatched to
+ *    whichever document currently has focus. If the window loses focus
+ *    while a movement key is physically held — alt-tab, clicking a
+ *    browser UI element, a notification stealing focus, switching apps on
+ *    a tablet — the browser page never sees that key come back up, and
+ *    the key stayed "held" forever afterward. Depending on which key got
+ *    stuck, this looked like movement continuing after release (the stuck
+ *    key alone), or movement refusing to respond at all (a stuck "forward"
+ *    silently cancelling a genuinely-held "backward", since both being
+ *    held nets to zero) — two very different-looking symptoms with the
+ *    same one cause. Fixed by resetting all held input the moment the
+ *    window blurs or the tab is hidden (`_resetAllInput`), the standard
+ *    fix for this well-known class of bug.
+ * 2. **Two keys mapped to the same action could cancel each other.**
+ *    `KeyW`/`ArrowUp` both mean "forward" — releasing just one of them,
+ *    while the other was still held, used to clear "forward" entirely,
+ *    because held state was tracked per *action*, not per physical key.
+ *    Fixed by tracking raw key codes and deriving "is this action held"
+ *    from whether *any* of its mapped codes are still down.
  */
 import * as THREE from "three";
 
@@ -26,13 +49,21 @@ const KEY_TO_ACTION = {
   KeyB: "buildMode",
 };
 
+// Reverse of KEY_TO_ACTION, built once: action -> every code that means it.
+// What lets releasing just one of two synonymous keys (KeyW/ArrowUp) leave
+// the action "held" as long as the other one still is.
+const ACTION_TO_CODES = {};
+for (const [code, action] of Object.entries(KEY_TO_ACTION)) {
+  (ACTION_TO_CODES[action] ??= []).push(code);
+}
+
 const JOYSTICK_RADIUS = 42; // px the nub can travel from centre before clamping
 const LOOK_DEADZONE = 1.2; // px of per-frame touch jitter to ignore, so a light tap doesn't twitch the camera
 
 export class InputManager {
   constructor(canvas, touchRoot) {
     this.canvas = canvas;
-    this._keys = new Set();
+    this._heldCodes = new Set(); // raw key codes currently down, e.g. "KeyW", "ArrowUp"
     this.lookDelta = new THREE.Vector2();
     this.pointerLocked = false;
     this._justPressed = new Set();
@@ -60,7 +91,29 @@ export class InputManager {
       this.pointerLocked = document.pointerLockElement === this.canvas;
     });
 
+    // See this file's own top comment (bug 1). Either of these can fire
+    // without the matching touchend/keyup ever arriving.
+    window.addEventListener("blur", () => this._resetAllInput());
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) this._resetAllInput();
+    });
+
     if (touchRoot) this._setupTouch(touchRoot);
+  }
+
+  /** Every held key, the joystick, and an in-progress look-drag, all back
+   *  to neutral — see the top-of-file comment on why this needs to exist
+   *  at all. Deliberately doesn't touch pointerLocked/touchMode (those
+   *  reflect real, still-current browser/device state, not "was something
+   *  held down", so there's nothing stale about them to clear). */
+  _resetAllInput() {
+    this._heldCodes.clear();
+    this._justPressed.clear();
+    this.lookDelta.set(0, 0);
+    this._joystickTouchId = null;
+    this._joystickVector.set(0, 0);
+    if (this.joystickNub) this.joystickNub.style.transform = "translate(0, 0)";
+    this._lookTouchId = null;
   }
 
   _onKeyDown(e) {
@@ -72,13 +125,21 @@ export class InputManager {
 
     const action = KEY_TO_ACTION[e.code];
     if (!action) return;
-    if (!this._keys.has(action)) this._justPressed.add(action);
-    this._keys.add(action);
+    if (!this._isActionHeld(action)) this._justPressed.add(action);
+    this._heldCodes.add(e.code);
   }
 
   _onKeyUp(e) {
-    const action = KEY_TO_ACTION[e.code];
-    if (action) this._keys.delete(action);
+    this._heldCodes.delete(e.code);
+  }
+
+  _isActionHeld(action) {
+    const codes = ACTION_TO_CODES[action];
+    if (!codes) return false;
+    for (const code of codes) {
+      if (this._heldCodes.has(code)) return true;
+    }
+    return false;
   }
 
   setMouseSensitivity(v) {
@@ -126,15 +187,15 @@ export class InputManager {
   get moveVector() {
     if (this._joystickTouchId !== null) return this._scratchMove.copy(this._joystickVector);
 
-    const x = (this._keys.has("right") ? 1 : 0) - (this._keys.has("left") ? 1 : 0);
-    const z = (this._keys.has("forward") ? 1 : 0) - (this._keys.has("backward") ? 1 : 0);
+    const x = (this._isActionHeld("right") ? 1 : 0) - (this._isActionHeld("left") ? 1 : 0);
+    const z = (this._isActionHeld("forward") ? 1 : 0) - (this._isActionHeld("backward") ? 1 : 0);
     const v = this._scratchMove.set(x, z);
     if (v.lengthSq() > 1) v.normalize();
     return v;
   }
 
   isHeld(action) {
-    return this._keys.has(action);
+    return this._isActionHeld(action);
   }
 
   wasJustPressed(action) {

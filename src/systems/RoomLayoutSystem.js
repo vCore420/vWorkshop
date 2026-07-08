@@ -27,26 +27,28 @@ export class RoomLayoutSystem {
   constructor() {
     this.room = null;
     this.doorOpen = false;
-    this._doorTargetY = 0;
+    this._doorTargetAngle = 0;
   }
 
   init(engine) {
     this.engine = engine;
     this.room = buildRoom(ROOM_DIMENSIONS, WINDOWS, WORKSHOP_DOOR);
     engine.scene.add(this.room.group);
-    this._doorTargetY = this.room.doorClosedY;
+    this._doorTargetAngle = 0; // closed
 
-    // The door mesh already lives inside room.group (added to the scene as
+    // The door panels already live inside room.group (added to the scene as
     // part of the room shell), so this entity skips MeshComponent — it only
     // needs `object3D` set for InteractableComponent's proximity check, and
-    // owns no separate scene-graph lifecycle of its own.
+    // owns no separate scene-graph lifecycle of its own. doorFrame (not
+    // either panel) is the anchor: it's fixed and centred on the doorway,
+    // where either swinging panel's own position moves as it opens.
     const doorEntity = new Entity("workshopDoor").tag("structural");
-    doorEntity.object3D = this.room.doorMesh;
+    doorEntity.object3D = this.room.doorFrame;
 
     doorEntity.addComponent(
       new InteractableComponent({
-        prompt: "Open the workshop door",
-        radius: 2.4, // large/structural — see docs/WORLD.md's interaction-distance pass
+        prompt: "Open the front doors",
+        radius: 1.6, // deliberately tighter than the standard "large/structural" 2.4m tier; see docs/REFINEMENT.md
         onInteract: () => this.toggleDoor(),
       })
     );
@@ -62,7 +64,7 @@ export class RoomLayoutSystem {
       windowEntity.addComponent(
         new InteractableComponent({
           prompt: "Look outside",
-          radius: 2.0, // small object
+          radius: 1.3, // deliberately tighter than the standard "small object" 2.0m tier; see docs/REFINEMENT.md
           opensOverlay: true,
           onInteract: () =>
             engine.events.emit("interaction:trigger", {
@@ -80,17 +82,18 @@ export class RoomLayoutSystem {
     engine.events.on("persistence:load", (bag) => {
       if (bag?.room) {
         this.doorOpen = !!bag.room.doorOpen;
-        this._doorTargetY = this.doorOpen ? this.room.doorOpenY : this.room.doorClosedY;
-        this.room.doorMesh.position.y = this._doorTargetY;
+        this._doorTargetAngle = this.doorOpen ? this.room.doorOpenAngle : 0;
+        this.room.doorPanels.left.rotation.y = -this._doorTargetAngle;
+        this.room.doorPanels.right.rotation.y = this._doorTargetAngle;
       }
     });
   }
 
   toggleDoor() {
     this.doorOpen = !this.doorOpen;
-    this._doorTargetY = this.doorOpen ? this.room.doorOpenY : this.room.doorClosedY;
+    this._doorTargetAngle = this.doorOpen ? this.room.doorOpenAngle : 0;
     const interactable = this.doorEntity.getComponent(InteractableComponent);
-    interactable.prompt = this.doorOpen ? "Close the workshop door" : "Open the workshop door";
+    interactable.prompt = this.doorOpen ? "Close the front doors" : "Open the front doors";
   }
 
   getBounds() {
@@ -113,6 +116,9 @@ export class RoomLayoutSystem {
 
   update(dt) {
     if (!this.room) return;
-    this.room.doorMesh.position.y = damp(this.room.doorMesh.position.y, this._doorTargetY, 4, dt);
+    const left = this.room.doorPanels.left;
+    const right = this.room.doorPanels.right;
+    left.rotation.y = damp(left.rotation.y, -this._doorTargetAngle, 4, dt);
+    right.rotation.y = damp(right.rotation.y, this._doorTargetAngle, 4, dt);
   }
 }
