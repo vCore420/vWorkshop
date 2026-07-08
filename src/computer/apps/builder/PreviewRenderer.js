@@ -3,16 +3,24 @@ import * as THREE from "three";
 /**
  * PreviewRenderer
  * -----------------
- * A small, fully self-contained Three.js scene just for previewing the
- * object currently being designed in the Builder app. Deliberately
+ * A small, fully self-contained Three.js scene just for previewing
+ * whatever object is handed to it via `setObject()`. Deliberately
  * independent of the main Engine (its own renderer, its own
  * requestAnimationFrame loop) — the object being edited isn't part of the
  * workshop yet, so it shouldn't share the workshop's scene, camera, or
- * lighting. `dispose()` must be called when the Builder tab is switched
+ * lighting. `dispose()` must be called when the owning tab is switched
  * away from, or this loop would keep running forever in the background.
+ *
+ * Originally built for the Builder app's live object preview; the
+ * Wardrobe app reuses it unchanged for the character preview (see
+ * `WardrobeApp.js`) — the same isolated-mini-scene need, just previewing a
+ * different kind of object. `lookAtHeight`/`distance` are configurable
+ * specifically so the Wardrobe can frame a person-sized figure properly;
+ * their defaults are exactly the Builder's original hardcoded values, so
+ * its own usage is completely unaffected.
  */
 export class PreviewRenderer {
-  constructor(container) {
+  constructor(container, { lookAtHeight = 0.3, distance = 3.2 } = {}) {
     this.container = container;
     this.canvas = document.createElement("canvas");
     this.canvas.className = "builder-preview-canvas";
@@ -24,7 +32,8 @@ export class PreviewRenderer {
     this.camera = new THREE.PerspectiveCamera(45, 1, 0.05, 50);
     this._theta = Math.PI * 0.25;
     this._phi = Math.PI * 0.35;
-    this._distance = 3.2;
+    this._distance = distance;
+    this._lookAtHeight = lookAtHeight;
     this._updateCameraPosition();
 
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
@@ -74,10 +83,10 @@ export class PreviewRenderer {
   _updateCameraPosition() {
     this.camera.position.set(
       this._distance * Math.sin(this._phi) * Math.sin(this._theta),
-      this._distance * Math.cos(this._phi) + 0.3,
+      this._distance * Math.cos(this._phi) + this._lookAtHeight,
       this._distance * Math.sin(this._phi) * Math.cos(this._theta)
     );
-    this.camera.lookAt(0, 0.3, 0);
+    this.camera.lookAt(0, this._lookAtHeight, 0);
   }
 
   _resize() {
