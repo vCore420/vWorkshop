@@ -4,7 +4,7 @@ A living 3D creative workshop, built to be a place you return to rather than
 an app you launch. Runs entirely in the browser, no build step, no backend —
 just static files.
 
-This project has gone through nine phases: an architectural foundation and
+This project has gone through ten phases: an architectural foundation and
 one believable room (phase 1), turning the computer into a real,
 self-contained creative workstation with a physical sit-down/stand-up
 transition (phase 2), turning the workbench into the workshop's visual
@@ -16,13 +16,15 @@ touch support, installability as a Progressive Web App, and a stability
 pass across everything built so far (phase 6), a real personal music
 library replacing the stereo's placeholder track (phase 7), giving that
 library a proper physical home: the reading and listening corner redesigned
-as one intentional area alongside the computer desk (phase 8), and — this
-phase — a performance audit and a full Settings app, making everything feel
-smoother, especially on tablets, without turning down the visual quality
-(phase 9). See `docs/ROADMAP.md` for what's next, `docs/ARCHITECTURE.md`
+as one intentional area alongside the computer desk (phase 8), a
+performance audit and a full Settings app, making everything feel smoother,
+especially on tablets, without turning down the visual quality (phase 9),
+and — this phase — a player identity system: a modular procedural
+character and a Wardrobe app to gradually become whoever you want to be
+(phase 10). See `docs/ROADMAP.md` for what's next, `docs/ARCHITECTURE.md`
 for how the workshop as a whole is put together, and `docs/COMPUTER.md` /
 `docs/WORKBENCH.md` / `docs/WORLDBUILDER.md` / `docs/WORLD.md` /
-`docs/POLISH.md` / `docs/MUSIC.md` / `docs/PERFORMANCE.md` for how those specifically work.
+`docs/POLISH.md` / `docs/MUSIC.md` / `docs/PERFORMANCE.md` / `docs/PLAYER.md` for how those specifically work.
 
 ## Running it locally
 
@@ -104,13 +106,15 @@ than disappearing. Standing up (Esc) reverses it exactly.
 
 The workstation panel itself is positioned every frame to match the
 monitor's actual position on your screen — it's not a full-screen overlay,
-it's meant to feel like it belongs to the object. Seven tabs live on it:
+it's meant to feel like it belongs to the object. Eight tabs live on it:
 
 - **Projects** — every project you've got, planning through done (the same
   data as the pinboard and workbench, just the full picture)
 - **Journal** — a page of notes, separate from the physical notebook
 - **Media** — reflects the real music library, wherever you last left it
 - **Builder** — design new objects for the world (see below)
+- **Wardrobe** — edit your own character's proportions, colours,
+  materials, and textures, with a live preview — see "Player identity" below
 - **Settings** — the Workshop's full configuration: room lights and clock mode, plus Graphics, Performance, Display, Controls, and Audio — see "Settings" below
 - **Browser** and **AI** — honestly labelled placeholders for later
 
@@ -234,6 +238,29 @@ object that happens to open it; redesigning it entirely (which happened in
 a later pass, see `docs/ARCHITECTURE.md`'s furniture notes) never touched
 this system at all. See `docs/MUSIC.md` for the full architecture.
 
+## Player identity
+
+"Not a character creator — a system that allows somebody to gradually
+become whoever they want to be." Your character is built from simple,
+clean primitive shapes (think Minecraft, not a realistic human) — Head,
+Torso, Upper/Lower Arm, Hand, Upper/Lower Leg, Foot — each one a real
+jointed part (shoulder, elbow, wrist; hip, knee, ankle), not a fixed model.
+The Wardrobe app, on the computer alongside every other app, edits every
+part's width/height/depth, colour, material, and an optional texture — paint
+directly onto it or import your own image — with a live preview that
+updates as you go.
+
+Save as many outfits as you like (rename, duplicate, delete, wear
+instantly); whatever you're currently wearing is remembered between visits
+the same way everything else in the Workshop is. The Workshop stays
+strictly first-person — you're not meant to see yourself constantly, only
+the way you naturally would in real life (looking down at your own hands
+or feet). Clothing, accessories, mirrors, and animation are all explicitly
+future work the rig was built to support without a redesign — see
+`docs/PLAYER.md` for the full architecture, including a design approach
+that didn't survive contact with the computer's existing panel system and
+what replaced it.
+
 ## Settings
 
 The computer's Settings app is the Workshop's one central place to
@@ -255,16 +282,20 @@ fixed architecturally rather than by turning anything down.
 
 Positions, lighting on/off, clock mode, current weather, your music
 library (locations, favourites, play counts, playlists, and exactly where
-playback was), every Workshop setting you've changed, and every project
-(including its physical presence on the bench) and note, every object
-you've designed and every copy you've placed in the room, which computer
-app and which bench project you last had active, and where you were
-standing — all saved automatically (on an interval, on tab-hide, and
-before the page closes) to `localStorage` (plus IndexedDB for the music
-library's folder access — see `docs/MUSIC.md`), and restored exactly on
-your next visit. Two small buttons in the top-left corner export/import
-that same save data as a plain JSON file, for manual backup or moving to
-another browser.
+playback was), every Workshop setting you've changed, your character's
+appearance and every outfit you've saved, and every project (including its
+physical presence on the bench) and note, every object you've designed and
+every copy you've placed in the room, which computer app and which bench
+project you last had active, and where you were standing — all saved
+automatically (on an interval, on tab-hide, and before the page closes) to
+`localStorage` (plus IndexedDB for the music library's folder access and
+your saved texture images — see `docs/MUSIC.md` / `docs/PLAYER.md`), and
+restored exactly on your next visit. Two small buttons in the top-left
+corner export/import that same save data as a plain JSON file, for manual
+backup or moving to another browser (texture images, being in IndexedDB
+rather than the save file itself, don't travel with that export — moving
+to another browser would bring outfits and proportions across, but
+custom-painted or imported textures would need re-adding).
 
 ## Project structure
 
@@ -283,6 +314,7 @@ src/workbench/   the workbench + Project Presence system — see docs/WORKBENCH.
 src/worldbuilder/ the world creation system (Builder + Build Mode + Construction Library) — see docs/WORLDBUILDER.md, docs/WORLD.md
 src/music/       the real music library + player — see docs/MUSIC.md
 src/settings/    Workshop Settings (persisted data + the system that applies it) — see docs/PERFORMANCE.md
+src/player/      the player character rig + appearance/outfit/texture persistence — see docs/PLAYER.md
 src/data/        room layout data, project/notes stores
 src/ui/          overlays (the diegetic panels) + the minimal HUD
 src/utils/       placeholder factories, procedural textures/audio, input abstraction (touch + mouse + keyboard)

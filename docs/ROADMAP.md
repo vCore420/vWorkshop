@@ -303,7 +303,49 @@ Explicitly *not* attempted yet, on purpose: a real performance benchmark
 and a discrete sound-effects channel for Effects Volume to actually
 control — see "Known limitations" in `docs/PERFORMANCE.md`.
 
-## Phase 10 — depth in the room that exists
+## Phase 10 — the player becomes an identity
+
+**Goal:** not a character creator — "a system that allows somebody to
+gradually become whoever they want to be." A modular, procedural player
+character (clean primitive geometry, Minecraft-ish, deliberately not
+realistic) and a Wardrobe app to edit it: proportions per body section,
+colour/material/texture per section, and named outfits that persist
+between sessions. See `docs/PLAYER.md` for the full write-up.
+
+Delivered:
+- **A real jointed rig** — eight body sections (Head, Torso, Upper/Lower
+  Arm, Hand, Upper/Lower Leg, Foot), each a unit-sized box scaled by its
+  own width/height/depth, connected through genuine parent-child pivots
+  (shoulder → elbow → wrist, hip → knee → ankle) rather than independently
+  positioned meshes — built specifically so a future animation system can
+  rotate joints that already exist, not rewrite the rig.
+- **The Wardrobe app**, on the computer alongside every other app: live
+  editing (every change applies immediately, the same in-place philosophy
+  the rest of the workshop already uses), colour/material/texture per
+  part, and a paint-directly-or-import-an-image texture tool, both ending
+  up as the same small saved canvas.
+- **Outfits**: save/rename/duplicate/delete/wear, each a full snapshot of
+  proportions + appearance, on top of a live "currently worn" appearance
+  that's always what's actually persisted and rendered.
+- **A real IndexedDB split for texture images**, the same reasoning
+  `HandleStore` already established for the music library's file handles
+  — real image data doesn't belong in a JSON blob bound for
+  `localStorage`'s quota. Textures are only actually deleted once nothing
+  live or saved still references them.
+- **A design course-correction worth recording**: the brief's "camera
+  should smoothly transition to face the character" was first built as a
+  literal main-camera retarget, and ran into a real conflict with how the
+  computer's screen-projected panel positions itself every frame. Reused
+  the Builder app's existing isolated preview-scene pattern instead — see
+  docs/PLAYER.md's own account of why.
+
+Explicitly *not* attempted yet, on purpose: independent left/right limb
+editing (arms and legs are symmetric), and anything involving clothing,
+accessories, mirrors, or animation — see "Architecture: ready for what
+comes next" in `docs/PLAYER.md` for how the rig was specifically built to
+support all of them later without a rewrite.
+
+## Phase 11 — depth in the room that exists
 
 Roughly in priority order, each independently shippable:
 
@@ -337,8 +379,15 @@ Roughly in priority order, each independently shippable:
    This Device" (Phase 9) ever proves unsatisfying — rendering a few
    sample frames and timing them, rather than inferring from device
    capability alone.
+8. **A mirror** — the first real payoff of Phase 10's "should normally
+   never see themselves except in... mirrors": a reflective surface
+   showing the live player rig from outside, likely a render-to-texture
+   second camera rather than anything stencil/portal-based, given the
+   room's modest size.
+9. **Clothing and wearable Builder objects** — attaching to the rig's
+   existing pivots (see `docs/PLAYER.md`'s "ready for what comes next").
 
-## Phase 11 — the world becomes alive on its own
+## Phase 12 — the world becomes alive on its own
 
 1. **Weather that changes itself** — `WeatherSystem.autoCycle` already
    exists as a flag with no behaviour behind it yet; give it a slow,
@@ -359,7 +408,7 @@ Roughly in priority order, each independently shippable:
    (Phase 4) already emits a generic named event; the first system or
    plugin that actually listens for one is what proves the hook out.
 
-## Phase 12 — beyond one building
+## Phase 13 — beyond one building
 
 - **Additional buildings** — `RoomLayoutSystem` was written with this in
   mind (see its class comment), and `WorldObjectsStore` was made

@@ -44,12 +44,13 @@ src/
                               set) — see docs/WORLDBUILDER.md and docs/WORLD.md
   music/                     the real music library + player — see docs/MUSIC.md
   settings/                  Workshop Settings: persisted data + the system that applies it — see docs/PERFORMANCE.md
+  player/                    the player character rig + appearance/outfit/texture persistence — see docs/PLAYER.md
   data/                      plain state: layoutDefault.js, ProjectsStore.js, NotesStore.js
   ui/                        OverlayManager.js, HUD.js, overlays/*.js (one per physical panel)
   utils/                     PlaceholderFactory, ProceduralTexture, AudioSynth, InputManager, math, storage, ScreenProjector
   plugins/examples/          reference plugin(s) — see PLUGIN_GUIDE.md
   main.js                    wiring only — construct, register, start. No behaviour here.
-docs/                        this file, COMPUTER.md, WORKBENCH.md, WORLDBUILDER.md, WORLD.md, POLISH.md, MUSIC.md, PERFORMANCE.md, ROADMAP.md, PLUGIN_GUIDE.md
+docs/                        this file, COMPUTER.md, WORKBENCH.md, WORLDBUILDER.md, WORLD.md, POLISH.md, MUSIC.md, PERFORMANCE.md, PLAYER.md, ROADMAP.md, PLUGIN_GUIDE.md
 assets/                      README explaining the "no shipped binary assets yet" decision
 ```
 
@@ -100,6 +101,13 @@ MusicSystem          → same flexibility as WorldObjectsSystem — only needs
 SettingsSystem       → looks up LightingSystem/WorldEnvironmentSystem/
                        AudioSystem/MusicSystem via getSystem() at init() —
                        safe regardless of order, see docs/PERFORMANCE.md
+PlayerCharacterSystem → same flexibility as WorldObjectsSystem/MusicSystem
+                       — only needs engine.scene/engine.events at init().
+                       Its own finalizeInitialState() (the first rig
+                       build, once appearance data has actually loaded)
+                       runs after engine.init() resolves, same reasoning
+                       as WorkbenchSystem's/MusicSystem's — see
+                       docs/PLAYER.md
 BuildModeSystem      → looks up CameraSystem/RoomLayoutSystem/
                        WorldObjectsSystem/InteractionSystem at the moment
                        it needs them, not at init() time
@@ -236,10 +244,14 @@ that reads/writes `localStorage`. Two ways state gets included in a save:
 - **Explicit providers**: `persistenceSystem.registerProvider(key, storeInstance)`
   for plain stores that aren't Engine systems (`ProjectsStore`, `NotesStore`,
   `ObjectLibraryStore`, `WorldObjectsStore`, `MusicLibraryStore`,
-  `PlaylistStore`, `SettingsStore`, and `engine.plugins` itself, so every
-  registered plugin's own `save()`/`load()` runs too). `MusicSystem` itself,
-  being a real Engine system, saves/loads its own playback session (queue,
-  position, volume) the ordinary system way — see docs/MUSIC.md.
+  `PlaylistStore`, `SettingsStore`, `PlayerAppearanceStore`, `OutfitStore`,
+  and `engine.plugins` itself, so every registered plugin's own
+  `save()`/`load()` runs too). `MusicSystem` itself, being a real Engine
+  system, saves/loads its own playback session (queue, position, volume)
+  the ordinary system way — see docs/MUSIC.md. `TextureStore` (player
+  textures) is the one exception, living entirely in IndexedDB — the same
+  deliberate split `HandleStore` established for the music library's real
+  file handles, see docs/PLAYER.md.
 
 The save envelope (`{ version, savedAt, systems: {...}, providers: {...} }`)
 is written to `localStorage` on an autosave interval, on tab-hide, and on

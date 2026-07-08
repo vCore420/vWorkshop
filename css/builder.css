@@ -29,6 +29,70 @@
 }
 .builder-preview-canvas:active { cursor: grabbing; }
 
+/* Wardrobe app — reuses .builder-root/.builder-preview/.builder-form/
+   .builder-section/.builder-library* as-is; these are the parts that
+   genuinely differ. */
+.wardrobe-preview {
+  min-height: 340px; /* a standing figure needs a taller frame than a typical Builder object */
+}
+.wardrobe-part-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: var(--space-3);
+}
+.wardrobe-part-tabs button {
+  background: none;
+  border: 1px solid rgba(127, 216, 196, 0.2);
+  color: rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  cursor: pointer;
+}
+.wardrobe-part-tabs button:hover { border-color: var(--screen-glow); color: var(--screen-glow); }
+.wardrobe-part-tabs button.active {
+  background: rgba(127, 216, 196, 0.15);
+  border-color: var(--screen-glow);
+  color: var(--screen-glow);
+}
+.wardrobe-texture-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: var(--space-2) 0;
+}
+.wardrobe-import-label {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+.wardrobe-paint-canvas {
+  width: 192px;
+  height: 192px;
+  image-rendering: pixelated;
+  border: 1px solid rgba(127, 216, 196, 0.3);
+  border-radius: 6px;
+  cursor: crosshair;
+  touch-action: none;
+  display: block;
+  margin-bottom: var(--space-2);
+}
+.wardrobe-paint-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wardrobe-paint-controls input[type="color"] {
+  width: 36px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(127, 216, 196, 0.3);
+  border-radius: 4px;
+  background: none;
+}
+
 .builder-form {
   flex: 1;
   min-width: 0;
@@ -146,6 +210,7 @@
 }
 .builder-parts-list li:hover { background: rgba(255, 255, 255, 0.05); }
 .builder-parts-list li.selected { background: rgba(184, 134, 59, 0.2); }
+.builder-library-list li.selected { background: rgba(127, 216, 196, 0.12); border-left: 2px solid var(--screen-glow); padding-left: 6px; }
 .builder-parts-list-controls { display: flex; gap: 2px; }
 
 .builder-icon-button {
