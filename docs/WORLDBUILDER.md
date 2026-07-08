@@ -28,6 +28,7 @@ through direct references to each other's internals.
 src/worldbuilder/
   ObjectLibraryStore.js       persisted WorkshopObjectDefinitions (the "design" data)
   WorldObjectsStore.js         persisted placed instances (the "where" data), room-scoped
+  PartTypes.js                  the curated primitive shape registry — see "Preset shapes" below
   ObjectCompiler.js            parts[] -> real THREE.Group — the one place this happens
   WorldObjectsSystem.js        spawns/updates/removes instances as real, always-present
                                 entities, and caches each one's collision footprint
@@ -37,6 +38,7 @@ src/worldbuilder/
   BuilderPhoneUI.js             the Builder Phone — see "The Builder Phone" below
   GhostPreview.js               the transparent-preview mechanic, shared identically by
                                 new placement and by moving something that already exists
+  ConstructionLibrary.js        the permanent Construction Library pieces — see below
   behaviours/
     registry.js                 type -> { propsSchema, apply() }
     index.js                    imports every built-in behaviour for its registration side effect
@@ -78,14 +80,97 @@ into a real `THREE.Group`, and both the Builder's live preview and
 `WorldObjectsSystem`'s real placed instances call it — what you see while
 designing is exactly what appears in the world.
 
-### "Extrusions where appropriate"
+## Builder workspace
 
-This phase's primitives are box/cylinder/sphere/cone/plane — no arbitrary
-profile-based `THREE.ExtrudeGeometry`. A cone is a cylinder with
-`radiusTop: 0`; a hexagonal-prism-style "extrusion" is a cylinder with
-`segments: 6`. This covers a genuinely useful range of simple shapes
-without the authoring complexity of drawing a 2D profile to extrude — a
-real future enhancement (see docs/ROADMAP.md), not attempted here.
+The computer's Builder app (where objects are *designed* — distinct from
+the Builder Phone, which is where already-designed objects get *placed*;
+see "The Builder Phone" below) is a simple, even split: a large live
+preview on the left, every editing control on the right, always both
+visible at once. This is `.builder-workspace`/`.builder-workspace-preview`/
+`.builder-workspace-form` in `css/builder.css` — deliberately its own
+layout, not the `.builder-root`/`.builder-preview`/`.builder-form` triplet
+the Wardrobe app also uses for its own live preview, specifically so
+widening the Builder's half of the screen could never narrow the
+Wardrobe's as a side effect.
+
+**Every change updates the live preview immediately** — this didn't need
+to change, since `refreshPreview()` was already called after every edit;
+what changed is what it's now large and central enough to actually judge
+proportions by, rather than a narrow strip beside a much wider form.
+
+**Orbit (drag) and zoom (scroll wheel)** are both supported now —
+`PreviewRenderer.js` gained bounded scroll-to-zoom (a purely additive
+change; the Wardrobe's own preview gets it for free too, from the exact
+same file).
+
+**Selecting a part now visibly highlights it in the 3D preview itself**,
+not just in the parts list — `refreshPreview()` finds the mesh whose
+`userData.partId` matches the selected part (the same tagging
+`ObjectCompiler` already does for every part) and gives it a cloned,
+emissive-boosted material, restoring/disposing that one clone on every
+subsequent refresh. Cloned, not mutated in place, for the same reason
+Build Mode's own ghost preview clones materials rather than editing them
+directly: a part's material is shared/cached by colour (see
+`PlaceholderFactory.js`), and directly tinting it would tint every other
+object using that same colour too, not just the one part being edited.
+
+### Preset shapes
+
+Thirteen primitive types now, up from the original five — "a sensible
+curated set" chosen for what's actually useful to build furniture,
+architecture, and everyday objects with, not every shape that was
+suggested. `src/worldbuilder/PartTypes.js` is the registry (grouped into
+Basic / Angled / Rounded & Partial / Rings & Tubes, purely for the
+Builder's own dropdown); `ObjectCompiler.js` is where each one is actually
+built.
+
+Every new shape still comes from base Three.js parametric geometry —
+no custom hand-authored vertex data, no external geometry library:
+
+- **Pyramid** — a cone with few enough radial segments to read as one,
+  rotated so a flat face points forward instead of an edge.
+- **Wedge / Ramp** — a right-triangle 2D profile (`THREE.Shape`) extruded
+  sideways (`THREE.ExtrudeGeometry`) — this phase's answer to "no
+  arbitrary profile-based extrusion" from the previous version of this
+  document, now that one was actually needed.
+- **Rounded Cube** — the same extrusion technique, with a rounded-rectangle
+  profile (`Shape.absarc` for each corner) instead of a triangle.
+- **Half Sphere** — `THREE.SphereGeometry`'s own `thetaLength` parameter,
+  limited to a quarter of the polar angle range, rather than a separate
+  geometry type.
+- **Quarter Cylinder** — the equivalent trick on `THREE.CylinderGeometry`'s
+  own `thetaLength`.
+- **Pipe / Tube** — a genuinely hollow wall cross-section (inner radius to
+  outer radius, top to bottom) revolved around Y with `THREE.LatheGeometry`
+  — real inner and outer walls and capped rings, not a cylinder that only
+  looks tube-like from outside.
+- **Ring** / **Arch** — `THREE.TorusGeometry`, full circle and (via its own
+  `arc` parameter) a half circle respectively.
+
+A few of the shapes suggested alongside these were deliberately left out,
+not overlooked:
+
+- **Capsule** — `THREE.CapsuleGeometry` isn't available in the Three.js
+  version this project loads; approximating one well needs a compound
+  shape (a cylinder plus two hemisphere caps), which breaks the "one part
+  is one mesh" assumption everything else here relies on. A capsule-like
+  silhouette is still buildable from a Cylinder plus two Half Spheres —
+  three parts instead of one, the same trade-off multi-part construction
+  pieces already make.
+- **Rounded Cylinder** — a cylinder is already a fully round shape; there's
+  no further edge to round without it becoming a different shape (a Pipe,
+  or a Rounded Cube) entirely.
+- **Corner Piece** / **Bevel Piece** — geometrically identical to Quarter
+  Cylinder and Wedge, just used at a smaller scale as trim. Separate types
+  for the same shape would be more choices without more capability —
+  exactly what "a sensible curated set" was asking to avoid.
+
+Every field a shape needs beyond position/rotation/scale/colour (a rounded
+cube's corner radius, a tube's wall thickness, a ring's tube thickness) is
+a fixed proportion baked into the geometry function itself, rather than
+its own editable field — keeping the part editor's field set identical for
+every shape was judged more valuable than exposing one more number for
+three shapes out of thirteen.
 
 ## Behaviours: properties, not programming
 
@@ -311,15 +396,44 @@ predictable, not by tracking per-instance schema versions.
 ## A second source of definitions: the Construction Library
 
 A later pass added `src/worldbuilder/ConstructionLibrary.js` — a small,
-permanent set of foundational building pieces (walls, floors, a roof, a
-functional door, ...), structurally separate from the `ObjectLibraryStore`
-this document describes, but built from the exact same
-`WorkshopObjectDefinition` shape and rendered by the exact same
-`ObjectCompiler`. The Builder Phone's Library screen shows both sources
-side by side, as its two tabs — Construction Library and Saved Objects.
-See `docs/WORLD.md` for the full reasoning — the short version is that a
-construction piece is "a definition from a different source", not a
-different kind of thing.
+permanent set of foundational building pieces, structurally separate from
+the `ObjectLibraryStore` this document describes, but built from the
+exact same `WorkshopObjectDefinition` shape and rendered by the exact
+same `ObjectCompiler`. The Builder Phone's Library screen shows both
+sources side by side, as its two tabs — Construction Library and Saved
+Objects. See `docs/WORLD.md` for the full reasoning — the short version
+is that a construction piece is "a definition from a different source",
+not a different kind of thing.
+
+Grown from an original 16 pieces to 30, organised into four groups —
+"enough to begin constructing meaningful spaces without relying entirely
+on custom objects":
+
+- **Structural** — Wall, Half Wall, Corner Wall, Floor, Ceiling, Roof,
+  Roof Corner, Pillar, Beam, Stairs, Ladder, plus the original Cube and
+  Plane.
+- **Openings** — Doorway, Door, Double Door, Window, Large Window,
+  Archway (the first construction piece built from the new Arch
+  primitive — see "Preset shapes" above).
+- **Workshop** — Table, Bench, Shelf, Cabinet, Storage Crate. Cabinet and
+  Storage Crate both carry the Storage behaviour out of the box —
+  genuinely usable the moment they're placed, not just decoration.
+- **Utilities** — Light (carries Light Source), Switch (carries Trigger,
+  ready to be wired to anything a future system listens for — see
+  docs/PLUGIN_GUIDE.md), Sign, Fence, Gate (a fence-styled Door).
+
+**Double Door and Gate both make the same honest simplification the
+original Door already did**: `DoorBehaviour` swings the *entire* compiled
+object by a fixed angle around its own origin — it has no concept of
+"which part is the door leaf" or a true edge hinge (see that behaviour's
+own comment). A double door built from two side-by-side panels therefore
+swings open as one rigid double-wide unit, not two independently-hinged
+leaves the way the workshop's own French doors do. Building genuinely
+independent leaves would mean either two separate placed objects or a
+real "hinge offset" property on the behaviour itself — a reasonable
+future enhancement (see "Future extension points" below), not attempted
+here for the sake of staying inside the existing behaviour system rather
+than special-casing one construction piece.
 
 ## Known simplifications (by design, for this phase)
 
@@ -330,8 +444,6 @@ different kind of thing.
   integration" above), but Build Mode itself doesn't stop you from
   placing two objects on top of each other — the ghost can rest on
   another object's surface, but nothing checks for interpenetration.
-- **No true extrusion primitive** — see "Extrusions where appropriate"
-  above.
 - **The property panel's colour input rebuilds the instance's geometry on
   every drag event**, not just on release — acceptable for now, a minor
   performance/smoothness rough edge rather than a correctness issue.
@@ -342,6 +454,16 @@ different kind of thing.
 
 ## Future extension points
 
+- **A real hinge-offset property for Door** — would let Double Door (and
+  any custom object with two door-shaped parts) swing as genuinely
+  independent leaves instead of one rigid double-wide unit — see the
+  Construction Library section above for the honest limitation this
+  would resolve.
+- **A thumbnail per shape/library item**, rendered once and cached,
+  rather than a flat colour swatch in the Builder Phone's grid and the
+  Builder app's own toolbar — would need its own small offscreen
+  render pass per definition, deliberately not attempted here to keep
+  this pass's own scope to the workspace and shape set specifically.
 - **Multi-select and group operations** — `BuildModeSystem.selection` is
   currently a single `{kind, id}`; a future version could hold an array,
   with `_confirmGhost()`/`_cancelGhost()` applying to every selected

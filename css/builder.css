@@ -2,9 +2,33 @@
   BUILDER APP
   ===========
   Lives inside the computer's workstation panel (see css/computer.css for
-  the screen material it inherits). Two columns: a live preview on the
-  left, a scrollable form on the right.
+  the screen material it inherits).
 */
+
+/* An even split: a large, always-visible live preview on the left, every
+   editing control on the right — its own layout, not
+   .builder-root/.builder-preview/.builder-form (which Wardrobe also
+   uses), so widening this couldn't narrow the Wardrobe's own preview as
+   a side effect. */
+.builder-workspace {
+  display: flex;
+  height: 100%;
+  gap: var(--space-3);
+}
+.builder-workspace-preview {
+  flex: 1;
+  min-width: 0;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid rgba(127, 216, 196, 0.25);
+  position: relative;
+}
+.builder-workspace-form {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
 
 .builder-root {
   display: flex;
@@ -209,9 +233,26 @@
   font-size: var(--text-sm);
 }
 .builder-parts-list li:hover { background: rgba(255, 255, 255, 0.05); }
-.builder-parts-list li.selected { background: rgba(184, 134, 59, 0.2); }
+.builder-parts-list li.selected {
+  background: rgba(184, 134, 59, 0.22);
+  border-left: 2px solid var(--brass-bright);
+  padding-left: 6px;
+  font-weight: 600;
+}
 .builder-library-list li.selected { background: rgba(127, 216, 196, 0.12); border-left: 2px solid var(--screen-glow); padding-left: 6px; }
 .builder-parts-list-controls { display: flex; gap: 2px; }
+
+.builder-shape-select {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--wood-mid);
+  border-radius: var(--radius-sm);
+  color: var(--paper);
+  padding: 6px 8px;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+}
 
 .builder-icon-button {
   background: transparent;

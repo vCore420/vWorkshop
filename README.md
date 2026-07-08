@@ -4,7 +4,7 @@ A living 3D creative workshop, built to be a place you return to rather than
 an app you launch. Runs entirely in the browser, no build step, no backend —
 just static files.
 
-This project has gone through twelve phases: an architectural foundation and
+This project has gone through thirteen phases: an architectural foundation and
 one believable room (phase 1), turning the computer into a real,
 self-contained creative workstation with a physical sit-down/stand-up
 transition (phase 2), turning the workbench into the workshop's visual
@@ -24,11 +24,14 @@ to gradually become whoever you want to be (phase 10), a maintenance pass:
 two real bugs properly root-caused (a stuck-key movement bug, a
 music-library WebMediaPlayer exhaustion bug), a genuine save-versioning and
 migration framework, a Settings Danger Zone, and a
-round of interior/lighting refinement (phase 11), and — this phase — the
-Builder Phone: redesigning how building feels rather than adding new
+round of interior/lighting refinement (phase 11), the Builder Phone:
+redesigning how building feels rather than adding new
 Builder functionality, with Workshop furniture now movable through the
 exact same mechanic as Builder objects, and Builder-placed objects now
-genuinely part of the physical world through real collision (phase 12).
+genuinely part of the physical world through real collision (phase 12),
+and — this phase — an even-split Builder workspace, a curated expansion
+of both the primitive shape set and the Construction Library, and a real
+bug fix for the front doors (phase 13).
 See `docs/ROADMAP.md` for what's next, `docs/ARCHITECTURE.md`
 for how the workshop as a whole is put together, and `docs/COMPUTER.md` /
 `docs/WORKBENCH.md` / `docs/WORLDBUILDER.md` / `docs/WORLD.md` /
@@ -158,12 +161,18 @@ physical presence without the workbench itself ever changing.
 ## The world creation system
 
 The computer has a seventh app now: **Builder**. It's a simple in-world
-modelling tool, not a Blender competitor — assemble primitives (boxes,
-cylinders, spheres, cones, planes) into an object, position/rotate/scale/
-colour each one with a live preview you can drag to orbit, give it a name
-and description, and attach behaviour (Interactable, Light Source, Seat,
-Storage, Door, Computer, Decoration, Trigger, Audio Source) purely through
-properties — no code. Save it, and it joins your permanent object library.
+modelling tool, not a Blender competitor — an even split, a large live
+preview always visible on one side (drag to orbit, scroll to zoom) and
+every editing control on the other. Assemble primitives — thirteen of
+them now, from simple boxes and cylinders through pyramids, wedges,
+rounded cubes, pipes, rings, and arches, chosen for what's actually useful
+to build furniture and architecture with, not for sheer variety — into an
+object, position/rotate/scale/colour each one (selecting a part highlights
+it directly in the preview, not just in the list), give it a name and
+description, and attach behaviour (Interactable, Light Source, Seat,
+Storage, Door, Computer, Decoration, Trigger, Audio Source, Music Player)
+purely through properties — no code. Save it, and it joins your permanent
+object library.
 
 Then press **B** anywhere in the room to enter **Build Mode**: the camera
 freezes right where you're standing, the cursor comes free, and a
@@ -188,11 +197,15 @@ piece of furniture. See `docs/WORLDBUILDER.md` for the full architecture,
 including why it was built to generalise to future rooms and buildings
 without needing to change.
 
-Alongside your own designs, a small permanent **Construction Library**
-(Wall, Floor, Roof, Pillar, Doorway, Door, Window, Stairs, Ramp, Fence,
-Beam, and a few more) is always available in Build Mode — the alphabet
-everything else gets built from. The Door piece already swings open on
-its own; it's a real, if plain, building block, not a mockup.
+Alongside your own designs, a permanent **Construction Library** of 30
+pieces — Structural (Wall, Half Wall, Floor, Ceiling, Roof, Pillar, Beam,
+Stairs, Ladder...), Openings (Door, Double Door, Window, Large Window,
+Archway...), Workshop (Table, Bench, Shelf, Cabinet, Storage Crate), and
+Utilities (Light, Switch, Sign, Fence, Gate) — is always available in
+Build Mode — the alphabet everything else gets built from. The Door piece
+already swings open on its own, Cabinet and Storage Crate already hold
+things, Light already lights up its surroundings; these are real, if
+plain, building blocks, not mockups.
 
 ## The world
 

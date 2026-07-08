@@ -418,7 +418,53 @@ undo/redo — see "Future extension points" in `docs/WORLDBUILDER.md` for
 why the current architecture is already shaped to support each of them
 without a rewrite.
 
-## Phase 13 — depth in the room that exists
+## Phase 13 — the Builder workspace and shape library
+
+**Goal:** refine the existing Builder workflow rather than redesign it —
+an even split (large live preview, all editing controls), a curated
+expansion of both the primitive shape set and the Construction Library,
+and a real bug fix (the French doors from Phase 11 had stopped opening
+entirely). See `docs/WORLDBUILDER.md` for the full write-up.
+
+Delivered:
+- **An even split workspace** for the computer's Builder app — a large,
+  always-visible live preview on one side, every editing control on the
+  other, using its own layout classes so widening it couldn't narrow the
+  Wardrobe app's own (unrelated) preview as a side effect.
+- **Orbit and zoom** for the shared `PreviewRenderer` (scroll-to-zoom,
+  bounded to a sensible range) — the Wardrobe's own character preview
+  gained this for free, from the same file.
+- **Selecting a part now highlights it directly in the 3D preview**, not
+  just in the parts list — a cloned, emissive-tinted material, never a
+  direct mutation of the shared, cached material other objects of that
+  colour also use.
+- **Eight new preset shapes** (Pyramid, Wedge/Ramp, Rounded Cube, Half
+  Sphere, Quarter Cylinder, Pipe/Tube, Ring, Arch) on top of the original
+  five, all built from base Three.js parametric geometry — no custom
+  vertex authoring, no external geometry library. A few suggested shapes
+  (Capsule, Rounded Cylinder, Corner Piece, Bevel Piece) were deliberately
+  left out as redundant or infeasible without additions this project
+  doesn't load — see "Preset shapes" in `docs/WORLDBUILDER.md`.
+- **The Construction Library grew from 16 to 30 pieces**, organised into
+  Structural / Openings / Workshop / Utilities. Cabinet and Storage Crate
+  carry the Storage behaviour out of the box; Light carries Light Source;
+  Switch carries Trigger, ready to be wired to anything a future system
+  listens for.
+- **A real bug fixed, root cause and all**: the front French doors
+  (Phase 11) had become completely unreachable. Their interaction anchor
+  sits at ground level, but interaction distance is measured in real 3D
+  from the camera's eye height (1.65m) — a radius reduced to 1.6m in the
+  same pass that redesigned the doors meant the *vertical* distance alone
+  already exceeded it, from any position at all. Restored to a radius
+  that correctly accounts for that fixed vertical offset.
+
+Explicitly *not* attempted, on purpose: per-part-leaf door hinging (Double
+Door still swings as one rigid unit, the same honest simplification the
+original Door already made) and rendered thumbnails for the shape/library
+grids (both flat colour swatches for now) — see "Future extension points"
+in `docs/WORLDBUILDER.md`.
+
+## Phase 14 — depth in the room that exists
 
 Roughly in priority order, each independently shippable:
 
@@ -458,7 +504,7 @@ Roughly in priority order, each independently shippable:
 9. **Multi-select, snapping, and undo/redo for Build Mode** — see "Future
    extension points" in `docs/WORLDBUILDER.md`.
 
-## Phase 14 — the world becomes alive on its own
+## Phase 15 — the world becomes alive on its own
 
 1. **Weather that changes itself** — `WeatherSystem.autoCycle` already
    exists as a flag with no behaviour behind it yet; give it a slow,
@@ -479,7 +525,7 @@ Roughly in priority order, each independently shippable:
    (Phase 4) already emits a generic named event; the first system or
    plugin that actually listens for one is what proves the hook out.
 
-## Phase 15 — beyond one building
+## Phase 16 — beyond one building
 
 - **Additional buildings** — `RoomLayoutSystem` was written with this in
   mind (see its class comment), and `WorldObjectsStore` was made
