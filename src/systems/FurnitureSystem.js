@@ -14,11 +14,16 @@ import { InteractableComponent } from "../core/components/InteractableComponent.
  * definition's `interaction` config. It also computes a simple footprint
  * box per piece for CameraSystem's walk-collision.
  *
- * Persistence hook: furniture *positions* are saved even though nothing in
- * this phase lets the player move furniture. That seam is intentional —
- * "customisable layouts" (brief, future philosophy) becomes "let the player
- * drag this and FurnitureSystem writes the new transform back into the
- * layout", with the save/load path already working on day one.
+ * **Furniture is now movable in Build Mode** (see docs/WORLDBUILDER.md),
+ * using exactly the seam described here previously: a small, explicit
+ * `overrides` map — `{ pieceId: {position, rotationY} }` — genuinely
+ * player-owned data, persisted separately from (and layered on top of)
+ * the Workshop's own `layoutDefault.js` defaults. A piece with no override
+ * always uses whatever the Workshop's current default is, which is what
+ * lets a real Workshop layout change still reach every piece nobody has
+ * personally moved — the same reasoning that made saving *every* piece's
+ * transform unconditionally, in an earlier version, a real bug (see
+ * docs/REFINEMENT.md) rather than a design worth keeping.
  */
 export class FurnitureSystem {
   constructor() {
@@ -26,6 +31,8 @@ export class FurnitureSystem {
     this.pieces = new Map();
     /** @type {THREE.Box3[]} cached, rebuilt only when a footprint actually changes (init, or a transform load) — see getFootprints() */
     this._footprintList = [];
+    /** @type {Record<string, {position:[number,number,number], rotationY:number}>} */
+    this.overrides = {};
   }
 
   init(engine) {
@@ -81,26 +88,54 @@ export class FurnitureSystem {
     }
     this._rebuildFootprintList();
 
-    // Deliberately NOT registered here: a persistence:save/persistence:load
-    // pair that round-trips every piece's position/rotation. That used to
-    // exist, and was a real bug — furniture placement is a WORKSHOP
-    // default (it lives in src/data/layoutDefault.js and is meant to
-    // improve freely as the Workshop itself is updated), not player-owned
-    // data, but saving and blindly restoring it on every load treated it
-    // as the latter: once a save existed, a Workshop layout change (moving
-    // the reading chair, replacing the front door) would never actually
-    // reach it, because the frozen old position from whenever the save was
-    // first made always won. See docs/ARCHITECTURE.md's persistence
-    // section and SaveMigrations.js's v1->v2 entry, which clears the old
-    // frozen positions out of existing saves so this stops happening.
-    //
-    // If a future "move furniture in Build Mode" feature needs this data
-    // to actually be player-owned, the right shape is a small, explicit
-    // *overrides* map — `{ pieceId: {position, rotationY} }` — written only
-    // for pieces a player has actually repositioned, with every other
-    // piece continuing to use whatever the Workshop's current default is.
-    // That preserves a real customisation while still letting Workshop
-    // layout improvements reach every piece nobody has personally moved.
+    // Genuinely player-owned data (unlike the old blanket save this
+    // replaced) — see this class's own comment above.
+    engine.events.on("persistence:save", (bag) => {
+      bag.furnitureOverrides = this.overrides;
+    });
+    engine.events.on("persistence:load", (bag) => {
+      if (!bag?.furnitureOverrides) return;
+      this.overrides = bag.furnitureOverrides;
+      for (const [pieceId, override] of Object.entries(this.overrides)) {
+        this._applyTransform(pieceId, override.position, override.rotationY);
+      }
+      this._rebuildFootprintList();
+    });
+  }
+
+  /** Called by BuildModeSystem once a furniture move/rotate is confirmed. */
+  setOverride(pieceId, position, rotationY) {
+    this.overrides[pieceId] = { position: [...position], rotationY };
+    this._applyTransform(pieceId, position, rotationY);
+    this._rebuildFootprintList();
+    this.engine.events.emit("persistence:saveRequested");
+  }
+
+  /** Reverts a piece back to the Workshop's own current default layout — the escape hatch for "undo my customisation", not exposed as its own dedicated button yet but available for the Builder Phone's edit panel to call. */
+  clearOverride(pieceId) {
+    if (!(pieceId in this.overrides)) return;
+    delete this.overrides[pieceId];
+    const layout = FURNITURE_LAYOUT[pieceId] ?? { position: [0, 0, 0], rotationY: 0 };
+    this._applyTransform(pieceId, layout.position, layout.rotationY ?? 0);
+    this._rebuildFootprintList();
+    this.engine.events.emit("persistence:saveRequested");
+  }
+
+  _applyTransform(pieceId, position, rotationY) {
+    const piece = this.pieces.get(pieceId);
+    if (!piece) return;
+    piece.entity.object3D.position.set(...position);
+    piece.entity.object3D.rotation.y = rotationY;
+    piece.entity.object3D.updateMatrixWorld(true);
+    piece.footprintBox = this._computeFootprintBox(piece.definition, position, rotationY);
+    // A focus pose (the computer desk's sit-down view, say) is resolved
+    // to *world* space from the object's transform at build time — moving
+    // the piece means re-resolving it, or sitting down would still ease
+    // the camera toward where the desk used to be.
+    if (piece.definition.interaction?.focusPoseLocal) {
+      const interactable = piece.entity.getComponent(InteractableComponent);
+      if (interactable) interactable.focusPose = this._resolveFocusPose(piece.definition, piece.entity.object3D);
+    }
   }
 
   _resolveFocusPose(definition, object3D) {
@@ -143,5 +178,10 @@ export class FurnitureSystem {
 
   getPiece(id) {
     return this.pieces.get(id) ?? null;
+  }
+
+  /** Every furniture piece, for BuildModeSystem's "select existing furniture" — a plain array, not the internal Map, so callers can't accidentally mutate it. */
+  getAllPieces() {
+    return [...this.pieces.values()];
   }
 }

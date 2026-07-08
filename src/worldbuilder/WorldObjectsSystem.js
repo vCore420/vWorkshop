@@ -1,9 +1,11 @@
+import * as THREE from "three";
 import { Entity } from "../core/Entity.js";
 import { MeshComponent } from "../core/components/MeshComponent.js";
 import { compileDefinition } from "./ObjectCompiler.js";
 import { applyBehaviour } from "./behaviours/index.js";
 import { CURRENT_ROOM_ID } from "./WorldObjectsStore.js";
 import { getConstructionPiece } from "./ConstructionLibrary.js";
+import { COLLISION_HEIGHT_LIMIT } from "../entities/room/WorkshopRoom.js";
 
 /**
  * WorldObjectsSystem
@@ -21,6 +23,19 @@ import { getConstructionPiece } from "./ConstructionLibrary.js";
  * system's `init()` has already run. `main.js` calls `spawnAll()`
  * explicitly, once, right after `await engine.init()` resolves — see the
  * same reasoning documented on WorkbenchSystem.finalizeInitialState().
+ *
+ * **Collision** (see docs/WORLDBUILDER.md): every placed instance gets a
+ * cached `THREE.Box3`, computed with `Box3.setFromObject()` on its actual
+ * compiled geometry rather than a hand-authored footprint — Builder
+ * objects can be any shape at all, so there's no fixed width/depth to
+ * declare the way furniture has. `CameraSystem` collides against these
+ * exactly the way it already collides against furniture footprints and
+ * wall segments — three flavours of "boxes the player can't walk through",
+ * not three different collision systems. A box entirely above
+ * `COLLISION_HEIGHT_LIMIT` (a decorative ceiling piece, say) is skipped
+ * entirely, matching the same "a header above head height is real
+ * geometry but never an obstacle" rule `WorkshopRoom.js`'s wall segments
+ * already follow.
  */
 export class WorldObjectsSystem {
   constructor({ objectLibraryStore, worldObjectsStore }) {
@@ -28,6 +43,8 @@ export class WorldObjectsSystem {
     this.worldObjectsStore = worldObjectsStore;
     /** @type {Map<number, {entity: import('../core/Entity').Entity}>} */
     this.liveInstances = new Map();
+    /** @type {Map<number, THREE.Box3>} instanceId -> cached collision box, skipped from the map entirely if the object sits entirely above head height */
+    this.footprints = new Map();
   }
 
   init(engine) {
@@ -50,6 +67,7 @@ export class WorldObjectsSystem {
     if (!live) return;
     this.engine.entities.destroy(live.entity);
     this.liveInstances.delete(instanceId);
+    this.footprints.delete(instanceId);
     this.worldObjectsStore.remove(instanceId);
   }
 
@@ -61,6 +79,7 @@ export class WorldObjectsSystem {
     live.entity.object3D.position.set(...instance.position);
     live.entity.object3D.rotation.y = instance.rotationY;
     live.entity.object3D.scale.setScalar(instance.scale);
+    this._updateFootprint(instanceId, live.entity.object3D);
   }
 
   /** Expensive path: colour override changes which cached material every part uses. */
@@ -84,6 +103,23 @@ export class WorldObjectsSystem {
   /** All root Object3Ds currently placed — used by BuildModeSystem for selection raycasting. */
   getAllLiveObjects() {
     return [...this.liveInstances.values()].map((v) => v.entity.object3D);
+  }
+
+  /** THREE.Box3 list for CameraSystem's walk-collision — cached per
+   *  instance, recomputed only on spawn/respawn/transform-change/removal,
+   *  not on every call. Read every single frame while walking. */
+  getFootprints() {
+    return [...this.footprints.values()];
+  }
+
+  _updateFootprint(instanceId, object3D) {
+    object3D.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(object3D);
+    if (box.min.y >= COLLISION_HEIGHT_LIMIT) {
+      this.footprints.delete(instanceId); // entirely above head height — not an obstacle, same rule wall headers already follow
+    } else {
+      this.footprints.set(instanceId, box);
+    }
   }
 
   _respawn(instance) {
@@ -130,6 +166,7 @@ export class WorldObjectsSystem {
 
     this.engine.entities.create(entity);
     this.liveInstances.set(instance.id, { entity });
+    this._updateFootprint(instance.id, object3D);
     return entity;
   }
 

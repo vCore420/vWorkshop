@@ -3,40 +3,54 @@ import { CameraSystem } from "../systems/CameraSystem.js";
 import { InteractionSystem } from "../systems/InteractionSystem.js";
 import { RoomLayoutSystem } from "../systems/RoomLayoutSystem.js";
 import { WorldEnvironmentSystem } from "../systems/WorldEnvironmentSystem.js";
+import { FurnitureSystem } from "../systems/FurnitureSystem.js";
 import { WorldObjectsSystem } from "./WorldObjectsSystem.js";
 import { CURRENT_ROOM_ID } from "./WorldObjectsStore.js";
 import { CONSTRUCTION_PIECES, getConstructionPiece } from "./ConstructionLibrary.js";
-import { BuildModePanels } from "./BuildModePanels.js";
+import { compileDefinition } from "./ObjectCompiler.js";
+import { BuilderPhoneUI } from "./BuilderPhoneUI.js";
+import { makeTransparent, restoreMaterials, disposeGhostMaterials, defaultGhostPoint } from "./GhostPreview.js";
+
+const ROTATE_STEP = Math.PI / 4; // 45° per press — coarse enough to feel deliberate, fine enough to square something up
 
 /**
  * BuildModeSystem
  * -----------------
- * "I should feel like I am physically rearranging my workshop" — not
- * opening a separate editor. Concretely, that meant three decisions:
+ * "I'll just move that chair" rather than "I'll open the editor" — Build
+ * Mode is a Workshop *device* (the Builder Phone, see BuilderPhoneUI.js),
+ * not a separate application taking over the screen. The 3D room never
+ * stops rendering; only the camera *freezes in place*
+ * (`CameraSystem.lock()`, the same generic capability the computer and
+ * workbench already use) so clicking/dragging on screen means something
+ * precise and stable.
  *
- *   1. The 3D room never stops rendering or changes camera mode while
- *      Build Mode is active — only the camera *freezes in place*
- *      (`CameraSystem.lock()`, the same generic capability the computer
- *      and workbench already use) so you can click into the exact view
- *      you were already standing in.
- *   2. The UI is two small HUD-docked strips (a library browser, a
- *      property panel for whatever's selected) — never a full-screen
- *      takeover. See BuildModePanels.js.
- *   3. Placing/selecting objects is a real raycast into the actual scene
- *      the player is looking at, using the exact geometry
- *      `WorldObjectsSystem` already spawned — there's no separate "edit
- *      representation" of the world to keep in sync with the real one.
+ * **One placement mechanic, used identically for three things**: placing
+ * a brand new object from the library, moving an existing Builder object,
+ * and moving a piece of Workshop furniture. All three produce the exact
+ * same transparent "ghost" (see GhostPreview.js) that follows the pointer
+ * and can be rotated before being confirmed — "avoid creating two
+ * separate editing systems" is implemented literally: `_beginGhost()`-style
+ * entry points are the only places any of the three ever start from, and
+ * `_confirmGhost()`/`_cancelGhost()` are the only places any of them ever
+ * end.
  *
- * The library strip shows two sources side by side — the permanent
- * `ConstructionLibrary` ("the alphabet") and the person's own
- * `ObjectLibraryStore` ("the language") — see `armedSource` below and
- * ConstructionLibrary.js's own comment for why they're kept structurally
- * separate rather than merged into one list.
+ * Furniture and Builder-created ("world") objects are still genuinely
+ * different underneath — furniture lives in `FurnitureSystem`'s
+ * `overrides` map (see its own comment), world objects live in
+ * `WorldObjectsStore` — but `_ghost.kind` is the only place that
+ * difference is ever visible; everything else (raycasting, rotating,
+ * the transparent material treatment, the Phone's own buttons) is
+ * completely unaware which kind it's looking at.
+ *
+ * Selecting an existing instance is a real raycast into the actual scene
+ * the player is looking at, using the exact geometry `WorldObjectsSystem`/
+ * `FurnitureSystem` already have live — there's no separate "edit
+ * representation" of the world to keep in sync with the real one.
  *
  * Build Mode also works identically indoors and outdoors: placement
  * raycasts against the interior floor *and* the outdoor ground plane (see
- * `_placeArmedDefinition`), and nothing here assumes there is only one
- * room — see docs/WORLD.md.
+ * `_gatherSurfaces`), and nothing here assumes there is only one room —
+ * see docs/WORLD.md.
  *
  * Build Mode is mutually exclusive with the normal interaction pipeline:
  * entering refuses if `InteractionSystem.active` (you're sitting at the
@@ -51,25 +65,55 @@ export class BuildModeSystem {
     this.objectLibraryStore = objectLibraryStore;
     this.worldObjectsStore = worldObjectsStore;
     this.active = false;
-    this.armedDefinitionId = null;
-    this.armedSource = null; // "library" | "construction"
-    this.selectedInstanceId = null;
+
+    /** { kind: "furniture"|"worldObject", id } | null — a *confirmed*, non-editing selection */
+    this.selection = null;
+
+    /**
+     * The one piece of live placement/movement state. Shape:
+     *   {
+     *     kind: "new" | "moveWorldObject" | "moveFurniture",
+     *     object3D,               // the thing actually being repositioned
+     *     definition,             // for hint text / the Phone's title
+     *     source,                 // "library" | "construction" (kind === "new" only)
+     *     rotationY,
+     *     materialSwap,           // Map from GhostPreview.makeTransparent, for "move" kinds
+     *     originalTransform,      // { position, rotationY }, for "move" kinds — restored on cancel
+     *     sourceId,               // instanceId or furniture pieceId, for "move" kinds
+     *   }
+     * null when nothing is currently being placed/moved.
+     */
+    this._ghost = null;
+
     this._raycaster = new THREE.Raycaster();
     this._pointerNDC = new THREE.Vector2();
+    this._hasPointer = false; // becomes true once a real mouse/touch position has been seen
   }
 
   init(engine) {
     this.engine = engine;
-    this.panels = new BuildModePanels(document.getElementById("buildmode-root"), {
-      onArmDefinition: (id, source) => this.armDefinition(id, source),
-      onTransformChange: (patch) => this._updateSelectedTransform(patch),
+    this._furnitureSystem = engine.getSystem(FurnitureSystem);
+    this._worldObjectsSystem = engine.getSystem(WorldObjectsSystem);
+    this._cameraSystem = engine.getSystem(CameraSystem);
+
+    this.ui = new BuilderPhoneUI(document.getElementById("buildmode-root"), {
+      onArmDefinition: (id, source) => this._armDefinition(id, source),
+      onRotateGhost: () => this._rotateGhost(),
+      onConfirmGhost: () => this._confirmGhost(),
+      onCancelGhost: () => this._cancelGhost(),
+      onStartMove: () => this._startMoveSelected(),
+      onTransformChange: (patch) => this._applyDirectTransformEdit(patch),
       onColorOverrideChange: (color) => this._updateSelectedColor(color),
       onDuplicate: () => this._duplicateSelected(),
       onDelete: () => this._deleteSelected(),
+      onResetFurniturePosition: () => this._resetSelectedFurniture(),
+      onDeselect: () => this._select(null),
     });
 
-    this._onCanvasClick = (event) => this._handleClick(event);
-    engine.canvas.addEventListener("click", this._onCanvasClick);
+    this._onPointerMove = (e) => this._handlePointerMove(e);
+    this._onPointerDown = (e) => this._handlePointerDown(e);
+    engine.canvas.addEventListener("pointermove", this._onPointerMove);
+    engine.canvas.addEventListener("pointerdown", this._onPointerDown);
 
     engine.events.on("buildmode:toggleRequested", () => this.toggle());
     engine.events.on("library:changed", () => {
@@ -77,7 +121,7 @@ export class BuildModeSystem {
     });
 
     engine.events.on("persistence:save", (bag) => {
-      bag.buildMode = {}; // nothing session-specific worth persisting yet — see docs/WORLD.md
+      bag.buildMode = {}; // nothing session-specific worth persisting — see docs/WORLDBUILDER.md
     });
   }
 
@@ -92,38 +136,27 @@ export class BuildModeSystem {
     if (interactionSystem?.active) return; // can't build while sitting at the computer, etc.
 
     this.active = true;
-    this.engine.getSystem(CameraSystem)?.lock();
+    this._cameraSystem?.lock();
     this.engine.input?.exitPointerLock();
-    this.panels.show();
+    this.ui.show();
     this._renderLibrary();
-    this._setHintForCurrentState();
+    this.ui.showLibraryScreen();
     this.engine.events.emit("buildmode:entered");
   }
 
   exit() {
     if (!this.active) return;
+    this._cancelGhost();
+    this._select(null);
     this.active = false;
-    this.armedDefinitionId = null;
-    this.armedSource = null;
-    this.selectedInstanceId = null;
-    this.engine.getSystem(CameraSystem)?.unlock();
+    this._cameraSystem?.unlock();
     this.engine.input?.requestPointerLock();
-    this.panels.hide();
+    this.ui.hide();
     this.engine.events.emit("buildmode:exited");
   }
 
-  armDefinition(definitionId, source) {
-    const alreadyArmed = this.armedDefinitionId === definitionId && this.armedSource === source;
-    this.armedDefinitionId = alreadyArmed ? null : definitionId;
-    this.armedSource = alreadyArmed ? null : source;
-    this.selectedInstanceId = null;
-    this._renderLibrary();
-    this.panels.renderSelection(null, null);
-    this._setHintForCurrentState();
-  }
-
   _renderLibrary() {
-    this.panels.renderLibrary(CONSTRUCTION_PIECES, this.objectLibraryStore.all(), this.armedDefinitionId, this.armedSource);
+    this.ui.renderLibrary(CONSTRUCTION_PIECES, this.objectLibraryStore.all());
   }
 
   _resolveDefinition(definitionId, source) {
@@ -131,113 +164,194 @@ export class BuildModeSystem {
     return this.objectLibraryStore.get(definitionId);
   }
 
-  _setHintForCurrentState() {
-    if (this.armedDefinitionId) {
-      const def = this._resolveDefinition(this.armedDefinitionId, this.armedSource);
-      this.panels.setHint(`Click anywhere — indoors or outside — to place "${def?.name ?? "object"}". Click its chip again to cancel.`);
-    } else if (this.selectedInstanceId) {
-      this.panels.setHint("Adjust the selected object below, or click elsewhere to deselect.");
-    } else {
-      this.panels.setHint("Click an object to select it, or pick something from the library below to place it. Esc to stand back up.");
-    }
+  // -----------------------------------------------------------------
+  // Beginning a ghost — the only three entry points
+  // -----------------------------------------------------------------
+
+  _armDefinition(definitionId, source) {
+    if (this._ghost) return; // already busy placing/moving something
+    const definition = this._resolveDefinition(definitionId, source);
+    if (!definition) return;
+
+    const object3D = compileDefinition(definition);
+    const point = this._raycastGhostSurfaces() ?? defaultGhostPoint(this.engine.camera);
+    object3D.position.copy(point);
+    this.engine.scene.add(object3D);
+
+    this._ghost = {
+      kind: "new",
+      object3D,
+      definition,
+      source,
+      rotationY: definition.defaultRotationY ?? 0,
+      materialSwap: makeTransparent(object3D),
+    };
+    object3D.rotation.y = this._ghost.rotationY;
+
+    this._select(null);
+    this.ui.showGhostScreen(definition, "Place");
   }
 
-  _handleClick(event) {
-    if (!this.active) return;
-    const rect = this.engine.canvas.getBoundingClientRect();
-    this._pointerNDC.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    this._pointerNDC.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-    this._raycaster.setFromCamera(this._pointerNDC, this.engine.camera);
+  _startMoveSelected() {
+    if (!this.selection || this._ghost) return;
+    if (this.selection.kind === "worldObject") {
+      const instance = this.worldObjectsStore.get(this.selection.id);
+      const entity = this._worldObjectsSystem?.getLiveEntity(this.selection.id);
+      if (!instance || !entity?.object3D) return;
+      this._ghost = {
+        kind: "moveWorldObject",
+        object3D: entity.object3D,
+        definition: this._resolveWorldObjectDefinition(instance),
+        rotationY: instance.rotationY,
+        sourceId: instance.id,
+        originalTransform: { position: [...instance.position], rotationY: instance.rotationY },
+        materialSwap: makeTransparent(entity.object3D),
+      };
+    } else {
+      const piece = this._furnitureSystem?.getPiece(this.selection.id);
+      if (!piece) return;
+      const obj = piece.entity.object3D;
+      this._ghost = {
+        kind: "moveFurniture",
+        object3D: obj,
+        definition: piece.definition,
+        rotationY: obj.rotation.y,
+        sourceId: this.selection.id,
+        originalTransform: { position: [obj.position.x, obj.position.y, obj.position.z], rotationY: obj.rotation.y },
+        materialSwap: makeTransparent(obj),
+      };
+    }
+    this.ui.showGhostScreen(this._ghost.definition, "Move here");
+  }
 
-    const worldObjectsSystem = this.engine.getSystem(WorldObjectsSystem);
-    const placedObjects = worldObjectsSystem?.getAllLiveObjects() ?? [];
+  _resolveWorldObjectDefinition(instance) {
+    if (instance.definitionSource === "construction") return getConstructionPiece(instance.definitionId);
+    return this.objectLibraryStore.get(instance.definitionId);
+  }
 
-    if (this.armedDefinitionId) {
-      this._placeArmedDefinition(placedObjects);
+  // -----------------------------------------------------------------
+  // While a ghost is active
+  // -----------------------------------------------------------------
+
+  _rotateGhost() {
+    if (!this._ghost) return;
+    this._ghost.rotationY += ROTATE_STEP;
+    this._ghost.object3D.rotation.y = this._ghost.rotationY;
+  }
+
+  _confirmGhost() {
+    const ghost = this._ghost;
+    if (!ghost) return;
+
+    if (ghost.kind === "new") {
+      const position = ghost.object3D.position;
+      disposeGhostMaterials(ghost.object3D); // never touches geometry — see GhostPreview.js
+      this.engine.scene.remove(ghost.object3D);
+
+      const instance = this.worldObjectsStore.create({
+        definitionId: ghost.definition.id,
+        definitionSource: ghost.source,
+        roomId: CURRENT_ROOM_ID,
+        position: [position.x, position.y, position.z],
+        rotationY: ghost.rotationY,
+        scale: ghost.definition.defaultScale ?? 1,
+      });
+      this._worldObjectsSystem?.spawnInstance(instance);
+      this.engine.events.emit("persistence:saveRequested");
+      this._ghost = null;
+      this._select({ kind: "worldObject", id: instance.id });
       return;
     }
 
-    // Selecting an existing instance takes priority over the floor/ground.
-    const instanceHit = this._raycastFirst(placedObjects);
-    if (instanceHit) {
-      this._select(this._findInstanceIdForObject(instanceHit.object));
+    restoreMaterials(ghost.materialSwap);
+    const position = ghost.object3D.position;
+    if (ghost.kind === "moveWorldObject") {
+      this._worldObjectsSystem?.updateInstanceTransform(ghost.sourceId, {
+        position: [position.x, position.y, position.z],
+        rotationY: ghost.rotationY,
+      });
+      this._select({ kind: "worldObject", id: ghost.sourceId });
     } else {
-      this._select(null);
+      this._furnitureSystem?.setOverride(ghost.sourceId, [position.x, position.y, position.z], ghost.rotationY);
+      this._select({ kind: "furniture", id: ghost.sourceId });
     }
+    this.engine.events.emit("persistence:saveRequested");
+    this._ghost = null;
   }
 
-  _placeArmedDefinition(placedObjects) {
-    // Indoor floor and outdoor ground are both valid placement surfaces —
-    // Build Mode has no notion of "the one room", just "whatever the
-    // raycast actually hits". See docs/WORLD.md.
+  _cancelGhost() {
+    const ghost = this._ghost;
+    if (!ghost) return;
+
+    if (ghost.kind === "new") {
+      disposeGhostMaterials(ghost.object3D); // never touches geometry
+      this.engine.scene.remove(ghost.object3D);
+      this._ghost = null;
+      this.ui.showLibraryScreen();
+      return;
+    }
+
+    restoreMaterials(ghost.materialSwap);
+    ghost.object3D.position.set(...ghost.originalTransform.position);
+    ghost.object3D.rotation.y = ghost.originalTransform.rotationY;
+    this._ghost = null;
+    if (ghost.kind === "moveWorldObject") this._select({ kind: "worldObject", id: ghost.sourceId });
+    else this._select({ kind: "furniture", id: ghost.sourceId });
+  }
+
+  // -----------------------------------------------------------------
+  // Pointer handling — hover (mouse) or drag (touch) repositions the
+  // active ghost; a plain click/tap with no ghost active selects/deselects.
+  // -----------------------------------------------------------------
+
+  _updatePointerNDC(event) {
+    const rect = this.engine.canvas.getBoundingClientRect();
+    this._pointerNDC.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    this._pointerNDC.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    this._hasPointer = true;
+  }
+
+  _handlePointerMove(event) {
+    if (!this.active || !this._ghost) return;
+    this._updatePointerNDC(event);
+    const point = this._raycastGhostSurfaces();
+    if (point) this._ghost.object3D.position.copy(point);
+  }
+
+  _handlePointerDown(event) {
+    if (!this.active) return;
+    this._updatePointerNDC(event);
+    if (this._ghost) return; // canvas interaction only repositions a ghost — the Phone's own buttons confirm/cancel
+
+    this._raycaster.setFromCamera(this._pointerNDC, this.engine.camera);
+    const targets = [...(this._worldObjectsSystem?.getAllLiveObjects() ?? []), ...this._furnitureObjects()];
+    const hit = this._raycastFirst(targets);
+    this._select(hit ? this._identifyHit(hit.object) : null);
+  }
+
+  /** Floor/ground + every already-placed object (world objects and
+   *  furniture both) — a ghost can rest on top of something else exactly
+   *  as naturally as on the floor. Excludes the ghost's own object when
+   *  moving something that already exists, so it never collides with
+   *  itself while dragging. */
+  _gatherSurfaces() {
     const floorMesh = this.engine.getSystem(RoomLayoutSystem)?.getFloorMesh();
     const groundMesh = this.engine.getSystem(WorldEnvironmentSystem)?.getGroundMesh();
     const surfaces = [floorMesh, groundMesh].filter(Boolean);
-    const targets = [...surfaces, ...placedObjects];
-    const hit = this._raycastFirst(targets);
-    if (!hit) return;
-
-    const worldObjectsSystem = this.engine.getSystem(WorldObjectsSystem);
-    const definition = this._resolveDefinition(this.armedDefinitionId, this.armedSource);
-    if (!definition || !worldObjectsSystem) return;
-
-    const instance = this.worldObjectsStore.create({
-      definitionId: definition.id,
-      definitionSource: this.armedSource,
-      roomId: CURRENT_ROOM_ID,
-      position: [hit.point.x, hit.point.y, hit.point.z],
-      rotationY: definition.defaultRotationY ?? 0,
-      scale: definition.defaultScale ?? 1,
-    });
-    worldObjectsSystem.spawnInstance(instance);
-    this.engine.events.emit("persistence:saveRequested");
-
-    this.armedDefinitionId = null;
-    this.armedSource = null;
-    this._renderLibrary();
-    this._select(instance.id);
+    const objects = [...(this._worldObjectsSystem?.getAllLiveObjects() ?? []), ...this._furnitureObjects()];
+    const excluding = this._ghost?.object3D;
+    return [...surfaces, ...objects].filter((o) => o !== excluding);
   }
 
-  _select(instanceId) {
-    this.selectedInstanceId = instanceId;
-    const instance = instanceId ? this.worldObjectsStore.get(instanceId) : null;
-    const definition = instance ? this._resolveDefinition(instance.definitionId, instance.definitionSource) : null;
-    this.panels.renderSelection(instance, definition);
-    this._setHintForCurrentState();
+  _furnitureObjects() {
+    return (this._furnitureSystem?.getAllPieces() ?? []).map((p) => p.entity.object3D);
   }
 
-  _updateSelectedTransform(patch) {
-    if (!this.selectedInstanceId) return;
-    this.engine.getSystem(WorldObjectsSystem)?.updateInstanceTransform(this.selectedInstanceId, patch);
-  }
-
-  _updateSelectedColor(color) {
-    if (!this.selectedInstanceId) return;
-    // Deliberately doesn't re-render the panel afterwards: nothing else it
-    // shows depends on colour, and rebuilding the DOM on every drag event
-    // from a native <input type="color"> would repeatedly tear out and
-    // recreate that same input mid-drag.
-    this.engine.getSystem(WorldObjectsSystem)?.updateInstanceColorOverride(this.selectedInstanceId, color);
-  }
-
-  _duplicateSelected() {
-    if (!this.selectedInstanceId) return;
-    const instance = this.worldObjectsStore.get(this.selectedInstanceId);
-    if (!instance) return;
-    const copy = this.worldObjectsStore.create({
-      ...instance,
-      position: [instance.position[0] + 0.3, instance.position[1], instance.position[2] + 0.3],
-    });
-    this.engine.getSystem(WorldObjectsSystem)?.spawnInstance(copy);
-    this.engine.events.emit("persistence:saveRequested");
-    this._select(copy.id);
-  }
-
-  _deleteSelected() {
-    if (!this.selectedInstanceId) return;
-    this.engine.getSystem(WorldObjectsSystem)?.removeInstance(this.selectedInstanceId);
-    this.engine.events.emit("persistence:saveRequested");
-    this._select(null);
+  _raycastGhostSurfaces() {
+    if (!this._hasPointer) return null;
+    this._raycaster.setFromCamera(this._pointerNDC, this.engine.camera);
+    const hit = this._raycastFirst(this._gatherSurfaces());
+    return hit ? hit.point : null;
   }
 
   _raycastFirst(objects) {
@@ -248,17 +362,115 @@ export class BuildModeSystem {
 
   /** Walks up from whatever child mesh was actually hit to find the owning
    *  entity (via MeshComponent's `object3D.userData.entityId` bridge) and
-   *  returns that entity's world-object instance id, if any. */
-  _findInstanceIdForObject(object3D) {
+   *  identifies it as either a world object or a furniture piece — the one
+   *  place that distinction is made, everywhere else just handles
+   *  `{kind, id}` generically. */
+  _identifyHit(object3D) {
     let node = object3D;
     while (node) {
       if (node.userData?.entityId != null) {
         const entity = this.engine.entities.getById(node.userData.entityId);
-        if (entity?.userData?.instanceId != null) return entity.userData.instanceId;
+        if (!entity) return null;
+        if (entity.hasTag("worldObject") && entity.userData?.instanceId != null) {
+          return { kind: "worldObject", id: entity.userData.instanceId };
+        }
+        if (entity.hasTag("furniture")) {
+          return { kind: "furniture", id: entity.name };
+        }
+        return null;
       }
       node = node.parent;
     }
     return null;
+  }
+
+  // -----------------------------------------------------------------
+  // Selection (confirmed, not currently moving)
+  // -----------------------------------------------------------------
+
+  _select(selection) {
+    this.selection = selection;
+    if (!selection) {
+      this.ui.showLibraryScreen();
+      return;
+    }
+    if (selection.kind === "worldObject") {
+      const instance = this.worldObjectsStore.get(selection.id);
+      const definition = instance ? this._resolveWorldObjectDefinition(instance) : null;
+      if (!instance || !definition) {
+        this.selection = null;
+        this.ui.showLibraryScreen();
+        return;
+      }
+      this.ui.showSelectionScreen({ kind: "worldObject", instance, definition });
+    } else {
+      const piece = this._furnitureSystem?.getPiece(selection.id);
+      if (!piece) {
+        this.selection = null;
+        this.ui.showLibraryScreen();
+        return;
+      }
+      const obj = piece.entity.object3D;
+      const hasOverride = selection.id in (this._furnitureSystem?.overrides ?? {});
+      this.ui.showSelectionScreen({
+        kind: "furniture",
+        definition: piece.definition,
+        position: [obj.position.x, obj.position.y, obj.position.z],
+        rotationY: obj.rotation.y,
+        hasOverride,
+      });
+    }
+  }
+
+  _applyDirectTransformEdit(patch) {
+    if (!this.selection) return;
+    if (this.selection.kind === "worldObject") {
+      this._worldObjectsSystem?.updateInstanceTransform(this.selection.id, patch);
+      this._select(this.selection); // refresh the panel's own displayed values
+    } else {
+      const piece = this._furnitureSystem?.getPiece(this.selection.id);
+      if (!piece) return;
+      const obj = piece.entity.object3D;
+      const position = patch.position ?? [obj.position.x, obj.position.y, obj.position.z];
+      const rotationY = patch.rotationY ?? obj.rotation.y;
+      this._furnitureSystem.setOverride(this.selection.id, position, rotationY);
+      this._select(this.selection);
+    }
+  }
+
+  _updateSelectedColor(color) {
+    if (this.selection?.kind !== "worldObject") return; // furniture has no colour-override concept
+    // Deliberately doesn't re-render the panel afterwards: nothing else it
+    // shows depends on colour, and rebuilding the DOM on every drag event
+    // from a native <input type="color"> would repeatedly tear out and
+    // recreate that same input mid-drag.
+    this._worldObjectsSystem?.updateInstanceColorOverride(this.selection.id, color);
+  }
+
+  _duplicateSelected() {
+    if (this.selection?.kind !== "worldObject") return; // there's only ever one of each furniture piece
+    const instance = this.worldObjectsStore.get(this.selection.id);
+    if (!instance) return;
+    const copy = this.worldObjectsStore.create({
+      ...instance,
+      position: [instance.position[0] + 0.3, instance.position[1], instance.position[2] + 0.3],
+    });
+    this._worldObjectsSystem?.spawnInstance(copy);
+    this.engine.events.emit("persistence:saveRequested");
+    this._select({ kind: "worldObject", id: copy.id });
+  }
+
+  _deleteSelected() {
+    if (this.selection?.kind !== "worldObject") return; // furniture can be moved, never deleted
+    this._worldObjectsSystem?.removeInstance(this.selection.id);
+    this.engine.events.emit("persistence:saveRequested");
+    this._select(null);
+  }
+
+  _resetSelectedFurniture() {
+    if (this.selection?.kind !== "furniture") return;
+    this._furnitureSystem?.clearOverride(this.selection.id);
+    this._select(this.selection);
   }
 
   update(_dt) {
@@ -268,17 +480,14 @@ export class BuildModeSystem {
     }
     if (!this.active) return;
     if (this.engine.input?.wasJustPressed("cancel")) {
-      if (this.armedDefinitionId) {
-        this.armDefinition(this.armedDefinitionId, this.armedSource); // toggles it back off
-      } else if (this.selectedInstanceId) {
-        this._select(null);
-      } else {
-        this.exit();
-      }
+      if (this._ghost) this._cancelGhost();
+      else if (this.selection) this._select(null);
+      else this.exit();
     }
   }
 
   dispose() {
-    this.engine.canvas.removeEventListener("click", this._onCanvasClick);
+    this.engine.canvas.removeEventListener("pointermove", this._onPointerMove);
+    this.engine.canvas.removeEventListener("pointerdown", this._onPointerDown);
   }
 }

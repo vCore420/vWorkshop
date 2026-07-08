@@ -3,6 +3,7 @@ import { damp, clamp, shortestAngleLerp, wrapAngle } from "../utils/MathUtils.js
 import { DEFAULT_SPAWN } from "../data/layoutDefault.js";
 import { RoomLayoutSystem } from "./RoomLayoutSystem.js";
 import { FurnitureSystem } from "./FurnitureSystem.js";
+import { WorldObjectsSystem } from "../worldbuilder/WorldObjectsSystem.js";
 
 const WALK_SPEED = 2.3; // metres/second
 const PLAYER_RADIUS = 0.32;
@@ -52,6 +53,7 @@ export class CameraSystem {
     // single call. See docs/PERFORMANCE.md.
     this._roomSystem = engine.getSystem(RoomLayoutSystem);
     this._furnitureSystem = engine.getSystem(FurnitureSystem);
+    this._worldObjectsSystem = engine.getSystem(WorldObjectsSystem);
     // Scratch objects reused every frame in _updateWalk/_resolveCollisions
     // instead of allocating a fresh Vector2/Vector3 each call — walking is
     // the workshop's default, continuous state, so this is the hottest
@@ -147,6 +149,9 @@ export class CameraSystem {
       this._pushOutOfBox(next, wallBox);
     }
     for (const footprint of this._furnitureSystem?.getFootprints?.() ?? []) {
+      this._pushOutOfBox(next, footprint);
+    }
+    for (const footprint of this._worldObjectsSystem?.getFootprints?.() ?? []) {
       this._pushOutOfBox(next, footprint);
     }
   }
