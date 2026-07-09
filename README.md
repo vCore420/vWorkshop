@@ -4,7 +4,7 @@ A living 3D creative workshop, built to be a place you return to rather than
 an app you launch. Runs entirely in the browser, no build step, no backend —
 just static files.
 
-This project has gone through fifteen phases: an architectural foundation and
+This project has gone through sixteen phases: an architectural foundation and
 one believable room (phase 1), turning the computer into a real,
 self-contained creative workstation with a physical sit-down/stand-up
 transition (phase 2), turning the workbench into the workshop's visual
@@ -40,7 +40,18 @@ and ambient sound alike (phase 14), and — this phase — a generic
 reflection capability (mirrors and polished surfaces, not a special
 "mirror object"), a physical wardrobe and mirror that open the exact same
 Wardrobe app the computer does, and a smooth first/third-person camera
-toggle for viewing outfits and Builder creations (phase 15).
+toggle for viewing outfits and Builder creations (phase 15), and — this
+phase — a quality pass rather than a feature one: real bugs found through
+actual everyday use (a backwards third-person camera and sitting pose,
+an unreachable wardrobe and notebook, dark mirror reflections, and a real
+performance cause behind occasional choppiness), each root-caused and
+fixed rather than patched around, plus falling rain, distinct weather
+sky tints, and a hidden-but-functional scrollbar throughout the computer
+(phase 16), and — this pass — mirrors that no longer chase the player
+around the room: a fixed viewpoint replaced a camera that reflected the
+player's own position every frame, fixing both the "reflections show
+areas outside the Workshop" bug this caused and a real chunk of the
+performance cost mirrors carried (phase 16.5).
 See `docs/ROADMAP.md` for what's next, `docs/ARCHITECTURE.md`
 for how the workshop as a whole is put together, and `docs/COMPUTER.md` /
 `docs/WORKBENCH.md` / `docs/WORLDBUILDER.md` / `docs/WORLD.md` /

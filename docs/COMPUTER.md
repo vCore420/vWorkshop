@@ -145,7 +145,12 @@ weren't literally sitting there when you reopened the browser tab.
   (`overflow-y: auto` plus the standard `min-height: 0` flexbox fix that
   actually lets it), so every app tab stays reachable regardless of
   screen height; the rest of the layout (rail width, content area sizing)
-  is unchanged.
+  is unchanged. A later, purely cosmetic pass ("Living Refinement" — see
+  docs/ROADMAP.md) hid the *visible* scrollbar on both the rail and every
+  app's own content area, using the standard cross-browser technique
+  (`scrollbar-width: none` for Firefox, `::-webkit-scrollbar { display:
+  none }` for Chrome/Safari/Edge) — scrolling itself (wheel, touchpad,
+  touch) is completely unchanged, only the track is hidden.
 - **One computer, one desk.** `ComputerSystem` looks up the furniture piece
   named `"computerDesk"` directly. If the workshop ever has more than one
   computer, this would need to become "one ComputerSystem instance per

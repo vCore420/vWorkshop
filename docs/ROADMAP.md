@@ -575,7 +575,166 @@ any reflow of the computer's layout beyond the one scrolling fix — see
 "Future extension points" in `docs/PLAYER.md` and the known
 simplification in `docs/COMPUTER.md`.
 
-## Phase 16 — depth in the room that exists
+## Phase 16 — Living Refinement
+
+**Goal:** not a feature pass — "everything below has been discovered
+simply by spending time using the Workshop naturally." Every item here is
+a genuine bug or rough edge, found through actual use rather than
+inspection, with its true root cause tracked down rather than patched
+around. See docs/PLAYER.md, docs/WORLD.md, docs/COMPUTER.md, and
+docs/PERFORMANCE.md for the fuller write-ups this summarises.
+
+**The third-person camera looked away from the player.** Position was
+right; orientation was backwards. The cause was a genuine, easy-to-miss
+Three.js gotcha: `Object3D.lookAt()` silently swaps which point is the
+"eye" and which is the "target" for anything that isn't a camera or
+light — a *plain* `Object3D`, used purely as a lookAt-math scratch helper
+(exactly what `CameraSystem.js` was doing), ends up with an orientation
+exactly 180° from what a real camera would compute facing that same
+point. Fixed by making the scratch object an actual (never rendered)
+`THREE.PerspectiveCamera`, so `isCamera` is true and `lookAt()` uses the
+correct convention.
+
+**The sitting chair made the player appear to sit backwards.** A
+different bug with a similar symptom: the reading chair's own focus pose
+had always pointed its `lookAt` back toward the chair's own backrest
+(local z=-1.2) instead of away from it (the way actually sitting down
+means facing outward, into the room). Corrected the one number; the
+chair's position, and the maths that turns a focus pose into a camera
+orientation, were never the problem.
+
+**The physical wardrobe couldn't be interacted with, and the notebook
+stopped working independently of the workbench.** Both traced to the same
+underlying issue REFINEMENT.md's own front-door fix already diagnosed
+once: an interaction anchor sitting at ground level, compared against the
+camera's eye height (1.65m) as a full 3D distance. The wardrobe's radius
+(1.6) was already smaller than that fixed vertical distance alone,
+making it unreachable from anywhere. The notebook's case was subtler and
+worth understanding properly rather than just widening its radius too:
+its group origin had always been at y=0 (ground level) while every part
+inside it was individually offset up to y≈0.9 to actually sit on the
+workbench — meaning its interaction anchor was never where the notebook
+visually was at all. That's what looked like "the notebook and workbench
+volumes overlap": the notebook's own check could never succeed, so the
+correctly-anchored workbench was the only thing ever responding nearby.
+Fixed at the root — the notebook's own group origin now sits at y=0.9,
+matching where it actually is, with its parts repositioned relative to
+that corrected origin rather than just enlarging its radius to paper over
+a wrongly-placed anchor.
+
+**Mirror reflections rendered but were almost unreadably dark.** Two
+genuine, well-documented Three.js colour-management gotchas, investigated
+rather than just brightened: a render target's texture needs its
+`colorSpace` set explicitly to `SRGBColorSpace`, or sampling it as a
+material `map` applies an extra, unwanted darkening decode on data that's
+already correctly encoded; and the offscreen render already has this
+renderer's own tone mapping baked into its pixels, so displaying that
+texture through a normally tone-mapped material doubles it, darkening the
+result again. Fixed both — the mirror's own material now also sets
+`toneMapped = false`, since its "colour" is already a fully rendered
+image, not a raw albedo waiting to be tone-mapped for the first time.
+
+**"Occasional choppiness"** turned out to have a genuine, findable cause
+once actually investigated rather than guessed at: being merely *near* a
+mirror paid the full cost of rendering the entire scene a second time,
+every other frame, regardless of whether the player was actually looking
+anywhere near it. A plain dot-product check against the camera's own
+forward direction (deliberately simpler than a full six-plane frustum
+test, easier to reason about, and only needing to be roughly right) now
+skips that render whenever the mirror is behind the camera or well
+outside its field of view. A small desk fan was added to the workbench
+specifically as an ongoing diagnostic, not decoration — a real stutter or
+dropped frame shows up immediately as a stumble in its otherwise
+perfectly steady spin, in a way camera movement alone can't distinguish
+from choppy input handling.
+
+**The Environment System's weather conditions felt too similar to each
+other.** Three genuine gaps, not one: rain had no visible presence beyond
+a subtle streak on window glass (fixed with real falling rain particles —
+camera-relative, correctly occluded indoors by ordinary depth testing,
+so they don't need to know whether the player is inside or out); most
+conditions only ever varied fog density and cloud coverage numerically
+without a distinct look (fixed with a per-weather sky tint, blended on
+top of the existing time-of-day colour — fog reads flat and grey, mist
+reads light and cool, storm reads dark and cold, where they used to all
+just be "the same grey sky, a bit hazier"); and every fix above (rain,
+tint) automatically extends to storm too, rather than needing its own
+special case, since both are driven by the same `precipitation`/weather
+id values storm already had.
+
+**Smaller fixes**, all found while working through the above:
+- **Visible scrollbars removed** from the computer's own app rail and
+  every app's content area — scrolling itself is completely unchanged
+  (wheel, touchpad, and touch all still work exactly as before); only the
+  visible track is hidden, via the standard cross-browser technique
+  (`scrollbar-width: none` for Firefox, `::-webkit-scrollbar { display:
+  none }` for Chrome/Safari/Edge).
+- **The light switch moved to the other side of the front doors** — a
+  doorway genuinely splits a wall into two separate segments either side
+  of it, which is what "the opposite wall" meant here — and nudged
+  fractionally closer to the actual wall surface.
+- **The wardrobe and its mirror moved closer to the wall** — the whole
+  ensemble shifted toward it, with the mirror specifically nudged further
+  still, since its frame is far thinner than the cabinet's own depth and
+  a small offset barely moved its actual back face.
+
+## Phase 16.5 — Mirror Refinement
+
+**Goal:** "not a feature pass... a refinement pass focused entirely on
+making mirrors feel more natural while improving performance." See
+docs/PLAYER.md's "Reflections and third person" section for the full
+write-up, and docs/PERFORMANCE.md for the performance half.
+
+**What was discovered:** walking toward a mirror made its reflected
+viewpoint appear to retreat, and close enough, areas outside the Workshop
+became visible through it — "the mirror camera currently appears to
+follow or respond to the player's camera," exactly as reported.
+
+**Why it happened:** the original implementation positioned the mirror's
+virtual camera at the reflection of the main camera's position and
+orientation, recomputed every frame from wherever the player currently
+was — genuinely closer to a physically correct reflection, but nothing
+bounded the resulting camera's frustum to the mirror's own actual size or
+to the room it sits in. As the player approached, the virtual camera
+approached from the opposite side at the same rate, and its wide-open
+frustum could sweep past whatever was nearby, including straight through
+the Workshop's own walls.
+
+**Why the new approach is an improvement — architecturally, not just
+behaviourally:** the mirror's camera position and orientation are now
+derived once from the mirror's *own* geometry — sitting just in front of
+its own surface (deliberately not behind the glass, which would need real
+depth a wall-mounted mirror often doesn't have) and never moving on their
+own, rather than being re-derived from the player every single frame.
+This is both the fix for the reported behaviour (walking closer now
+simply makes the reflection occupy more of a camera that isn't moving,
+and the view can never sweep past its own fixed framing) and a genuine
+simplification: no per-frame camera-reflection trigonometry at all,
+replaced by a cheap "has the mirror's own mesh moved" check that only
+recomputes anything when a Builder-placed mirror actually gets
+repositioned. "The Workshop should always favour believable over
+physically perfect" was the deciding factor in choosing this over a more
+exact (and more expensive, and apparently more prone to exactly this bug)
+alternative.
+
+**Performance was investigated, not guessed at.** The unavoidable cost —
+rendering the entire scene a second time — is inherent to any real-time
+render-to-texture mirror and didn't go away. What did: shadow-map
+rendering (a genuinely expensive, separate pass per shadow-casting light)
+is now skipped for the mirror's own render specifically, likely the
+largest single saving; the update interval loosened slightly now that a
+fixed viewpoint doesn't need to track anything in real time; and the
+render resolution trimmed slightly, since a mirror is seen from a few
+metres away, not pixel-peeped. Distance culling and the view-direction
+check from the previous pass carried over unchanged.
+
+**Future compatibility**: nothing about this required any mirror to
+become a special case. `registerSurface(mesh, options)` is unchanged as a
+contract; a future Builder-placed mirror gets the identical fixed-
+viewpoint treatment, the identical move-tracking, and the identical
+performance characteristics as the physical wardrobe mirror, automatically.
+
+## Phase 17 — depth in the room that exists
 
 Roughly in priority order, each independently shippable:
 
@@ -614,7 +773,7 @@ Roughly in priority order, each independently shippable:
 9. **A true oriented planar reflection**, and reflective surfaces beyond a
    flat plane — see "Future extension points" in `docs/PLAYER.md`.
 
-## Phase 17 — the world becomes alive on its own
+## Phase 18 — the world becomes alive on its own
 
 1. **Seasonal changes** — a plugin (see `PLUGIN_GUIDE.md`) reading the real
    calendar date and adjusting window tint / a handful of decorative
@@ -638,7 +797,7 @@ Roughly in priority order, each independently shippable:
    Construction Library's own Switch piece (Phase 13) is one ready-made
    source of that event, waiting for something to listen.
 
-## Phase 18 — beyond one building
+## Phase 19 — beyond one building
 
 - **Additional buildings** — `RoomLayoutSystem` was written with this in
   mind (see its class comment), and `WorldObjectsStore` was made

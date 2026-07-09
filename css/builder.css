@@ -28,6 +28,11 @@
   min-width: 0;
   overflow-y: auto;
   padding-right: 4px;
+  scrollbar-width: none; /* Firefox — scrolling still works via wheel/touchpad/touch, only the visible track disappears */
+  -ms-overflow-style: none; /* legacy Edge/IE */
+}
+.builder-workspace-form::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/modern Edge */
 }
 
 .builder-root {
@@ -122,6 +127,11 @@
   min-width: 0;
   overflow-y: auto;
   padding-right: 4px;
+  scrollbar-width: none; /* Firefox — scrolling still works via wheel/touchpad/touch, only the visible track disappears */
+  -ms-overflow-style: none; /* legacy Edge/IE */
+}
+.builder-form::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/modern Edge */
 }
 
 .builder-section {

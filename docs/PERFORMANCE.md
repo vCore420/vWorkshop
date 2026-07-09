@@ -144,9 +144,40 @@ actually looked at and found to be fine, rather than only what changed:
 - **`TimeOfDaySystem`** already throttled its own expensive recomputation
   to 4Hz before this pass — a good, pre-existing example of exactly the
   throttling pattern applied to `InteractionSystem` above.
-- **`WeatherSystem.update()`/`WorldEnvironmentSystem.update()`** — both
+- **`EnvironmentSystem.update()`/`WorldEnvironmentSystem.update()`** — both
   already cheap (a handful of property reads/writes, no allocation), aside
   from the `getSystem()` calls fixed above.
+- **`ReflectionSystem`'s mirror render, found later** ("Living
+  Refinement" — see docs/ROADMAP.md): merely being *near* a reflective
+  surface paid the full cost of rendering the entire scene a second time
+  into its render target, every other frame — regardless of whether the
+  surface was actually in view. A real, findable cause for "occasional
+  choppiness" once it was actually investigated rather than guessed at.
+  Fixed with a plain dot-product check against the camera's own forward
+  direction, skipping the render whenever the mirror is behind the camera
+  or well outside its field of view — deliberately simpler than a full
+  six-plane frustum test, and only needing to be roughly right. A small
+  desk fan was added to the workbench specifically as an ongoing
+  diagnostic for exactly this class of problem: real stutters and dropped
+  frames show up immediately as a stumble in its otherwise perfectly
+  steady spin, in a way that's hard to distinguish from choppy camera/
+  input handling by feel alone.
+- **Mirrors were still one of the more expensive things in the Workshop
+  even after that fix ("Mirror Refinement" — see docs/ROADMAP.md and
+  docs/PLAYER.md's "Reflections and third person").** The dot-product
+  check and distance culling already stopped *unnecessary* renders; what
+  remained was the genuine, unavoidable cost of the renders that *did*
+  still happen — rendering the entire scene a second time is inherent to
+  any real-time render-to-texture mirror, and no camera-positioning
+  change removes that. What was addressable: shadow-map rendering (a
+  genuinely expensive, separate pass per shadow-casting light) is now
+  switched off for the mirror's own render specifically, likely the
+  single largest saving available; the update interval loosened slightly
+  (every third frame, not every other — a fixed viewpoint, the same pass
+  moved to for unrelated reasons, doesn't need to track anything in real
+  time the way the original player-chasing camera did); and the render
+  target resolution trimmed slightly (320px, down from 384) — a mirror is
+  seen from a few metres away, not pixel-peeped.
 
 ## The Settings app
 

@@ -192,37 +192,101 @@ reflective. `Wardrobe.js`'s hand-built mirror and a Builder object's
 `reflective` behaviour (`ReflectiveBehaviour.js`) both call it directly,
 neither aware the other exists — "avoid hard-coded special cases" is true
 because there is no special case, just one small, generic function two
-independent callers happen to use.
+independent callers happen to use. None of what follows changed that —
+"Mirror Refinement" (see docs/ROADMAP.md) replaced *how the camera is
+positioned*, not this contract.
 
-**How it renders**, chosen specifically for maintainability over
-graphical fidelity per the brief: a second camera is placed at the
-reflection of the main camera's position across the surface's plane,
-aimed with a plain `lookAt()` at the reflection of a point in front of the
-main camera, and rendered into a small texture applied to the surface's
-own (cloned — the same "never mutate a shared cached material" rule
-`PlaceholderFactory.js`'s own cache already requires everywhere else in
-this project) material. This is deliberately *not* a per-pixel-correct
-planar reflection — that needs a projective texture shader and oblique
-near-plane clipping, real additional machinery for a visual improvement
-that matters least of anywhere in this project. Using `lookAt()` rather
-than reflecting the camera's basis vectors directly also sidesteps a real
-risk with true mirror transforms: a reflection inverts handedness, and
-naively reusing the camera's reflected orientation can invert winding
-order and cull the wrong faces. `lookAt()` always produces a normal,
+**A fixed viewpoint, not a camera chasing the player.** The first version
+of this system positioned the mirror's virtual camera at the reflection
+of the main camera's position and orientation, recomputed every single
+frame from wherever the player currently was. In actual use, that turned
+out to be the wrong choice, not just an implementation detail worth
+polishing:
+
+- **What was discovered:** walking toward the mirror made the reflected
+  viewpoint appear to retreat, and close enough, areas outside the
+  Workshop became visible through it.
+- **Why it happened:** reflecting the player's exact position every frame
+  is *closer* to a physically correct reflection, but nothing bounded the
+  resulting camera's frustum to the mirror's own actual size or to the
+  room it sits in. As the player approached and turned to face the
+  mirror, the virtual camera approached from the opposite side at the
+  same rate, and its wide-open, unbounded frustum could sweep past
+  whatever was nearby — including straight through the Workshop's own
+  walls into the exterior world beyond them. It was also doing real,
+  avoidable work for this: re-deriving a full camera transform from
+  scratch, every single frame, on top of the render itself.
+- **What changed:** the mirror's camera position and orientation are now
+  derived once from the mirror's *own* geometry, not the player's —
+  sitting just in front of its own surface (deliberately *not* behind the
+  glass, which would need real physical depth a wall-mounted mirror often
+  doesn't have — this one specifically, having been moved closer to a
+  wall in the previous pass), looking further out into the room, and
+  never moving on their own. Walking closer to the mirror now simply
+  makes the player's own rig occupy more of a camera that isn't moving —
+  exactly the desired behaviour — and the view can never sweep past
+  whatever that fixed framing was set up to show in the first place.
+  "The Workshop should always favour believable over physically perfect"
+  — a real mirror doesn't have a camera in front of it either; a fixed,
+  sensible viewpoint reads as a believable reflection without needing to
+  be a physically exact one.
+
+The one thing that *does* still need tracking is the mirror itself
+moving — a future Builder-placed mirror repositioned in Build Mode
+shouldn't leave its reflection facing where it used to be.
+`_updateFixedTransform()` checks this cheaply every frame for every
+surface (a plain position/normal comparison against what was last seen)
+and only recomputes the camera transform when something actually changed
+— nothing at all for the ordinary case of a mirror that never moves.
+
+Rendering itself still uses `lookAt()` to build the camera's orientation
+rather than reflecting basis vectors directly — a reflection inverts
+handedness, and a naively-reflected orientation can invert winding order
+and cull the wrong faces; `lookAt()` always produces a normal,
 correctly-wound camera basis regardless of how its target point was
-derived, at the honest cost of the reflection being an approximation from
-extreme viewing angles rather than exact from every one. For "can I see
-myself while changing outfits," that trade is the right one.
+derived. The rendered texture is still applied to the surface's own
+cloned material (never the shared, cached original — the same rule
+`PlaceholderFactory.js`'s own cache requires everywhere else in this
+project).
 
-Every surface's texture only re-renders every second frame and stops
-entirely once the camera is more than 9m away — a mirror nobody's near
-costs nothing. A `dispose(ctx)` hook was added to the behaviour registry
-itself (`registerBehaviour`/`registry.js`) specifically for this: unlike
+**Performance was investigated properly, not guessed at ("Mirror
+Refinement" — see docs/ROADMAP.md).** The unavoidable cost is rendering
+the entire scene a second time — that's inherent to any real-time
+render-to-texture mirror, fixed viewpoint or not, and no amount of
+camera-math cleverness removes it. What actually was addressable, once
+that was understood:
+- **Shadow-map rendering is now skipped for this render specifically** —
+  a genuinely expensive, separate pass per shadow-casting light, and not
+  something a believable-not-perfect reflection needs. Likely the single
+  largest saving found.
+- **Update throttling loosened slightly** (every third frame, not every
+  other) — a fixed viewpoint doesn't need to track anything in real time
+  the way a chasing camera used to.
+- **Render resolution trimmed slightly** (320px, down from 384) — a
+  mirror is seen from a few metres away, not pixel-peeped.
+- **Distance culling and a view-direction check both carried over
+  unchanged** from the previous pass — being near a mirror, or it being
+  out of view, already meant skipping the render entirely; none of that
+  needed to change.
+
+A `dispose(ctx)` hook lives on the behaviour registry itself
+(`registerBehaviour`/`registry.js`) specifically for this system: unlike
 a light or a decoration, which are just scene-graph children that get
 cleaned up automatically when their object is removed, a render target is
 a real GPU resource that would otherwise leak on every deleted or
 recoloured (which rebuilds an instance from scratch — see
 `WorldObjectsSystem.updateInstanceColorOverride`) reflective object.
+
+**Reflections had also rendered almost unreadably dark ("Living
+Refinement" — see docs/ROADMAP.md), from two real, well-documented
+Three.js colour-management gotchas**: a render target's texture needs its
+`colorSpace` set explicitly (to `SRGBColorSpace`), or sampling it as a
+`map` applies an extra, unwanted darkening decode on data that's already
+correctly encoded; and the offscreen render already has this renderer's
+own tone mapping baked into its pixels, so displaying that texture
+through a normally tone-mapped material doubles it, darkening the result
+further. Both fixed, rather than just brightening the result to
+compensate.
 
 ### The physical wardrobe opens the existing app — literally the same code
 
@@ -246,6 +310,19 @@ same "a system reaches into furniture's own userData for something it
 cares about" pattern `LightingSystem` already uses to find the workbench's
 lamp socket.
 
+**The wardrobe was completely unreachable when first added ("Living
+Refinement" — see docs/ROADMAP.md).** The same root cause
+docs/REFINEMENT.md's front-door fix had already diagnosed once: its
+interaction anchor (the whole compiled group) sits at ground level, but
+interaction distance is a real 3D distance from the camera's eye height
+(1.65m) — its original radius (1.6) was already smaller than that fixed
+vertical distance alone, making it unreachable from any position at all.
+Now 2.0. The wardrobe and its mirror were also moved closer to the wall
+in the same pass, purely a placement refinement — the mirror needed a
+noticeably larger nudge than the cabinet, since its frame is far thinner
+than the cabinet's own depth, and a small offset barely moves a thin
+object's actual back face.
+
 ### Third person is a rendering choice, not a second player
 
 `CameraSystem.viewMode` ("first" | "third", toggled with **V** or the
@@ -261,6 +338,19 @@ and a position behind-and-above the player, aimed back at them with
 `_resolveCollisions()` — the exact same wall/furniture push-out the
 player's own movement already uses — so the camera doesn't clip through a
 wall behind the player, without a second collision system existing for it.
+
+**A genuine, easy-to-miss bug here, found through actual use ("Living
+Refinement" — see docs/ROADMAP.md): the camera looked *away* from the
+player, position otherwise correct.** The cause was a real Three.js
+gotcha, not a maths error in this file: `Object3D.lookAt()` internally
+swaps which point is the "eye" and which is the "target" for anything
+that isn't a camera or light (`this.isCamera`/`isLight`). The scratch
+object used purely to compute the third-person orientation was a *plain*
+`Object3D` — meaning it silently used the wrong convention, producing an
+orientation exactly 180° from what a real camera needs to face that same
+point. Fixed by making that scratch object an actual (never rendered)
+`THREE.PerspectiveCamera` instead, so `isCamera` is true and `lookAt()`
+computes the orientation a camera actually needs.
 
 Third person only ever applies while walking, never while focused
 (sitting at the computer, the wardrobe, anywhere else with a focus pose):

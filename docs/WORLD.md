@@ -236,17 +236,33 @@ already use, no audio files:
 Fog density is now weather-driven, not just time-of-day/render-distance
 driven — "Fog"/"Mist" genuinely close the world in, layered on top of
 (not instead of) whatever the Settings app's Render Distance already set.
-Rain direction responds to wind: the window's rain-streak overlay (see
-"honest" note below) drifts sideways as it scrolls, proportional to wind
-speed and direction, not just falling straight down regardless of
-conditions.
+Rain direction responds to wind: the window's rain-streak overlay drifts
+sideways as it scrolls, proportional to wind speed and direction, not
+just falling straight down regardless of conditions.
 
-Rain itself is still represented the same honest way it always has been
-for a room with placeholder-style windows rather than a fully simulated
-exterior view: streaks scrolling (and now drifting) across the glass, not
-actual falling raindrop particles anywhere in the 3D world. A future pass
-giving the room a real falling-particle exterior view could upgrade this
-without changing `environment:changed`'s shape at all.
+**Rain genuinely falls now** ("Living Refinement" — see docs/ROADMAP.md).
+The window's own streak overlay was always an honest representation for
+what's actually happening on the glass itself, not a stand-in for rain
+that should have been falling elsewhere — but "rain currently does not
+visibly fall" was a real, fair gap: nothing in the 3D world itself showed
+precipitation at all. `WorldEnvironmentSystem`'s own rain is a field of
+short falling line segments (`THREE.LineSegments`, cheap — one draw call),
+positioned relative to the camera the same way clouds and stars are, and
+wrapped the same way once a particle falls far enough. It doesn't need to
+know whether the camera is indoors or outdoors: a solid wall or the roof
+correctly occludes it via ordinary depth testing, being real geometry
+like anything else in the scene.
+
+Each weather condition also now blends its own tint into the time-of-day
+sky colour (`WEATHER_SKY_TINT` in `WorldEnvironmentSystem.js`) — "each
+weather condition should have its own distinct visual identity" was fair
+too: Overcast, Fog, and a light Drizzle used to differ mainly in a fog-
+density number, reading as slightly-hazier versions of the same grey sky
+rather than genuinely different weather. Fog now reads flat and grey
+(fog scatters colour out of the air); Mist reads lighter and cooler, a
+thinner haze than Fog rather than a weaker version of it; Storm reads
+darkest and coldest of anything. Clear, Partly Cloudy, and Windy have no
+tint at all — they're meant to read as ordinary, undramatic sky days.
 
 ## A simple exterior shell, aligned to the interior
 
@@ -369,11 +385,10 @@ what's still current everywhere.)
 
 ## Future extension points
 
-- **A real falling-particle rain/snow system** for the outdoor world,
-  once it's worth the cost — the window's rain-streak overlay was always
-  an honest stand-in for a room with placeholder-style glass rather than
-  a fully simulated exterior (see "The Environment System" above); nothing
-  about `environment:changed`'s shape would need to change to support it.
+- **A real falling-particle snow visual** — rain now genuinely falls (see
+  "Atmosphere" above), but snow-mapped weather still borrows the same
+  rain-family visuals by intensity (see `WeatherProvider.js`'s own
+  comment) rather than having a distinct look of its own.
 - **A visible lightning bolt and a thunder sound**, timed together (with
   a slight delay proportional to distance, for a nice touch) — the
   current flash-only implementation was judged enough for "subtle
