@@ -1,16 +1,27 @@
 import * as THREE from "three";
 import { FurnitureSystem } from "./FurnitureSystem.js";
 
-const DEFAULT_RESOLUTION = 384; // modest — a mirror doesn't need to be sharper than the room's own shadow maps
-const DEFAULT_UPDATE_INTERVAL = 2; // render every Nth frame, not every frame
+const DEFAULT_RESOLUTION = 320; // modest — a mirror is seen from a few metres away, not pixel-peeped
+const DEFAULT_UPDATE_INTERVAL = 3; // render every Nth frame, not every frame
 const MAX_ACTIVE_DISTANCE = 9; // metres — beyond this, a surface's texture just stops refreshing rather than costing a render every frame for something nobody's near
 const CAMERA_NEAR = 0.05;
-const CAMERA_FAR = 30;
+const CAMERA_FAR = 20;
+// How far *in front of* the mirror's own surface its fixed virtual camera
+// sits (a small standoff, just enough to avoid clipping into the glass
+// itself) and how far further into the room it looks — see the class
+// comment below for why "in front of," not "behind," matters here: a
+// mirror is very often mounted close to a wall (this one specifically,
+// after an earlier pass moved it closer to one), and a camera placed
+// behind the glass would have nowhere real to be.
+const MIRROR_CAMERA_OFFSET = 0.05;
+const MIRROR_LOOK_DISTANCE = 2.6;
+// Squared-distance / (1 - cosine) thresholds below which the mirror's own
+// mesh is treated as "hasn't moved" — see _updateFixedTransform().
+const TRANSFORM_EPSILON = 0.0005;
 
-const _scratchAhead = new THREE.Vector3();
-const _scratchReflectedAhead = new THREE.Vector3();
 const _scratchWorldPos = new THREE.Vector3();
 const _scratchWorldNormal = new THREE.Vector3();
+const _scratchLookTarget = new THREE.Vector3();
 const _scratchToMirror = new THREE.Vector3();
 const _scratchCameraForward = new THREE.Vector3();
 
@@ -24,31 +35,64 @@ const _scratchCameraForward = new THREE.Vector3();
  * furniture piece (`Wardrobe.js`) and a Builder behaviour
  * (`ReflectiveBehaviour.js`) both call this exact same function; neither
  * knows the other exists, and this system doesn't know or care which one
- * asked. That's what "avoid hard-coded special cases" means here — a
- * future NPC, a polished workbench surface, a puddle, anything at all,
- * becomes reflective by calling the same one function.
+ * asked.
  *
- * **How it actually works**, optimised for maintainability over graphical
- * fidelity per the brief: a second camera is positioned at the mirror
- * image of the main camera across the surface's plane, and rendered into
- * a small render-target texture applied to the surface's own (cloned, so
- * the shared cached material is never mutated — see PlaceholderFactory.js)
- * material. This is *not* a per-pixel-correct planar reflection (that
- * needs a projective texture shader and oblique near-plane clipping,
- * meaningfully more code to maintain for a visual improvement that matters
- * least of anywhere in this project); it's a camera placed to show
- * whatever's in front of the mirror — which, for "can I see myself while
- * changing outfits," is exactly what's needed, without the extra
- * machinery. See docs/PLAYER.md's Reflection System section for the full
- * reasoning and the known viewing-angle limitation this trades away.
+ * **A fixed viewpoint, not a camera chasing the player — the whole
+ * architecture changed here, and this is why.** The original version
+ * positioned the mirror's virtual camera at the reflection of the main
+ * camera's position every single frame, recomputed from wherever the
+ * player currently was. That's *closer* to a physically correct
+ * reflection, but it's also exactly what made the mirror feel like a
+ * second camera following the player around rather than a fixed object
+ * in the room: as the player approached, the virtual camera approached
+ * from the opposite side at the same rate, and because nothing bounded
+ * its frustum to the mirror's own actual size, the reflected view could
+ * end up looking clean through the workshop's own walls into whatever
+ * was beyond them — exactly the "areas outside the Workshop become
+ * visible" symptom this pass exists to fix. Chasing the player's exact
+ * position and orientation was also the more *expensive* choice for no
+ * benefit worth its cost: every frame it rendered, it re-derived a fresh
+ * camera transform from scratch, on top of the render itself.
  *
- * Every surface's texture only re-renders every `updateInterval` frames,
- * and skips entirely once the camera is further than `MAX_ACTIVE_DISTANCE`
- * away — a mirror nobody's near costs nothing.
+ * The fix is simpler than what it replaces, not more complex: the mirror
+ * camera's position and orientation are derived once from the mirror's
+ * *own* geometry — sitting just in front of its own surface (not behind
+ * it, which would need real physical depth that a wall-mounted mirror
+ * often doesn't have), looking further out into the room — and never
+ * move on their own. Walking closer to the mirror makes the player's own
+ * reflection occupy more of the frame (their rig is simply closer to a
+ * camera that isn't moving), which is exactly the desired behaviour, and
+ * the reflected view can never sweep past whatever the mirror's own
+ * fixed framing was set up to show. "The Workshop should always favour
+ * believable over physically perfect" — a real mirror doesn't have a
+ * camera in front of it either; a fixed, sensible viewpoint reads as a
+ * believable reflection without needing to be a physically exact one.
+ *
+ * The one thing that *does* still need to track something is the mirror
+ * itself moving — a future Builder-placed mirror repositioned in Build
+ * Mode shouldn't leave its reflection facing where it used to be. See
+ * `_updateFixedTransform()`: cheap enough to check every frame for every
+ * surface (a plain position/normal comparison), so a moved mirror's
+ * camera recomputes the moment it actually changes, without recomputing
+ * anything at all for the common case of a mirror that never moves.
+ *
+ * **Performance** (see docs/PERFORMANCE.md for the fuller account): the
+ * unavoidable cost here is rendering the entire scene a second time —
+ * that's inherent to any real-time render-to-texture mirror, fixed
+ * viewpoint or not, and no amount of camera-math cleverness removes it.
+ * What actually is addressable: distance culling (skip entirely once the
+ * player is far away), a view-direction check (skip if the player isn't
+ * even roughly looking that way — a plain dot product, deliberately
+ * simpler than a full frustum test), update throttling (every third
+ * frame, not every frame — a fixed viewpoint doesn't need to track
+ * anything in real time the way a chasing camera did), a modest render
+ * resolution, and disabling shadow-map rendering for this one render
+ * specifically (a real, meaningfully expensive per-light render pass of
+ * its own, and not something a believable-not-perfect reflection needs).
  */
 export class ReflectionSystem {
   constructor() {
-    /** @type {Array<{mesh: THREE.Mesh, plane: THREE.Plane, renderTarget: THREE.WebGLRenderTarget, camera: THREE.PerspectiveCamera, material: THREE.Material, originalMaterial: THREE.Material|THREE.Material[], updateInterval: number, timer: number}>} */
+    /** @type {Array<{mesh: THREE.Mesh, renderTarget: THREE.WebGLRenderTarget, camera: THREE.PerspectiveCamera, material: THREE.Material, originalMaterial: THREE.Material|THREE.Material[], updateInterval: number, timer: number, lastMeshPosition: THREE.Vector3, lastMeshNormal: THREE.Vector3}>} */
     this._surfaces = [];
   }
 
@@ -82,10 +126,10 @@ export class ReflectionSystem {
   /**
    * Marks `mesh` as reflective. `mesh` should be roughly flat — its own
    * world-space normal (local +Z, transformed by its world matrix) is
-   * used as the mirror plane's normal. Returns a disposer; call it if the
-   * surface is ever removed from the scene (a deleted Builder object, a
-   * despawned instance) so its render target and cloned material are
-   * properly freed rather than leaking.
+   * used both as the mirror plane's normal and to place its fixed camera.
+   * Returns a disposer; call it if the surface is ever removed from the
+   * scene (a deleted Builder object, a despawned instance) so its render
+   * target and cloned material are properly freed rather than leaking.
    */
   registerSurface(mesh, { resolution = DEFAULT_RESOLUTION, updateInterval = DEFAULT_UPDATE_INTERVAL, aspect = 1 } = {}) {
     const renderTarget = new THREE.WebGLRenderTarget(resolution, Math.round(resolution * aspect), {
@@ -107,7 +151,7 @@ export class ReflectionSystem {
     //      a normally tone-mapped material applies tone mapping a second
     //      time, compressing (and further darkening) the result again.
     renderTarget.texture.colorSpace = THREE.SRGBColorSpace;
-    const camera = new THREE.PerspectiveCamera(55, resolution / (resolution * aspect), CAMERA_NEAR, CAMERA_FAR);
+    const camera = new THREE.PerspectiveCamera(50, resolution / (resolution * aspect), CAMERA_NEAR, CAMERA_FAR);
 
     // Cloned, never mutated in place — the same reasoning Build Mode's own
     // ghost preview and the Builder's part-selection highlight both
@@ -123,15 +167,17 @@ export class ReflectionSystem {
 
     const surface = {
       mesh,
-      plane: new THREE.Plane(),
       renderTarget,
       camera,
       material,
       originalMaterial,
       updateInterval,
       timer: Math.random() * updateInterval, // staggers multiple mirrors' render frames apart, not synchronised
+      lastMeshPosition: new THREE.Vector3(NaN, NaN, NaN), // NaN guarantees the very first check below computes an initial transform
+      lastMeshNormal: new THREE.Vector3(),
     };
     this._surfaces.push(surface);
+    this._updateFixedTransform(surface); // establish its transform immediately, rather than waiting for the first render tick
     return () => this.unregisterSurface(mesh);
   }
 
@@ -144,76 +190,88 @@ export class ReflectionSystem {
     if (mesh.material === surface.material) mesh.material = surface.originalMaterial;
   }
 
+  /** Recomputes this surface's fixed camera transform, but only if its
+   *  mesh has actually moved (or rotated) since the last check — cheap
+   *  enough to run every single frame for every surface regardless, so a
+   *  Builder-moved mirror is never stale, without recomputing anything at
+   *  all for the ordinary case of a mirror that never moves. */
+  _updateFixedTransform(surface) {
+    surface.mesh.updateWorldMatrix(true, false);
+    surface.mesh.getWorldPosition(_scratchWorldPos);
+    _scratchWorldNormal.set(0, 0, 1).transformDirection(surface.mesh.matrixWorld);
+
+    const positionMoved = _scratchWorldPos.distanceToSquared(surface.lastMeshPosition) > TRANSFORM_EPSILON;
+    const normalRotated = 1 - _scratchWorldNormal.dot(surface.lastMeshNormal) > TRANSFORM_EPSILON;
+    if (!positionMoved && !normalRotated) return;
+
+    surface.lastMeshPosition.copy(_scratchWorldPos);
+    surface.lastMeshNormal.copy(_scratchWorldNormal);
+
+    // A fixed viewpoint just in front of the mirror's own surface,
+    // looking further out into the room — not a camera reflecting
+    // wherever the player currently is, and not requiring any real space
+    // behind the glass itself. See this class's own top comment for why
+    // that distinction is the entire point of this file.
+    surface.camera.position.copy(_scratchWorldPos).addScaledVector(_scratchWorldNormal, MIRROR_CAMERA_OFFSET);
+    _scratchLookTarget.copy(_scratchWorldPos).addScaledVector(_scratchWorldNormal, MIRROR_LOOK_DISTANCE);
+    surface.camera.up.set(0, 1, 0);
+    surface.camera.lookAt(_scratchLookTarget);
+  }
+
   update(dt) {
     const mainCamera = this.engine.camera;
     if (!mainCamera || this._surfaces.length === 0) return;
 
     for (const surface of this._surfaces) {
+      // Always cheap to check, regardless of whether this surface ends up
+      // rendering this frame — a moved mirror shouldn't go stale just
+      // because it's currently too far away or out of view to be
+      // actively rendering.
+      this._updateFixedTransform(surface);
+
       if (!surface.mesh.visible) continue;
       surface.timer -= dt;
       if (surface.timer > 0) continue;
       surface.timer = surface.updateInterval;
 
-      surface.mesh.getWorldPosition(_scratchWorldPos);
-      const distSq = _scratchWorldPos.distanceToSquared(mainCamera.position);
+      const distSq = surface.lastMeshPosition.distanceToSquared(mainCamera.position);
       if (distSq > MAX_ACTIVE_DISTANCE * MAX_ACTIVE_DISTANCE) continue;
 
       // Skip the expensive render entirely if the mirror isn't even
       // roughly in view — merely being *near* a mirror used to pay the
-      // full cost of rendering the whole scene a second time, every other
-      // frame, regardless of whether the player was actually looking
-      // anywhere near it. A plain dot product against the camera's own
-      // forward direction (deliberately simpler than a full 6-plane
-      // frustum test — easier to reason about, and this only needs to be
-      // roughly right, not exact) is enough: skip anything behind the
-      // camera or well outside its field of view.
+      // full cost of rendering the whole scene a second time, regardless
+      // of whether the player was actually looking anywhere near it. A
+      // plain dot product against the camera's own forward direction
+      // (deliberately simpler than a full 6-plane frustum test — easier
+      // to reason about, and this only needs to be roughly right, not
+      // exact) is enough: skip anything behind the camera or well outside
+      // its field of view.
       if (distSq > 0.09) {
         // (skip the direction check when standing almost exactly at the
         // mirror's own position — subtracting two nearly-identical points
         // would normalize a near-zero vector)
-        _scratchToMirror.subVectors(_scratchWorldPos, mainCamera.position).normalize();
+        _scratchToMirror.subVectors(surface.lastMeshPosition, mainCamera.position).normalize();
         _scratchCameraForward.set(0, 0, -1).applyQuaternion(mainCamera.quaternion);
         if (_scratchToMirror.dot(_scratchCameraForward) < 0.3) continue;
       }
 
-      surface.mesh.updateWorldMatrix(true, false);
-      _scratchWorldNormal.set(0, 0, 1).transformDirection(surface.mesh.matrixWorld);
-      surface.plane.setFromNormalAndCoplanarPoint(_scratchWorldNormal, _scratchWorldPos);
-
-      this._pointMirrorCamera(surface, mainCamera);
-
       // Never see the mirror in its own reflection — belt-and-braces; the
-      // mirror camera's position/facing should already put it behind the
-      // surface's own frustum in every normal placement, but this
-      // guarantees it regardless.
+      // mirror camera's fixed position/facing should already put it
+      // behind the surface's own frustum in every normal placement, but
+      // this guarantees it regardless.
       surface.mesh.visible = false;
       const previousTarget = this.engine.renderer.getRenderTarget();
+      // A mirror's own reflection doesn't need full shadow detail to read
+      // as believable, and shadow-map rendering is a genuinely expensive,
+      // separate render pass per shadow-casting light — skipping it for
+      // this one render is one of the larger, easy wins available here.
+      const shadowsWereEnabled = this.engine.renderer.shadowMap.enabled;
+      this.engine.renderer.shadowMap.enabled = false;
       this.engine.renderer.setRenderTarget(surface.renderTarget);
       this.engine.renderer.render(this.engine.scene, surface.camera);
       this.engine.renderer.setRenderTarget(previousTarget);
+      this.engine.renderer.shadowMap.enabled = shadowsWereEnabled;
       surface.mesh.visible = true;
     }
-  }
-
-  /** Positions `surface.camera` at the reflection of `mainCamera`'s
-   *  position across the surface's plane, looking toward the reflection
-   *  of a point some distance in front of `mainCamera` — see this file's
-   *  own top comment for why a `lookAt`-built orientation was chosen over
-   *  reflecting the camera's basis vectors directly (guaranteed-correct
-   *  winding/handedness, at the cost of exactness from every angle). */
-  _pointMirrorCamera(surface, mainCamera) {
-    const distance = surface.plane.distanceToPoint(mainCamera.position);
-    surface.camera.position.copy(mainCamera.position).addScaledVector(surface.plane.normal, -2 * distance);
-
-    _scratchAhead
-      .set(0, 0, -1)
-      .applyQuaternion(mainCamera.quaternion)
-      .multiplyScalar(2.2)
-      .add(mainCamera.position);
-    const aheadDistance = surface.plane.distanceToPoint(_scratchAhead);
-    _scratchReflectedAhead.copy(_scratchAhead).addScaledVector(surface.plane.normal, -2 * aheadDistance);
-
-    surface.camera.up.set(0, 1, 0);
-    surface.camera.lookAt(_scratchReflectedAhead);
   }
 }
