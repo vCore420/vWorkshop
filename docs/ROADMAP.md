@@ -734,7 +734,77 @@ contract; a future Builder-placed mirror gets the identical fixed-
 viewpoint treatment, the identical move-tracking, and the identical
 performance characteristics as the physical wardrobe mirror, automatically.
 
-## Phase 17 — depth in the room that exists
+## Phase 17 — Movement & Expression
+
+**Goal:** "truly bring the player to life... think of this less as
+building a game animation editor, and more as creating another creative
+application inside the Workshop." See docs/PLAYER.md's "Movement &
+Expression" section for the full write-up.
+
+Delivered:
+- **A real movement system** — running, crouching, and jumping joined
+  walking, all still one continuous state machine inside `CameraSystem`
+  rather than a second movement system. Real vertical movement: gravity,
+  a jump arc, and a simple heightmap-style ground query that lets the
+  player stand on top of (and land on) Builder-created structures —
+  `WorldObjectsSystem`'s own real per-object footprints specifically, not
+  furniture's fixed collision column.
+- **Climbable ladders, through the Builder behaviour system** —
+  `LadderSystem.registerLadder()` is the entire capability, called
+  directly by both `LadderBehaviour.js` (Builder objects) and any future
+  hand-built ladder, neither aware the other exists — the same
+  "reflective"/`ReflectionSystem` split established for mirrors.
+- **A second, independently-customisable body model** — `BodyModels.js`
+  defines Masculine and Feminine, sharing the exact same pivot structure
+  (what makes animations work identically across both), with
+  `PlayerAppearanceStore` keeping each model's own appearance separately
+  so switching between them restores rather than overwrites.
+- **A complete keyframe Animation System** — `PlayerAnimationSystem`
+  owns the entire mapping from a plain movement-state string
+  (`CameraSystem`'s only contribution) to which clip actually plays, how
+  it blends between frames, and whether an explicitly-requested emote is
+  currently overriding movement-driven playback.
+- **The Animation Editor**, a new computer app matching the Builder's own
+  split-workspace design: a live, isolated preview always visible on one
+  side, frame-by-frame editing (add/duplicate/delete/reorder frames,
+  per-joint rotation sliders, play/pause/loop preview) on the other. Works
+  on a local draft, saved back to the library on every change rather than
+  live-editing whatever the player's own character might currently be
+  playing.
+- **A shared Animation Library** — default animations (`AnimationClips.js`,
+  the same permanent "alphabet" role `ConstructionLibrary.js` plays for
+  the Builder), player-created ones, and imported ones, all resolved
+  identically through one `getClip(id)`.
+- **Import/Export** — a simple, self-describing JSON format
+  (`{format, version, clip}`), reusing the exact same
+  `StorageUtils.downloadJSON`/`uploadJSON` every other export in the
+  Workshop already uses.
+- **The Emote Wheel** — lightweight on purpose: lists every non-movement
+  clip, plays whichever one is picked, closes itself immediately. "The
+  Emote Wheel should simply play animation assets" is true by
+  construction; this file has never seen a pose or a pivot name.
+
+**A real bug, found and fixed during this pass**: ladder climbing
+initially used the world-space transformed movement vector to decide
+"how much forward input," which only actually correlated with pressing
+forward when facing exactly north or south — at any other facing it read
+as close to zero, since a sideways-facing "forward" barely moves along
+world Z at all. Fixed by using the raw, camera-relative forward input
+instead (`input.moveVector.y`, before the yaw transform), which is what
+"pressing forward" means regardless of which way the ladder faces. The
+same fix applied to the horizontal drift while climbing, which had been
+arbitrarily zeroing world-space Z rather than computing a proper
+strafe-only vector.
+
+**Explicitly *not* attempted, on purpose**: touch-specific UI for
+running/crouching/jumping (the existing joystick/drag-look/tap-interact
+touch controls cover walking and looking exactly as before); true 3D
+collision for standing surfaces (a heightmap query, not real physics);
+quaternion-based animation interpolation (plain per-axis Euler lerp,
+the same "believable, not physically perfect" trade the reflection
+system already made) — see "Known limitations" in docs/PLAYER.md.
+
+## Phase 18 — depth in the room that exists
 
 Roughly in priority order, each independently shippable:
 
@@ -773,7 +843,7 @@ Roughly in priority order, each independently shippable:
 9. **A true oriented planar reflection**, and reflective surfaces beyond a
    flat plane — see "Future extension points" in `docs/PLAYER.md`.
 
-## Phase 18 — the world becomes alive on its own
+## Phase 19 — the world becomes alive on its own
 
 1. **Seasonal changes** — a plugin (see `PLUGIN_GUIDE.md`) reading the real
    calendar date and adjusting window tint / a handful of decorative
@@ -797,7 +867,7 @@ Roughly in priority order, each independently shippable:
    Construction Library's own Switch piece (Phase 13) is one ready-made
    source of that event, waiting for something to listen.
 
-## Phase 19 — beyond one building
+## Phase 20 — beyond one building
 
 - **Additional buildings** — `RoomLayoutSystem` was written with this in
   mind (see its class comment), and `WorldObjectsStore` was made

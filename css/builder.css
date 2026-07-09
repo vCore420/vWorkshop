@@ -351,3 +351,36 @@
   cursor: pointer;
 }
 .builder-small-button:hover { border-color: var(--brass); color: var(--brass-bright); }
+.builder-small-button.active { border-color: var(--screen-glow); color: var(--screen-glow); background: rgba(127, 216, 196, 0.12); }
+
+/* ---------- Animation Editor ---------- */
+.anim-playback-bar {
+  display: flex;
+  gap: 8px;
+  padding: var(--space-2);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.anim-readonly-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: var(--text-sm);
+  color: var(--paper-dark);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-bottom: var(--space-3);
+}
+.anim-duration-input {
+  width: 56px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--paper);
+  border-radius: var(--radius-sm);
+  padding: 2px 4px;
+  margin: 0 6px;
+}

@@ -149,9 +149,34 @@ running into a real constraint discovered while building it, not before.
   extension is a garment "attaching" to one of the rig's existing pivots
   (the torso pivot for a shirt, a wrist pivot for a bracelet) the same way
   a hand already attaches to a wrist. The pivots already exist for this.
-- **Animation** — rotating any pivot in the hierarchy already affects
-  everything below it correctly, because the hierarchy is real, not
-  simulated with independently-positioned meshes.
+
+"Animation" used to be listed here as a future extension point too — see
+"Movement & Expression" below for the full system it became. The
+prediction held up exactly as written here too: "rotating any pivot in
+the hierarchy already affects everything below it correctly, because the
+hierarchy is real" turned out to be the entire reason a full keyframe
+animation system, a frame-by-frame editor, and a shared library all
+needed zero changes to the rig itself — `applyPose()` just sets
+`.rotation` on pivots that were already sitting there, real joints,
+since Phase 10.
+
+What Movement & Expression makes newly possible:
+
+- **Chairs and Builder objects requesting a specific animation** —
+  `PlayerAnimationSystem.play(clipId)` is already a generic entry point
+  any system could call, not something built specifically for the Emote
+  Wheel; a sitting animation triggered by the reading chair, say, is a
+  few lines in `SeatBehaviour.js`, not a new capability.
+- **Future Workshop residents using the same animation library** — since
+  a clip is just rotations keyed by pivot name, and any rig sharing
+  those pivot names could play it, an NPC built on the same
+  `PlayerCharacter.js` rig shape would already be animatable with zero
+  changes to `AnimationClips.js` or `PlayerAnimationSystem.js`.
+- **A true root-motion system**, if walk/run animations ever need to
+  visually move the rig's own feet rather than the whole body simply
+  following the camera — everything here still treats animation as
+  pose-only, layered on top of `PlayerCharacterSystem`'s existing
+  camera-follows-position behaviour.
 
 Two things this section used to list as *future* extension points —
 mirrors/reflections and a third-person camera — are no longer future; see
@@ -359,6 +384,213 @@ gameplay" is implemented as a real constraint, not just a suggestion —
 `toggleViewMode()` is a no-op in focus mode, and the blend automatically
 eases back to first person the moment a focus pose is entered.
 
+## Movement & Expression
+
+"Bring the player to life" — three things arrived together, each modular
+enough to not depend on the others existing: a real movement system
+(running, crouching, jumping, climbing), multiple body models, and a
+complete keyframe animation system with its own creative workspace. See
+docs/ROADMAP.md's Phase 17 entry for the full account of what was built.
+
+### Movement: still one continuous state machine in CameraSystem
+
+Running, crouching, jumping, falling, landing, and climbing all live
+inside `CameraSystem._updateWalk()` and the two methods it delegates to
+(`_updateGroundMovement`/`_updateLadderMovement`) — not a second
+movement system, an extension of the one that already handled walking.
+Vertical movement tracks a separate foot-level height (`_footY`) from the
+eye-height offset added on top of it (`this.position.y = _footY +
+_currentEyeHeight`): gravity and jumping operate on the former, crouching
+smoothly eases the latter, and everything else in the file (focus mode,
+third person, collision) still only ever reads `this.position` as one
+combined number, exactly as before.
+
+**Standing on Builder-created structures** uses
+`WorldObjectsSystem.getFootprints()` specifically, not furniture's own —
+furniture's footprints are a fixed 0–2.2m collision column (see
+docs/WORLD.md), not the piece's actual height, which would make every
+piece of furniture seem to have a flat "top" at 2.2m if used for this.
+`_computeGroundHeight()` is a simple heightmap-style query, not real
+physics: the base floor, plus the top surface of any nearby footprint
+within a step-up tolerance of the player's own feet — close enough to
+climb onto or land on, not a distant platform floating overhead that
+would otherwise teleport the player up the moment they walked underneath
+it. "Favour believable over physically perfect" applies here exactly as
+much as it does to reflections.
+
+**Ladders integrate through the Builder behaviour system, not a special
+case** — `LadderSystem.js` is the entire capability (one function,
+`registerLadder(object3D)`, the same "one small, generic thing multiple
+independent callers use" shape `ReflectionSystem.registerSurface()`
+already established), and `LadderBehaviour.js` is the Builder-facing side
+of it. A ladder is just a `THREE.Box3` zone; standing inside one switches
+`_updateWalk()` into climbing mode, where forward/back input (relative to
+the player's own facing, not world space — see the note below) climbs up
+or down and gravity is suspended.
+
+**A real, if minor, bug found and fixed during this pass**: the first
+version of ladder climbing used `wish.y` (the world-space Z component of
+the player's intended movement, after the yaw transform) as "how much
+forward input" — which only actually correlates with pressing forward
+when facing exactly north or south. At any other facing, `wish.y` reads
+close to zero even while holding forward, since a sideways-facing
+"forward" barely moves along world Z at all — climbing would have felt
+broken depending entirely on which direction the ladder happened to
+face. Fixed by using `input.moveVector.y` instead — the raw,
+camera-relative forward input, before the yaw transform — which is what
+"pressing forward" actually means regardless of world orientation. The
+same fix applies to the gentle horizontal drift while climbing, which
+used to zero out world-space Z outright rather than computing a proper
+strafe-only vector.
+
+### Body models: the same rig, different starting proportions
+
+`BodyModels.js` defines the available procedural body models (Masculine,
+Feminine to start) — each with its own base dimensions and default
+appearance, but every one of them produces the exact same `PART_IDS` and
+pivot names `PlayerCharacter.js`'s rig always has. That's not a
+limitation; it's what makes "the same animation library should work
+across every supported body model" true by construction — a clip stores
+rotations keyed by pivot name, and a pivot of that name exists on every
+model, always, so animation playback never needs to know or care which
+model is currently active.
+
+`PlayerAppearanceStore` keeps each model's appearance independently
+(`appearanceByModel[modelId]`) — switching models restores whatever was
+last being customised on that one, rather than overwriting it.
+`.appearance` stays a plain property throughout, via a getter/setter that
+proxies to `appearanceByModel[bodyModelId]`: every existing caller
+(`PlayerCharacterSystem`, `WardrobeApp.js`) kept reading/writing
+`store.appearance` exactly as before, with zero changes needed on their
+side; only the store itself needed to know there's more than one now.
+Outfits remember which body model they were saved for
+(`OutfitStore`'s own `bodyModelId` field) — loading one saved on a
+different model switches models too, rather than applying mismatched
+proportions to the wrong base dimensions.
+
+Adding a third model later is one more entry in `BodyModels.js`'s own
+`BODY_MODELS` object — its own base dimensions, its own default
+appearance — and nothing else in the player architecture changes.
+
+### The Animation System: movement requests, this system decides
+
+**"The movement controller should simply request animations from the
+Animation System... avoid tightly coupling animation logic directly into
+the movement controller."** `CameraSystem` has never seen an animation
+clip, a pose, or a pivot name, and never will — every frame it computes
+one plain string ("idle"/"walk"/"run"/"jump"/"fall"/"land"/"crouch"/
+"ladderClimb") describing what the player is *doing*, and hands it to
+`PlayerAnimationSystem.setMovementState()`. What that state actually
+looks like — which clip plays, how frames blend, whether an emote is
+currently overriding it — is entirely `PlayerAnimationSystem`'s own
+concern.
+
+**A clip's shape** (`AnimationClips.js`'s own comment has the full
+version): `{ id, name, description, category, loop, speed, frames: [
+{ duration, pose: { pivotName: [x,y,z] } } ] }` — plain Euler-angle
+rotations in radians, keyed by pivot name. `applyPose()`
+(`PlayerCharacter.js`) is the entire playback mechanism: it sets every
+pivot's rotation explicitly each call, resetting anything a pose doesn't
+mention back to rest rather than leaving it at whatever it happened to
+be — without that, a rotation from whichever clip played *previously*
+(bent knees from Crouch, say) could silently persist into a new clip that
+never mentions that pivot at all.
+
+**Interpolation is plain linear interpolation of Euler angles**, not
+quaternion slerp — a deliberate simplification that holds up fine for the
+modest rotation ranges ordinary locomotion and gestures actually need, in
+exchange for authoring and reasoning about poses as plain per-axis
+numbers. "Favour believable over physically perfect."
+
+**Two playback sources, one clear priority.** Movement state drives
+playback by default. `PlayerAnimationSystem.play(clipId)` — the Emote
+Wheel's own entry point, and "keep the player architecture modular" means
+anything else can call it too (a chair, a Builder object, a future AI
+Resident) — takes over as an override until either it finishes
+(non-looping) or genuine movement interrupts it: walking away from a
+looping emote hands control back to movement automatically, "looping
+animations should continue until interrupted by player movement or
+another animation" implemented as `setMovementState()` itself clearing
+any active override the moment the new state represents real movement.
+
+**The eight default animations** (`AnimationClips.js`) are seeded data,
+not special-cased code — the same "the alphabet" role
+`ConstructionLibrary.js` plays for the Builder. `AnimationLibraryStore`
+never stores them in its own mutable list; `getClip(id)` resolves either
+a default or a user clip identically, and `isDefault(id)` is what the
+Animation Editor uses to show them as read-only, offering "Duplicate to
+Edit" instead of letting them be changed directly — the same read-only-
+defaults rule the Construction Library already follows.
+
+### The Animation Editor: another creative application, not a technical tool
+
+`AnimationEditorApp.js` follows the Builder app's exact split-workspace
+layout (`.builder-workspace`/`.builder-workspace-preview`/
+`.builder-workspace-form`) on purpose — "think of this less as building a
+game animation editor, and more as creating another creative application
+inside the Workshop." A live preview (its own small, isolated
+`PreviewRenderer` scene — a second character rig built fresh for editing,
+never the player's actual on-screen one, so posing it for editing never
+affects what's actually happening in the Workshop right now) stays
+visible at all times on the left; the timeline, frame controls, body part
+selection, rotation sliders, and animation properties live on the right.
+
+**A working copy, not live editing** — unlike the Wardrobe (where every
+slider writes straight through to the live-worn appearance), the editor
+works on a local, deep-copied draft of whichever clip is selected, saved
+back to the library on every change but never touching a clip the
+player's own on-screen character might currently be playing until that
+save actually happens. Selecting a different frame immediately updates
+the preview to that frame's exact pose; Play/Pause blends between frames
+the same way `PlayerAnimationSystem` does, using a second, independent
+playback loop scoped entirely to this editor's own preview scene.
+
+Frame operations (add, duplicate, delete, reorder) and rotation editing
+(per body part, per axis, in degrees for readability — converted to/from
+the radians a pose actually stores) are all immediate, no separate "apply"
+step, matching how every other editing surface in the Workshop already
+works.
+
+### Import / Export: animations are portable Workshop assets
+
+A simple, self-describing JSON wrapper — `{ format: "workshop-animation",
+version: 1, clip: {...} }` — future-friendly the same way every other
+export format in this project is: a format/version marker up front means
+a future version of this app can always tell an old export apart from a
+new one without guessing. Reuses `StorageUtils.downloadJSON`/`uploadJSON`
+directly, the same browser download/file-picker mechanism every other
+export in the Workshop already uses — no new file-handling machinery
+needed. Importing a clip creates a brand new user clip (never overwrites
+anything existing), named "<original name> (imported)" so it's obvious
+where it came from.
+
+### The Emote Wheel: plays assets, decides nothing
+
+`EmoteWheelSystem.js` (toggled with **G**) is deliberately almost
+nothing: it lists every non-movement clip in the library and calls
+`PlayerAnimationSystem.play(clipId)` when one is picked. "The Emote Wheel
+should simply play animation assets" is true by construction — this file
+has never seen a pose, a frame, or a pivot name. It closes itself the
+instant something is picked (or Escape is pressed) rather than staying
+open as a persistent menu, and briefly locks movement/look while open
+(the same `CameraSystem.lock()`/`unlock()` every overlay already uses) so
+the mouse can click a button — given how briefly it's ever open, this
+reads as a quick glance down at a gesture list, not a mode switch.
+
+### Architecture: four systems, no direct dependencies between them
+
+"Body Models define the player's structure. Appearance defines colours
+and textures. Outfits define clothing and wearable assets. Animations
+define movement and expression. These systems should work together
+without depending directly on one another." Concretely: `BodyModels.js`
+has never imported `PlayerAnimationSystem.js`; `AnimationLibraryStore`
+has never imported `BodyModels.js`; every one of these only ever talks to
+the others through a plain, narrow interface (pivot names, a body model
+id, a clip id) rather than reaching into each other's internals. A future
+body model, wearable system, or animation improvement is additive —
+exactly what let this entire phase arrive without a single existing file
+needing a structural rewrite, only extensions to what was already there.
+
 ## Known limitations
 
 - **"Never see themselves" in first person is physics, not a rule.** The
@@ -383,3 +615,22 @@ eases back to first person the moment a focus pose is entered.
   uses; very fine detail in a large imported image won't survive that.
 - **The paint tool is deliberately simple** — one brush size, flat fill,
   no layers or undo. It's a wardrobe, not an image editor.
+- **No dedicated touch UI for running, crouching, or jumping yet** —
+  those three arrived as keyboard bindings (Shift, C, Space) alongside
+  the existing joystick/drag-look/tappable-interact touch controls, which
+  cover walking and looking around exactly as before. A touch-friendly
+  affordance for the three new actions is a reasonable next step, not
+  something this pass got to.
+- **Ground-height detection is a heightmap query, not real 3D collision**
+  — see "Movement & Expression" above. A player can't land on the
+  underside of an overhang, and very thin or steeply angled Builder
+  geometry may not read as standable the way a flat platform does.
+- **A ladder's climbable zone is its own bounding box** — a ladder built
+  at an angle, or one that isn't roughly vertical, will still produce a
+  box-shaped zone rather than one that follows its actual rungs.
+- **Animation interpolation is linear per-axis Euler, not quaternion
+  slerp** — see "The Animation System" above for the reasoning; it holds
+  up for ordinary locomotion and gestures, but a pose with a very large
+  rotation on more than one axis at once can occasionally interpolate
+  through an unexpected intermediate angle, the well-known trade-off of
+  Euler-angle interpolation in general.

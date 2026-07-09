@@ -4,7 +4,8 @@ A living 3D creative workshop, built to be a place you return to rather than
 an app you launch. Runs entirely in the browser, no build step, no backend —
 just static files.
 
-This project has gone through sixteen phases: an architectural foundation and
+This project has gone through seventeen phases (with one dedicated
+refinement pass in between): an architectural foundation and
 one believable room (phase 1), turning the computer into a real,
 self-contained creative workstation with a physical sit-down/stand-up
 transition (phase 2), turning the workbench into the workshop's visual
@@ -51,7 +52,13 @@ sky tints, and a hidden-but-functional scrollbar throughout the computer
 around the room: a fixed viewpoint replaced a camera that reflected the
 player's own position every frame, fixing both the "reflections show
 areas outside the Workshop" bug this caused and a real chunk of the
-performance cost mirrors carried (phase 16.5).
+performance cost mirrors carried (phase 16.5), and — most recently — a
+complete movement and expression system: running, crouching, jumping,
+and real vertical collision including climbable ladders; a second,
+independently-customisable body model; and a full keyframe Animation
+System with its own frame-by-frame editor, a shared library of default
+and player-created animations, import/export, and a lightweight Emote
+Wheel to trigger them (phase 17).
 See `docs/ROADMAP.md` for what's next, `docs/ARCHITECTURE.md`
 for how the workshop as a whole is put together, and `docs/COMPUTER.md` /
 `docs/WORKBENCH.md` / `docs/WORLDBUILDER.md` / `docs/WORLD.md` /
@@ -94,8 +101,12 @@ way.
 |---|---|
 | Click "Step inside" | Enter the room, lock the mouse cursor |
 | W A S D / arrow keys | Walk |
+| Shift | Run |
+| C | Crouch |
+| Space | Jump |
 | Mouse | Look around |
-| E / Space | Interact with whatever's prompted at the bottom of the screen |
+| E | Interact with whatever's prompted at the bottom of the screen |
+| G | Open the Emote Wheel — trigger a gesture or animation |
 | B | Toggle Build Mode (also a button, top-left) — see below |
 | V | Toggle first/third person (also a button, top-left) — mainly for viewing outfits, appreciating what you've built, and screenshots; the Workshop is still designed primarily for first person |
 | Esc | Step back out of whatever's open |
@@ -396,5 +407,3 @@ ships with is generated in code — see `assets/README.md` — the one
 exception being the music library, which plays whatever real files you
 point it at from your own device (see `docs/MUSIC.md`); nothing is bundled
 with the project itself.
-
-- vCore
