@@ -78,7 +78,7 @@ export class PlayerCharacterSystem {
     this._rebuildInFlight = true;
 
     const textureImages = await resolveTextureImages(this.appearanceStore.appearance, this.textureStore);
-    const next = buildCharacter(this.appearanceStore.appearance, textureImages);
+    const next = buildCharacter(this.appearanceStore.appearance, this.appearanceStore.bodyModelId, textureImages);
 
     if (this._current) {
       this.engine.scene.remove(this._current.root);
@@ -92,6 +92,17 @@ export class PlayerCharacterSystem {
       this._rebuildAgainAfter = false;
       this._rebuild();
     }
+  }
+
+  /** The live rig's pivots — `PlayerAnimationSystem` reads this every
+   *  frame to apply whatever pose the current clip calls for. Always the
+   *  *current* rig's pivots, never a cached reference: a proportion
+   *  change or a body-model switch rebuilds the whole rig from scratch
+   *  (see PlayerCharacter.js's own comment on why), producing entirely
+   *  new pivot objects — this always reflects whichever rebuild most
+   *  recently finished. */
+  getPivots() {
+    return this._current?.pivots ?? null;
   }
 
   update(_dt) {

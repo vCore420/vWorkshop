@@ -1,5 +1,5 @@
 import { EventBus } from "../core/EventBus.js";
-import { defaultAppearance } from "./PlayerCharacter.js";
+import { DEFAULT_BODY_MODEL, getBodyModel, getBodyModelList } from "./BodyModels.js";
 
 /**
  * PlayerAppearanceStore
@@ -10,6 +10,16 @@ import { defaultAppearance } from "./PlayerCharacter.js";
  * workbench's *current* project is distinct from the archive of finished
  * ones: this is live, continuously-edited state, not a collection.
  *
+ * **Each body model keeps its own independent appearance**
+ * (`appearanceByModel[modelId]`) — switching models restores whatever was
+ * last being customised on that one, rather than overwriting it. `.appearance`
+ * stays a plain property throughout, via a getter/setter that proxies to
+ * `appearanceByModel[bodyModelId]` — every existing caller
+ * (`PlayerCharacterSystem`, `WardrobeApp.js`) keeps reading/writing
+ * `store.appearance` exactly as before, with zero changes needed on their
+ * side; only this store itself needed to know there's more than one of
+ * them now.
+ *
  * `currentOutfitId` is remembered (not required) — editing the live
  * appearance doesn't silently rewrite a saved outfit; "Save" is always an
  * explicit action (see docs/PLAYER.md), the same way finishing a project
@@ -18,8 +28,18 @@ import { defaultAppearance } from "./PlayerCharacter.js";
 export class PlayerAppearanceStore {
   constructor() {
     this.events = new EventBus();
-    this.appearance = defaultAppearance();
+    this.bodyModelId = DEFAULT_BODY_MODEL;
+    this.appearanceByModel = {};
+    for (const model of getBodyModelList()) this.appearanceByModel[model.id] = model.defaultAppearance();
     this.currentOutfitId = null;
+  }
+
+  get appearance() {
+    return this.appearanceByModel[this.bodyModelId];
+  }
+
+  set appearance(value) {
+    this.appearanceByModel[this.bodyModelId] = value;
   }
 
   getPart(partId) {
@@ -38,14 +58,33 @@ export class PlayerAppearanceStore {
     this._emitChanged();
   }
 
+  /** Switches which body model is active, restoring *that* model's own
+   *  independently-maintained appearance — "switching between body models
+   *  should simply restore that model's saved appearance rather than
+   *  losing previous work." An outfit is tied to the model it was saved
+   *  from (see OutfitStore.js), so switching models directly (not via
+   *  loading an outfit) clears the remembered outfit id rather than
+   *  leaving it pointing at a snapshot for a different model's
+   *  proportions. */
+  setBodyModel(bodyModelId) {
+    if (bodyModelId === this.bodyModelId || !getBodyModel(bodyModelId)) return;
+    if (!this.appearanceByModel[bodyModelId]) this.appearanceByModel[bodyModelId] = getBodyModel(bodyModelId).defaultAppearance();
+    this.bodyModelId = bodyModelId;
+    this.currentOutfitId = null;
+    this._emitChanged();
+  }
+
   /** Used by the Settings app's Danger Zone ("Reset Player Data") — back
-   *  to the default figure, wearing nothing customised. Doesn't touch
-   *  TextureStore itself; the caller is responsible for cleaning up any
-   *  textures this appearance (and every saved outfit) referenced, since
-   *  this store has no reference to OutfitStore/TextureStore to check
-   *  "is this texture still used elsewhere" against on its own. */
+   *  to the default figure for every body model, wearing nothing
+   *  customised. Doesn't touch TextureStore itself; the caller is
+   *  responsible for cleaning up any textures this appearance (and every
+   *  saved outfit) referenced, since this store has no reference to
+   *  OutfitStore/TextureStore to check "is this texture still used
+   *  elsewhere" against on its own. */
   resetToDefaults() {
-    this.appearance = defaultAppearance();
+    this.bodyModelId = DEFAULT_BODY_MODEL;
+    this.appearanceByModel = {};
+    for (const model of getBodyModelList()) this.appearanceByModel[model.id] = model.defaultAppearance();
     this.currentOutfitId = null;
     this._emitChanged();
   }
@@ -62,12 +101,22 @@ export class PlayerAppearanceStore {
 
   // ---- persistence contract, read by PersistenceSystem ----
   save() {
-    return { appearance: this.appearance, currentOutfitId: this.currentOutfitId };
+    return { bodyModelId: this.bodyModelId, appearanceByModel: this.appearanceByModel, currentOutfitId: this.currentOutfitId };
   }
 
   load(data) {
-    if (!data?.appearance) return;
-    this.appearance = data.appearance;
+    if (!data) return;
+    if (data.appearanceByModel) {
+      this.appearanceByModel = data.appearanceByModel;
+      this.bodyModelId = data.bodyModelId ?? DEFAULT_BODY_MODEL;
+    } else if (data.appearance) {
+      // A save from before body models existed — becomes this model's own
+      // appearance; every other model still starts at its own default,
+      // the same graceful "a field simply absent from an old save is
+      // handled the same way a first launch is" degradation every other
+      // store in this project already follows.
+      this.appearanceByModel[this.bodyModelId] = data.appearance;
+    }
     this.currentOutfitId = data.currentOutfitId ?? null;
     this.events.emit("appearance:changed", this.appearance);
   }

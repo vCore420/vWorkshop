@@ -1,4 +1,5 @@
 import { EventBus } from "../core/EventBus.js";
+import { DEFAULT_BODY_MODEL } from "./BodyModels.js";
 
 let _nextId = 1;
 
@@ -11,19 +12,28 @@ let _nextId = 1;
  * established for named, user-curated collections. `PlayerAppearanceStore`
  * is the live, currently-worn state; this is the wardrobe rail it can be
  * saved into and loaded back out of.
+ *
+ * Each outfit also remembers which body model it was saved for
+ * (`bodyModelId`) — an outfit's proportions are relative to a specific
+ * model's own base dimensions (see `BodyModels.js`), so loading one saved
+ * on the feminine model while the masculine model is active needs to
+ * switch models too, not just apply mismatched numbers to the wrong
+ * proportions. `WardrobeApp.js` is what actually does that switch, using
+ * this field to know it's needed.
  */
 export class OutfitStore {
   constructor() {
     this.events = new EventBus();
-    /** @type {Array<{id:number, name:string, appearance:object, createdAt:string, updatedAt:string}>} */
+    /** @type {Array<{id:number, name:string, appearance:object, bodyModelId:string, createdAt:string, updatedAt:string}>} */
     this.outfits = [];
   }
 
-  create(name, appearance) {
+  create(name, appearance, bodyModelId = DEFAULT_BODY_MODEL) {
     const outfit = {
       id: _nextId++,
       name: name?.trim() || "Untitled outfit",
       appearance: JSON.parse(JSON.stringify(appearance)),
+      bodyModelId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -40,11 +50,15 @@ export class OutfitStore {
     this._emitChanged();
   }
 
-  /** Overwrites a saved outfit's appearance with the current live one — "Save" on an already-saved outfit, not a new one. */
-  updateAppearance(id, appearance) {
+  /** Overwrites a saved outfit's appearance (and body model — "update"
+   *  means "match my current appearance", whichever model that's on now)
+   *  with the current live one — "Save" on an already-saved outfit, not a
+   *  new one. */
+  updateAppearance(id, appearance, bodyModelId = DEFAULT_BODY_MODEL) {
     const outfit = this.get(id);
     if (!outfit) return;
     outfit.appearance = JSON.parse(JSON.stringify(appearance));
+    outfit.bodyModelId = bodyModelId;
     outfit.updatedAt = new Date().toISOString();
     this._emitChanged();
   }
@@ -57,7 +71,7 @@ export class OutfitStore {
   duplicate(id) {
     const source = this.get(id);
     if (!source) return null;
-    const copy = this.create(`${source.name} copy`, source.appearance);
+    const copy = this.create(`${source.name} copy`, source.appearance, source.bodyModelId);
     return copy;
   }
 
@@ -102,7 +116,11 @@ export class OutfitStore {
 
   load(data) {
     if (!data?.outfits) return;
-    this.outfits = data.outfits;
+    // A save from before body models existed won't have bodyModelId on
+    // any outfit — they were all saved against what's now the default
+    // model, the same graceful degradation every other new field in this
+    // project already gets.
+    this.outfits = data.outfits.map((o) => ({ bodyModelId: DEFAULT_BODY_MODEL, ...o }));
     const maxId = this.outfits.reduce((m, o) => Math.max(m, o.id), 0);
     _nextId = maxId + 1;
     this.events.emit("outfits:changed", this.outfits);

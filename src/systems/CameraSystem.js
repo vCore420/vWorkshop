@@ -1,32 +1,73 @@
 import * as THREE from "three";
-import { damp, clamp, shortestAngleLerp, wrapAngle } from "../utils/MathUtils.js";
+import { damp, clamp, shortestAngleLerp, wrapAngle, lerp } from "../utils/MathUtils.js";
 import { DEFAULT_SPAWN } from "../data/layoutDefault.js";
 import { RoomLayoutSystem } from "./RoomLayoutSystem.js";
 import { FurnitureSystem } from "./FurnitureSystem.js";
 import { WorldObjectsSystem } from "../worldbuilder/WorldObjectsSystem.js";
+import { LadderSystem } from "./LadderSystem.js";
+import { PlayerAnimationSystem } from "../player/PlayerAnimationSystem.js";
 
 const WALK_SPEED = 2.3; // metres/second
+const RUN_MULTIPLIER = 1.8;
+const CROUCH_SPEED_MULTIPLIER = 0.55;
 const PLAYER_RADIUS = 0.32;
-const EYE_HEIGHT = 1.65;
+const STANDING_EYE_HEIGHT = 1.65;
+const CROUCH_EYE_HEIGHT = 1.15;
+const EYE_HEIGHT_DAMPING = 10; // how quickly standing<->crouch eye height eases, not a snap
+const GRAVITY = 15.5; // metres/second² — tuned for snappy, game-y jump/fall arcs, not real-world 9.8
+const JUMP_HEIGHT = 0.55; // metres — the actual design parameter; JUMP_VELOCITY below is derived from it
+const JUMP_VELOCITY = Math.sqrt(2 * GRAVITY * JUMP_HEIGHT);
+const STEP_TOLERANCE = 0.6; // metres a surface can sit above the player's own feet and still count as reachable ground — see _computeGroundHeight()
+const LAND_STATE_DURATION = 0.16; // seconds "land" holds before yielding to whatever movement calls for next
+const LADDER_CLIMB_SPEED = 1.6; // metres/second
 const LOOK_SENSITIVITY = 0.0022;
 const MAX_PITCH = Math.PI / 2 - 0.05;
 const THIRD_PERSON_DISTANCE = 3.2; // metres behind the player
-const THIRD_PERSON_HEIGHT = 0.85; // additional height above EYE_HEIGHT — total ~2.5m, comfortably under the workshop's 3m ceiling (see ROOM_DIMENSIONS in layoutDefault.js)
+const THIRD_PERSON_HEIGHT = 0.85; // additional height above STANDING_EYE_HEIGHT — total ~2.5m, comfortably under the workshop's 3m ceiling (see ROOM_DIMENSIONS in layoutDefault.js)
 const THIRD_PERSON_LOOK_DROP = 0.35; // looks slightly down at the player rather than dead-level
 
 /**
  * CameraSystem
  * ------------
- * Drives `engine.camera` directly (the room only ever has one camera).
- * Two modes:
+ * Drives `engine.camera` directly (the room only ever has one camera), and
+ * — since "Movement & Expression" — is also the Workshop's entire
+ * movement controller: walking, running, crouching, jumping, falling,
+ * landing, and climbing a ladder all live here, as one continuous state
+ * machine built on top of the walk mode that already existed. Two modes:
  *
  *   "walk"  - default. WASD/virtual-joystick movement + pointer-lock
- *             mouse-look or touch-drag-look, simple circle-vs-box collision
- *             against the room walls and furniture footprints.
+ *             mouse-look or touch-drag-look, circle-vs-box collision
+ *             against the room walls and furniture/Builder-object
+ *             footprints, plus real vertical movement (gravity, jumping,
+ *             standing on top of Builder-created structures, climbing a
+ *             ladder) — see `_updateWalk`/`_computeGroundHeight`.
  *   "focus" - entered when an interaction provides a focusPose (e.g. sitting
  *             at the computer desk). Movement and look are locked while the
  *             camera eases to the given position/orientation; exitFocus()
  *             eases back to wherever the player was standing.
+ *
+ * **"The movement controller should simply request animations from the
+ * Animation System... avoid tightly coupling animation logic directly
+ * into the movement controller."** This file has never seen an animation
+ * clip, a pose, or a pivot name, and never will — every frame, it computes
+ * one plain string ("idle"/"walk"/"run"/"jump"/"fall"/"land"/"crouch"/
+ * "ladderClimb") describing what the player is *doing*, and hands it to
+ * `PlayerAnimationSystem.setMovementState()`. What that state actually
+ * looks like — which clip plays, how it blends, whether an emote is
+ * currently overriding it — is entirely that system's own concern. See
+ * docs/PLAYER.md's "Movement and animation" section for the full account.
+ *
+ * **Vertical movement** tracks a separate foot-level height (`_footY`)
+ * from the eye-height offset added on top of it (`this.position.y =
+ * _footY + _currentEyeHeight`) — gravity and jumping operate on the
+ * former, crouching smoothly eases the latter, and third person/focus
+ * mode never needed to know either exists, since both still only ever
+ * read `this.position` as one combined number, same as before.
+ * `_computeGroundHeight()` is a simple heightmap-style query, not real
+ * physics: the base floor (y=0), plus the top surface of any nearby
+ * Builder-object footprint the player could reasonably step onto or land
+ * on — "favour believable over physically perfect" applies here exactly
+ * as much as it does to reflections.
  *
  * A separate `viewMode` ("first" | "third") sits on top of whichever mode
  * above is active: `this.position`/`yaw`/`pitch` always represent the
@@ -62,6 +103,15 @@ export class CameraSystem {
     this._focusT = 0;
     this.viewMode = "first"; // "first" | "third" — see toggleViewMode(). Deliberately not persisted: every session starts first-person, matching "the Workshop should continue being designed primarily for first-person gameplay" as the default you always land back on, not just an initial one.
     this._viewBlend = 0; // 0 = first person, 1 = third person — eased toward viewMode's target every frame, see update()
+    // Vertical movement — see this class's own doc comment on _footY vs.
+    // this.position.y. Spawns "grounded" at the default spawn height.
+    this._footY = DEFAULT_SPAWN.position[1] - STANDING_EYE_HEIGHT;
+    this._verticalVelocity = 0;
+    this._grounded = true;
+    this._currentEyeHeight = STANDING_EYE_HEIGHT;
+    this._crouching = false;
+    this._landTimer = 0;
+    this._onLadder = false;
   }
 
   init(engine) {
@@ -74,6 +124,8 @@ export class CameraSystem {
     this._roomSystem = engine.getSystem(RoomLayoutSystem);
     this._furnitureSystem = engine.getSystem(FurnitureSystem);
     this._worldObjectsSystem = engine.getSystem(WorldObjectsSystem);
+    this._ladderSystem = engine.getSystem(LadderSystem);
+    this._animationSystem = engine.getSystem(PlayerAnimationSystem);
     // Scratch objects reused every frame in _updateWalk/_resolveCollisions
     // instead of allocating a fresh Vector2/Vector3 each call — walking is
     // the workshop's default, continuous state, so this is the hottest
@@ -99,6 +151,13 @@ export class CameraSystem {
       this.position.fromArray(bag.camera.position);
       this.yaw = bag.camera.yaw;
       this.pitch = bag.camera.pitch;
+      // Crouch/vertical-velocity state isn't meaningful to persist across
+      // sessions — every load lands standing, on whatever the loaded
+      // height implies for its own footing.
+      this._footY = this.position.y - STANDING_EYE_HEIGHT;
+      this._currentEyeHeight = STANDING_EYE_HEIGHT;
+      this._verticalVelocity = 0;
+      this._grounded = true;
     });
     this._applyImmediate();
   }
@@ -217,18 +276,133 @@ export class CameraSystem {
       forward.z * move.y + right.z * move.x
     );
     if (wish.lengthSq() > 1) wish.normalize();
+    const moving = wish.lengthSq() > 0.0004;
 
-    this._velocity.x = damp(this._velocity.x, wish.x * WALK_SPEED, 10, dt);
-    this._velocity.y = damp(this._velocity.y, wish.y * WALK_SPEED, 10, dt);
+    const ladderZone = this._ladderSystem?.getZoneAt(this.position.x, this._footY + 0.1, this.position.z) ?? null;
+    this._onLadder = !!ladderZone;
+
+    let movementState;
+    if (this._onLadder) {
+      movementState = this._updateLadderMovement(dt, ladderZone, input);
+    } else {
+      movementState = this._updateGroundMovement(dt, wish, moving, input);
+    }
+
+    this._animationSystem?.setMovementState(movementState);
+  }
+
+  /** Ordinary horizontal movement, gravity, jumping, crouching, and
+   *  standing on Builder-created structures — everything that isn't
+   *  climbing a ladder. Returns the movement state string for this frame. */
+  _updateGroundMovement(dt, wish, moving, input) {
+    const running = input.isHeld("run") && !this._crouching && moving;
+    const speed = WALK_SPEED * (this._crouching ? CROUCH_SPEED_MULTIPLIER : running ? RUN_MULTIPLIER : 1);
+
+    this._velocity.x = damp(this._velocity.x, wish.x * speed, 10, dt);
+    this._velocity.y = damp(this._velocity.y, wish.y * speed, 10, dt);
 
     const next = this._scratchNext.copy(this.position);
     next.x += this._velocity.x * dt;
     next.z += this._velocity.y * dt;
-
     this._resolveCollisions(next);
     this.position.x = next.x;
     this.position.z = next.z;
-    this.position.y = EYE_HEIGHT;
+
+    // Crouching is only ever entered/held while grounded — crouching
+    // mid-air has no meaning here and would just fight with the jump/fall
+    // states below.
+    const crouchHeld = input.isHeld("crouch");
+    this._crouching = this._grounded && crouchHeld;
+
+    const wasGrounded = this._grounded;
+    if (this._grounded && input.wasJustPressed("jump") && !this._crouching) {
+      this._verticalVelocity = JUMP_VELOCITY;
+      this._grounded = false;
+    }
+
+    if (!this._grounded) this._verticalVelocity -= GRAVITY * dt;
+    this._footY += this._verticalVelocity * dt;
+
+    const groundHeight = this._computeGroundHeight(this.position.x, this.position.z);
+    if (this._footY <= groundHeight) {
+      this._footY = groundHeight;
+      this._verticalVelocity = 0;
+      this._grounded = true;
+      if (!wasGrounded) this._landTimer = LAND_STATE_DURATION;
+    } else {
+      this._grounded = false;
+    }
+
+    const targetEyeHeight = this._crouching ? CROUCH_EYE_HEIGHT : STANDING_EYE_HEIGHT;
+    this._currentEyeHeight = damp(this._currentEyeHeight, targetEyeHeight, EYE_HEIGHT_DAMPING, dt);
+    this.position.y = this._footY + this._currentEyeHeight;
+
+    if (!this._grounded) return this._verticalVelocity > 0.3 ? "jump" : "fall";
+    if (this._landTimer > 0) {
+      this._landTimer -= dt;
+      return "land";
+    }
+    if (this._crouching) return "crouch";
+    if (moving) return running ? "run" : "walk";
+    return "idle";
+  }
+
+  /** Vertical movement along a ladder zone — forward/back input climbs up/
+   *  down (facing the ladder to climb up reads more naturally than a
+   *  dedicated key, and needs no new input binding at all), gravity is
+   *  suspended, and horizontal drift stays gentle so the player doesn't
+   *  need to fight to stay near the rungs while climbing. */
+  _updateLadderMovement(dt, zone, input) {
+    this._verticalVelocity = 0;
+    this._crouching = false;
+    this._currentEyeHeight = damp(this._currentEyeHeight, STANDING_EYE_HEIGHT, EYE_HEIGHT_DAMPING, dt);
+
+    // input.moveVector.y is "how much forward input", relative to the
+    // player's own facing — not wish.y, which is wish's *world-space* Z
+    // component after the yaw transform below already applied. Using
+    // wish.y here would only actually correlate with "pressing forward"
+    // when facing exactly north or south; at any other facing it would
+    // read as close to zero even while holding W, since a sideways-facing
+    // "forward" barely moves along world Z at all.
+    const climbInput = input.moveVector.y;
+    this._footY = clamp(this._footY + climbInput * LADDER_CLIMB_SPEED * dt, zone.min.y, zone.max.y);
+
+    // Gentle horizontal drift only — strafe a little, but a ladder isn't a
+    // place to wander away from while still inside its own zone. Uses
+    // just the strafe component (this._scratchRight, already computed by
+    // _updateWalk before this was called, scaled by the raw strafe
+    // input) rather than wish, which mixes in the forward component too
+    // — forward input is fully spoken for by climbing here, and
+    // arbitrarily zeroing world-space Z instead would be wrong at any
+    // facing angle that isn't exactly north or south.
+    const next = this._scratchNext.copy(this.position);
+    next.x += this._scratchRight.x * input.moveVector.x * WALK_SPEED * 0.4 * dt;
+    next.z += this._scratchRight.z * input.moveVector.x * WALK_SPEED * 0.4 * dt;
+    this._resolveCollisions(next);
+    this.position.x = next.x;
+    this.position.z = next.z;
+    this.position.y = this._footY + this._currentEyeHeight;
+
+    return Math.abs(climbInput) > 0.05 ? "ladderClimb" : "idle";
+  }
+
+  /** A simple heightmap-style query, not real physics: the base floor
+   *  (y=0), plus the top surface of any nearby Builder-object footprint
+   *  (`WorldObjectsSystem.getFootprints()` specifically — real,
+   *  per-object bounding boxes, unlike furniture's own footprints, which
+   *  are a fixed 0-2.2m collision column rather than the piece's actual
+   *  height; see WorldObjectsSystem.js). A surface only counts if it's
+   *  within `STEP_TOLERANCE` of the player's current feet — close enough
+   *  to step up onto or land on, not a distant platform floating far
+   *  overhead that would otherwise teleport the player up onto it the
+   *  moment they walked underneath it. */
+  _computeGroundHeight(x, z) {
+    let best = 0;
+    for (const box of this._worldObjectsSystem?.getFootprints?.() ?? []) {
+      if (x < box.min.x || x > box.max.x || z < box.min.z || z > box.max.z) continue;
+      if (box.max.y > best && box.max.y <= this._footY + STEP_TOLERANCE) best = box.max.y;
+    }
+    return best;
   }
 
   _resolveCollisions(next) {

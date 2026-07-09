@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { getBodyModel } from "./BodyModels.js";
 
 /**
  * PlayerCharacter
@@ -13,33 +14,30 @@ import * as THREE from "three";
  * The rig is a genuine parent-child joint hierarchy — a shoulder pivot
  * holds the upper arm, which holds an elbow pivot, which holds the lower
  * arm, which holds a wrist pivot, which holds the hand — not eight
- * independent meshes positioned by hand. That's not needed for anything in
- * *this* pass (nothing here animates), but it's what makes "Animation"
- * later a matter of rotating pivots that already exist, not a rig
- * rewrite. See docs/PLAYER.md.
+ * independent meshes positioned by hand. That's what makes "Animation"
+ * (`PlayerAnimationSystem.js`) a matter of rotating pivots that already
+ * exist, not a rig rewrite: a clip stores a rotation per pivot name, and
+ * `applyPose()` below just sets `.rotation` on whichever of these groups
+ * that name refers to.
  *
- * `buildCharacter(appearance)` fully rebuilds the mesh from scratch. That's
- * deliberate, not a missed optimisation: changing a proportion changes
- * where every joint *below* it needs to sit (a longer upper arm moves the
- * elbow), so a partial update would need the same joint-position logic a
- * full rebuild already has, for an operation that only ever happens when
- * a person is actively adjusting a slider in the Wardrobe — never per
- * frame.
+ * **Body models** (`BodyModels.js`) supply the base dimensions every part
+ * scales from — `buildCharacter()` itself has no opinion on masculine vs.
+ * feminine vs. anything added later; it just asks `BodyModels.js` for
+ * whichever one the appearance says is active and builds from that. Every
+ * model produces the exact same `PART_IDS`/pivot names, which is what
+ * lets "the same animation library work across every supported body
+ * model" be true without either side needing to know about the other.
+ *
+ * `buildCharacter(appearance, bodyModelId, textureImages)` fully rebuilds
+ * the mesh from scratch. That's deliberate, not a missed optimisation:
+ * changing a proportion changes where every joint *below* it needs to sit
+ * (a longer upper arm moves the elbow), so a partial update would need
+ * the same joint-position logic a full rebuild already has, for an
+ * operation that only ever happens when a person is actively adjusting a
+ * slider in the Wardrobe or switching body models — never per frame.
  */
 
 export const PART_IDS = ["head", "torso", "upperArm", "lowerArm", "hand", "upperLeg", "lowerLeg", "foot"];
-
-/** Base unit dimensions (metres) before a part's own width/height/depth multipliers are applied. */
-export const BASE_DIMENSIONS = {
-  torso: { width: 0.5, height: 0.7, depth: 0.3 },
-  head: { width: 0.34, height: 0.34, depth: 0.34 },
-  upperArm: { width: 0.15, height: 0.34, depth: 0.15 },
-  lowerArm: { width: 0.13, height: 0.3, depth: 0.13 },
-  hand: { width: 0.13, height: 0.16, depth: 0.07 },
-  upperLeg: { width: 0.19, height: 0.4, depth: 0.19 },
-  lowerLeg: { width: 0.16, height: 0.38, depth: 0.16 },
-  foot: { width: 0.17, height: 0.09, depth: 0.25 },
-};
 
 export const MATERIAL_PRESETS = {
   matte: { roughness: 0.85, metalness: 0.05 },
@@ -53,23 +51,8 @@ export function defaultPartAppearance(partId, color) {
   return { width: 1, height: 1, depth: 1, color, material: "matte", textureId: null };
 }
 
-export function defaultAppearance() {
-  return {
-    parts: {
-      head: defaultPartAppearance("head", "#d9a878"),
-      torso: defaultPartAppearance("torso", "#3c5a53"),
-      upperArm: defaultPartAppearance("upperArm", "#3c5a53"),
-      lowerArm: defaultPartAppearance("lowerArm", "#d9a878"),
-      hand: defaultPartAppearance("hand", "#d9a878"),
-      upperLeg: defaultPartAppearance("upperLeg", "#4a4038"),
-      lowerLeg: defaultPartAppearance("lowerLeg", "#4a4038"),
-      foot: defaultPartAppearance("foot", "#2c2419"),
-    },
-  };
-}
-
-function partSize(partId, appearance) {
-  const base = BASE_DIMENSIONS[partId];
+function partSize(partId, appearance, baseDimensions) {
+  const base = baseDimensions[partId];
   const a = appearance.parts[partId] ?? defaultPartAppearance(partId, "#888888");
   return {
     width: base.width * a.width,
@@ -99,17 +82,19 @@ function boxMesh(width, height, depth, material) {
 }
 
 /**
- * @param {object} appearance - see defaultAppearance()
+ * @param {object} appearance - see BodyModels.js's own defaultAppearance()
+ * @param {string} bodyModelId - see BodyModels.js
  * @param {Record<string, HTMLCanvasElement|HTMLImageElement>} textureImages - partId -> image, for parts with a textureId set
  * @returns {{root: THREE.Group, pivots: Record<string, THREE.Group>, meshes: Record<string, THREE.Mesh>, totalHeight: number}}
  */
-export function buildCharacter(appearance, textureImages = {}) {
+export function buildCharacter(appearance, bodyModelId, textureImages = {}) {
+  const baseDimensions = getBodyModel(bodyModelId).baseDimensions;
   const root = new THREE.Group();
   root.name = "PlayerCharacter";
   const pivots = {};
   const meshes = {};
 
-  const sizeOf = (id) => partSize(id, appearance);
+  const sizeOf = (id) => partSize(id, appearance, baseDimensions);
   const materialOf = (id) => buildMaterial(id, appearance, textureImages[id]);
 
   const torsoSize = sizeOf("torso");
@@ -221,6 +206,7 @@ export function buildCharacter(appearance, textureImages = {}) {
     root,
     pivots,
     meshes,
+    bodyModelId,
     totalHeight: standingHeight + torsoSize.height + headSize.height,
     // Roughly where eyes would sit within the head — 85% up its height —
     // used by PlayerCharacterSystem to line the rig up with the camera
@@ -228,6 +214,27 @@ export function buildCharacter(appearance, textureImages = {}) {
     // docs/PLAYER.md.
     eyeHeight: standingHeight + torsoSize.height + headSize.height * 0.85,
   };
+}
+
+/**
+ * Applies a pose — `{ pivotName: [x, y, z] }`, Euler angles in radians —
+ * to a live rig's pivots. Used every frame by `PlayerAnimationSystem`.
+ * Every pivot is explicitly set, not just the ones the pose mentions —
+ * anything left out is reset to its rest rotation ([0,0,0]) rather than
+ * left at whatever it happened to be. That's deliberate: without it, a
+ * rotation from whichever clip played *previously* (bent knees from
+ * Crouch, say) could silently persist into a new clip that never
+ * mentions that pivot at all, since nothing would ever reset it back.
+ * This is the entire "playback" mechanism — an animation clip is just a
+ * sequence of poses to interpolate between and apply this way, one frame
+ * at a time.
+ */
+export function applyPose(pivots, pose) {
+  for (const name of Object.keys(pivots)) {
+    const rotation = pose[name];
+    if (rotation) pivots[name].rotation.set(rotation[0], rotation[1], rotation[2]);
+    else pivots[name].rotation.set(0, 0, 0);
+  }
 }
 
 /** Disposes every geometry/material this rig created — call before rebuilding, so the old rig doesn't leak. */
