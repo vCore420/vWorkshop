@@ -3,10 +3,11 @@ import { InputManager } from "./utils/InputManager.js";
 
 import { RoomLayoutSystem } from "./systems/RoomLayoutSystem.js";
 import { FurnitureSystem } from "./systems/FurnitureSystem.js";
+import { ReflectionSystem } from "./systems/ReflectionSystem.js";
 import { WorldEnvironmentSystem } from "./systems/WorldEnvironmentSystem.js";
 import { LightingSystem } from "./systems/LightingSystem.js";
 import { TimeOfDaySystem } from "./systems/TimeOfDaySystem.js";
-import { WeatherSystem } from "./systems/WeatherSystem.js";
+import { EnvironmentSystem } from "./systems/EnvironmentSystem.js";
 import { AudioSystem } from "./systems/AudioSystem.js";
 import { CameraSystem } from "./systems/CameraSystem.js";
 import { InteractionSystem } from "./systems/InteractionSystem.js";
@@ -42,6 +43,7 @@ import { createArchiveOverlay } from "./ui/overlays/ArchiveOverlay.js";
 import { createToolStorageOverlay } from "./ui/overlays/ToolStorageOverlay.js";
 import { createWindowOverlay } from "./ui/overlays/WindowOverlay.js";
 import { createRestNookOverlay } from "./ui/overlays/RestNookOverlay.js";
+import { createWardrobeOverlay } from "./ui/overlays/WardrobeOverlay.js";
 
 import { dustMotesPlugin } from "./plugins/examples/dustMotesPlugin.js";
 
@@ -67,6 +69,11 @@ engine.input = new InputManager(canvas, document.getElementById("touch-controls"
 // wall colliders RoomLayoutSystem builds.
 const roomLayoutSystem = engine.addSystem(new RoomLayoutSystem());
 const furnitureSystem = engine.addSystem(new FurnitureSystem());
+// Reaches into FurnitureSystem's already-built pieces for a mirrorMesh
+// marker (see Wardrobe.js) — must be registered after it for the same
+// reason ComputerSystem/LightingSystem already need FurnitureSystem
+// built first.
+const reflectionSystem = engine.addSystem(new ReflectionSystem());
 // WorldEnvironmentSystem (ground + sky/fog) must be registered before
 // TimeOfDaySystem: TimeOfDaySystem.init() emits the first
 // "timeofday:changed" synchronously, and WorldEnvironmentSystem needs to
@@ -74,7 +81,7 @@ const furnitureSystem = engine.addSystem(new FurnitureSystem());
 const worldEnvironmentSystem = engine.addSystem(new WorldEnvironmentSystem());
 const lightingSystem = engine.addSystem(new LightingSystem());
 const timeOfDaySystem = engine.addSystem(new TimeOfDaySystem());
-const weatherSystem = engine.addSystem(new WeatherSystem());
+const environmentSystem = engine.addSystem(new EnvironmentSystem());
 const audioSystem = engine.addSystem(new AudioSystem());
 const cameraSystem = engine.addSystem(new CameraSystem());
 
@@ -152,7 +159,7 @@ const computerSystem = engine.addSystem(
     musicSystem,
     lightingSystem,
     timeOfDaySystem,
-    weatherSystem,
+    environmentSystem,
     objectLibraryStore,
     worldObjectsStore,
     worldObjectsSystem,
@@ -204,8 +211,9 @@ overlayManager.register("notebook", createNotebookOverlay({ notesStore }));
 overlayManager.register("music", createMusicOverlay({ musicSystem, libraryStore: musicLibraryStore, playlistStore }));
 overlayManager.register("archive", createArchiveOverlay({ projectsStore }));
 overlayManager.register("toolStorage", createToolStorageOverlay());
-overlayManager.register("window", createWindowOverlay({ weatherSystem, timeOfDaySystem }));
+overlayManager.register("window", createWindowOverlay({ environmentSystem, timeOfDaySystem }));
 overlayManager.register("restNook", createRestNookOverlay());
+overlayManager.register("wardrobe", createWardrobeOverlay({ appearanceStore, outfitStore, textureStore }));
 
 new HUD(document.getElementById("hud-root"), engine);
 

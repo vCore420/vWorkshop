@@ -1,4 +1,5 @@
 import { PersistenceSystem } from "../systems/PersistenceSystem.js";
+import { CameraSystem } from "../systems/CameraSystem.js";
 
 /**
  * HUD
@@ -61,7 +62,11 @@ export class HUD {
     buildModeBtn.type = "button";
     buildModeBtn.textContent = "Build Mode (B)";
     buildModeBtn.addEventListener("click", () => engine.events.emit("buildmode:toggleRequested"));
-    this.backupControls.append(exportBtn, importBtn, buildModeBtn);
+    const viewModeBtn = document.createElement("button");
+    viewModeBtn.type = "button";
+    viewModeBtn.textContent = "View (V)";
+    viewModeBtn.addEventListener("click", () => engine.getSystem(CameraSystem)?.toggleViewMode());
+    this.backupControls.append(exportBtn, importBtn, buildModeBtn, viewModeBtn);
     this.root.appendChild(this.backupControls);
 
     this.touchControls = document.getElementById("touch-controls");

@@ -10,6 +10,11 @@
  * file at all. `AudioSystem` only ever knows a track by its id/title
  * contract, not how the sound is produced, so adding a new generative
  * track here is a one-file change.
+ *
+ * Also generates the Workshop's outdoor ambience: `createNoiseSource` for
+ * the weather layer (wind/rain/storm, filtered differently per state by
+ * `AudioSystem`) and `createNatureAmbience` for the day/night layer
+ * (birds, crickets) — see docs/WORLD.md's Environmental Audio section.
  */
 
 const TRACK_DEFS = [
@@ -92,4 +97,102 @@ export function createNoiseSource(audioContext) {
   source.buffer = buffer;
   source.loop = true;
   return source;
+}
+
+/**
+ * A self-scheduling nature ambience — intermittent bird chirps by day, a
+ * steady cricket pulse by night, layered independently on top of whatever
+ * weather ambience is also playing (see AudioSystem.js: this is a second,
+ * always-potentially-active gain, not a replacement for the wind/rain/
+ * storm noise bed). Owns its own `setTimeout` scheduling internally and
+ * disposes each brief oscillator as it finishes; the caller only ever
+ * starts it once, calls `setDayNight()`/`setIntensity()` as conditions
+ * change, and `stop()`s it once, rather than managing individual chirps.
+ */
+export function createNatureAmbience(audioContext, destinationNode) {
+  let isDay = true;
+  let stopped = false;
+  let pendingTimeout = null;
+  const gain = audioContext.createGain();
+  gain.gain.value = 0;
+  gain.connect(destinationNode);
+
+  function playBirdChirp() {
+    const now = audioContext.currentTime;
+    const startFreq = 1800 + Math.random() * 1400;
+    const osc = audioContext.createOscillator();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(startFreq, now);
+    osc.frequency.exponentialRampToValueAtTime(startFreq * (0.7 + Math.random() * 0.5), now + 0.12);
+    const chirpGain = audioContext.createGain();
+    chirpGain.gain.setValueAtTime(0.0001, now);
+    chirpGain.gain.linearRampToValueAtTime(0.5, now + 0.015);
+    chirpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+    osc.connect(chirpGain);
+    chirpGain.connect(gain);
+    osc.start(now);
+    osc.stop(now + 0.2);
+
+    if (Math.random() < 0.4) {
+      // A real bird call is rarely a single, perfectly isolated note.
+      const osc2 = audioContext.createOscillator();
+      osc2.type = "sine";
+      osc2.frequency.setValueAtTime(startFreq * 1.15, now + 0.2);
+      const gain2 = audioContext.createGain();
+      gain2.gain.setValueAtTime(0.0001, now + 0.2);
+      gain2.gain.linearRampToValueAtTime(0.4, now + 0.21);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      osc2.connect(gain2);
+      gain2.connect(gain);
+      osc2.start(now + 0.2);
+      osc2.stop(now + 0.36);
+    }
+  }
+
+  function playCricketPulse() {
+    const now = audioContext.currentTime;
+    const osc = audioContext.createOscillator();
+    osc.type = "square";
+    osc.frequency.value = 4200 + Math.random() * 300;
+    const filter = audioContext.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.value = 4300;
+    filter.Q.value = 8;
+    const pulseGain = audioContext.createGain();
+    pulseGain.gain.setValueAtTime(0.0001, now);
+    pulseGain.gain.linearRampToValueAtTime(0.22, now + 0.006);
+    pulseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+    osc.connect(filter);
+    filter.connect(pulseGain);
+    pulseGain.connect(gain);
+    osc.start(now);
+    osc.stop(now + 0.06);
+  }
+
+  function scheduleNext() {
+    if (stopped) return;
+    const delaySeconds = isDay ? 2.5 + Math.random() * 7 : 0.4 + Math.random() * 0.3;
+    pendingTimeout = setTimeout(() => {
+      if (stopped) return;
+      if (isDay) playBirdChirp();
+      else playCricketPulse();
+      scheduleNext();
+    }, delaySeconds * 1000);
+  }
+  scheduleNext();
+
+  return {
+    setDayNight(nextIsDay) {
+      isDay = nextIsDay;
+    },
+    /** 0-1 overall level for this layer — AudioSystem fades it in/out with weather (birds/crickets quiet down in heavy rain or storm) and the Settings ambient volume. */
+    setIntensity(level) {
+      gain.gain.linearRampToValueAtTime(Math.max(0, level), audioContext.currentTime + 1.5);
+    },
+    stop() {
+      stopped = true;
+      if (pendingTimeout) clearTimeout(pendingTimeout);
+      gain.disconnect();
+    },
+  };
 }

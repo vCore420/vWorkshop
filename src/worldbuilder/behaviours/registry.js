@@ -2,7 +2,7 @@
  * behaviours/registry.js
  * ------------------------
  * A behaviour is data (`{ type, properties }`, stored on a
- * WorkshopObjectDefinition) plus two small pieces of code, registered
+ * WorkshopObjectDefinition) plus small pieces of code, registered
  * together here:
  *
  *   - `propsSchema`: what the Builder app should show as editable fields
@@ -15,6 +15,16 @@
  *     InteractableComponent" using the existing, unmodified interaction
  *     pipeline (see docs/ARCHITECTURE.md). `ctx` is
  *     `{ entity, object3D, properties, engine, instance, definition }`.
+ *   - `dispose(ctx)` (optional): what happens right before that same
+ *     instance is destroyed or rebuilt. Most behaviours don't need this —
+ *     a light or a decoration is just a scene-graph child of `object3D`,
+ *     and removing `object3D` from the scene already takes it with it, no
+ *     separate cleanup required. It exists specifically for behaviours
+ *     that hold onto a resource *beyond* the scene graph (the `reflective`
+ *     behaviour's render target being the first — see
+ *     ReflectiveBehaviour.js), so those don't leak every time a placed
+ *     instance is deleted or its colour override rebuilds it. `ctx` is the
+ *     same shape `apply` received.
  *
  * `ownsInteractable: true` marks a behaviour that wants to attach its own
  * InteractableComponent. An Entity can only hold one, so the Builder UI
@@ -29,7 +39,7 @@
 const behaviours = new Map();
 
 export function registerBehaviour(type, config) {
-  behaviours.set(type, { type, ownsInteractable: false, propsSchema: [], ...config });
+  behaviours.set(type, { type, ownsInteractable: false, propsSchema: [], dispose: null, ...config });
 }
 
 export function getBehaviourTypes() {
@@ -43,6 +53,14 @@ export function getBehaviourConfig(type) {
 export function applyBehaviour(type, ctx) {
   const config = behaviours.get(type);
   config?.apply?.(ctx);
+}
+
+/** Called before an instance carrying this behaviour is destroyed or
+ *  rebuilt — see `dispose(ctx)`'s own note above. A no-op for every
+ *  behaviour that doesn't define one. */
+export function disposeBehaviour(type, ctx) {
+  const config = behaviours.get(type);
+  config?.dispose?.(ctx);
 }
 
 /** Default `properties` object for a freshly-checked behaviour, from its own schema. */

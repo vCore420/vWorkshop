@@ -24,7 +24,7 @@
  * with a stale or now-meaningless shape.
  */
 
-export const CURRENT_SAVE_VERSION = 2;
+export const CURRENT_SAVE_VERSION = 3;
 
 const MIGRATIONS = {
   // v1 -> v2: furniture position/rotation used to be saved and blindly
@@ -42,6 +42,30 @@ const MIGRATIONS = {
   1: (envelope) => {
     if (envelope.systems?.furniture) {
       delete envelope.systems.furniture;
+    }
+    return envelope;
+  },
+  // v2 -> v3: WeatherSystem's three states (clear/cloudy/rain), saved as
+  // `{current, autoCycle}`, became EnvironmentSystem's ten states and
+  // three modes, saved as an entirely different shape — see
+  // docs/WORLD.md's Environment System section. Rather than just
+  // discarding whatever a player had last chosen, this maps their old
+  // pick onto its closest new equivalent and carries it forward as an
+  // explicit Manual choice — someone who'd deliberately picked a weather
+  // state before shouldn't silently be switched into Workshop Dynamic
+  // without ever having asked for that.
+  2: (envelope) => {
+    const oldWeather = envelope.systems?.weather;
+    if (oldWeather) {
+      const mapped = { clear: "clear", cloudy: "overcast", rain: "lightRain" }[oldWeather.current] ?? "clear";
+      envelope.systems.environment = {
+        mode: "manual",
+        current: mapped,
+        manualState: mapped,
+        enteredAt: Date.now(),
+        windDirectionRad: 0,
+      };
+      delete envelope.systems.weather;
     }
     return envelope;
   },

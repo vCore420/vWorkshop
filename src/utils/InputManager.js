@@ -47,6 +47,7 @@ const KEY_TO_ACTION = {
   KeyE: "interact", Space: "interact",
   Escape: "cancel",
   KeyB: "buildMode",
+  KeyV: "toggleView",
 };
 
 // Reverse of KEY_TO_ACTION, built once: action -> every code that means it.

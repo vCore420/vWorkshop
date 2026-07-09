@@ -10,11 +10,11 @@ import { FurnitureSystem } from "./FurnitureSystem.js";
  * LightingSystem
  * --------------
  * Owns every light in the scene. It doesn't decide *when* it's day or night
- * or raining — TimeOfDaySystem and WeatherSystem emit events describing
- * that, and LightingSystem just reacts: updating the sun's direction/colour
- * and dimming practical fixtures. This split means a future system (say,
- * seasonal changes) can influence lighting just by emitting an event, with
- * no direct dependency on this file.
+ * or what the weather is — TimeOfDaySystem and EnvironmentSystem emit events
+ * describing that, and LightingSystem just reacts: updating the sun's
+ * direction/colour and dimming practical fixtures. This split means a
+ * future system (say, seasonal changes) can influence lighting just by
+ * emitting an event, with no direct dependency on this file.
  *
  * Practical lights (ceiling pendants + the workbench lamp) are gated by a
  * physical light switch by the door — flipping it is a real interaction,
@@ -31,6 +31,11 @@ export class LightingSystem {
     this._weatherDampening = 0;
     this._lightingQuality = "medium"; // "low" | "medium" | "high" — see setLightingQuality
     this._shadowQuality = "medium"; // "off" | "low" | "medium" | "high" — see setShadowQuality
+    this._baseHemiIntensity = 0.55;
+    this._baseAmbientIntensity = 0.18;
+    this._stormActive = false;
+    this._lightningTimer = 0;
+    this._lightningFlash = 0; // 0-1, decays after each flash — see update()
   }
 
   init(engine) {
@@ -57,7 +62,7 @@ export class LightingSystem {
     this._buildLightSwitch();
 
     engine.events.on("timeofday:changed", (state) => this._onTimeChanged(state));
-    engine.events.on("weather:changed", (state) => this._onWeatherChanged(state));
+    engine.events.on("environment:changed", (state) => this._onEnvironmentChanged(state));
 
     engine.events.on("persistence:save", (bag) => {
       bag.lighting = { lightsOn: this.lightsOn };
@@ -177,20 +182,36 @@ export class LightingSystem {
     const dampening = 1 - this._weatherDampening;
     this.sun.intensity = sunIntensity * dampening;
     this.sun.color.set(sunColor);
-    this.hemi.intensity = hemiIntensity * (0.7 + 0.3 * dampening);
-    this.ambientFill.intensity = ambientIntensity;
+    this._baseHemiIntensity = hemiIntensity * (0.7 + 0.3 * dampening);
+    this._baseAmbientIntensity = ambientIntensity;
     this._lastSunIntensity = sunIntensity;
   }
 
-  _onWeatherChanged({ lightDampening }) {
+  _onEnvironmentChanged({ lightDampening, id }) {
     this._weatherDampening = lightDampening ?? 0;
     if (this._lastSunIntensity !== undefined) {
       this.sun.intensity = this._lastSunIntensity * (1 - this._weatherDampening);
     }
+    // A storm gets occasional lightning: a brief, bright flash layered on
+    // top of the hemisphere/ambient fill (see update()), not a change to
+    // the sun itself — a flash reads as ambient sky-wide light, not a
+    // single directional source suddenly changing angle.
+    const wasStormActive = this._stormActive;
+    this._stormActive = id === "storm";
+    if (this._stormActive && !wasStormActive) this._lightningTimer = 2 + Math.random() * 5;
   }
 
-  update(_dt) {
-    // Reserved for future subtle effects (flicker, lightning flashes on
-    // storm weather, etc). Intentionally empty for now.
+  update(dt) {
+    if (this._stormActive) {
+      this._lightningTimer -= dt;
+      if (this._lightningTimer <= 0) {
+        this._lightningFlash = 1;
+        this._lightningTimer = 5 + Math.random() * 14; // next flash, a good while off — storms flash occasionally, not constantly
+      }
+    }
+    if (this._lightningFlash > 0) this._lightningFlash = Math.max(0, this._lightningFlash - dt * 3.5); // a quick, sharp decay rather than a slow fade
+    const boost = this._lightningFlash * 1.6;
+    this.hemi.intensity = this._baseHemiIntensity + boost;
+    this.ambientFill.intensity = this._baseAmbientIntensity + boost * 0.5;
   }
 }

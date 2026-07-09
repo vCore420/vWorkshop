@@ -10,6 +10,9 @@ const PLAYER_RADIUS = 0.32;
 const EYE_HEIGHT = 1.65;
 const LOOK_SENSITIVITY = 0.0022;
 const MAX_PITCH = Math.PI / 2 - 0.05;
+const THIRD_PERSON_DISTANCE = 3.2; // metres behind the player
+const THIRD_PERSON_HEIGHT = 0.85; // additional height above EYE_HEIGHT — total ~2.5m, comfortably under the workshop's 3m ceiling (see ROOM_DIMENSIONS in layoutDefault.js)
+const THIRD_PERSON_LOOK_DROP = 0.35; // looks slightly down at the player rather than dead-level
 
 /**
  * CameraSystem
@@ -24,6 +27,21 @@ const MAX_PITCH = Math.PI / 2 - 0.05;
  *             at the computer desk). Movement and look are locked while the
  *             camera eases to the given position/orientation; exitFocus()
  *             eases back to wherever the player was standing.
+ *
+ * A separate `viewMode` ("first" | "third") sits on top of whichever mode
+ * above is active: `this.position`/`yaw`/`pitch` always represent the
+ * player's own logical position and facing — where they're actually
+ * standing, what movement/collision/focus-easing all operate on — and
+ * third-person is purely a *rendering* choice layered on top in
+ * `_applyCameraTransform()`, easing `engine.camera`'s own position/
+ * rotation back behind the player rather than exactly onto them. Nothing
+ * about movement, collision, or focus poses needed to change at all;
+ * third person only ever exists in "walk" mode (see `toggleViewMode`) —
+ * "the Workshop should continue being designed primarily for first-person
+ * gameplay," so it doesn't apply mid-interaction, only while exploring.
+ * The camera's own wall/furniture collision is reused as-is (see
+ * `_resolveCollisions`) to keep the third-person view from clipping
+ * through a wall, rather than introducing a second collision system for it.
  *
  * All input is read through `engine.input` (InputManager) rather than raw
  * DOM events, which is exactly what let touch support (joystick, drag-look,
@@ -42,6 +60,8 @@ export class CameraSystem {
     this._preFocus = null;
     this._focusPose = null;
     this._focusT = 0;
+    this.viewMode = "first"; // "first" | "third" — see toggleViewMode(). Deliberately not persisted: every session starts first-person, matching "the Workshop should continue being designed primarily for first-person gameplay" as the default you always land back on, not just an initial one.
+    this._viewBlend = 0; // 0 = first person, 1 = third person — eased toward viewMode's target every frame, see update()
   }
 
   init(engine) {
@@ -62,6 +82,12 @@ export class CameraSystem {
     this._scratchRight = new THREE.Vector3();
     this._scratchWish = new THREE.Vector2();
     this._scratchNext = new THREE.Vector3();
+    // Third-person blending — see _applyCameraTransform().
+    this._scratchFPQuat = new THREE.Quaternion();
+    this._scratchEuler = new THREE.Euler(0, 0, 0, "YXZ");
+    this._scratchThirdDesired = new THREE.Vector3();
+    this._scratchThirdLookAt = new THREE.Vector3();
+    this._scratchThirdDummy = new THREE.Object3D();
     this.engine.events.on("persistence:save", (bag) => {
       bag.camera = { position: this.position.toArray(), yaw: this.yaw, pitch: this.pitch };
     });
@@ -103,12 +129,60 @@ export class CameraSystem {
     this.locked = false;
   }
 
+  /** Third person only ever applies in "walk" mode — see this class's own
+   *  doc comment. Toggling while focused (sitting at the computer, say)
+   *  is simply a no-op rather than a state a future exitFocus() would
+   *  need to unwind. */
+  toggleViewMode() {
+    if (this.mode === "focus") return;
+    this.viewMode = this.viewMode === "first" ? "third" : "first";
+  }
+
   update(dt) {
+    if (!this.locked && this.engine.input?.wasJustPressed("toggleView")) this.toggleViewMode();
+
     if (this.mode === "focus") this._updateFocus(dt);
     else if (!this.locked) this._updateWalk(dt);
 
-    this.engine.camera.position.copy(this.position);
-    this.engine.camera.rotation.set(this.pitch, this.yaw, 0, "YXZ");
+    const thirdPersonActive = this.viewMode === "third" && this.mode === "walk";
+    this._viewBlend = damp(this._viewBlend, thirdPersonActive ? 1 : 0, 6, dt);
+    this._applyCameraTransform();
+  }
+
+  /** Where `engine.camera` actually ends up — always derived from
+   *  `this.position`/`yaw`/`pitch` (the player's real, logical state),
+   *  never the other way around. Blends smoothly toward/from the
+   *  third-person offset via `_viewBlend` rather than snapping, so
+   *  toggling view mode reads as one continuous camera move — "keep
+   *  switching between first and third person smooth and unobtrusive." */
+  _applyCameraTransform() {
+    const camera = this.engine.camera;
+    if (this._viewBlend < 0.001) {
+      camera.position.copy(this.position);
+      camera.rotation.set(this.pitch, this.yaw, 0, "YXZ");
+      return;
+    }
+
+    this._scratchFPQuat.setFromEuler(this._scratchEuler.set(this.pitch, this.yaw, 0, "YXZ"));
+
+    // "Behind" the player is the opposite of _updateWalk's own forward
+    // vector (Math.sin(yaw), 0, Math.cos(yaw)) rather than its negation.
+    const desired = this._scratchThirdDesired.set(
+      this.position.x + Math.sin(this.yaw) * THIRD_PERSON_DISTANCE,
+      this.position.y + THIRD_PERSON_HEIGHT,
+      this.position.z + Math.cos(this.yaw) * THIRD_PERSON_DISTANCE
+    );
+    // Reuses the exact same wall/furniture push-out the player's own
+    // movement already does — not a second collision system, just the
+    // desired camera point treated as a "next position" like any other.
+    this._resolveCollisions(desired);
+
+    const lookAt = this._scratchThirdLookAt.set(this.position.x, this.position.y - THIRD_PERSON_LOOK_DROP, this.position.z);
+    this._scratchThirdDummy.position.copy(desired);
+    this._scratchThirdDummy.lookAt(lookAt);
+
+    camera.position.lerpVectors(this.position, desired, this._viewBlend);
+    camera.quaternion.slerpQuaternions(this._scratchFPQuat, this._scratchThirdDummy.quaternion, this._viewBlend);
   }
 
   _updateWalk(dt) {

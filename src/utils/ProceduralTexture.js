@@ -74,7 +74,7 @@ export function concreteTexture(base = "#8d8577") {
   return texture;
 }
 
-/** Vertical streak noise used by WeatherSystem to simulate rain on window glass. */
+/** Vertical streak noise used by EnvironmentSystem to simulate rain on window glass. */
 export function rainStreakTexture() {
   const canvas = makeCanvas(128);
   const ctx = canvas.getContext("2d");
@@ -95,6 +95,61 @@ export function rainStreakTexture() {
   texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(1, 2);
   return texture;
+}
+
+/** A soft circular glow, colour-tinted — used for the sun and moon discs.
+ *  Centre is solid `color`, fading smoothly to fully transparent by the
+ *  edge, so a THREE.Sprite using this reads as a soft light source rather
+ *  than a hard-edged coloured circle. */
+export function radialGlowTexture(color = "#fff2df") {
+  const canvas = makeCanvas(128);
+  const ctx = canvas.getContext("2d");
+  const c = canvas.width / 2;
+  const gradient = ctx.createRadialGradient(c, c, 0, c, c, c);
+  gradient.addColorStop(0, color);
+  gradient.addColorStop(0.35, color);
+  gradient.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  return new THREE.CanvasTexture(canvas);
+}
+
+/** A soft, irregular white blob — several overlapping soft circles rather
+ *  than one perfect one, so a field of these reads as clouds rather than
+ *  a grid of identical discs. */
+export function cloudBlobTexture() {
+  const canvas = makeCanvas(128);
+  const ctx = canvas.getContext("2d");
+  const puffs = 5 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < puffs; i++) {
+    const x = 40 + Math.random() * 48;
+    const y = 50 + Math.random() * 28;
+    const r = 22 + Math.random() * 20;
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, r);
+    gradient.addColorStop(0, "rgba(255,255,255,0.9)");
+    gradient.addColorStop(0.6, "rgba(255,255,255,0.5)");
+    gradient.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  return new THREE.CanvasTexture(canvas);
+}
+
+/** A single small soft dot — used (as a sprite map, not a texture atlas)
+ *  for every star in the night sky's THREE.Points cloud. */
+export function starSpriteTexture() {
+  const canvas = makeCanvas(32);
+  const ctx = canvas.getContext("2d");
+  const c = canvas.width / 2;
+  const gradient = ctx.createRadialGradient(c, c, 0, c, c, c);
+  gradient.addColorStop(0, "rgba(255,255,255,1)");
+  gradient.addColorStop(0.4, "rgba(255,255,255,0.8)");
+  gradient.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  return new THREE.CanvasTexture(canvas);
 }
 
 /** Blueprint-style texture: blue ground, white grid + a few "drawn" lines. */

@@ -17,13 +17,14 @@ import { lerpColorHex, clamp, TAU } from "../utils/MathUtils.js";
  * so LightingSystem/WorldEnvironmentSystem never need to know which mode is
  * active.
  *
- * This system only *computes* the sky colour now — it doesn't apply it
- * anywhere itself. Before the outdoor world existed, it tinted the window
- * panes directly to fake a sky through glass that wasn't really there; now
- * that the windows are real transparent openings (see WorkshopRoom.js) and
- * a real sky exists (WorldEnvironmentSystem's scene.background/fog), that
- * hack is gone — WorldEnvironmentSystem listens to the same
- * `timeofday:changed` event independently.
+ * This system only *computes* the sky colour, sun/moon direction, moon
+ * phase, and star visibility now — it doesn't apply any of it anywhere
+ * itself. Before the outdoor world existed, it tinted the window panes
+ * directly to fake a sky through glass that wasn't really there; now that
+ * the windows are real transparent openings (see WorkshopRoom.js) and a
+ * real sky exists (WorldEnvironmentSystem's sky dome, sun/moon discs,
+ * stars, and fog), that hack is gone — WorldEnvironmentSystem listens to
+ * the same `timeofday:changed` event independently.
  */
 export class TimeOfDaySystem {
   constructor() {
@@ -98,6 +99,28 @@ export class TimeOfDaySystem {
       Math.sin(phase) * 0.4
     ).normalize();
 
+    // The moon sits roughly opposite the sun (up when the sun is down),
+    // offset a little so they're never in exactly the same spot during
+    // the brief window both are technically above the horizon at dawn/dusk.
+    const moonDirection = new THREE.Vector3(
+      Math.cos(phase + Math.PI),
+      Math.max(-altitude, -0.15),
+      Math.sin(phase + Math.PI) * 0.4 + 0.15
+    ).normalize();
+
+    // A real, if simplified, lunar cycle from the actual calendar date —
+    // "quietly different, day to day" applies to the sky itself, not just
+    // the weather. ~29.53 days per cycle; the reference new-moon date is
+    // arbitrary (any known new moon works as the epoch), only the current
+    // offset from it matters.
+    const daysSinceEpoch = (Date.now() - Date.UTC(2000, 0, 6)) / 86400000;
+    const moonPhaseFraction = ((daysSinceEpoch % 29.53) + 29.53) % 29.53 / 29.53; // 0/1 = new moon, 0.5 = full moon
+    const moonIllumination = (1 - Math.cos(moonPhaseFraction * TAU)) / 2; // 0 = new (dark), 1 = full (bright)
+
+    // Stars fade in well before full darkness and stay hidden in daylight
+    // — a soft-edged threshold around dayFactor, not a hard cutoff.
+    const starVisibility = clamp(1 - dayFactor / 0.2, 0, 1);
+
     // Warm at the edges of the day, neutral-white at midday, cool at night.
     let sunColor;
     if (this.currentTime > 5 && this.currentTime < 8) sunColor = lerpColorHex("#ff9d5c", "#fff2df", (this.currentTime - 5) / 3);
@@ -122,7 +145,10 @@ export class TimeOfDaySystem {
     if (dayFactor > 0.15) skyColor = lerpColorHex("#ffb27a", "#bfe6ff", clamp((dayFactor - 0.15) / 0.4, 0, 1));
     else skyColor = lerpColorHex("#0d1b2e", "#ffb27a", clamp(dayFactor / 0.15, 0, 1));
 
-    return { sunDirection, sunColor, sunIntensity, hemiIntensity, ambientIntensity, skyColor, dayFactor };
+    return {
+      sunDirection, sunColor, sunIntensity, hemiIntensity, ambientIntensity, skyColor, dayFactor,
+      moonDirection, moonIllumination, starVisibility,
+    };
   }
 
   _applyAndEmit() {

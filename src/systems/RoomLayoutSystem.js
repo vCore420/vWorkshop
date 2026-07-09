@@ -68,8 +68,8 @@ export class RoomLayoutSystem {
     this.doorEntity = doorEntity;
 
     // Each window is also a small interactable — "look outside" is where
-    // weather gets checked and changed, keeping WeatherSystem's controls
-    // spatial rather than a menu bolted onto the HUD.
+    // the environment gets checked and changed, keeping EnvironmentSystem's
+    // controls spatial rather than a menu bolted onto the HUD.
     this.room.windowPanes.forEach((pane, index) => {
       const windowEntity = new Entity(`window-${index}`).tag("structural");
       windowEntity.object3D = pane.mesh;

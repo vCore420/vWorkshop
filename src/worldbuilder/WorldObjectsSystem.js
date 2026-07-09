@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { Entity } from "../core/Entity.js";
 import { MeshComponent } from "../core/components/MeshComponent.js";
 import { compileDefinition } from "./ObjectCompiler.js";
-import { applyBehaviour } from "./behaviours/index.js";
+import { applyBehaviour, disposeBehaviour } from "./behaviours/index.js";
 import { CURRENT_ROOM_ID } from "./WorldObjectsStore.js";
 import { getConstructionPiece } from "./ConstructionLibrary.js";
 import { COLLISION_HEIGHT_LIMIT } from "../entities/room/WorkshopRoom.js";
@@ -65,6 +65,8 @@ export class WorldObjectsSystem {
   removeInstance(instanceId) {
     const live = this.liveInstances.get(instanceId);
     if (!live) return;
+    const instance = this.worldObjectsStore.get(instanceId);
+    if (instance) this._disposeInstanceBehaviours(instance, live.entity);
     this.engine.entities.destroy(live.entity);
     this.liveInstances.delete(instanceId);
     this.footprints.delete(instanceId);
@@ -125,10 +127,26 @@ export class WorldObjectsSystem {
   _respawn(instance) {
     const live = this.liveInstances.get(instance.id);
     if (live) {
+      this._disposeInstanceBehaviours(instance, live.entity);
       this.engine.entities.destroy(live.entity);
       this.liveInstances.delete(instance.id);
     }
     this._spawn(instance);
+  }
+
+  _disposeInstanceBehaviours(instance, entity) {
+    const definition = this._resolveDefinition(instance);
+    if (!definition) return;
+    for (const behaviour of definition.behaviours ?? []) {
+      disposeBehaviour(behaviour.type, {
+        entity,
+        object3D: entity.object3D,
+        properties: behaviour.properties ?? {},
+        engine: this.engine,
+        instance,
+        definition,
+      });
+    }
   }
 
   _resolveDefinition(instance) {
