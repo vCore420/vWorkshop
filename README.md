@@ -396,3 +396,5 @@ ships with is generated in code — see `assets/README.md` — the one
 exception being the music library, which plays whatever real files you
 point it at from your own device (see `docs/MUSIC.md`); nothing is bundled
 with the project itself.
+
+- vCore
