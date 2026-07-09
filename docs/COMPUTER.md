@@ -134,9 +134,18 @@ weren't literally sitting there when you reopened the browser tab.
 - **Axis-aligned screen projection**, not perspective-correct — see above.
 - **No real browser or AI.** `BrowserApp` and `AIApp` are honest
   placeholders (see `docs/ROADMAP.md`, Phase 4).
-- **Desktop-sized assumptions.** `WorkstationPanel`'s rail/content layout
-  hasn't been tuned for a narrow viewport yet — see the touch-input item in
-  `docs/ROADMAP.md`'s Phase 3.
+- **Desktop-sized assumptions, mostly.** `WorkstationPanel`'s rail/content
+  layout hasn't been reflowed for a narrow viewport — see the touch-input
+  item in `docs/ROADMAP.md`. One specific accessibility problem this
+  caused *is* fixed, though: once there got to be enough apps (Phase 10's
+  Wardrobe, this phase's growth) that the rail's button list could exceed
+  a shorter screen's height, those extra apps became genuinely
+  unreachable — clipped by `.workstation-panel`'s own `overflow: hidden`,
+  not just visually cramped. `.workstation-rail` now scrolls vertically
+  (`overflow-y: auto` plus the standard `min-height: 0` flexbox fix that
+  actually lets it), so every app tab stays reachable regardless of
+  screen height; the rest of the layout (rail width, content area sizing)
+  is unchanged.
 - **One computer, one desk.** `ComputerSystem` looks up the furniture piece
   named `"computerDesk"` directly. If the workshop ever has more than one
   computer, this would need to become "one ComputerSystem instance per

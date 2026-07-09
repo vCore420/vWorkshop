@@ -149,29 +149,142 @@ running into a real constraint discovered while building it, not before.
   extension is a garment "attaching" to one of the rig's existing pivots
   (the torso pivot for a shirt, a wrist pivot for a bracelet) the same way
   a hand already attaches to a wrist. The pivots already exist for this.
-- **Mirrors / reflections** — anything that needs to see the character
-  from outside (a mirror, a future third-person camera) can read
-  `PlayerCharacterSystem`'s live rig directly; nothing about it assumes
-  first-person is the only way it's ever viewed.
 - **Animation** — rotating any pivot in the hierarchy already affects
   everything below it correctly, because the hierarchy is real, not
   simulated with independently-positioned meshes.
-- **Third-person cameras** — the rig doesn't hide itself from any
-  particular camera; first-person "not normally seeing yourself" falls out
-  of where the camera happens to sit relative to the geometry (see "Known
-  limitations"), not from any explicit visibility rule that would need
-  removing later.
+
+Two things this section used to list as *future* extension points —
+mirrors/reflections and a third-person camera — are no longer future; see
+"Reflections and third person" below for both. The prediction here held up
+exactly as written: neither needed a single change to this file. The rig
+never hid itself from any particular camera to begin with, and the reason
+it happens to be invisible in ordinary first-person play was always just
+where the camera physically sits (see "Known limitations"), not a rule
+that needed removing.
+
+What those two make newly possible:
+
+- **Future Workshop residents** — anything with its own position/
+  orientation (an NPC, say) becomes visible in a mirror or from a
+  third-person camera exactly the way the player already is, with no
+  special-casing needed on either side; a mirror renders whatever's
+  actually in the scene, not "the player, specifically."
+- **A true oriented planar reflection**, if the approximation in
+  "Reflections and third person" ever needs to be more exact — the
+  projective-texture-shader approach `ReflectionSystem.js`'s own comment
+  describes and deliberately didn't build.
+- **Reflective Builder surfaces beyond a flat plane** — `ReflectiveBehaviour.js`
+  currently only looks for the largest Plane-shaped part; a curved or
+  multi-part reflective surface would need its own, more involved surface
+  detection, not a change to `ReflectionSystem` itself.
+
+## Reflections and third person: the player becomes visible
+
+"Strengthen the player's presence" turned out to mean, concretely: give
+the player a way to actually *see* the character this whole system
+builds, from outside it, in more than one way.
+
+### The reflection system is generic, not a mirror special-case
+
+`src/systems/ReflectionSystem.js` is the entire capability: one function,
+`registerSurface(mesh, options)`, that anything can call to make a mesh
+reflective. `Wardrobe.js`'s hand-built mirror and a Builder object's
+`reflective` behaviour (`ReflectiveBehaviour.js`) both call it directly,
+neither aware the other exists — "avoid hard-coded special cases" is true
+because there is no special case, just one small, generic function two
+independent callers happen to use.
+
+**How it renders**, chosen specifically for maintainability over
+graphical fidelity per the brief: a second camera is placed at the
+reflection of the main camera's position across the surface's plane,
+aimed with a plain `lookAt()` at the reflection of a point in front of the
+main camera, and rendered into a small texture applied to the surface's
+own (cloned — the same "never mutate a shared cached material" rule
+`PlaceholderFactory.js`'s own cache already requires everywhere else in
+this project) material. This is deliberately *not* a per-pixel-correct
+planar reflection — that needs a projective texture shader and oblique
+near-plane clipping, real additional machinery for a visual improvement
+that matters least of anywhere in this project. Using `lookAt()` rather
+than reflecting the camera's basis vectors directly also sidesteps a real
+risk with true mirror transforms: a reflection inverts handedness, and
+naively reusing the camera's reflected orientation can invert winding
+order and cull the wrong faces. `lookAt()` always produces a normal,
+correctly-wound camera basis regardless of how its target point was
+derived, at the honest cost of the reflection being an approximation from
+extreme viewing angles rather than exact from every one. For "can I see
+myself while changing outfits," that trade is the right one.
+
+Every surface's texture only re-renders every second frame and stops
+entirely once the camera is more than 9m away — a mirror nobody's near
+costs nothing. A `dispose(ctx)` hook was added to the behaviour registry
+itself (`registerBehaviour`/`registry.js`) specifically for this: unlike
+a light or a decoration, which are just scene-graph children that get
+cleaned up automatically when their object is removed, a render target is
+a real GPU resource that would otherwise leak on every deleted or
+recoloured (which rebuilds an instance from scratch — see
+`WorldObjectsSystem.updateInstanceColorOverride`) reflective object.
+
+### The physical wardrobe opens the existing app — literally the same code
+
+`Wardrobe.js` is an ordinary `FURNITURE_REGISTRY` entry with an
+`overlayId` like any other piece of furniture that opens an overlay (the
+music cabinet, the archive shelving). `WardrobeOverlay.js` — the thing
+that `overlayId` actually opens — calls `createWardrobeApp()`, the exact
+same factory function `src/computer/apps/registry.js` calls for the
+computer's own Wardrobe tab, and mounts it into an overlay panel instead
+of a computer screen. There is no second wardrobe system to keep in sync;
+there's one, with two doors into it.
+
+The mirror stands beside the cabinet as part of the same furniture
+definition, marked via `object3D.userData.mirrorMesh` (and
+`mirrorAspect`, since furniture built with `box()` bakes its real
+dimensions into the geometry rather than expressing them through
+`mesh.scale` the way Builder parts do — reading `.scale` for the aspect
+ratio here would always give 1:1). `ReflectionSystem.init()` reaches into
+`FurnitureSystem`'s already-built pieces looking for that marker, the
+same "a system reaches into furniture's own userData for something it
+cares about" pattern `LightingSystem` already uses to find the workbench's
+lamp socket.
+
+### Third person is a rendering choice, not a second player
+
+`CameraSystem.viewMode` ("first" | "third", toggled with **V** or the
+HUD's own button) sits entirely on top of the existing walk/focus modes.
+`this.position`/`yaw`/`pitch` still represent where the player actually
+is and which way they're actually facing — everything movement,
+collision, and focus-pose easing already does is completely unaware a
+third-person view exists. Only `_applyCameraTransform()` changes: it
+blends (`_viewBlend`, eased over time so toggling reads as one continuous
+camera move rather than a cut) between the ordinary first-person transform
+and a position behind-and-above the player, aimed back at them with
+`lookAt()`. The desired third-person position is run through
+`_resolveCollisions()` — the exact same wall/furniture push-out the
+player's own movement already uses — so the camera doesn't clip through a
+wall behind the player, without a second collision system existing for it.
+
+Third person only ever applies while walking, never while focused
+(sitting at the computer, the wardrobe, anywhere else with a focus pose):
+"the Workshop should continue being designed primarily for first-person
+gameplay" is implemented as a real constraint, not just a suggestion —
+`toggleViewMode()` is a no-op in focus mode, and the blend automatically
+eases back to first person the moment a focus pose is entered.
 
 ## Known limitations
 
-- **"Never see themselves" is physics, not a rule.** The camera sits
-  almost exactly where the head mesh is, so — thanks to ordinary backface
-  culling — the head effectively becomes invisible to it from the inside,
-  and looking down shows the torso/legs/feet normally, the same as any
-  first-person game. There's no deliberate visibility toggle hiding the
-  mesh from its own camera; if a future camera ever sits somewhere that
-  makes this look wrong (very extreme pitch angles, say), that's the first
-  place to look.
+- **"Never see themselves" in first person is physics, not a rule.** The
+  camera sits almost exactly where the head mesh is, so — thanks to
+  ordinary backface culling — the head effectively becomes invisible to
+  it from the inside, and looking down shows the torso/legs/feet
+  normally, the same as any first-person game. There's no deliberate
+  visibility toggle hiding the mesh from its own camera — confirmed by
+  third person and the reflection system both existing now (see
+  "Reflections and third person" above) and needing zero changes to this
+  system to work: move the viewing camera outside the head, in either
+  form, and the rig is just normally visible, exactly as predicted.
+- **The reflection is an approximation, not a true mirror**, and the
+  third-person camera's own collision reuses the player's flat wall/
+  furniture push-out rather than a real 3D check — see their own sections
+  above for what each trades away and why.
 - **Symmetric limbs only** — see "The rig" above. Editing an arm or leg
   shape affects both sides identically; there's no independent left/right
   control.

@@ -4,7 +4,7 @@ A living 3D creative workshop, built to be a place you return to rather than
 an app you launch. Runs entirely in the browser, no build step, no backend —
 just static files.
 
-This project has gone through thirteen phases: an architectural foundation and
+This project has gone through fifteen phases: an architectural foundation and
 one believable room (phase 1), turning the computer into a real,
 self-contained creative workstation with a physical sit-down/stand-up
 transition (phase 2), turning the workbench into the workshop's visual
@@ -29,9 +29,18 @@ redesigning how building feels rather than adding new
 Builder functionality, with Workshop furniture now movable through the
 exact same mechanic as Builder objects, and Builder-placed objects now
 genuinely part of the physical world through real collision (phase 12),
-and — this phase — an even-split Builder workspace, a curated expansion
+an even-split Builder workspace, a curated expansion
 of both the primitive shape set and the Construction Library, and a real
-bug fix for the front doors (phase 13).
+bug fix for the front doors (phase 13), and — this phase — a full
+Environment System: ten weather states instead of three, three modes
+(Manual, Live Weather via a real free weather API, and a genuinely
+evolving Workshop Dynamic), a real sky with moving clouds, sun, moon, and
+stars, and weather that now reaches indoor lighting, outdoor atmosphere,
+and ambient sound alike (phase 14), and — this phase — a generic
+reflection capability (mirrors and polished surfaces, not a special
+"mirror object"), a physical wardrobe and mirror that open the exact same
+Wardrobe app the computer does, and a smooth first/third-person camera
+toggle for viewing outfits and Builder creations (phase 15).
 See `docs/ROADMAP.md` for what's next, `docs/ARCHITECTURE.md`
 for how the workshop as a whole is put together, and `docs/COMPUTER.md` /
 `docs/WORKBENCH.md` / `docs/WORLDBUILDER.md` / `docs/WORLD.md` /
@@ -77,6 +86,7 @@ way.
 | Mouse | Look around |
 | E / Space | Interact with whatever's prompted at the bottom of the screen |
 | B | Toggle Build Mode (also a button, top-left) — see below |
+| V | Toggle first/third person (also a button, top-left) — mainly for viewing outfits, appreciating what you've built, and screenshots; the Workshop is still designed primarily for first person |
 | Esc | Step back out of whatever's open |
 | Click the canvas | Re-lock the mouse cursor (after pressing Esc, for instance) |
 
@@ -93,7 +103,7 @@ There is no menu. Everything is a physical object — see the table below.
 
 | Object | What happens when you interact |
 |---|---|
-| Computer desk | Sit down — the monitor powers on, the room softly fades behind it. A real creative workstation: Projects, Journal, Browser, AI, Media, Settings. See below. |
+| Computer desk | Sit down — the monitor powers on, the room softly fades behind it. A real creative workstation: Projects, Journal, Browser, AI, Media, Builder, Settings, Wardrobe. See below. |
 | Pinboard | Full project planning board — every project, any status, pinned as cork notes |
 | Workbench | Physically shows whatever project you're currently focused on — lean in for a small panel to finish it, switch to another, or start something new. See below. |
 | Notebook (on the workbench) | A page of free-form notes, saved automatically — separate from whatever project is currently on the bench |
@@ -101,7 +111,8 @@ There is no menu. Everything is a physical object — see the table below.
 | Shelving | Documentation & finished-project archive (honestly empty until there's something to archive) — the reference bookshelf at the top of the reading corner |
 | Tool storage | Labelled placeholder for a future inventory system |
 | Reading chair | Part of the same reading-and-listening corner as the bookshelf and music cabinet — a quiet spot, deliberately reserved for something calmer later |
-| Windows | Real glass now — see the actual sky/world outside. "Look outside" still checks and changes the weather, sees the current time |
+| Wardrobe | A physical wardrobe and full-height mirror — opens the exact same Wardrobe app the computer does, just from a second, physical entry point. Stand in front of the mirror to see yourself while you change |
+| Windows | Real glass now — see the actual sky/world outside. "Look outside" opens the Environment panel: view or change the weather, wind, and mode, see the current time |
 | Front doors | A proper pair of outward-opening French doors — opens/closes, and genuinely leads outside — walk through into the world and back in freely |
 | Light switch (left of the front doors) | Toggles the room's practical lighting |
 
@@ -170,7 +181,8 @@ to build furniture and architecture with, not for sheer variety — into an
 object, position/rotate/scale/colour each one (selecting a part highlights
 it directly in the preview, not just in the list), give it a name and
 description, and attach behaviour (Interactable, Light Source, Seat,
-Storage, Door, Computer, Decoration, Trigger, Audio Source, Music Player)
+Storage, Door, Computer, Decoration, Trigger, Audio Source, Music Player,
+Reflective Surface)
 purely through properties — no code. Save it, and it joins your permanent
 object library.
 
@@ -312,7 +324,9 @@ behind "Factory Reset."
 
 ## What persists
 
-Positions, lighting on/off, clock mode, current weather, your music
+Positions, lighting on/off, clock mode, the current environment (mode,
+weather, and — for Workshop Dynamic — exactly when it last changed, so it
+can keep evolving while you're away), your music
 library (locations, favourites, play counts, playlists, and exactly where
 playback was), every Workshop setting you've changed, your character's
 appearance and every outfit you've saved, and every project (including its

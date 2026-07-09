@@ -67,6 +67,9 @@ RoomLayoutSystem    → builds the room shell (including its exterior and
                        read its window panes and floor/wall geometry
 FurnitureSystem     → builds every registered piece of furniture; Lighting
                        attaches fixtures to it, Camera collides against it
+ReflectionSystem     → reaches into FurnitureSystem's already-built pieces
+                       for a mirrorMesh marker (the wardrobe's mirror) —
+                       see docs/PLAYER.md's "Reflections and third person"
 WorldEnvironmentSystem → the outdoor ground + sky/fog; registered before
                        TimeOfDaySystem so it catches the first
                        `timeofday:changed` emission — see docs/WORLD.md
@@ -75,8 +78,9 @@ TimeOfDaySystem      → computes sun/sky state and emits it; no longer
                        touches window panes directly (they're real glass
                        now) — Lighting and WorldEnvironmentSystem each
                        apply the parts they own
-WeatherSystem        → dampens light, drives ambience, streaks the glass
-AudioSystem          → reacts to WeatherSystem's events
+EnvironmentSystem    → dampens light, drives ambience, streaks the glass,
+                       feeds WorldEnvironmentSystem's fog/cloud/wind state
+AudioSystem          → reacts to EnvironmentSystem's events
 CameraSystem         → collides against RoomLayoutSystem's wall colliders
                        and FurnitureSystem's footprints — no hard room
                        rectangle any more, see docs/WORLD.md
@@ -239,7 +243,7 @@ that reads/writes `localStorage`. Two ways state gets included in a save:
   `persistence:save` and writes onto the shared `bag` object it's handed;
   listens for `persistence:load` and reads its own key back out of the bag
   it's handed. This is how `RoomLayoutSystem`, `LightingSystem`,
-  `TimeOfDaySystem`, `WeatherSystem`, `AudioSystem`, `CameraSystem`,
+  `TimeOfDaySystem`, `EnvironmentSystem`, `AudioSystem`, `CameraSystem`,
   `ComputerSystem`, `WorkbenchSystem`, and `FurnitureSystem` all persist
   state, with zero coupling to `PersistenceSystem` beyond those two event
   names. `WorkbenchSystem` persists only `{ currentProjectId }` this way —

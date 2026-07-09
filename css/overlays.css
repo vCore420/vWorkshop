@@ -233,6 +233,109 @@
 }
 .panel-row label { width: 90px; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--paper-dark); }
 .panel-row input[type="range"] { flex: 1; }
+
+/* ---------- Wardrobe overlay material ---------- */
+/* Reuses the exact same createWardrobeApp() the computer's Wardrobe app
+   mounts — see src/ui/overlays/WardrobeOverlay.js. Sized generously
+   (rather than the smaller panel material other furniture uses) since
+   its split preview/form layout needs real room to breathe. */
+.overlay--wardrobe {
+  background: rgba(10, 8, 6, 0.72);
+}
+.overlay--wardrobe .overlay-panel {
+  width: min(880px, 92vw);
+  height: min(600px, 84vh);
+  background: linear-gradient(180deg, var(--wood-mid), var(--wood-dark));
+  border-radius: var(--radius-lg);
+  border: 3px solid var(--wood-dark);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  padding: var(--space-3);
+  display: flex;
+}
+.wardrobe-overlay-panel {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---------- Environment panel (the window) ---------- */
+.environment-panel .environment-summary {
+  font-size: var(--text-md);
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+.environment-panel .environment-wind {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--paper-dark);
+  margin: 0 0 var(--space-3);
+}
+.environment-mode-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+}
+.environment-mode-tabs button {
+  flex: 1;
+  min-width: 100px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.environment-mode-tabs button.active {
+  border-color: var(--brass-bright);
+  background: rgba(184, 134, 59, 0.3);
+}
+.environment-weather-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.environment-weather-grid button {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: transparent;
+  color: inherit;
+}
+.environment-weather-grid button.active {
+  border-color: var(--brass-bright);
+  background: rgba(184, 134, 59, 0.3);
+}
+.environment-status {
+  font-size: var(--text-sm);
+  color: var(--paper-dark);
+  line-height: 1.4;
+  margin-bottom: var(--space-3);
+}
+.environment-status-error {
+  color: #e0a084;
+}
+.environment-note {
+  font-size: var(--text-sm);
+  color: var(--paper-dark);
+  font-style: italic;
+}
+.environment-refresh-button {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--brass);
+  background: rgba(184, 134, 59, 0.15);
+  color: inherit;
+  cursor: pointer;
+}
+.environment-refresh-button:hover { background: rgba(184, 134, 59, 0.28); }
+.environment-refresh-button:disabled { opacity: 0.5; cursor: default; }
 .dial-button {
   width: 44px;
   height: 44px;

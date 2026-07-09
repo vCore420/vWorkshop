@@ -64,6 +64,8 @@
   border-right: 1px solid rgba(127, 216, 196, 0.15);
   padding: var(--space-2) 0;
   gap: 2px;
+  overflow-y: auto;
+  min-height: 0; /* lets this actually scroll within the flex row above, rather than just growing past .workstation-panel's own bounds */
 }
 .workstation-rail button {
   background: transparent;

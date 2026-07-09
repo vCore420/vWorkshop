@@ -40,12 +40,12 @@ src/worldbuilder/
                                 new placement and by moving something that already exists
   ConstructionLibrary.js        the permanent Construction Library pieces — see below
   behaviours/
-    registry.js                 type -> { propsSchema, apply() }
+    registry.js                 type -> { propsSchema, apply(), dispose() }
     index.js                    imports every built-in behaviour for its registration side effect
     InteractableBehaviour.js, LightSourceBehaviour.js, SeatBehaviour.js,
     StorageBehaviour.js, DoorBehaviour.js, ComputerBehaviour.js,
     DecorationBehaviour.js, TriggerBehaviour.js, AudioSourceBehaviour.js,
-    MusicPlayerBehaviour.js
+    MusicPlayerBehaviour.js, ReflectiveBehaviour.js
 src/computer/apps/builder/
   BuilderApp.js                 the computer app: metadata form, parts editor, behaviour form, library list
   PreviewRenderer.js             an isolated mini Three.js scene for live preview
@@ -177,9 +177,11 @@ three shapes out of thirteen.
 A behaviour is registered once (`behaviours/registry.js`) as data plus two
 functions: `propsSchema` (what fields the Builder should render — label,
 input type, default) and `apply(ctx)` (what happens when a *placed
-instance* with this behaviour spawns). `BuilderApp` never has bespoke code
-for any specific behaviour — it renders whatever `propsSchema` says, for
-all nine built-ins and any future one, identically.
+instance* with this behaviour spawns) — plus, since this pass, an optional
+`dispose(ctx)` for the rare behaviour that holds a real resource beyond
+the scene graph (see `reflective`, below). `BuilderApp` never has bespoke
+code for any specific behaviour — it renders whatever `propsSchema` says,
+for all eleven built-ins and any future one, identically.
 
 Nearly every behaviour's `apply()` just attaches an ordinary
 `InteractableComponent` — the exact same component furniture and the
@@ -189,18 +191,28 @@ system is actually generic: a custom object with a Seat behaviour is
 handled by the interaction pipeline no differently than the workbench's
 chair.
 
-Because an `Entity` can only hold one `InteractableComponent`, seven of the
-nine behaviours (Interactable, Seat, Storage, Door, Computer, Trigger,
-Audio source) are mutually exclusive with each other — checking one in the
-Builder unchecks any other from that group. Light Source and Decoration
-don't touch `InteractableComponent` at all, so they combine freely with
-anything.
+Because an `Entity` can only hold one `InteractableComponent`, eight of the
+eleven behaviours (Interactable, Seat, Storage, Door, Computer, Trigger,
+Audio source, Music player) are mutually exclusive with each other —
+checking one in the Builder unchecks any other from that group. Light
+Source, Decoration, and Reflective Surface don't touch
+`InteractableComponent` at all, so they combine freely with anything —
+a mirror can also glow, or be a seat, or both.
 
 **Trigger** is the deliberately open-ended one: it emits
 `worldObject:trigger` with whatever event name was typed in, and nothing in
 this codebase currently listens for any specific name. That's the point —
 see docs/PLUGIN_GUIDE.md for how a future system or plugin hooks into it
 without this behaviour or the object carrying it needing to change.
+
+**Reflective Surface** attaches to any object with a flat Plane part and
+turns it into a real mirror — no properties to configure, since the plane
+it applies to is found automatically (the largest one, by area) rather
+than asking for a part id nobody would know offhand. It's the Builder-facing
+half of a small, generic reflection capability any Workshop object can use;
+see docs/PLAYER.md's "Reflections and third person" section for the full
+story, including the physical wardrobe mirror that calls the exact same
+underlying function directly.
 
 ## Why Build Mode looks like this
 

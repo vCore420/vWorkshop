@@ -464,7 +464,118 @@ original Door already made) and rendered thumbnails for the shape/library
 grids (both flat colour swatches for now) — see "Future extension points"
 in `docs/WORLDBUILDER.md`.
 
-## Phase 14 — depth in the room that exists
+## Phase 14 — the Environment System
+
+**Goal:** "think beyond simply adding weather effects" — not a weather
+feature, an environment that makes stepping outside feel quietly
+different, day to day. See `docs/WORLD.md`'s "The Environment System"
+section for the full write-up.
+
+Delivered:
+- **`WeatherSystem` grew into `EnvironmentSystem`** — three states became
+  ten (Clear, Partly Cloudy, Overcast, Drizzle, Light Rain, Heavy Rain,
+  Fog, Mist, Windy, Storm), each with its own light dampening, fog
+  density, cloud coverage, and precipitation intensity.
+- **Three modes**: Manual (pick a state directly), Live Weather (real
+  conditions from Open-Meteo — no API key needed, a plain HTTPS GET
+  callable straight from the browser — via the browser's own
+  geolocation), and Workshop Dynamic, a real weighted Markov process
+  (`TRANSITIONS`) rather than a random pick, each state held for a
+  randomised real-world duration before the next is even considered.
+  Live Weather's every failure mode (permission denied, offline, an
+  unreachable API) falls back to Workshop Dynamic gracefully, with a
+  human-readable reason kept for the panel to show.
+- **"Conditions should persist between visits" is genuinely true**, not
+  just a saved label: Workshop Dynamic persists *when* the current state
+  was entered, and replays elapsed real time forward through the
+  transition graph on load (bounded to six steps) — the weather has
+  actually moved on while you were away.
+- **The window is now the Environment panel** — mode tabs, the current
+  condition and wind, and either the weather grid (Manual) or a status/
+  retry control (Live Weather), evolved from the original flat row of
+  three buttons rather than replaced.
+- **A real sky**: moving sprite clouds driven by actual wind direction/
+  speed, sun and moon glow-sprites, a star field that fades in and out
+  with dusk/dawn, and a moon phase computed from the real calendar date —
+  all positioned relative to the camera (not the world origin) so nothing
+  is ever clipped by a short Render Distance setting or left behind by
+  building far from the origin.
+- **Weather now reaches indoor lighting and outdoor atmosphere both** —
+  fog density genuinely responds to Fog/Mist, not just Render Distance;
+  a storm gets an occasional lightning flash (`LightingSystem`, filling in
+  a seam its own code had explicitly left for this); rain visibly drifts
+  with wind direction instead of only falling straight down.
+- **A second, independent ambience layer** — birds by day, crickets by
+  night, generated the same way the workshop's ambient music already is
+  (Web Audio synthesis, no audio files), quieted (not silenced) under
+  heavy precipitation, layered on top of the existing wind/rain/storm
+  ambience rather than replacing it.
+- **A real save-migration** (`SaveMigrations.js` v2→v3) carries a
+  player's last manually-chosen weather forward as an explicit Manual
+  choice on the new system, rather than discarding it or silently
+  defaulting them into Workshop Dynamic.
+
+Explicitly *not* attempted, on purpose: real falling-rain/snow particles
+outdoors (the window's streak-based rain remains an honest stand-in for a
+room with placeholder-style glass), a visible lightning bolt or thunder
+sound (light-only for now), and any snow-specific visual (mapped onto the
+closest rain-family state instead) — see "Future extension points" in
+`docs/WORLD.md`.
+
+## Phase 15 — reflections, identity, and everyday presence
+
+**Goal:** "not about adding graphics for the sake of graphics... make the
+Workshop feel more personal and lived in." See `docs/PLAYER.md`'s
+"Reflections and third person" section for the full write-up.
+
+Delivered:
+- **A generic reflection capability, not a special mirror object** —
+  `ReflectionSystem.registerSurface(mesh, options)` is the entire thing;
+  a hand-built furniture mirror and a Builder behaviour
+  (`ReflectiveBehaviour.js`) both call it directly, neither aware the
+  other exists. Rendered via a second camera placed with `lookAt()` at
+  the reflection of the main camera, chosen specifically over a true
+  per-pixel planar reflection (which needs a projective shader and
+  oblique clipping) for maintainability, at the honest cost of exactness
+  from extreme viewing angles.
+- **A physical Wardrobe** — an ordinary furniture piece whose overlay
+  mounts the exact same `createWardrobeApp()` the computer's own Wardrobe
+  tab already uses. No second wardrobe system exists; there's one, with
+  two doors into it.
+- **A full-height mirror as part of the same furniture piece**, the first
+  real payoff of Phase 10's "should normally never see themselves except
+  in mirrors" — marked via a `mirrorMesh` userData marker `ReflectionSystem`
+  discovers the same way `LightingSystem` already finds the workbench's
+  lamp socket.
+- **A smooth first/third-person toggle** (**V**, or a HUD button) that
+  needed zero changes to movement, collision, or focus-pose easing —
+  `CameraSystem.viewMode` only changes how the final camera transform is
+  derived from the player's own unchanged logical position, blended over
+  time so switching reads as one continuous move. Third person reuses the
+  player's own wall/furniture collision for its camera offset rather than
+  a second collision system, and is disabled entirely while focused
+  (sitting at the computer, the wardrobe, anywhere else), matching "the
+  Workshop should continue being designed primarily for first-person
+  gameplay."
+- **A `dispose(ctx)` hook added to the behaviour registry itself** —
+  needed because a reflective surface's render target is a real GPU
+  resource, unlike every other behaviour's scene-graph-only children,
+  which get cleaned up automatically. A small, genuinely reusable
+  addition to the framework, not a one-off fix.
+- **The computer's app rail is now vertically scrollable** — once there
+  were enough apps (Wardrobe, Builder) to exceed a shorter screen's
+  height, the extras became genuinely unreachable, clipped rather than
+  just cramped. One CSS fix (`overflow-y: auto` plus the standard
+  `min-height: 0` flexbox correction), everything else about the
+  computer's layout untouched.
+
+Explicitly *not* attempted, on purpose: a true per-pixel planar
+reflection, reflective surfaces on anything other than a flat plane, and
+any reflow of the computer's layout beyond the one scrolling fix — see
+"Future extension points" in `docs/PLAYER.md` and the known
+simplification in `docs/COMPUTER.md`.
+
+## Phase 16 — depth in the room that exists
 
 Roughly in priority order, each independently shippable:
 
@@ -485,7 +596,9 @@ Roughly in priority order, each independently shippable:
    workstation/workbench/Build Mode/music panels' *sizing* hasn't had a
    dedicated pass for genuinely narrow (phone-width, as opposed to
    tablet-width) viewports yet — distinct from Phase 9's UI Scale setting,
-   which scales everything uniformly rather than reflowing it.
+   which scales everything uniformly rather than reflowing it, and from
+   Phase 15's rail-scrolling fix, which solved reachability specifically,
+   not narrow-screen layout generally.
 5. **Occlusion-aware interaction checks** — a raycast between the player
    and a candidate interactable, so standing just outside a wall can no
    longer trigger something on the other side of it (see `docs/WORLD.md`'s
@@ -494,38 +607,38 @@ Roughly in priority order, each independently shippable:
    This Device" (Phase 9) ever proves unsatisfying — rendering a few
    sample frames and timing them, rather than inferring from device
    capability alone.
-7. **A mirror** — the first real payoff of Phase 10's "should normally
-   never see themselves except in... mirrors": a reflective surface
-   showing the live player rig from outside, likely a render-to-texture
-   second camera rather than anything stencil/portal-based, given the
-   room's modest size.
-8. **Clothing and wearable Builder objects** — attaching to the rig's
+7. **Clothing and wearable Builder objects** — attaching to the rig's
    existing pivots (see `docs/PLAYER.md`'s "ready for what comes next").
-9. **Multi-select, snapping, and undo/redo for Build Mode** — see "Future
+8. **Multi-select, snapping, and undo/redo for Build Mode** — see "Future
    extension points" in `docs/WORLDBUILDER.md`.
+9. **A true oriented planar reflection**, and reflective surfaces beyond a
+   flat plane — see "Future extension points" in `docs/PLAYER.md`.
 
-## Phase 15 — the world becomes alive on its own
+## Phase 17 — the world becomes alive on its own
 
-1. **Weather that changes itself** — `WeatherSystem.autoCycle` already
-   exists as a flag with no behaviour behind it yet; give it a slow,
-   believable transition schedule.
-2. **Seasonal changes** — a plugin (see `PLUGIN_GUIDE.md`) reading the real
+1. **Seasonal changes** — a plugin (see `PLUGIN_GUIDE.md`) reading the real
    calendar date and adjusting window tint / a handful of decorative
-   details.
-3. **Real falling-rain particles outdoors** — now that a real exterior
-   exists (Phase 5), `WeatherSystem`'s rain could extend beyond streaks on
-   the glass to actual particles falling over the outdoor world.
-4. **The computer's placeholders, for real** — a browser view (likely an
+   details. `EnvironmentSystem`'s moon-phase calculation (Phase 14) is the
+   existing precedent for "a real-calendar-driven detail computed
+   independently of weather."
+2. **Real falling-rain/snow particles outdoors** — now that a real
+   exterior exists (Phase 5) and weather genuinely varies (Phase 14), the
+   window's honest streaks-on-glass could extend to actual particles
+   falling over the outdoor world. See "Future extension points" in
+   `docs/WORLD.md`.
+3. **The computer's placeholders, for real** — a browser view (likely an
    `<iframe>` where targets allow it), a local AI companion (see
    `docs/PLUGIN_GUIDE.md`), and real recorded/streamed media.
-5. **A finished project's physical send-off** — an actual short animation
+4. **A finished project's physical send-off** — an actual short animation
    of a completed piece moving from the bench toward the shelving unit,
    building on the "packs away" transition already in place.
-6. **`worldObject:trigger` gets a listener** — the Trigger behaviour
+5. **`worldObject:trigger` gets a listener** — the Trigger behaviour
    (Phase 4) already emits a generic named event; the first system or
-   plugin that actually listens for one is what proves the hook out.
+   plugin that actually listens for one is what proves the hook out. The
+   Construction Library's own Switch piece (Phase 13) is one ready-made
+   source of that event, waiting for something to listen.
 
-## Phase 16 — beyond one building
+## Phase 18 — beyond one building
 
 - **Additional buildings** — `RoomLayoutSystem` was written with this in
   mind (see its class comment), and `WorldObjectsStore` was made

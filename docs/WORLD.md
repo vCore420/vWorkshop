@@ -70,19 +70,183 @@ scene. `WorldEnvironmentSystem` (new) adds exactly two things to the same
    sits a few centimetres below the interior floor's exact surface height,
    purely to avoid z-fighting where the floor slab meets it.
 2. **Sky and fog**, driven by the exact same `timeofday:changed` event
-   `LightingSystem` already listens to. Before this phase, `TimeOfDaySystem`
-   tinted the window panes directly to fake a sky that wasn't really there;
-   that's gone now — the windows are real transparent glass
-   (`Materials.glass`), and what you see through them is the same
-   `scene.background`/fog you'd see standing outside, updated in one place.
-   Time of day, weather's light-dampening, and the sun/moon direction all
-   already applied scene-wide; they needed no changes at all to work
-   outdoors — they always did.
+   `LightingSystem` already listens to, and by `environment:changed` (see
+   "The Environment System" below) for everything weather-driven on top of
+   that. Before this phase, `TimeOfDaySystem` tinted the window panes
+   directly to fake a sky that wasn't really there; that's gone now — the
+   windows are real transparent glass (`Materials.glass`), and what you see
+   through them is the same `scene.background`/fog/sun/moon/stars/clouds
+   you'd see standing outside, updated in one place. Time of day and
+   weather already applied scene-wide before there even was an outdoor
+   world to see them in; they needed no changes at all to work outdoors —
+   they always did.
 
 Walking through the open door, looking back at the building, and walking
 back in all just work as a consequence of the above — there's no trigger
 volume, no "you have left the workshop" event, because nothing about
 crossing that threshold is special beyond geometry.
+
+## The Environment System
+
+"Think beyond simply adding weather effects" — `WeatherSystem` (three
+states, a manual pick from a small HUD panel) grew into
+`EnvironmentSystem`: still the same core idea (a state, changed by
+looking out a window, that everything else reacts to), now covering ten
+weather states, three different ways that state gets decided, real wind,
+and a sky that actually shows what's happening rather than only dimming
+the room a little. See `docs/REFINEMENT.md` and `docs/WORLDBUILDER.md`
+for the two passes immediately before this one — this is the third system
+in a row to grow this way: get the core idea working simply first, then
+widen it once it's proven itself, rather than over-building it up front.
+
+### One state, five independent listeners
+
+`EnvironmentSystem` computes weather and wind and emits one event,
+`environment:changed` — exactly the same "compute state, emit an event,
+let every consumer react independently" shape `timeofday:changed` already
+established. Nothing in this system renders anything, lights anything, or
+plays any sound itself:
+
+- **`WorldEnvironmentSystem`** — the sky colour, fog density, cloud
+  coverage/drift, and (from `timeofday:changed`) the sun/moon discs, moon
+  phase, and star field.
+- **`LightingSystem`** — indoor light dampening, plus a storm's occasional
+  lightning flash (a brief boost to the hemisphere/ambient fill, layered
+  on top of whatever time-of-day already set, not a change to the sun
+  itself — a flash reads as the whole sky brightening for an instant, not
+  a single light source moving).
+- **`AudioSystem`** — the weather ambience layer (wind/rain/a heavier
+  storm mix) and how quiet the nature ambience gets under heavy
+  precipitation.
+- **The Builder Phone / Build Mode** — nothing at all. Every wall, roof
+  panel, or custom object anyone builds sits under the same sky, in the
+  same fog, lit by the same sun, automatically — "Builder compatibility...
+  without requiring special cases" is true because nothing here is aware
+  a workshop, or any other building, exists in the first place. It lights
+  and fogs the *scene*.
+
+None of these five things know about each other. A future sixth listener
+(seasonal foliage colour, say) would cost one new `engine.events.on(...)`
+call, nothing more.
+
+### Ten weather states, chosen with sensible transitions
+
+`clear`, `partlyCloudy`, `overcast`, `drizzle`, `lightRain`, `heavyRain`,
+`fog`, `mist`, `windy`, `storm` — each with its own light dampening, fog
+density, cloud coverage, precipitation intensity, and ambience. `storm` is
+deliberately rare and short-lived: `TRANSITIONS` (in `EnvironmentSystem.js`)
+only ever leads into it from `heavyRain`, at low weight, and it always
+decays straight back out to `heavyRain` rather than lingering or chaining
+into anything else.
+
+`TRANSITIONS` is a small weighted graph, not a uniform random pick — clear
+skies drift toward partly cloudy far more often than straight to fog, the
+way real weather actually develops. Each state, once entered, holds for a
+randomised real-world duration (40–150 minutes; storm 8–18) before the
+next transition is even considered, so a session doesn't see the sky
+flicker through conditions — "the world should feel natural rather than
+unpredictable" is implemented as a real, if simple, Markov process, not a
+per-frame dice roll.
+
+### Three modes
+
+- **Manual** — `setWeather(id)` picks a state directly and it stays there.
+  For building, screenshots, or personal preference, as the brief puts it.
+  Remembered separately from whatever Live/Dynamic last left `current` at
+  (`manualState`), so switching back to Manual restores your last choice
+  rather than defaulting to Clear.
+- **Live Weather** — real conditions from Open-Meteo
+  (`src/utils/WeatherProvider.js`), chosen specifically because it needs
+  no API key or account: a plain HTTPS GET with a latitude/longitude,
+  callable directly from a static, backend-free project. Uses the
+  browser's own geolocation (a real permission prompt — this is one of
+  exactly two places in the entire project that reach outside the browser
+  at all, the other being the fetch itself). Its current-conditions
+  response reports a WMO weather-interpretation code, an international
+  standard, not something Open-Meteo invented, which `WeatherProvider.js`
+  maps onto this project's own ten states. "Windy" and the Fog/Mist split
+  have no direct WMO equivalent (wind is its own separate variable; the
+  WMO table doesn't really distinguish fog severity) — both are
+  deliberate, documented reinterpretations of the raw data, not gaps.
+  Refetches automatically every 20 minutes while active.
+- **Workshop Dynamic** (the default) — the Markov process above, running
+  on its own. "Conditions should persist between visits" is handled by
+  persisting *when* the current state was entered, not just what it is:
+  on load, `_catchUpDynamic()` replays elapsed real time forward through
+  the transition graph (bounded to six steps, so a save that's months old
+  doesn't try to simulate months of ticks) — the weather has genuinely
+  moved on while you were away, rather than freezing or resetting.
+
+**Live Weather's failure path is the same graceful fallback everywhere**:
+geolocation denied, geolocation unsupported, offline, a slow or
+unreachable API, a malformed response — every one of them rejects
+`fetchLiveWeather()` with a plain, human-readable `Error`, and
+`EnvironmentSystem` responds identically regardless of which: switch to
+Workshop Dynamic, keep the reason in `liveError` for the Environment panel
+to show, and keep going. Nothing about Live Weather failing is a dead end.
+
+### The window is the Environment panel
+
+Evolved, not replaced, per the brief: still opened by looking out a
+window (`RoomLayoutSystem`'s own interactable), still the one place
+weather is viewed and changed — `WindowOverlay.js` now shows mode tabs, the
+current condition and wind, the weather grid (Manual), or a status/retry
+control (Live Weather), rather than a flat row of three buttons with
+inline styles.
+
+### Sky: restrained on purpose
+
+"Avoid making the sky visually overwhelming" ruled out anything
+volumetric or particle-heavy. Sun and moon are soft glow sprites
+(`THREE.Sprite`, always facing the camera for free), not lit 3D geometry;
+stars are a single `THREE.Points` cloud (one draw call for all ~300 of
+them); clouds are a small, fixed number (12) of soft sprite blobs drifting
+with the wind. Every one of these is positioned *relative to the camera*,
+not the world origin, each frame — both so they stay within the camera's
+far clipping plane no matter which Render Distance setting is active (see
+`SKY_RADIUS`'s own comment for the "Short" preset's 55m minimum, which is
+what actually forced this design) and so they're always somewhere
+overhead no matter how far from the origin something eventually gets
+built. Moon phase comes from the real calendar date (a simplified ~29.53
+day cycle from a fixed reference new moon) — one more small way "stepping
+outside" looks quietly different day to day, independent of weather
+entirely.
+
+### Environmental audio
+
+Two independent layers (see `AudioSystem.js`), both generative — the same
+Web Audio synthesis (`AudioSynth.js`) the workshop's ambient music tracks
+already use, no audio files:
+
+- **Weather ambience** — filtered noise, unchanged in kind from the
+  original three-state WeatherSystem, now with a distinct storm preset
+  (louder, brighter filter) alongside wind and rain.
+- **Nature ambience** — birds by day, crickets by night, entirely
+  independent of the weather layer (both can be audible at once — a light
+  rain with birdsong easing back in as it clears is exactly the kind of
+  thing this split makes possible). Quieted, not silenced, under heavy
+  precipitation, since birdsong over a downpour reads as a mistake rather
+  than atmosphere. `createNatureAmbience()` schedules its own brief
+  oscillator-based chirps/pulses via `setTimeout` and disposes each one as
+  it finishes — the caller only ever starts it once and adjusts its
+  day/night state and intensity.
+
+### Atmosphere
+
+Fog density is now weather-driven, not just time-of-day/render-distance
+driven — "Fog"/"Mist" genuinely close the world in, layered on top of
+(not instead of) whatever the Settings app's Render Distance already set.
+Rain direction responds to wind: the window's rain-streak overlay (see
+"honest" note below) drifts sideways as it scrolls, proportional to wind
+speed and direction, not just falling straight down regardless of
+conditions.
+
+Rain itself is still represented the same honest way it always has been
+for a room with placeholder-style windows rather than a fully simulated
+exterior view: streaks scrolling (and now drifting) across the glass, not
+actual falling raindrop particles anywhere in the 3D world. A future pass
+giving the room a real falling-particle exterior view could upgrade this
+without changing `environment:changed`'s shape at all.
 
 ## A simple exterior shell, aligned to the interior
 
@@ -190,3 +354,35 @@ what's still current everywhere.)
 - **One ground plane, one sky.** Multiple buildings later would still
   share this exact system — nothing here assumes a single building, only
   a single *world* (which remains true).
+- **Snow has no dedicated visual.** Open-Meteo can report real snow
+  conditions; `WeatherProvider.js` maps them onto the closest rain-family
+  state by intensity (see its own `WMO_CODE_MAP` comment) rather than
+  inventing a snow visual this pass didn't ask for.
+- **Clouds and stars are sprites, not volumetric or physically placed.**
+  A `THREE.Points` field and a handful of `THREE.Sprite` blobs, chosen
+  specifically to stay cheap and to avoid "visually overwhelming" — real
+  cloud shapes, shadows cast by clouds, or constellation-accurate star
+  positions were never the goal.
+- **Lightning is a light-only flash.** `LightingSystem`'s storm flash
+  brightens the hemisphere/ambient fill briefly; there's no visible bolt,
+  no thunder-clap sound tied to it, no view-dependent flash timing.
+
+## Future extension points
+
+- **A real falling-particle rain/snow system** for the outdoor world,
+  once it's worth the cost — the window's rain-streak overlay was always
+  an honest stand-in for a room with placeholder-style glass rather than
+  a fully simulated exterior (see "The Environment System" above); nothing
+  about `environment:changed`'s shape would need to change to support it.
+- **A visible lightning bolt and a thunder sound**, timed together (with
+  a slight delay proportional to distance, for a nice touch) — the
+  current flash-only implementation was judged enough for "subtle
+  atmosphere rather than spectacle," but a full version is a natural
+  next step from the same seam.
+- **Seasonal variation** — foliage colour, day-length drift across a real
+  year, particularly cold/hot spells — would be another independent
+  listener on `timeofday:changed`/`environment:changed`, the same way
+  every current consumer is, not a change to either emitter.
+- **Snow's own visual and ambience**, once genuinely wanted — the
+  `WeatherProvider.js` mapping already isolates exactly where this would
+  plug in.
