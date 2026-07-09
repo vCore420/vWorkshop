@@ -70,17 +70,26 @@ export const WardrobeDefinition = {
     const mirrorWidth = 0.55;
     const mirrorHeight = 1.7;
     const frameThickness = 0.05;
+    // A nudge toward the wall, on top of the whole ensemble's own
+    // position — local -Z maps to world +Z (toward the south wall, at
+    // this piece's placement) once the 180° rotation in layoutDefault.js
+    // is applied. -0.25, not just a token amount: the mirror's own frame
+    // is only 0.04m deep, far thinner than the cabinet's 0.5m, so a small
+    // offset to its origin barely moves its actual back face — this is
+    // sized so the mirror's back face ends up at least as close to the
+    // wall as the cabinet's own back face does.
+    const mirrorZ = -0.25;
 
     const stand = box(mirrorWidth + frameThickness * 2, 0.05, 0.22, woodTrim);
-    stand.position.set(mirrorX, 0.025, 0);
+    stand.position.set(mirrorX, 0.025, mirrorZ);
     g.add(stand);
 
     const frame = box(mirrorWidth + frameThickness * 2, mirrorHeight + frameThickness * 2, 0.04, woodTrim);
-    frame.position.set(mirrorX, mirrorHeight / 2 + 0.05, 0);
+    frame.position.set(mirrorX, mirrorHeight / 2 + 0.05, mirrorZ);
     g.add(frame);
 
     const mirrorMesh = box(mirrorWidth, mirrorHeight, 0.015, Materials.matte("#dfe3e6"));
-    mirrorMesh.position.set(mirrorX, mirrorHeight / 2 + 0.05, 0.02);
+    mirrorMesh.position.set(mirrorX, mirrorHeight / 2 + 0.05, mirrorZ + 0.02);
     g.add(mirrorMesh);
 
     // Markers for ReflectionSystem — see this file's own top comment.
@@ -95,7 +104,15 @@ export const WardrobeDefinition = {
 
   interaction: {
     prompt: "Open the wardrobe",
-    radius: 1.6,
+    // The interaction anchor is the whole compiled group, whose origin
+    // sits at ground level (y=0) — but interaction distance is a real 3D
+    // distance from the camera's eye height (1.65m), not a horizontal-only
+    // one. 1.6 was already less than that fixed vertical distance alone,
+    // making this completely unreachable from any position — the exact
+    // same root cause an earlier pass found and fixed for the front
+    // doors (see docs/REFINEMENT.md). 2.0 comfortably covers the vertical
+    // offset with real horizontal reach left over.
+    radius: 2.0,
     overlayId: "wardrobe",
     focusPoseLocal: {
       // A few steps back from the mirror, facing the wardrobe/mirror

@@ -18,6 +18,10 @@ import { box, cylinder, group, Materials } from "../../utils/PlaceholderFactory.
  *     permanent geometry.
  *   - `clipboardMesh`: the small always-there clipboard the workbench's
  *     panel visually anchors to, regardless of which project is active.
+ *
+ * Also carries a small desk fan with genuinely spinning blades — a
+ * performance reference object, not decoration; see its own comment
+ * further down and docs/PERFORMANCE.md.
  */
 export const WorkbenchDefinition = {
   id: "workbench",
@@ -94,6 +98,41 @@ export const WorkbenchDefinition = {
     g.add(presenceAnchor);
     g.userData.presenceAnchor = presenceAnchor;
     g.userData.surfaceY = surfaceY;
+
+    // A small desk fan — deliberately not decoration. Its whole purpose
+    // is a constant, always-moving visual reference for judging frame
+    // smoothness while testing: a real stutter or a dropped frame shows
+    // up immediately as a stumble in its otherwise perfectly steady spin,
+    // in a way that's much harder to judge from camera movement alone
+    // (which a choppy *input* system, rather than a choppy *renderer*,
+    // can also make look uneven). See docs/PERFORMANCE.md.
+    const fanGroup = new THREE.Group();
+    const fanBase = cylinder(0.05, 0.06, 0.02, Materials.matte("#3a3a3a"));
+    fanBase.position.set(0, 0.01, 0);
+    fanGroup.add(fanBase);
+    const fanNeck = cylinder(0.012, 0.012, 0.16, Materials.matte("#3a3a3a"));
+    fanNeck.position.set(0, 0.1, 0);
+    fanGroup.add(fanNeck);
+    const fanHousing = cylinder(0.09, 0.09, 0.025, Materials.matte("#5a5a5a"), 20);
+    fanHousing.rotation.x = Math.PI / 2; // lay the cylinder on its side so its flat faces point horizontally, like a real fan
+    fanHousing.position.set(0, 0.2, 0);
+    fanGroup.add(fanHousing);
+
+    const bladeAssembly = new THREE.Group();
+    bladeAssembly.position.set(0, 0.2, 0.018);
+    const bladeMat = Materials.matte("#d8d8d8");
+    for (let i = 0; i < 3; i++) {
+      const blade = box(0.018, 0.075, 0.006, bladeMat, { castShadow: false });
+      blade.position.set(0, 0.04, 0);
+      blade.rotation.z = (i / 3) * Math.PI * 2;
+      bladeAssembly.add(blade);
+    }
+    fanGroup.add(bladeAssembly);
+
+    fanGroup.position.set(-0.72, topY + 0.02, -0.32);
+    fanGroup.rotation.y = 0.5; // angled slightly, as if aimed across the bench rather than dead-on
+    g.add(fanGroup);
+    g.userData.spinningParts = [{ mesh: bladeAssembly, axis: "z", speed: 7 }];
 
     return g;
   },

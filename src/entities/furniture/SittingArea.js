@@ -54,7 +54,13 @@ export const SittingAreaDefinition = {
     overlayId: "restNook",
     focusPoseLocal: {
       position: [0, 1.1, 0.15],
-      lookAt: [0, 0.9, -1.2],
+      // The backrest sits at local z=-0.3 (see build() above) — sitting
+      // normally means facing *away* from it, toward +Z, not back into
+      // it. This used to point toward -1.2, aiming the camera back over
+      // its own shoulder at the chair instead of out into the room —
+      // "the sitting camera is rotated approximately 180 degrees,
+      // causing the player to appear to sit backwards."
+      lookAt: [0, 0.9, 1.2],
     },
   },
 };
