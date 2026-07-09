@@ -184,4 +184,20 @@ export class FurnitureSystem {
   getAllPieces() {
     return [...this.pieces.values()];
   }
+
+  /** Generic continuous-rotation animation — a definition marks any of its
+   *  own meshes via `object3D.userData.spinningParts = [{ mesh, axis, speed }]`
+   *  in its own build() (see Workbench.js's small desk fan for the first
+   *  example) and this just turns them, every frame, forever. Not a new
+   *  system: furniture never needed a per-frame update before, so this is
+   *  the one small, generic hook that lets a piece ask for simple
+   *  animation without every future spinning/swinging/bobbing thing
+   *  needing its own bespoke update loop. */
+  update(dt) {
+    for (const { entity } of this.pieces.values()) {
+      const spinningParts = entity.object3D.userData.spinningParts;
+      if (!spinningParts) continue;
+      for (const { mesh, axis, speed } of spinningParts) mesh.rotation[axis] += speed * dt;
+    }
+  }
 }

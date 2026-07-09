@@ -87,7 +87,10 @@ export class CameraSystem {
     this._scratchEuler = new THREE.Euler(0, 0, 0, "YXZ");
     this._scratchThirdDesired = new THREE.Vector3();
     this._scratchThirdLookAt = new THREE.Vector3();
-    this._scratchThirdDummy = new THREE.Object3D();
+    // A real (if never rendered) camera, not a plain Object3D — see the
+    // comment where this is used in _applyCameraTransform() for why that
+    // distinction actually matters here, not just for tidiness.
+    this._scratchThirdDummy = new THREE.PerspectiveCamera();
     this.engine.events.on("persistence:save", (bag) => {
       bag.camera = { position: this.position.toArray(), yaw: this.yaw, pitch: this.pitch };
     });
@@ -179,6 +182,16 @@ export class CameraSystem {
 
     const lookAt = this._scratchThirdLookAt.set(this.position.x, this.position.y - THIRD_PERSON_LOOK_DROP, this.position.z);
     this._scratchThirdDummy.position.copy(desired);
+    // `Object3D.lookAt()` has a genuine, easy-to-miss gotcha: internally,
+    // it swaps which point is the "eye" and which is the "target" for
+    // anything that isn't a camera or light (`this.isCamera`/`isLight`) —
+    // meaning a *plain* Object3D used purely as a lookAt-math scratch
+    // helper computes an orientation exactly 180° from what a camera
+    // actually needs to face that same target. This was that bug: "the
+    // third-person camera... is rotated away from the player" — fixed by
+    // making `_scratchThirdDummy` a real PerspectiveCamera (constructor
+    // above), never rendered, purely so `isCamera` is true and `lookAt()`
+    // uses the correct convention.
     this._scratchThirdDummy.lookAt(lookAt);
 
     camera.position.lerpVectors(this.position, desired, this._viewBlend);

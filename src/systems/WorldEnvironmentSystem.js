@@ -13,6 +13,28 @@ const RECENTER_GRID = 20; // snap recentring to this grid so the texture never v
 // matter how far something eventually gets built from the origin.
 const SKY_RADIUS = 42;
 const CLOUD_HALF_RANGE = 34; // clouds drift and wrap within this box around the camera — also comfortably inside "Short"
+const RAIN_COUNT = 220;
+const RAIN_HALF_RANGE = 16; // falls within this box around the camera, horizontally
+const RAIN_TOP = 7;
+const RAIN_BOTTOM = -0.5;
+const RAIN_STREAK_LENGTH = 0.35;
+
+// A tint blended into the time-of-day sky colour per weather state — see
+// _applySkyColor(). Distinct from fogDensity/cloudCoverage: those already
+// existed and did their job, but a fog day and an overcast day with
+// similar fog numbers still looked like the same grey sky with a
+// slightly different haze, not genuinely different weather. `null` means
+// "no tint" — clear/partlyCloudy/windy read as clean, ordinary sky days,
+// exactly as they should.
+const WEATHER_SKY_TINT = {
+  overcast: { color: "#9aa3ac", strength: 0.5 },
+  drizzle: { color: "#8b95a0", strength: 0.4 },
+  lightRain: { color: "#7c8790", strength: 0.5 },
+  heavyRain: { color: "#5f6a74", strength: 0.65 },
+  fog: { color: "#c7c7c7", strength: 0.8 }, // flatter, greyer — fog scatters colour out of the air
+  mist: { color: "#dde6ec", strength: 0.4 }, // lighter, cooler-white — a thinner haze than fog
+  storm: { color: "#454b53", strength: 0.75 }, // the darkest, coldest sky of any condition
+};
 const STAR_COUNT = 320;
 const CLOUD_COUNT = 12;
 
@@ -51,6 +73,10 @@ export class WorldEnvironmentSystem {
     this._windDirectionRad = 0;
     this._sunDirection = new THREE.Vector3(0, 1, 0);
     this._moonDirection = new THREE.Vector3(0, -1, 0);
+    this._baseSkyColor = new THREE.Color("#bfe6ff");
+    this._weatherTint = null; // { color: THREE.Color, strength } — see _applySkyColor()
+    this._precipitation = 0;
+    this._rainData = null; // { points, positions } — see _buildRain()
   }
 
   init(engine) {
@@ -70,6 +96,7 @@ export class WorldEnvironmentSystem {
     this._buildSunMoon();
     this._buildStars();
     this._buildClouds();
+    this._buildRain();
 
     engine.events.on("timeofday:changed", (state) => this._onTimeChanged(state));
     engine.events.on("environment:changed", (state) => this._onEnvironmentChanged(state));
@@ -144,6 +171,39 @@ export class WorldEnvironmentSystem {
     }
   }
 
+  /** A field of short falling line-segments, camera-relative and wrapped
+   *  the same way clouds are — cheap (one draw call), and, unlike the
+   *  window's own rain-streak overlay (still the honest representation
+   *  for what's happening on the glass itself — see docs/WORLD.md), this
+   *  is real geometry any camera can see, indoors or out: a solid wall or
+   *  roof correctly occludes it via ordinary depth testing, so it doesn't
+   *  need to know whether the player happens to be inside or outside. */
+  _buildRain() {
+    const positions = new Float32Array(RAIN_COUNT * 2 * 3); // 2 points (top+bottom) per streak
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    const material = new THREE.LineBasicMaterial({
+      color: "#bcd2de",
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      fog: false, // rain reads as itself even in thick fog, rather than vanishing into the same haze it's falling through
+    });
+    this.rain = new THREE.LineSegments(geometry, material);
+    this.rain.frustumCulled = false; // positions update every frame in local space the bounding sphere is never recomputed for; avoids it vanishing at the wrong moment
+    this.engine.scene.add(this.rain);
+
+    this._rainDrops = [];
+    for (let i = 0; i < RAIN_COUNT; i++) {
+      this._rainDrops.push({
+        x: (Math.random() - 0.5) * RAIN_HALF_RANGE * 2,
+        y: RAIN_BOTTOM + Math.random() * (RAIN_TOP - RAIN_BOTTOM),
+        z: (Math.random() - 0.5) * RAIN_HALF_RANGE * 2,
+        speed: 5 + Math.random() * 3,
+      });
+    }
+  }
+
   /** Used by BuildModeSystem so outdoor placement works the same way indoor placement does. */
   getGroundMesh() {
     return this.groundMesh;
@@ -176,8 +236,9 @@ export class WorldEnvironmentSystem {
   }
 
   _onTimeChanged({ skyColor, sunDirection, moonDirection, moonIllumination, starVisibility }) {
-    this.engine.scene.background = new THREE.Color(skyColor);
-    if (this.engine.scene.fog) this.engine.scene.fog.color.set(skyColor);
+    this._baseSkyColor.set(skyColor);
+    this._applySkyColor();
+    if (this.engine.scene.fog) this.engine.scene.fog.color.copy(this.engine.scene.background);
 
     this._sunDirection.copy(sunDirection);
     this._moonDirection.copy(moonDirection);
@@ -190,11 +251,30 @@ export class WorldEnvironmentSystem {
     this.stars.material.opacity = starVisibility * 0.85;
   }
 
-  _onEnvironmentChanged({ fogDensity, cloudCoverage, windSpeed, windDirectionRad }) {
+  /** Blends the current weather's own sky tint (see WEATHER_SKY_TINT) into
+   *  the time-of-day base colour that would otherwise be the whole story —
+   *  "each weather condition should have its own distinct visual
+   *  identity", not just a fog-density number. Called from both
+   *  _onTimeChanged and _onEnvironmentChanged, since either the time of
+   *  day or the weather can change independently and both need to
+   *  recombine against whichever the other last was. */
+  _applySkyColor() {
+    const background = this.engine.scene.background instanceof THREE.Color ? this.engine.scene.background : new THREE.Color();
+    background.copy(this._baseSkyColor);
+    if (this._weatherTint) background.lerp(this._weatherTint.color, this._weatherTint.strength);
+    this.engine.scene.background = background;
+  }
+
+  _onEnvironmentChanged({ id, fogDensity, cloudCoverage, windSpeed, windDirectionRad, precipitation }) {
     this._weatherFogDensity = fogDensity ?? 0;
     this._cloudCoverage = cloudCoverage ?? 0.1;
     this._windSpeed = windSpeed ?? 0.1;
     this._windDirectionRad = windDirectionRad ?? 0;
+    this._precipitation = precipitation ?? 0;
+    const tintDef = WEATHER_SKY_TINT[id];
+    this._weatherTint = tintDef ? { color: new THREE.Color(tintDef.color), strength: tintDef.strength } : null;
+    this._applySkyColor();
+    if (this.engine.scene.fog) this.engine.scene.fog.color.copy(this.engine.scene.background);
     this._applyFog();
   }
 
@@ -240,6 +320,47 @@ export class WorldEnvironmentSystem {
       if (camPos) cloud.sprite.position.set(camPos.x + cloud.offsetX, cloud.height, camPos.z + cloud.offsetZ);
       const targetOpacity = this._cloudCoverage * 0.75 * cloud.opacityJitter;
       cloud.sprite.material.opacity += (targetOpacity - cloud.sprite.material.opacity) * Math.min(1, dt * 0.5);
+    }
+    // Rain falls continuously whenever precipitation is active — visible
+    // through any window or open door, correctly occluded by solid walls
+    // and the roof via ordinary depth testing, without this needing to
+    // know whether the camera happens to be indoors or outdoors right
+    // now. Offsets (x/z) are relative to the camera, like clouds; y is
+    // real world height, since rain falls toward the ground, not toward
+    // wherever the player's own head happens to be.
+    const targetRainOpacity = Math.min(1, this._precipitation * 1.15) * 0.55;
+    this.rain.material.opacity += (targetRainOpacity - this.rain.material.opacity) * Math.min(1, dt * 2);
+    if (camPos && this.rain.material.opacity > 0.01) {
+      const positions = this.rain.geometry.attributes.position.array;
+      const fallSpeedMultiplier = 1 + this._windSpeed * 0.5;
+      const driftX = Math.cos(this._windDirectionRad) * this._windSpeed * 0.7;
+      const driftZ = Math.sin(this._windDirectionRad) * this._windSpeed * 0.7;
+      for (let i = 0; i < this._rainDrops.length; i++) {
+        const drop = this._rainDrops[i];
+        drop.y -= drop.speed * fallSpeedMultiplier * dt;
+        drop.x += driftX * dt;
+        drop.z += driftZ * dt;
+        if (drop.y < RAIN_BOTTOM) {
+          drop.y = RAIN_TOP;
+          drop.x = (Math.random() - 0.5) * RAIN_HALF_RANGE * 2;
+          drop.z = (Math.random() - 0.5) * RAIN_HALF_RANGE * 2;
+        }
+        if (drop.x > RAIN_HALF_RANGE) drop.x -= RAIN_HALF_RANGE * 2;
+        else if (drop.x < -RAIN_HALF_RANGE) drop.x += RAIN_HALF_RANGE * 2;
+        if (drop.z > RAIN_HALF_RANGE) drop.z -= RAIN_HALF_RANGE * 2;
+        else if (drop.z < -RAIN_HALF_RANGE) drop.z += RAIN_HALF_RANGE * 2;
+
+        const worldX = camPos.x + drop.x;
+        const worldZ = camPos.z + drop.z;
+        const base = i * 6;
+        positions[base] = worldX;
+        positions[base + 1] = drop.y;
+        positions[base + 2] = worldZ;
+        positions[base + 3] = worldX;
+        positions[base + 4] = drop.y - RAIN_STREAK_LENGTH;
+        positions[base + 5] = worldZ;
+      }
+      this.rain.geometry.attributes.position.needsUpdate = true;
     }
   }
 }

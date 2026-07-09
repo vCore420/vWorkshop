@@ -102,15 +102,15 @@ export class LightingSystem {
   _buildLightSwitch() {
     const switchEntity = new Entity("lightSwitch").tag("structural");
     const plate = box(0.08, 0.12, 0.02, Materials.matte("#e7e2d6"));
-    // On the south wall now, to the left of the front doors as you walk in
-    // facing into the room (the doors sit at x=0, spanning ±1.3 — see
-    // WORKSHOP_DOOR in layoutDefault.js; west, negative x, is your left
-    // walking in facing north). This also happens to fix a mismatch that
-    // was already there: the plate is thin along its own Z axis, which
-    // matches a wall whose face runs along X (north/south walls) — it
-    // used to sit on the *west* wall instead, whose face runs along Z, so
-    // moving it here is also the geometrically correct wall for its shape.
-    plate.position.set(-1.8, 1.3, 2.8);
+    // On the south wall, on the far side of the front doors from where it
+    // used to sit — the doors sit at x=0, spanning ±1.3 (see
+    // WORKSHOP_DOOR in layoutDefault.js), and a doorway genuinely splits
+    // a wall into two separate segments either side of it, which is what
+    // "the opposite wall" means here rather than a literally different
+    // wall. z is nudged from 2.8 to 2.83 — closer to the wall's actual
+    // interior face (~2.85) without quite touching it, avoiding z-fighting
+    // while sitting visibly flush rather than with a noticeable gap.
+    plate.position.set(1.8, 1.3, 2.83);
     switchEntity.addComponent(new MeshComponent(plate, this.engine.scene));
     switchEntity.addComponent(
       new InteractableComponent({

@@ -11,6 +11,8 @@ const _scratchAhead = new THREE.Vector3();
 const _scratchReflectedAhead = new THREE.Vector3();
 const _scratchWorldPos = new THREE.Vector3();
 const _scratchWorldNormal = new THREE.Vector3();
+const _scratchToMirror = new THREE.Vector3();
+const _scratchCameraForward = new THREE.Vector3();
 
 /**
  * ReflectionSystem
@@ -91,6 +93,20 @@ export class ReflectionSystem {
       magFilter: THREE.LinearFilter,
       format: THREE.RGBAFormat,
     });
+    // Two real, well-documented Three.js colour-management gotchas, not
+    // guesswork — see docs/PLAYER.md's own note on this for the full
+    // explanation of why reflections rendered dark despite genuinely
+    // rendering something:
+    //   1. A render target's texture needs its own `colorSpace` set
+    //      explicitly to match how it'll actually be sampled — left at
+    //      its default, sampling it as a `map` applies an extra,
+    //      unwanted darkening decode on data that's already correctly
+    //      encoded.
+    //   2. The offscreen render already has this renderer's own tone
+    //      mapping baked into its pixels; displaying that texture through
+    //      a normally tone-mapped material applies tone mapping a second
+    //      time, compressing (and further darkening) the result again.
+    renderTarget.texture.colorSpace = THREE.SRGBColorSpace;
     const camera = new THREE.PerspectiveCamera(55, resolution / (resolution * aspect), CAMERA_NEAR, CAMERA_FAR);
 
     // Cloned, never mutated in place — the same reasoning Build Mode's own
@@ -102,6 +118,7 @@ export class ReflectionSystem {
     const material = (Array.isArray(originalMaterial) ? originalMaterial[0] : originalMaterial).clone();
     material.map = renderTarget.texture;
     material.color.set("#ffffff"); // let the render show through at full, undamped colour
+    material.toneMapped = false; // see gotcha 2 above — this material's colour is already a fully rendered, already-tone-mapped image, not a raw albedo needing it applied
     mesh.material = material;
 
     const surface = {
@@ -138,7 +155,26 @@ export class ReflectionSystem {
       surface.timer = surface.updateInterval;
 
       surface.mesh.getWorldPosition(_scratchWorldPos);
-      if (_scratchWorldPos.distanceToSquared(mainCamera.position) > MAX_ACTIVE_DISTANCE * MAX_ACTIVE_DISTANCE) continue;
+      const distSq = _scratchWorldPos.distanceToSquared(mainCamera.position);
+      if (distSq > MAX_ACTIVE_DISTANCE * MAX_ACTIVE_DISTANCE) continue;
+
+      // Skip the expensive render entirely if the mirror isn't even
+      // roughly in view — merely being *near* a mirror used to pay the
+      // full cost of rendering the whole scene a second time, every other
+      // frame, regardless of whether the player was actually looking
+      // anywhere near it. A plain dot product against the camera's own
+      // forward direction (deliberately simpler than a full 6-plane
+      // frustum test — easier to reason about, and this only needs to be
+      // roughly right, not exact) is enough: skip anything behind the
+      // camera or well outside its field of view.
+      if (distSq > 0.09) {
+        // (skip the direction check when standing almost exactly at the
+        // mirror's own position — subtracting two nearly-identical points
+        // would normalize a near-zero vector)
+        _scratchToMirror.subVectors(_scratchWorldPos, mainCamera.position).normalize();
+        _scratchCameraForward.set(0, 0, -1).applyQuaternion(mainCamera.quaternion);
+        if (_scratchToMirror.dot(_scratchCameraForward) < 0.3) continue;
+      }
 
       surface.mesh.updateWorldMatrix(true, false);
       _scratchWorldNormal.set(0, 0, 1).transformDirection(surface.mesh.matrixWorld);
