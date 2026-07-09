@@ -10,7 +10,7 @@ import { EventBus } from "../core/EventBus.js";
  * AudioSystem, MusicSystem) listens for this store's `settings:changed`
  * event and applies its own relevant slice independently — the same
  * decoupled, event-driven shape as `timeofday:changed` or
- * `weather:changed` already use elsewhere in the workshop, not a new
+ * `environment:changed` already use elsewhere in the workshop, not a new
  * pattern invented for this.
  *
  * See docs/PERFORMANCE.md for what each graphics/performance field

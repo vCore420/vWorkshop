@@ -2,7 +2,7 @@
  * EventBus
  * --------
  * The nervous system of the workshop. Systems never call each other directly —
- * they publish events ("time:changed", "interact:start", "weather:changed")
+ * they publish events ("time:changed", "interact:start", "environment:changed")
  * and anything that cares can subscribe. This is what lets us add a brand new
  * system later (say, a seasonal-decorations system) without touching the code
  * of any system that already exists: it just subscribes to the events it needs.

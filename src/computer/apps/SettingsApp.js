@@ -13,7 +13,9 @@
  * whole app now live in the "General" tab — preserved exactly as they
  * were, not removed, just no longer the only thing here.
  */
-export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySystem, weatherSystem, musicSystem, dangerZoneActions }) {
+import { WEATHER_STATES } from "../../systems/EnvironmentSystem.js";
+
+export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySystem, environmentSystem, musicSystem, dangerZoneActions }) {
   const engine = musicSystem.engine; // same trick MediaApp.js uses — avoids a dedicated engine dependency just for this
 
   const TABS = [
@@ -87,7 +89,9 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
 
         const weatherRow = document.createElement("p");
         weatherRow.className = "app-subtitle";
-        weatherRow.textContent = `Current weather: ${weatherSystem.current} \u2014 change it by looking out a window.`;
+        const envState = WEATHER_STATES[environmentSystem.current]?.label ?? environmentSystem.current;
+        const modeLabel = { manual: "Manual", live: "Live Weather", dynamic: "Workshop Dynamic" }[environmentSystem.mode] ?? environmentSystem.mode;
+        weatherRow.textContent = `Current environment: ${envState} (${modeLabel}) \u2014 look out a window to view or change it.`;
         el.appendChild(weatherRow);
         return null;
       }

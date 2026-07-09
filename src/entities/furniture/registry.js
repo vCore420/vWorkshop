@@ -6,6 +6,7 @@ import { PinboardDefinition } from "./Pinboard.js";
 import { SittingAreaDefinition } from "./SittingArea.js";
 import { MusicCabinetDefinition } from "./MusicCabinet.js";
 import { NotebookDefinition } from "./Notebook.js";
+import { WardrobeDefinition } from "./Wardrobe.js";
 
 /**
  * FURNITURE_REGISTRY
@@ -41,6 +42,7 @@ export const FURNITURE_REGISTRY = [
   SittingAreaDefinition,
   MusicCabinetDefinition,
   NotebookDefinition,
+  WardrobeDefinition,
 ];
 
 export function registerFurniture(definition) {

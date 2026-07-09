@@ -50,6 +50,7 @@ export const FURNITURE_LAYOUT = {
   sittingArea: { position: [2.3, 0, 0.9], rotationY: Math.PI * 0.4 }, // rotated 180° from its original -0.6π so it faces the bookshelf/music corner instead of away from them
   musicCabinet: { position: [3.5, 0, 2.15], rotationY: -Math.PI / 2 },
   notebook: { position: [-2.95, 0, -0.15], rotationY: 0.3 },
+  wardrobe: { position: [-2.3, 0, 2.3], rotationY: Math.PI }, // south-west corner, facing into the room — clear of toolStorage, the front doors, and the light switch
 };
 
 // Note: the z component of each window/door position below is now purely

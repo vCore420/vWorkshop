@@ -92,7 +92,7 @@ function buildWallWithOpenings({ length, height, thickness, openings, exteriorFa
  * from the outside, plus a simple roof) and a list of wall collision
  * boxes.
  *
- * Returns everything RoomLayoutSystem/CameraSystem/WeatherSystem need:
+ * Returns everything RoomLayoutSystem/CameraSystem/EnvironmentSystem need:
  *   - windowPanes: real glass (Materials.glass), not an opaque tint — the
  *     actual sky/exterior is what you see through them.
  *   - doorFrame: the (fixed, never-moving) door casing — used as the
