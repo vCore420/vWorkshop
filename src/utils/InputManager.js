@@ -44,10 +44,14 @@ const KEY_TO_ACTION = {
   KeyS: "backward", ArrowDown: "backward",
   KeyA: "left", ArrowLeft: "left",
   KeyD: "right", ArrowRight: "right",
-  KeyE: "interact", Space: "interact",
+  KeyE: "interact",
+  Space: "jump",
+  ShiftLeft: "run", ShiftRight: "run",
+  KeyC: "crouch",
   Escape: "cancel",
   KeyB: "buildMode",
   KeyV: "toggleView",
+  KeyG: "emoteWheel",
 };
 
 // Reverse of KEY_TO_ACTION, built once: action -> every code that means it.

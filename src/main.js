@@ -10,6 +10,8 @@ import { TimeOfDaySystem } from "./systems/TimeOfDaySystem.js";
 import { EnvironmentSystem } from "./systems/EnvironmentSystem.js";
 import { AudioSystem } from "./systems/AudioSystem.js";
 import { CameraSystem } from "./systems/CameraSystem.js";
+import { LadderSystem } from "./systems/LadderSystem.js";
+import { EmoteWheelSystem } from "./systems/EmoteWheelSystem.js";
 import { InteractionSystem } from "./systems/InteractionSystem.js";
 import { PersistenceSystem } from "./systems/PersistenceSystem.js";
 import { ComputerSystem } from "./computer/ComputerSystem.js";
@@ -31,6 +33,8 @@ import { PlayerAppearanceStore } from "./player/PlayerAppearanceStore.js";
 import { OutfitStore } from "./player/OutfitStore.js";
 import { TextureStore } from "./player/TextureStore.js";
 import { PlayerCharacterSystem } from "./player/PlayerCharacterSystem.js";
+import { PlayerAnimationSystem } from "./player/PlayerAnimationSystem.js";
+import { AnimationLibraryStore } from "./player/AnimationLibraryStore.js";
 
 import { ProjectsStore } from "./data/ProjectsStore.js";
 import { NotesStore } from "./data/NotesStore.js";
@@ -122,7 +126,22 @@ void settingsSystem;
 // engine.scene/engine.events at init() time. Its finalizeInitialState()
 // (below, after engine.init()) does the first rig build, once the
 // appearance store has actually loaded. See src/player/PlayerCharacterSystem.js.
-const playerCharacterSystem = engine.addSystem(new PlayerCharacterSystem({ appearanceStore, textureStore }));
+// Constructed as its own variable (not inline in addSystem()) so
+// PlayerAnimationSystem below can be handed the reference directly —
+// see that constructor's own comment on why, rather than each resolving
+// the other via engine.getSystem(), which would create a genuine
+// three-way circular import between this file, PlayerAnimationSystem.js,
+// and CameraSystem.js.
+const playerCharacterSystem = new PlayerCharacterSystem({ appearanceStore, textureStore });
+engine.addSystem(playerCharacterSystem);
+
+const animationLibraryStore = new AnimationLibraryStore();
+const playerAnimationSystem = new PlayerAnimationSystem({ characterSystem: playerCharacterSystem, libraryStore: animationLibraryStore });
+engine.addSystem(playerAnimationSystem);
+const ladderSystem = engine.addSystem(new LadderSystem());
+void ladderSystem;
+const emoteWheelSystem = engine.addSystem(new EmoteWheelSystem({ animationLibraryStore }));
+void emoteWheelSystem;
 
 // The Settings app's Danger Zone needs to reach across several stores
 // that don't otherwise know about each other (this is deliberately a
@@ -138,7 +157,15 @@ const dangerZoneActions = {
   resetSettings: () => settingsStore.resetToDefaults(),
   async resetPlayerData() {
     const textureIds = new Set();
-    for (const part of Object.values(appearanceStore.appearance.parts)) if (part.textureId) textureIds.add(part.textureId);
+    // Every body model's own appearance, not just the currently active
+    // one — each is independently customisable (see
+    // PlayerAppearanceStore.js), and resetToDefaults() below clears all
+    // of them, so any texture referenced by whichever model *isn't*
+    // active right now still needs collecting here or it's orphaned in
+    // TextureStore rather than actually cleaned up.
+    for (const appearance of Object.values(appearanceStore.appearanceByModel)) {
+      for (const part of Object.values(appearance.parts)) if (part.textureId) textureIds.add(part.textureId);
+    }
     for (const outfit of outfitStore.all()) for (const part of Object.values(outfit.appearance.parts)) if (part.textureId) textureIds.add(part.textureId);
     appearanceStore.resetToDefaults();
     outfitStore.resetToDefaults();
@@ -167,6 +194,7 @@ const computerSystem = engine.addSystem(
     appearanceStore,
     outfitStore,
     textureStore,
+    animationLibraryStore,
     dangerZoneActions,
   })
 );
@@ -199,6 +227,7 @@ persistenceSystem.registerProvider("playlists", playlistStore);
 persistenceSystem.registerProvider("settings", settingsStore);
 persistenceSystem.registerProvider("playerAppearance", appearanceStore);
 persistenceSystem.registerProvider("outfits", outfitStore);
+persistenceSystem.registerProvider("animationLibrary", animationLibraryStore);
 persistenceSystem.registerProvider("plugins", engine.plugins);
 
 // --- Overlays: one registration per physical object that opens a panel ---
