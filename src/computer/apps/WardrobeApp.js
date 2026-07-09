@@ -1,6 +1,7 @@
 import { PreviewRenderer } from "./builder/PreviewRenderer.js";
 import { buildCharacter, disposeCharacter, PART_IDS } from "../../player/PlayerCharacter.js";
 import { resolveTextureImages } from "../../player/PlayerCharacterSystem.js";
+import { getBodyModelList } from "../../player/BodyModels.js";
 
 const PART_LABELS = {
   head: "Head",
@@ -67,7 +68,7 @@ export function createWardrobeApp({ appearanceStore, outfitStore, textureStore }
         }
         previewRebuildInFlight = true;
         const textureImages = await resolveTextureImages(appearanceStore.appearance, textureStore);
-        const built = buildCharacter(appearanceStore.appearance, textureImages);
+        const built = buildCharacter(appearanceStore.appearance, appearanceStore.bodyModelId, textureImages);
         if (disposed) {
           // The tab was switched away from while textures were still
           // resolving — nothing left to show this to; dispose it
@@ -88,11 +89,43 @@ export function createWardrobeApp({ appearanceStore, outfitStore, textureStore }
 
       function render() {
         form.innerHTML = "";
+        form.appendChild(buildBodyModelSection());
         form.appendChild(buildPartTabs());
         form.appendChild(buildProportionsSection());
         form.appendChild(buildAppearanceSection());
         if (paintOpen) form.appendChild(buildPaintSection());
         form.appendChild(buildOutfitsSection());
+      }
+
+      /** "Expand the existing player identity system to support multiple
+       *  procedural base body models... switching between body models
+       *  should simply restore that model's saved appearance rather than
+       *  losing previous work." Each button just calls
+       *  `appearanceStore.setBodyModel()`; everything else (the preview
+       *  rebuilding, this form refreshing to show that model's own
+       *  independently-maintained proportions/colours) already happens
+       *  automatically through the same `appearance:changed` listener
+       *  every other edit in this app already goes through — switching
+       *  models needed no special-casing here at all. */
+      function buildBodyModelSection() {
+        const section = document.createElement("div");
+        section.className = "builder-section";
+        const heading = document.createElement("h2");
+        heading.textContent = "Body";
+        section.appendChild(heading);
+
+        const tabs = document.createElement("div");
+        tabs.className = "wardrobe-part-tabs";
+        for (const model of getBodyModelList()) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.textContent = model.label;
+          btn.className = model.id === appearanceStore.bodyModelId ? "active" : "";
+          btn.addEventListener("click", () => appearanceStore.setBodyModel(model.id));
+          tabs.appendChild(btn);
+        }
+        section.appendChild(tabs);
+        return section;
       }
 
       function buildPartTabs() {
@@ -377,7 +410,7 @@ export function createWardrobeApp({ appearanceStore, outfitStore, textureStore }
         saveNewBtn.addEventListener("click", () => {
           const name = window.prompt("Name this outfit:", "New Outfit");
           if (name === null) return;
-          const outfit = outfitStore.create(name, appearanceStore.snapshot());
+          const outfit = outfitStore.create(name, appearanceStore.snapshot(), appearanceStore.bodyModelId);
           appearanceStore.currentOutfitId = outfit.id;
           render();
         });
@@ -389,7 +422,7 @@ export function createWardrobeApp({ appearanceStore, outfitStore, textureStore }
           updateBtn.type = "button";
           updateBtn.className = "builder-small-button";
           updateBtn.textContent = `Update "${current.name}"`;
-          updateBtn.addEventListener("click", () => outfitStore.updateAppearance(current.id, appearanceStore.snapshot()));
+          updateBtn.addEventListener("click", () => outfitStore.updateAppearance(current.id, appearanceStore.snapshot(), appearanceStore.bodyModelId));
           actions.appendChild(updateBtn);
         }
         section.appendChild(actions);
@@ -428,6 +461,7 @@ export function createWardrobeApp({ appearanceStore, outfitStore, textureStore }
         loadBtn.className = "builder-icon-button";
         loadBtn.textContent = "Wear";
         loadBtn.addEventListener("click", () => {
+          if (outfit.bodyModelId && outfit.bodyModelId !== appearanceStore.bodyModelId) appearanceStore.setBodyModel(outfit.bodyModelId);
           appearanceStore.setAppearance(outfit.appearance, outfit.id);
           render();
         });
