@@ -308,9 +308,22 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
     }
 
     // A simple lever handle near the meeting edge (opposite the hinge).
+    // The handle's position is relative to `mesh`, which is itself
+    // already offset from `pivot` toward the doorway's centre (see
+    // `mesh.position.set()` above) — so the *mesh's own* local edge
+    // nearest the hinge is the one closest to zero in mesh-local space,
+    // and the one furthest from the hinge (the meeting edge) is the one
+    // signed the *same* as that same offset, not the opposite of
+    // `hingeSide` the way the mesh's own offset is. Using `hingeSide`
+    // directly (without negating it, unlike the mesh's own offset above)
+    // is what actually lands the handle near the meeting edge.
+    // Z is negative — "door handles should appear on the correct inner
+    // sides of the French doors." This wall's own `exteriorFacesPositiveZ:
+    // true` (above) means the interior is -Z, not +Z; a positive Z here
+    // was putting the handle on the outward-facing side instead.
     const handle = cylinder(0.012, 0.012, 0.14, Materials.brass(), 10);
     handle.rotation.z = Math.PI / 2;
-    handle.position.set(hingeSide * (panelWidth / 2 - 0.12), 0, 0.05);
+    handle.position.set(-hingeSide * (panelWidth / 2 - 0.12), 0, -0.05);
     mesh.add(handle);
 
     return pivot;
@@ -366,12 +379,23 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
     ceilingLightSockets.push(new THREE.Vector3(x, height - 0.6, z));
   }
 
+  // "Collision geometry should accurately match the visible doors" — one
+  // box spanning the full doorway opening (the wall's own gap left for
+  // it), at the wall's actual thickness — see RoomLayoutSystem.js's own
+  // getDoorCollider() for when this is actually used (only while the
+  // door is substantially closed).
+  const doorColliderBox = new THREE.Box3(
+    new THREE.Vector3(doorDef.position[0] - doorDef.width / 2, 0, southInteriorZ),
+    new THREE.Vector3(doorDef.position[0] + doorDef.width / 2, doorDef.height, southOuterZ)
+  );
+
   return {
     group: root,
     windowPanes,
     doorFrame, // used as the interaction anchor — it's already positioned at the doorway itself, and never moves
     doorPanels: { left: doorPanelLeft, right: doorPanelRight },
     doorOpenAngle,
+    doorColliderBox,
     ceilingLightSockets,
     bounds: { width, depth, height },
     floorMesh: floor,

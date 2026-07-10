@@ -9,11 +9,14 @@
  * has no idea what a setting actually *does*. See docs/PERFORMANCE.md for
  * what each one does and why the ranges are what they are.
  *
- * The room lighting / clock-mode / weather controls that used to be this
- * whole app now live in the "General" tab — preserved exactly as they
- * were, not removed, just no longer the only thing here.
+ * The room lighting / clock-mode / weather controls that used to live in
+ * "General" now live in "Atmosphere" instead — "the central place for
+ * understanding and controlling the Workshop's environmental
+ * simulation" — alongside a full, live read-out of the same environment
+ * the 3D scene itself renders (see renderAtmosphere()'s own comment).
  */
 import { WEATHER_STATES } from "../../systems/EnvironmentSystem.js";
+import { getObserverLocation, solarPosition, moonPhaseFraction, moonIllumination, sunriseSunset, moonriseMoonset, dayOfYear } from "../../utils/Astronomy.js";
 
 function formatClockTime(hour) {
   const h = Math.floor(hour) % 24;
@@ -21,16 +24,71 @@ function formatClockTime(hour) {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySystem, environmentSystem, musicSystem, dangerZoneActions }) {
+const COMPASS_LABELS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+/** A wind/sun direction in radians (0 = north, clockwise) to a plain
+ *  compass label — the same eight-point compass CompassSystem.js already
+ *  shows in the 3D world, just as text here. */
+function compassLabel(radians) {
+  const normalized = ((radians % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+  const index = Math.round(normalized / (Math.PI / 4)) % 8;
+  return COMPASS_LABELS[index];
+}
+
+const MOON_PHASE_NAMES = [
+  [0.02, "New Moon"],
+  [0.24, "Waxing Crescent"],
+  [0.26, "First Quarter"],
+  [0.49, "Waxing Gibbous"],
+  [0.51, "Full Moon"],
+  [0.74, "Waning Gibbous"],
+  [0.76, "Last Quarter"],
+  [0.98, "Waning Crescent"],
+  [1.01, "New Moon"],
+];
+/** A 0-1 phase fraction (see Astronomy.js's own moonPhaseFraction()) to
+ *  the plain name for whichever of the eight traditional phases it falls
+ *  nearest to. */
+function moonPhaseName(fraction) {
+  for (const [threshold, name] of MOON_PHASE_NAMES) {
+    if (fraction <= threshold) return name;
+  }
+  return "New Moon";
+}
+
+function sectionHeading(text) {
+  const h = document.createElement("h3");
+  h.textContent = text;
+  h.style.marginTop = "18px";
+  return h;
+}
+
+/** A plain, read-only label/value row — Atmosphere's and Diagnostics'
+ *  own equivalent of `buildCheckboxRow`/`buildSelectRow` for values
+ *  there's nothing to edit, just something to show clearly. */
+function infoRow(labelText, valueText) {
+  const row = document.createElement("div");
+  row.className = "panel-row";
+  const label = document.createElement("label");
+  label.textContent = labelText;
+  const value = document.createElement("span");
+  value.className = "settings-info-value";
+  value.textContent = valueText;
+  row.append(label, value);
+  return row;
+}
+
+export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySystem, environmentSystem, musicSystem, dangerZoneActions, aiConnectionManager, residentProfileStore, residentBehaviour, cameraSystem, interiorSystem, hostManager }) {
   const engine = musicSystem.engine; // same trick MediaApp.js uses — avoids a dedicated engine dependency just for this
 
   const TABS = [
     { id: "general", label: "General" },
+    { id: "atmosphere", label: "Atmosphere" },
     { id: "graphics", label: "Graphics" },
     { id: "performance", label: "Performance" },
     { id: "display", label: "Display" },
     { id: "controls", label: "Controls" },
     { id: "audio", label: "Audio" },
+    { id: "diagnostics", label: "Diagnostics" },
     { id: "danger", label: "Danger Zone" },
   ];
 
@@ -69,35 +127,80 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         disposeCurrentTab?.();
         disposeCurrentTab = null;
         body.innerHTML = "";
-        const render = { general: renderGeneral, graphics: renderGraphics, performance: renderPerformance, display: renderDisplay, controls: renderControls, audio: renderAudio, danger: renderDangerZone }[id];
+        const render = { general: renderGeneral, atmosphere: renderAtmosphere, graphics: renderGraphics, performance: renderPerformance, display: renderDisplay, controls: renderControls, audio: renderAudio, diagnostics: renderDiagnostics, danger: renderDangerZone }[id];
         disposeCurrentTab = render(body);
       }
 
       function renderGeneral(el) {
         const lightRow = buildCheckboxRow("Workshop lights on", lightingSystem.lightsOn, (checked) => lightingSystem.setLightsOn(checked));
         el.appendChild(lightRow);
+        const hint = document.createElement("p");
+        hint.className = "app-subtitle";
+        hint.textContent = "Weather, time, and everything else about the Workshop's own environment now lives in the Atmosphere tab.";
+        el.appendChild(hint);
+        return null;
+      }
 
-        const timeRow = document.createElement("div");
-        timeRow.className = "panel-row";
-        const timeLabel = document.createElement("label");
-        timeLabel.textContent = "Clock";
-        const timeSelect = document.createElement("select");
-        for (const [value, label] of [["realtime", "Follow real time"], ["simulated", "Simulated cycle"]]) {
-          const opt = document.createElement("option");
-          opt.value = value;
-          opt.textContent = label;
-          if (timeOfDaySystem.mode === value) opt.selected = true;
-          timeSelect.appendChild(opt);
+      /** "This should become the central place for understanding and
+       *  controlling the Workshop's environmental simulation." Everything
+       *  here reads live off the same systems the 3D scene itself already
+       *  reads from (TimeOfDaySystem, EnvironmentSystem, Astronomy.js) —
+       *  nothing is a separate snapshot or copy, so this tab can never
+       *  drift out of sync with what the sky actually looks like right
+       *  now. The time-mode/set-time controls used to live in General;
+       *  they moved here rather than being duplicated, since this is now
+       *  unambiguously "the" place for the Workshop's own environment. */
+      function renderAtmosphere(el) {
+        const now = new Date();
+        const location = getObserverLocation();
+        const doy = dayOfYear(now);
+        const sun = solarPosition(timeOfDaySystem.currentTime, location.latitude, doy);
+        const sunTimes = sunriseSunset(location.latitude, doy);
+        const phaseFrac = moonPhaseFraction(now);
+        const illum = moonIllumination(phaseFrac);
+        const moonTimes = moonriseMoonset(location.latitude, doy, phaseFrac);
+        const starsVisible = sun.altitude < -2; // roughly matches TimeOfDaySystem's own soft star-visibility threshold
+
+        el.appendChild(sectionHeading("Weather"));
+        el.appendChild(
+          buildSelectRow(
+            "Mode",
+            environmentSystem.mode,
+            [["manual", "Manual"], ["live", "Live Weather"], ["dynamic", "Workshop Dynamic"]],
+            (value) => environmentSystem.setMode(value)
+          )
+        );
+        el.appendChild(
+          buildSelectRow(
+            "Current weather",
+            environmentSystem.current,
+            Object.entries(WEATHER_STATES).map(([id, def]) => [id, def.label]),
+            (value) => environmentSystem.setWeather(value)
+          )
+        );
+        if (environmentSystem.mode === "live" && environmentSystem.liveError) {
+          const err = document.createElement("p");
+          err.className = "app-subtitle";
+          err.textContent = `Live weather unavailable right now: ${environmentSystem.liveError}`;
+          el.appendChild(err);
         }
-        timeSelect.addEventListener("change", () => timeOfDaySystem.setMode(timeSelect.value));
-        timeRow.append(timeLabel, timeSelect);
-        el.appendChild(timeRow);
+        el.appendChild(infoRow("Wind", `${Math.round(environmentSystem.windSpeed * 60)} km/h, from ${compassLabel(environmentSystem.windDirectionRad)}`));
+        el.appendChild(infoRow("Temperature", environmentSystem.temperatureC !== null ? `${Math.round(environmentSystem.temperatureC)}\u00b0C` : "Not available \u2014 switch to Live Weather"));
 
-        // "The player should be able to adjust the Workshop time directly
-        // from the computer settings... the transition should feel calm
-        // and believable" — setTime() itself owns the actual easing (see
-        // TimeOfDaySystem.js); this control is just the one slider that
-        // requests it.
+        el.appendChild(sectionHeading("Location"));
+        el.appendChild(infoRow("Current location", `${location.latitude.toFixed(2)}\u00b0, ${location.longitude.toFixed(2)}\u00b0 ${location.isReal ? "" : "(default \u2014 location not shared)"}`));
+
+        el.appendChild(sectionHeading("Date & Time"));
+        el.appendChild(infoRow("Current date", now.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })));
+        el.appendChild(infoRow("Current time", formatClockTime(timeOfDaySystem.currentTime)));
+        el.appendChild(
+          buildSelectRow(
+            "Clock",
+            timeOfDaySystem.mode,
+            [["realtime", "Follow real time"], ["simulated", "Simulated cycle"]],
+            (value) => timeOfDaySystem.setMode(value)
+          )
+        );
         const setTimeRow = document.createElement("div");
         setTimeRow.className = "panel-row";
         const setTimeLabel = document.createElement("label");
@@ -114,6 +217,10 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         setTimeInput.addEventListener("input", () => {
           setTimeValue.textContent = formatClockTime(parseFloat(setTimeInput.value));
         });
+        // Deliberately "change" (on release), not "input" (continuous,
+        // while dragging) — setTime() starts a fresh easing transition on
+        // every call (see TimeOfDaySystem.js), which would restart
+        // jarringly on every pixel of drag if it fired that often.
         setTimeInput.addEventListener("change", () => {
           timeOfDaySystem.setTime(parseFloat(setTimeInput.value));
         });
@@ -124,12 +231,18 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         setTimeHint.textContent = "Eases there gradually rather than jumping — the sun and moon actually move to their new positions.";
         el.appendChild(setTimeHint);
 
-        const weatherRow = document.createElement("p");
-        weatherRow.className = "app-subtitle";
-        const envState = WEATHER_STATES[environmentSystem.current]?.label ?? environmentSystem.current;
-        const modeLabel = { manual: "Manual", live: "Live Weather", dynamic: "Workshop Dynamic" }[environmentSystem.mode] ?? environmentSystem.mode;
-        weatherRow.textContent = `Current environment: ${envState} (${modeLabel}) \u2014 look out a window to view or change it.`;
-        el.appendChild(weatherRow);
+        el.appendChild(sectionHeading("Sun"));
+        el.appendChild(infoRow("Sunrise", sunTimes.rise !== null ? formatClockTime(sunTimes.rise) : "Doesn't rise today"));
+        el.appendChild(infoRow("Sunset", sunTimes.set !== null ? formatClockTime(sunTimes.set) : "Doesn't set today"));
+
+        el.appendChild(sectionHeading("Moon"));
+        el.appendChild(infoRow("Phase", `${moonPhaseName(phaseFrac)} \u2014 ${Math.round(illum * 100)}% illuminated`));
+        el.appendChild(infoRow("Moonrise", moonTimes.rise !== null ? formatClockTime(moonTimes.rise) : "Doesn't rise today"));
+        el.appendChild(infoRow("Moonset", moonTimes.set !== null ? formatClockTime(moonTimes.set) : "Doesn't set today"));
+
+        el.appendChild(sectionHeading("Stars"));
+        el.appendChild(infoRow("Visibility", starsVisible ? "Visible \u2014 the sky is dark enough" : "Not visible \u2014 too much daylight"));
+
         return null;
       }
 
@@ -254,6 +367,54 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         note.textContent = "Music Volume sits on top of the player's own volume slider, the same way a device's system volume sits on top of an app's — turning either down turns the music down.";
         el.appendChild(note);
         return null;
+      }
+
+      /** "Not intended to be a developer console... a lightweight status
+       *  page for understanding the Workshop's current state." Every row
+       *  reads straight from whichever system already owns that fact —
+       *  FPS from Engine's own performance sampling, weather from
+       *  EnvironmentSystem, resident status from ResidentBehaviour/
+       *  ResidentConnection — nothing here is a second copy of anything,
+       *  the same "app renders a store, doesn't duplicate it" shape every
+       *  other Workshop app already follows. */
+      function renderDiagnostics(el) {
+        const perf = document.createElement("div");
+        el.appendChild(sectionHeading("Performance"));
+        el.appendChild(perf);
+
+        el.appendChild(sectionHeading("Environment"));
+        const envState = WEATHER_STATES[environmentSystem.current]?.label ?? environmentSystem.current;
+        el.appendChild(infoRow("Current weather", envState));
+        el.appendChild(infoRow("Time & date", `${formatClockTime(timeOfDaySystem.currentTime)} \u00b7 ${new Date().toLocaleDateString()}`));
+        el.appendChild(infoRow("Shadow quality", capitalize(lightingSystem.getShadowQuality())));
+
+        el.appendChild(sectionHeading("Player"));
+        const pos = cameraSystem?.position;
+        el.appendChild(infoRow("Player position", pos ? `${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}` : "Unavailable"));
+        el.appendChild(infoRow("Current interior", interiorSystem?.isInside(pos) ? "Indoors" : "Outdoors"));
+
+        el.appendChild(sectionHeading("Resident"));
+        const activeProfile = residentProfileStore?.getActive();
+        el.appendChild(infoRow("Resident status", residentBehaviour ? (aiConnectionManager?.status === "connected" ? "Awake" : "Sleeping \u2014 waiting for Ollama") : "Unavailable"));
+        el.appendChild(infoRow("Active profile", activeProfile?.name ?? "None"));
+
+        el.appendChild(sectionHeading("Connections"));
+        const hostStatus = hostManager?.getOverviewStatus();
+        el.appendChild(infoRow("Workshop Platform status", hostStatus ? `Running \u00b7 v${hostStatus.version} \u00b7 ${hostStatus.availableCapabilities.length} capabilities available` : "Unavailable"));
+        el.appendChild(infoRow("Ollama connection", { connected: "Connected", connecting: "Connecting\u2026", disconnected: "Waiting for Ollama\u2026" }[aiConnectionManager?.status] ?? "Unavailable"));
+
+        const renderPerf = ({ fps, frameTimeMs } = {}) => {
+          perf.innerHTML = "";
+          perf.appendChild(infoRow("FPS", fps ? String(Math.round(fps)) : "measuring\u2026"));
+          perf.appendChild(infoRow("Frame time", frameTimeMs ? `${frameTimeMs.toFixed(1)} ms` : "measuring\u2026"));
+        };
+        renderPerf();
+        const offSample = engine.events.on("engine:performanceSample", renderPerf);
+        return () => offSample();
+      }
+
+      function capitalize(text) {
+        return typeof text === "string" && text.length ? text.charAt(0).toUpperCase() + text.slice(1) : text;
       }
 
       function renderDangerZone(el) {

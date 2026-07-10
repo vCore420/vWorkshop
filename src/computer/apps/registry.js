@@ -7,6 +7,9 @@ import { createSettingsApp } from "./SettingsApp.js";
 import { createBuilderApp } from "./builder/BuilderApp.js";
 import { createWardrobeApp } from "./WardrobeApp.js";
 import { createAnimationEditorApp } from "./AnimationEditorApp.js";
+import { createBeingCreatorApp } from "./beings/BeingCreatorApp.js";
+import { createBeingSpawnerApp } from "./beings/BeingSpawnerApp.js";
+import { createBeingManagerApp } from "./beings/BeingManagerApp.js";
 
 /**
  * apps/registry.js
@@ -26,6 +29,9 @@ const factories = [
   createBuilderApp,
   createWardrobeApp,
   createAnimationEditorApp,
+  createBeingCreatorApp,
+  createBeingSpawnerApp,
+  createBeingManagerApp,
   createSettingsApp,
 ];
 

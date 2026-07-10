@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { FurnitureSystem } from "../systems/FurnitureSystem.js";
+import { LightingSystem } from "../systems/LightingSystem.js";
 import { damp, clamp, lerp } from "../utils/MathUtils.js";
 import { makeRectCorners, projectRect } from "../utils/ScreenProjector.js";
 import { WorkstationPanel } from "./WorkstationPanel.js";
@@ -9,7 +10,7 @@ const TRANSITION_SMOOTHING = 7; // higher = faster; ~0.5-0.6s to visually settle
 const STANDBY_EMISSIVE = 0.05;
 const FULL_EMISSIVE = 1.5;
 const SCREEN_LIGHT_MAX = 0.85;
-const DESK_LAMP_INTENSITY = 0.55; // constant — see ComputerDesk.js's comment on why this stays on
+const DESK_LAMP_INTENSITY = 0.55; // constant — see LightingSystem.registerPracticalLight(), which now controls whether this is actually applied
 const PANEL_REVEAL_START = 0.35; // panel stays invisible below this progress...
 const PANEL_REVEAL_END = 1.0; // ...and is fully shown by this progress
 
@@ -65,6 +66,12 @@ export class ComputerSystem {
       this.deskLampLight = new THREE.PointLight("#ffcf8c", DESK_LAMP_INTENSITY, 2.6, 2);
       this.deskLampLight.position.copy(lampSocket);
       this.deskObject.add(this.deskLampLight);
+      // "Connect the desk lamp to the Workshop lighting system. The lamp
+      // should turn on and off alongside the Workshop light switch" — the
+      // same registration the workbench's own lamp already goes through,
+      // just built here instead since ComputerSystem already knows
+      // exactly where this light needs to sit.
+      engine.getSystem(LightingSystem)?.registerPracticalLight(this.deskLampLight);
     }
 
     const apps = buildApps(this.deps);

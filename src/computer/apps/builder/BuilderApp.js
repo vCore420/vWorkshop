@@ -402,7 +402,59 @@ function behaviourPropField(field, properties, parts, imageLibraryStore, imageAs
   if (field.type === "imageRef") return imageRefField(field, properties, imageLibraryStore, imageAssetStore, onChange);
   if (field.type === "color") return colorField(field.label, properties[field.key], (v) => { properties[field.key] = v; });
   if (field.type === "number") return numberField(field.label, properties[field.key], 0.1, (v) => { properties[field.key] = v; });
+  // "Determine whether a predefined library of prompts already exists...
+  // expose the available interaction prompts... rather than needing to
+  // know hidden identifiers." There wasn't one — every prompt field
+  // (SeatBehaviour, StorageBehaviour, TriggerBehaviour,
+  // InteractableBehaviour) was plain free text with no guidance at all,
+  // not a hidden-identifier problem exactly, but not "easily understand
+  // and choose from" either. `field.key === "prompt"` is a reliable
+  // signal — every one of those behaviours names it exactly that.
+  if (field.key === "prompt") return promptField(field.label, properties[field.key], (v) => { properties[field.key] = v; });
   return textField(field.label, properties[field.key], (v) => { properties[field.key] = v; });
+}
+
+// The Workshop's own real, existing interaction prompts — every one
+// currently used by a built-in piece of furniture (see
+// src/entities/furniture/*.js and src/worldbuilder/behaviours/*.js),
+// gathered here rather than invented fresh, so "predefined library"
+// genuinely reflects how interactions already read across the Workshop
+// rather than introducing a new, separate vocabulary just for
+// Builder-made objects.
+const PROMPT_SUGGESTIONS = [
+  "Open", "Close", "Sit down", "Stand up", "Talk", "Look closer", "Check storage",
+  "Activate", "Play some music", "Play this track", "Turn it on", "Pick up",
+  "Read", "Examine",
+];
+
+/** A free-text field with a `<datalist>` of established prompts —
+ *  "should remain simple and approachable" ruled out replacing free text
+ *  entirely with a closed dropdown (an object's own prompt is often
+ *  genuinely custom, like a specific book's title), so this keeps typing
+ *  anything at all fully available while surfacing the existing
+ *  vocabulary as suggestions the moment the field is focused. */
+function promptField(label, value, onInput) {
+  const wrap = document.createElement("label");
+  wrap.className = "builder-field";
+  wrap.textContent = label;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = value ?? "";
+  input.setAttribute("list", "builder-prompt-suggestions");
+  input.addEventListener("input", () => onInput(input.value));
+  wrap.appendChild(input);
+
+  if (!document.getElementById("builder-prompt-suggestions")) {
+    const datalist = document.createElement("datalist");
+    datalist.id = "builder-prompt-suggestions";
+    for (const suggestion of PROMPT_SUGGESTIONS) {
+      const option = document.createElement("option");
+      option.value = suggestion;
+      datalist.appendChild(option);
+    }
+    document.body.appendChild(datalist);
+  }
+  return wrap;
 }
 
 /** "Images should be loaded from the player's local files using the same

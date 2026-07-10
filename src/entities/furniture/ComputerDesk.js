@@ -63,9 +63,10 @@ export const ComputerDeskDefinition = {
     mouse.position.set(0.22, surfaceY + 0.01, 0.15);
     g.add(mouse);
 
-    // A small desk lamp, off to the side — this is the "always a little
-    // warm and inviting" light ComputerSystem attaches to, independent of
-    // whether the monitor itself is on. Real desk lamps get left on.
+    // A small desk lamp, off to the side — its own light (see
+    // deskLampSocket, below) is registered with the Workshop's own light
+    // switch (ComputerSystem.js), turning on and off right alongside
+    // every other practical light in the room.
     const lampBase = cylinder(0.05, 0.06, 0.015, Materials.metal("#3a3a3a"));
     lampBase.position.set(0.52, topY + 0.01, -0.22);
     g.add(lampBase);
@@ -103,8 +104,14 @@ export const ComputerDeskDefinition = {
     // it to world space once placed, so this definition stays reusable
     // even if the desk is later moved to a different spot in the room.
     focusPoseLocal: {
-      position: [0, 1.22, 0.25],
-      lookAt: [0, 1.05, -0.16],
+      // "The monitor sits slightly too high... the top of the interface
+      // approaches the edge of the viewport." Raised (1.22 → 1.27) and
+      // moved closer (0.25 → 0.19), so the monitor comfortably occupies
+      // more of the view rather than sitting small and high in the frame
+      // — "the Workshop computer should feel comfortable for long
+      // creative sessions."
+      position: [0, 1.27, 0.19],
+      lookAt: [0, 1.07, -0.16],
     },
     // No overlayId — the computer doesn't use the generic full-screen
     // overlay pipeline (see OverlayManager). Sitting down and standing up
