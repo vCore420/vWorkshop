@@ -200,6 +200,36 @@ export class CameraSystem {
     this.viewMode = this.viewMode === "first" ? "third" : "first";
   }
 
+  /** The "I'm Lost!" button's entire job — a pure quality-of-life escape
+   *  hatch, not something the Workshop itself ever triggers on its own.
+   *  Resets every piece of position-related state this system owns, not
+   *  just `this.position` — `_footY`/`_verticalVelocity`/`_grounded` all
+   *  need to agree with the new position too, or the very next frame's
+   *  gravity would immediately start acting on stale values (falling
+   *  from whatever height the player used to be at, say). Cancels focus
+   *  mode outright if it happened to be active, rather than trying to
+   *  ease out of it — being lost is exactly the situation where a
+   *  guaranteed-safe reset matters more than a smooth transition. */
+  recoverToSpawn() {
+    this.mode = "walk";
+    this.locked = false;
+    this._preFocus = null;
+    this._focusPose = null;
+    this.position.set(...DEFAULT_SPAWN.position);
+    this.yaw = DEFAULT_SPAWN.yaw;
+    this.pitch = 0;
+    this._footY = DEFAULT_SPAWN.position[1] - STANDING_EYE_HEIGHT;
+    this._verticalVelocity = 0;
+    this._grounded = true;
+    this._crouching = false;
+    this._currentEyeHeight = STANDING_EYE_HEIGHT;
+    this._landTimer = 0;
+    this._onLadder = false;
+    this.viewMode = "first";
+    this._viewBlend = 0;
+    this.engine.events.emit("persistence:saveRequested");
+  }
+
   update(dt) {
     if (!this.locked && this.engine.input?.wasJustPressed("toggleView")) this.toggleViewMode();
 

@@ -1,8 +1,10 @@
+import * as THREE from "three";
 import { buildRoom } from "../entities/room/WorkshopRoom.js";
 import { ROOM_DIMENSIONS, WINDOWS, WORKSHOP_DOOR } from "../data/layoutDefault.js";
 import { Entity } from "../core/Entity.js";
 import { InteractableComponent } from "../core/components/InteractableComponent.js";
 import { damp } from "../utils/MathUtils.js";
+import { InteriorSystem } from "./InteriorSystem.js";
 
 /**
  * RoomLayoutSystem
@@ -35,6 +37,24 @@ export class RoomLayoutSystem {
     this.room = buildRoom(ROOM_DIMENSIONS, WINDOWS, WORKSHOP_DOOR);
     engine.scene.add(this.room.group);
     this._doorTargetAngle = 0; // closed
+
+    // "Weather should correctly recognise interior spaces... think about
+    // this architecturally rather than specifically for the Workshop
+    // building." Registers directly with InteriorSystem — the exact same
+    // function a future Builder-created enclosed structure would call
+    // through InteriorBehaviour.js instead. Built from ROOM_DIMENSIONS
+    // directly rather than Box3.setFromObject(this.room.group), which
+    // would also sweep in the exterior shell's own wall thickness and
+    // roof overhang — this is deliberately just the room's actual
+    // interior air, not everything the shell's geometry happens to occupy.
+    const interiorSystem = engine.getSystem(InteriorSystem);
+    if (interiorSystem) {
+      const halfWidth = ROOM_DIMENSIONS.width / 2;
+      const halfDepth = ROOM_DIMENSIONS.depth / 2;
+      interiorSystem.registerVolume(
+        new THREE.Box3(new THREE.Vector3(-halfWidth, 0, -halfDepth), new THREE.Vector3(halfWidth, ROOM_DIMENSIONS.height, halfDepth))
+      );
+    }
 
     // The door panels already live inside room.group (added to the scene as
     // part of the room shell), so this entity skips MeshComponent — it only

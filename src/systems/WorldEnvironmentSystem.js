@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { Materials } from "../utils/PlaceholderFactory.js";
 import { radialGlowTexture, cloudBlobTexture, starSpriteTexture } from "../utils/ProceduralTexture.js";
 import { CameraSystem } from "./CameraSystem.js";
+import { InteriorSystem } from "./InteriorSystem.js";
 
 const GROUND_SIZE = 400; // metres — one tile of the "effectively infinite" ground
 const RECENTER_THRESHOLD = 120; // recentre once the camera is this far from the tile's own centre
@@ -18,6 +19,9 @@ const RAIN_HALF_RANGE = 16; // falls within this box around the camera, horizont
 const RAIN_TOP = 7;
 const RAIN_BOTTOM = -0.5;
 const RAIN_STREAK_LENGTH = 0.35;
+
+const _scratchShootingHead = new THREE.Vector3();
+const _scratchShootingTail = new THREE.Vector3();
 
 // A tint blended into the time-of-day sky colour per weather state — see
 // _applySkyColor(). Distinct from fogDensity/cloudCoverage: those already
@@ -73,6 +77,7 @@ export class WorldEnvironmentSystem {
     this._windDirectionRad = 0;
     this._sunDirection = new THREE.Vector3(0, 1, 0);
     this._moonDirection = new THREE.Vector3(0, -1, 0);
+    this._starVisibility = 0;
     this._baseSkyColor = new THREE.Color("#bfe6ff");
     this._weatherTint = null; // { color: THREE.Color, strength } — see _applySkyColor()
     this._precipitation = 0;
@@ -82,6 +87,7 @@ export class WorldEnvironmentSystem {
   init(engine) {
     this.engine = engine;
     this._cameraSystem = engine.getSystem(CameraSystem); // resolved once — see CameraSystem.js's own init() comment on why this is safe regardless of registration order
+    this._interiorSystem = engine.getSystem(InteriorSystem);
 
     const groundMat = Materials.ground();
     const geometry = new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE);
@@ -95,6 +101,7 @@ export class WorldEnvironmentSystem {
 
     this._buildSunMoon();
     this._buildStars();
+    this._buildShootingStar();
     this._buildClouds();
     this._buildRain();
 
@@ -143,6 +150,74 @@ export class WorldEnvironmentSystem {
     });
     this.stars = new THREE.Points(geometry, material);
     this.engine.scene.add(this.stars);
+  }
+
+  /** "Occasional shooting stars during clear nights... these effects
+   *  should remain subtle. The goal is quiet realism rather than
+   *  spectacle." One reusable streak (a two-point line, the same
+   *  cheap-geometry approach the rain particles already use), triggered
+   *  at a random, unhurried interval and only when the sky is actually
+   *  dark and clear — see _maybeTriggerShootingStar(). Nothing about this
+   *  claims to be an astronomically accurate meteor shower; it's a rare,
+   *  brief flourish, not a simulation. */
+  _buildShootingStar() {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(6), 3));
+    const material = new THREE.LineBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0, depthWrite: false, fog: false });
+    this.shootingStar = new THREE.LineSegments(geometry, material);
+    this.shootingStar.frustumCulled = false;
+    this.engine.scene.add(this.shootingStar);
+    this._shootingStarState = null; // null while inactive; see _maybeTriggerShootingStar()
+    this._shootingStarCooldown = this._randomShootingStarCooldown();
+  }
+
+  _randomShootingStarCooldown() {
+    return 14 + Math.random() * 40; // occasional — roughly once every 15-55 seconds when conditions allow one at all
+  }
+
+  _maybeTriggerShootingStar(dt) {
+    if (this._shootingStarState) return; // one at a time
+    this._shootingStarCooldown -= dt;
+    if (this._shootingStarCooldown > 0) return;
+    this._shootingStarCooldown = this._randomShootingStarCooldown();
+
+    const clearEnough = this._cloudCoverage < 0.25 && this._precipitation < 0.05;
+    if (!clearEnough || this._starVisibility < 0.6) return; // only dark, clear nights
+
+    const y = 0.35 + Math.random() * 0.5; // upper sky, well clear of the horizon
+    const angle = Math.random() * Math.PI * 2;
+    const r = Math.sqrt(1 - y * y);
+    const start = new THREE.Vector3(Math.cos(angle) * r, y, Math.sin(angle) * r);
+    const travelAngle = angle + (Math.random() - 0.5) * 1.2;
+    const end = new THREE.Vector3(Math.cos(travelAngle) * r, y - 0.15 - Math.random() * 0.15, Math.sin(travelAngle) * r).normalize();
+    this._shootingStarState = { start, end, elapsed: 0, duration: 0.5 + Math.random() * 0.4 };
+  }
+
+  _updateShootingStar(dt, camPos) {
+    this._maybeTriggerShootingStar(dt);
+    if (!this._shootingStarState || !camPos) {
+      if (this.shootingStar.material.opacity > 0) this.shootingStar.material.opacity = 0;
+      return;
+    }
+    const state = this._shootingStarState;
+    state.elapsed += dt;
+    const t = state.elapsed / state.duration;
+    if (t >= 1) {
+      this._shootingStarState = null;
+      this.shootingStar.material.opacity = 0;
+      return;
+    }
+
+    // A short streak sliding along the path — the "head" leads, a "tail"
+    // trails a little behind it, both travelling the same arc.
+    const headPoint = _scratchShootingHead.lerpVectors(state.start, state.end, t).normalize().multiplyScalar(SKY_RADIUS).add(camPos);
+    const tailPoint = _scratchShootingTail.lerpVectors(state.start, state.end, Math.max(0, t - 0.06)).normalize().multiplyScalar(SKY_RADIUS).add(camPos);
+    const positions = this.shootingStar.geometry.attributes.position.array;
+    positions[0] = tailPoint.x; positions[1] = tailPoint.y; positions[2] = tailPoint.z;
+    positions[3] = headPoint.x; positions[4] = headPoint.y; positions[5] = headPoint.z;
+    this.shootingStar.geometry.attributes.position.needsUpdate = true;
+    // A quick fade in over the first ~12% of its travel, then a gradual fade out.
+    this.shootingStar.material.opacity = Math.min(1, t * 8) * (1 - t) * 0.9;
   }
 
   /** A handful of sprite clouds drifting with the wind — cheap, and
@@ -235,7 +310,7 @@ export class WorldEnvironmentSystem {
     this.engine.scene.fog.far = Math.max(this.engine.scene.fog.near + 4, this._baseFogFar * (1 - density * 0.88));
   }
 
-  _onTimeChanged({ skyColor, sunDirection, moonDirection, moonIllumination, starVisibility }) {
+  _onTimeChanged({ skyColor, sunDirection, moonDirection, moonIllumination, starVisibility, hour }) {
     this._baseSkyColor.set(skyColor);
     this._applySkyColor();
     if (this.engine.scene.fog) this.engine.scene.fog.color.copy(this.engine.scene.background);
@@ -249,6 +324,16 @@ export class WorldEnvironmentSystem {
     // stands out against the night sky.
     this.moonSprite.material.opacity = 0.25 + moonIllumination * 0.65;
     this.stars.material.opacity = starVisibility * 0.85;
+    this._starVisibility = starVisibility;
+    // "Stars mapped to the real night sky where practical" — not a full
+    // constellation catalogue (a genuinely different-scale undertaking),
+    // but the star field does turn slowly with the hour, the same
+    // apparent motion the real sky has from Earth's own rotation, rather
+    // than sitting frozen in one arrangement all night regardless of
+    // time. A simplified rotation about the world's vertical axis, not a
+    // properly latitude-tilted polar one — believable, not an
+    // observatory-grade planetarium.
+    this.stars.rotation.y = (hour / 24) * Math.PI * 2;
   }
 
   /** Blends the current weather's own sky tint (see WEATHER_SKY_TINT) into
@@ -321,14 +406,23 @@ export class WorldEnvironmentSystem {
       const targetOpacity = this._cloudCoverage * 0.75 * cloud.opacityJitter;
       cloud.sprite.material.opacity += (targetOpacity - cloud.sprite.material.opacity) * Math.min(1, dt * 0.5);
     }
-    // Rain falls continuously whenever precipitation is active — visible
-    // through any window or open door, correctly occluded by solid walls
-    // and the roof via ordinary depth testing, without this needing to
-    // know whether the camera happens to be indoors or outdoors right
-    // now. Offsets (x/z) are relative to the camera, like clouds; y is
+    // Rain falls continuously whenever precipitation is active and the
+    // camera isn't inside a registered interior volume (InteriorSystem —
+    // see its own comment for why this is architectural, not
+    // Workshop-specific). That check matters for a real reason, not just
+    // tidiness: raindrops spawn within a box centred on the camera, so if
+    // the camera is standing inside an enclosed room, a good number of
+    // them end up inside that same enclosed space too — genuinely
+    // co-located with the player, not behind a wall or roof from their
+    // perspective at all. Depth testing only ever occludes geometry that
+    // actually sits *between* the camera and a particle; it does nothing
+    // for a particle that was never behind anything to begin with, which
+    // is exactly what "rain falling inside enclosed buildings" turned out
+    // to be. Offsets (x/z) are relative to the camera, like clouds; y is
     // real world height, since rain falls toward the ground, not toward
     // wherever the player's own head happens to be.
-    const targetRainOpacity = Math.min(1, this._precipitation * 1.15) * 0.55;
+    const indoors = camPos ? (this._interiorSystem?.isInside(camPos) ?? false) : false;
+    const targetRainOpacity = indoors ? 0 : Math.min(1, this._precipitation * 1.15) * 0.55;
     this.rain.material.opacity += (targetRainOpacity - this.rain.material.opacity) * Math.min(1, dt * 2);
     if (camPos && this.rain.material.opacity > 0.01) {
       const positions = this.rain.geometry.attributes.position.array;
@@ -362,5 +456,7 @@ export class WorldEnvironmentSystem {
       }
       this.rain.geometry.attributes.position.needsUpdate = true;
     }
+
+    this._updateShootingStar(dt, camPos);
   }
 }

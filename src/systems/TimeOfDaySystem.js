@@ -1,5 +1,9 @@
-import * as THREE from "three";
-import { lerpColorHex, clamp, TAU } from "../utils/MathUtils.js";
+import { lerpColorHex, clamp } from "../utils/MathUtils.js";
+import { solarPosition, azimuthAltitudeToDirection, moonPhaseFraction, moonIllumination, dayOfYear, getObserverLocation, requestGeolocation } from "../utils/Astronomy.js";
+
+function toRadLocal(deg) {
+  return (deg * Math.PI) / 180;
+}
 
 /**
  * TimeOfDaySystem
@@ -12,19 +16,41 @@ import { lerpColorHex, clamp, TAU } from "../utils/MathUtils.js";
  *
  * A "simulated" mode also exists (currentTime advances at `speedMultiplier`
  * game-hours per real second, independent of the wall clock) for anyone who
- * wants to watch a full day cycle in a few minutes, or for a future
- * "time control" plugin. Both modes emit the same `timeofday:changed` event
- * so LightingSystem/WorldEnvironmentSystem never need to know which mode is
- * active.
+ * wants to watch a full day cycle in a few minutes. Both modes emit the same
+ * `timeofday:changed` event so LightingSystem/WorldEnvironmentSystem never
+ * need to know which mode is active.
+ *
+ * **The Settings app's own time control** (`setTime()`) also uses simulated
+ * mode under the hood, but never jumps straight to the requested hour —
+ * "avoid instantly teleporting the sun or moon... the transition should
+ * feel calm and believable." `update()` eases `currentTime` toward
+ * whatever was requested along the *shorter* of the two directions around
+ * the 24-hour clock (so 23:00 → 01:00 moves forward two hours, not
+ * backward twenty-two), at a fixed rate — a few real seconds for even the
+ * most extreme (12-hour) jump. Setting a time switches to simulated mode
+ * and pauses there once the transition finishes, rather than continuing
+ * to advance afterward; it's "go look at this specific moment," not "start
+ * a new clock."
+ *
+ * **Astronomy** (`src/utils/Astronomy.js`) replaced the fixed,
+ * direction-agnostic arc this system used to compute the sun/moon with —
+ * "correct sunrise/sunset direction based on the player's location," using
+ * a standard approximate solar-position formula driven by the player's own
+ * geolocation when available (falling back to a fixed, reasonable
+ * mid-latitude otherwise, the same "ask once, fall back gracefully on any
+ * failure" shape `WeatherProvider.js`'s live weather already uses). The
+ * moon's own position is derived from the same formula, offset by its
+ * current phase's fraction of the day — a real moon phase visibly changes
+ * *where* the moon rises and sets relative to the sun, not just how bright
+ * it looks, and this is what actually reproduces that relationship rather
+ * than just placing it "roughly opposite" the sun regardless of phase.
  *
  * This system only *computes* the sky colour, sun/moon direction, moon
  * phase, and star visibility now — it doesn't apply any of it anywhere
- * itself. Before the outdoor world existed, it tinted the window panes
- * directly to fake a sky through glass that wasn't really there; now that
- * the windows are real transparent openings (see WorkshopRoom.js) and a
- * real sky exists (WorldEnvironmentSystem's sky dome, sun/moon discs,
- * stars, and fog), that hack is gone — WorldEnvironmentSystem listens to
- * the same `timeofday:changed` event independently.
+ * itself. `WorldEnvironmentSystem` listens to the same `timeofday:changed`
+ * event independently, and the Compass (`CompassSystem.js`) reads the same
+ * sun direction this emits to show where east/west actually are, so both
+ * always agree with each other by construction.
  */
 export class TimeOfDaySystem {
   constructor() {
@@ -33,10 +59,12 @@ export class TimeOfDaySystem {
     this.speedMultiplier = 0.5; // game-hours per real second, simulated mode only
     this.paused = false;
     this._emitAccumulator = 0;
+    this._transitionTarget = null; // hours, 0-24 — non-null while easing toward a Settings-requested time; see setTime()
   }
 
   init(engine) {
     this.engine = engine;
+    requestGeolocation(); // see Astronomy.js — a no-op if already requested or unsupported; falls back gracefully either way
     this._applyAndEmit(); // so the very first frame is already lit correctly
 
     engine.events.on("persistence:save", (bag) => {
@@ -56,6 +84,7 @@ export class TimeOfDaySystem {
 
   setMode(mode) {
     this.mode = mode;
+    this._transitionTarget = null; // switching modes explicitly cancels any transition in progress rather than fighting it
     this._applyAndEmit();
   }
 
@@ -67,12 +96,23 @@ export class TimeOfDaySystem {
     this.paused = paused;
   }
 
+  /** The Settings app's own time control. Switches to simulated mode and
+   *  eases toward `hour` rather than jumping — see this class's own doc
+   *  comment for why. Pauses there once the transition finishes ("go look
+   *  at this specific moment," not "start a new clock running from here"). */
+  setTime(hour) {
+    this.mode = "simulated";
+    this._transitionTarget = ((hour % 24) + 24) % 24;
+  }
+
   getState() {
-    return { mode: this.mode, currentTime: this.currentTime, paused: this.paused };
+    return { mode: this.mode, currentTime: this.currentTime, paused: this.paused, transitioning: this._transitionTarget !== null };
   }
 
   update(dt) {
-    if (this.mode === "realtime") {
+    if (this._transitionTarget !== null) {
+      this._advanceTransition(dt);
+    } else if (this.mode === "realtime") {
       const now = new Date();
       this.currentTime = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
     } else if (!this.paused) {
@@ -88,34 +128,57 @@ export class TimeOfDaySystem {
     }
   }
 
+  /** Eases `currentTime` toward `_transitionTarget` along whichever
+   *  direction around the 24-hour clock is shorter, at a fixed rate — a
+   *  few real seconds even for the most extreme (12-hour) jump. "Moving
+   *  from morning to evening should smoothly move the sun across the
+   *  sky... night should naturally transition into dawn," implemented as
+   *  literally advancing the clock forward (or back) through every
+   *  moment in between, not a cut. */
+  _advanceTransition(dt) {
+    const TRANSITION_RATE = 3; // game-hours of clock movement per real second
+    let delta = (this._transitionTarget - this.currentTime) % 24;
+    if (delta > 12) delta -= 24;
+    else if (delta < -12) delta += 24;
+
+    const step = Math.sign(delta) * TRANSITION_RATE * dt;
+    if (Math.abs(step) >= Math.abs(delta) || delta === 0) {
+      this.currentTime = this._transitionTarget;
+      this._transitionTarget = null;
+      this.paused = true; // arrived — hold here rather than continuing to run, until the player changes something else
+    } else {
+      this.currentTime = (this.currentTime + step + 24) % 24;
+    }
+  }
+
   _computeState() {
-    const phase = ((this.currentTime - 6) / 24) * TAU; // 0 at 06:00 (sunrise), PI at 18:00 (sunset)
-    const altitude = Math.sin(phase);
-    const dayFactor = clamp(altitude, 0, 1); // 0 at night, 1 at midday
+    const { latitude } = getObserverLocation();
+    const doy = dayOfYear(new Date());
 
-    const sunDirection = new THREE.Vector3(
-      Math.cos(phase),
-      Math.max(altitude, -0.15),
-      Math.sin(phase) * 0.4
-    ).normalize();
+    const sun = solarPosition(this.currentTime, latitude, doy);
+    const sunDirection = azimuthAltitudeToDirection(sun.azimuth, Math.max(sun.altitude, -8.6));
+    // sin of the *actual* solar altitude — 1 at zenith, 0 at the horizon,
+    // negative (clamped away) below it. Naturally varies by season and
+    // latitude now rather than always reaching the same fixed maximum
+    // every single day, since it's driven by a real altitude angle
+    // rather than an arbitrary phase sine.
+    const dayFactor = clamp(Math.sin(toRadLocal(sun.altitude)), 0, 1);
 
-    // The moon sits roughly opposite the sun (up when the sun is down),
-    // offset a little so they're never in exactly the same spot during
-    // the brief window both are technically above the horizon at dawn/dusk.
-    const moonDirection = new THREE.Vector3(
-      Math.cos(phase + Math.PI),
-      Math.max(-altitude, -0.15),
-      Math.sin(phase + Math.PI) * 0.4 + 0.15
-    ).normalize();
-
-    // A real, if simplified, lunar cycle from the actual calendar date —
-    // "quietly different, day to day" applies to the sky itself, not just
-    // the weather. ~29.53 days per cycle; the reference new-moon date is
-    // arbitrary (any known new moon works as the epoch), only the current
-    // offset from it matters.
-    const daysSinceEpoch = (Date.now() - Date.UTC(2000, 0, 6)) / 86400000;
-    const moonPhaseFraction = ((daysSinceEpoch % 29.53) + 29.53) % 29.53 / 29.53; // 0/1 = new moon, 0.5 = full moon
-    const moonIllumination = (1 - Math.cos(moonPhaseFraction * TAU)) / 2; // 0 = new (dark), 1 = full (bright)
+    // The moon's position is derived from the exact same solar-position
+    // formula, at an "effective hour" offset by how far through its
+    // current phase it is — a new moon (phase 0) sits at essentially the
+    // sun's own position (0-hour offset: they rise and set together, which
+    // is what "new moon" astronomically means), a full moon (phase 0.5)
+    // is a 12-hour offset (opposite the sun, rising as it sets), and
+    // anything in between falls proportionally somewhere around the same
+    // daily arc. That relationship — not just "always opposite the sun
+    // regardless of phase" — is what "moon movement matching the current
+    // date and time" actually means astronomically.
+    const moonPhaseFrac = moonPhaseFraction();
+    const moonHour = (this.currentTime + moonPhaseFrac * 24) % 24;
+    const moon = solarPosition(moonHour, latitude, doy);
+    const moonDirection = azimuthAltitudeToDirection(moon.azimuth, Math.max(moon.altitude, -8.6));
+    const moonIllum = moonIllumination(moonPhaseFrac);
 
     // Stars fade in well before full darkness and stay hidden in daylight
     // — a soft-edged threshold around dayFactor, not a hard cutoff.
@@ -147,7 +210,7 @@ export class TimeOfDaySystem {
 
     return {
       sunDirection, sunColor, sunIntensity, hemiIntensity, ambientIntensity, skyColor, dayFactor,
-      moonDirection, moonIllumination, starVisibility,
+      moonDirection, moonIllumination: moonIllum, starVisibility, hour: this.currentTime,
     };
   }
 

@@ -66,7 +66,12 @@ export class HUD {
     viewModeBtn.type = "button";
     viewModeBtn.textContent = "View (V)";
     viewModeBtn.addEventListener("click", () => engine.getSystem(CameraSystem)?.toggleViewMode());
-    this.backupControls.append(exportBtn, importBtn, buildModeBtn, viewModeBtn);
+    const lostBtn = document.createElement("button");
+    lostBtn.type = "button";
+    lostBtn.textContent = "I'm Lost!";
+    lostBtn.title = "Return to the Workshop";
+    lostBtn.addEventListener("click", () => engine.getSystem(CameraSystem)?.recoverToSpawn());
+    this.backupControls.append(exportBtn, importBtn, buildModeBtn, viewModeBtn, lostBtn);
     this.root.appendChild(this.backupControls);
 
     this.touchControls = document.getElementById("touch-controls");
