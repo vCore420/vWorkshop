@@ -29,6 +29,13 @@ export const ComputerDeskDefinition = {
     const top = box(1.3, 0.06, 0.65, Materials.wood("#4a3120"));
     top.position.set(0, topY, 0);
     g.add(top);
+    // box()/cylinder() geometry is centred at its own local origin — topY
+    // is the desk top's own centre, not its actual surface. Everything
+    // below that's meant to rest *on* the desk (the monitor stand,
+    // keyboard, mouse) needed to account for the top's own half-thickness
+    // to sit flush rather than sinking slightly into it; surfaceY is that
+    // real surface height, only ever used from here down.
+    const surfaceY = topY + 0.03;
 
     for (const [x, z] of [[-0.58, -0.28], [0.58, -0.28], [-0.58, 0.28], [0.58, 0.28]]) {
       const leg = box(0.06, topY, 0.06, Materials.metal("#4a4844"));
@@ -38,22 +45,22 @@ export const ComputerDeskDefinition = {
 
     // Monitor
     const standBase = cylinder(0.09, 0.11, 0.02, Materials.matte("#232323"));
-    standBase.position.set(0, topY + 0.01, -0.15);
+    standBase.position.set(0, surfaceY + 0.01, -0.15);
     g.add(standBase);
     const standNeck = box(0.04, 0.18, 0.04, Materials.matte("#232323"));
-    standNeck.position.set(0, topY + 0.1, -0.15);
+    standNeck.position.set(0, surfaceY + 0.1, -0.15);
     g.add(standNeck);
     const screen = box(0.6, 0.36, 0.03, Materials.emissive("#7fd8c4", 0.05));
-    screen.position.set(0, topY + 0.32, -0.16);
+    screen.position.set(0, surfaceY + 0.32, -0.16);
     g.add(screen);
     g.userData.screenGlowMesh = screen;
 
     // Keyboard + mouse placeholders
     const keyboard = box(0.34, 0.02, 0.12, Materials.matte("#3a3a3a"));
-    keyboard.position.set(0, topY + 0.02, 0.15);
+    keyboard.position.set(0, surfaceY + 0.01, 0.15);
     g.add(keyboard);
     const mouse = box(0.05, 0.02, 0.09, Materials.matte("#3a3a3a"));
-    mouse.position.set(0.22, topY + 0.02, 0.15);
+    mouse.position.set(0.22, surfaceY + 0.01, 0.15);
     g.add(mouse);
 
     // A small desk lamp, off to the side — this is the "always a little

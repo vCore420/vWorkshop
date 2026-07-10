@@ -32,7 +32,7 @@ const INTERACTABLE_GROUP = new Set(getBehaviourTypes().filter((type) => getBehav
  * specifically so widening it here couldn't narrow the Wardrobe's own
  * preview as a side effect.
  */
-export function createBuilderApp({ objectLibraryStore, worldObjectsStore, worldObjectsSystem }) {
+export function createBuilderApp({ objectLibraryStore, worldObjectsStore, worldObjectsSystem, imageLibraryStore, imageAssetStore }) {
   return {
     id: "builder",
     label: "Builder",
@@ -90,7 +90,7 @@ export function createBuilderApp({ objectLibraryStore, worldObjectsStore, worldO
         formPane.innerHTML = "";
         formPane.appendChild(buildMetadataSection(draft, renderAll));
         formPane.appendChild(buildPartsSection(draft, renderAll, refreshPreview));
-        formPane.appendChild(buildBehavioursSection(draft, renderAll));
+        formPane.appendChild(buildBehavioursSection(draft, renderAll, imageLibraryStore, imageAssetStore));
         formPane.appendChild(buildActionsSection(draft, {
           onSave: saveDraftToLibrary,
           onClear: () => { draft = freshDraft(); renderAll(); },
@@ -317,7 +317,7 @@ function buildPartEditor(part, onPreviewChange) {
 // ============================================================
 // Behaviours
 // ============================================================
-function buildBehavioursSection(draft, onChange) {
+function buildBehavioursSection(draft, onChange, imageLibraryStore, imageAssetStore) {
   const section = document.createElement("div");
   section.className = "builder-section";
 
@@ -358,7 +358,7 @@ function buildBehavioursSection(draft, onChange) {
       const props = document.createElement("div");
       props.className = "builder-behaviour-props";
       for (const field of config.propsSchema) {
-        props.appendChild(behaviourPropField(field, existing.properties));
+        props.appendChild(behaviourPropField(field, existing.properties, draft.parts, imageLibraryStore, imageAssetStore, onChange));
       }
       row.appendChild(props);
     }
@@ -369,22 +369,111 @@ function buildBehavioursSection(draft, onChange) {
   return section;
 }
 
-function behaviourPropField(field, properties) {
+function behaviourPropField(field, properties, parts, imageLibraryStore, imageAssetStore, onChange) {
   if (field.type === "select") {
+    // selectField's onChange receives select.value directly — since
+    // optionValues is passed below, that's already the raw option value,
+    // not its label. Assigning it straight through is correct; searching
+    // for it *by label* (as if the callback had received one) would only
+    // ever match when a label happened to equal its own value string.
     return selectField(
       field.label,
       properties[field.key],
       field.options.map(([, label]) => label),
-      (label) => {
-        const match = field.options.find(([, l]) => l === label);
-        properties[field.key] = match ? match[0] : properties[field.key];
-      },
+      (value) => { properties[field.key] = value; },
       field.options.map(([value]) => value)
     );
   }
+  if (field.type === "partRef") {
+    // "Any chosen face" — a dropdown of the object's own parts, labelled
+    // the exact same way the part list itself already labels them
+    // (index + type), rather than exposing an internal part id directly.
+    // Reflects whatever parts currently exist, so adding or removing a
+    // part always keeps this in sync with reality.
+    const options = (parts ?? []).map((part, index) => [part.id, `${index + 1}. ${partLabel(part.type)}`]);
+    return selectField(
+      field.label,
+      properties[field.key] ?? options[0]?.[0],
+      options.map(([, label]) => label),
+      (value) => { properties[field.key] = value; },
+      options.map(([value]) => value)
+    );
+  }
+  if (field.type === "imageRef") return imageRefField(field, properties, imageLibraryStore, imageAssetStore, onChange);
   if (field.type === "color") return colorField(field.label, properties[field.key], (v) => { properties[field.key] = v; });
   if (field.type === "number") return numberField(field.label, properties[field.key], 0.1, (v) => { properties[field.key] = v; });
   return textField(field.label, properties[field.key], (v) => { properties[field.key] = v; });
+}
+
+/** "Images should be loaded from the player's local files using the same
+ *  design philosophy as the Music Library wherever practical" — a
+ *  dropdown of whatever's already in `ImageLibraryStore`, plus an
+ *  "Upload" button beside it that reads a local file, stores it (see
+ *  ImageAssetStore.js/ImageLibraryStore.js's own split), and selects it
+ *  immediately, the same "upload once, it's simply available from here
+ *  on" flow the rest of the Workshop's own asset libraries already use. */
+function imageRefField(field, properties, imageLibraryStore, imageAssetStore, onChange) {
+  const wrap = document.createElement("div");
+  wrap.className = "builder-field builder-image-ref-field";
+
+  const labelEl = document.createElement("label");
+  labelEl.textContent = field.label;
+  wrap.appendChild(labelEl);
+
+  const row = document.createElement("div");
+  row.className = "builder-inline-row";
+
+  const images = imageLibraryStore?.all() ?? [];
+  const select = document.createElement("select");
+  const emptyOption = document.createElement("option");
+  emptyOption.value = "";
+  emptyOption.textContent = images.length ? "\u2014 choose an image \u2014" : "No images uploaded yet";
+  select.appendChild(emptyOption);
+  for (const image of images) {
+    const opt = document.createElement("option");
+    opt.value = image.id;
+    opt.textContent = image.name;
+    if (image.id === properties[field.key]) opt.selected = true;
+    select.appendChild(opt);
+  }
+  select.addEventListener("change", () => {
+    properties[field.key] = select.value || null;
+    onChange();
+  });
+  row.appendChild(select);
+
+  const uploadBtn = document.createElement("button");
+  uploadBtn.type = "button";
+  uploadBtn.className = "builder-icon-button";
+  uploadBtn.textContent = "Upload\u2026";
+  uploadBtn.addEventListener("click", () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.addEventListener("change", async () => {
+      const file = input.files?.[0];
+      if (!file || !imageLibraryStore || !imageAssetStore) return;
+      const dataUrl = await readFileAsDataUrl(file);
+      const imageId = imageLibraryStore.add(file.name.replace(/\.[^.]+$/, ""));
+      await imageAssetStore.put(imageId, dataUrl);
+      properties[field.key] = imageId;
+      onChange();
+    });
+    input.click();
+  });
+  row.appendChild(uploadBtn);
+
+  wrap.appendChild(row);
+  return wrap;
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 }
 
 // ============================================================

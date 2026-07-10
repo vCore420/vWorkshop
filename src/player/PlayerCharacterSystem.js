@@ -2,6 +2,7 @@ import { buildCharacter, disposeCharacter } from "./PlayerCharacter.js";
 import { CameraSystem } from "../systems/CameraSystem.js";
 
 const REBUILD_DEBOUNCE_MS = 120; // see _scheduleRebuild
+const DEFAULT_EYE_HEIGHT = 1.65; // fallback for getEyeHeight() before the very first rebuild ever finishes
 
 /**
  * PlayerCharacterSystem
@@ -103,6 +104,19 @@ export class PlayerCharacterSystem {
    *  recently finished. */
   getPivots() {
     return this._current?.pivots ?? null;
+  }
+
+  /** The live rig's actual current eye height — `CameraSystem` reads this
+   *  as the *target* its own standing eye-height eases toward (see its
+   *  own "Player Height" comment), rather than assuming a fixed number.
+   *  A taller or shorter character genuinely needs a different eye
+   *  height; treating 1.65m as universal is what let a taller character
+   *  end up with their feet below the floor in the first place — this
+   *  system already computed the right number for the rig itself, it
+   *  just wasn't being asked. Falls back to a reasonable default before
+   *  the very first rebuild ever finishes. */
+  getEyeHeight() {
+    return this._current?.eyeHeight ?? DEFAULT_EYE_HEIGHT;
   }
 
   update(_dt) {
