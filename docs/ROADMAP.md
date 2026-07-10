@@ -1129,7 +1129,147 @@ already lived in one small, isolated class, making "swap what's inside
 `checkConnection()`/`sendTestPrompt()` for a Host service call" a
 contained future change rather than a rewrite.
 
-## Phase 24 — depth in the room that exists
+## Phase 24 — Workshop Polish
+
+**Goal:** "This is not a feature expansion phase. This is a quality
+pass... make the existing systems feel comfortable, consistent and
+believable."
+
+**A real root-cause bug, solved properly.** "The player model is
+currently facing the wrong direction" traced to a genuine 180° mismatch:
+an unrotated rig's own local +Z (the plain "front" a symmetric,
+face-free box rig naturally has) rotated, under a bare `rotation.y =
+yaw`, toward the exact opposite of this project's established forward
+convention. Fixing the root rotation alone would have just traded one bug
+for another — flipping the whole rig also flips every animation's own
+forward-swing alignment with movement, introducing a moonwalk effect
+where none existed. The complete fix negates each pose's own X/Z
+components in `applyPose()` to compensate, keeping every clip looking
+exactly as it always did, now correctly oriented — not a hand-edit of
+every frame's numbers across every clip.
+
+**Another real root cause, this time in the Browser.** French door
+handles were on the wrong (exterior-facing) side — traced to a Z-offset
+sign that didn't account for which side `exteriorFacesPositiveZ` actually
+put the interior on for that wall.
+
+**Small, mechanical fixes across many systems** — light switch position,
+desk lamp now wired into the same practical-light switch the workbench
+lamp already uses (`LightingSystem.registerPracticalLight()`, a new
+one-call hook other systems can reuse), mirror viewing distance, computer
+seating height/distance, jump height (raised again), smoother ladder
+entry, shadow radius/bias for softer, more consistent edges.
+
+**A real, non-cosmetic UI bug fix.** The Quiet Corner's dismiss-the-
+reminder interaction was only fading its own inner text, leaving the
+overlay's own background panel fully visible and looking like an empty,
+still-active overlay — the actual reported symptom. Fixed by fading the
+panel element itself, not just its content.
+
+**Settings' new Atmosphere tab** — "the central place for understanding
+and controlling the Workshop's environmental simulation" — consolidates
+the clock/weather controls that used to live in General with a full, live
+read-out (weather, location, date/time, sunrise/sunset, moon phase and
+rise/set, star visibility, wind, temperature) reading straight from
+TimeOfDaySystem/EnvironmentSystem/Astronomy.js, never a separate copy.
+Sunrise/sunset and moonrise/moonset are new: a simple day-long scan for
+where `solarPosition()`'s own altitude crosses the horizon, reusing the
+exact formula the 3D scene itself already relies on rather than a second
+model that could disagree with it.
+
+**Settings' new Diagnostics tab** — "not intended to be a developer
+console... a lightweight status page" — FPS/frame time, weather,
+time/date, player position, current interior, shadow quality, resident
+status, Workshop Platform (Host) status, Ollama connection, every row
+reading live from whichever system already owns that fact.
+
+**Music's cross-browser difference, actually root-caused.** The folder
+picker already had proper File System Access API feature detection with
+a clear, honest "not supported in this browser" message — that part was
+already fine. The real gap: the main playback `<audio>` element had *no*
+error listener at all (unlike the duration-probe pool), so a track that
+failed to decode in a particular browser's own more limited codec support
+left `isPlaying` stuck true with nothing audible and no explanation.
+Fixed with a real error handler and an honest message in the player UI.
+
+**Builder's interaction prompt field** gets a `<datalist>` of the
+Workshop's own real, already-used prompts ("Open," "Sit down," "Talk,"
+and so on) as suggestions — free text stays fully available (a custom
+object's own prompt is often genuinely custom), but "choosing from
+supported interaction behaviours" no longer means guessing at phrasing
+from a blank field.
+
+**The resident's own position now genuinely persists**, including
+mid-travel. `ResidentState.currentPosition` — a plain field, mutated
+directly every frame rather than through an event-emitting setter (doing
+that 60 times a second would defeat `PersistenceSystem`'s own debouncing
+entirely) — lets `ResidentMovement`'s constructor resume a fresh journey
+from exactly where the resident actually was, toward the same destination
+it was already heading to, rather than snapping to the destination's own
+fixed point on reload.
+
+## Phase 25 — Beings Creator
+
+**Goal:** "This is NOT about adding hard-coded NPCs. This is about
+creating a complete system for designing, saving, placing and managing
+Beings within the Workshop." See docs/BEINGS.md for the full architecture
+write-up.
+
+**Nine small, separated files** (`src/beings/`), following the same
+"separate responsibilities" instinct `src/ai/`/`src/resident/`/
+`src/host/` already established — `ModelAssetStore`/`ModelLibrary`/
+`ModelLoader` (a real GLTFLoader import pipeline, cached and shared —
+"reused by Beings, Builder, Player, future systems" is true today, not
+just planned, since nothing in that trio has a single Being-specific line
+in it), `BeingBehaviours` (a closed, data-only vocabulary — no scripting
+surface anywhere), `BeingLibrary` (definitions, with real export/import),
+`BeingInstanceStore` (placed instances, the same thin-record shape
+`WorldObjectsStore.js` already established for Builder objects),
+`BeingMovementSystem` (stateless wander/patrol/avoidance computation),
+`BeingController` (the one system that actually spawns, moves, and
+renders every placed Being each frame), `BeingSpawnerSystem` (a
+floor-only ghost-preview placement workflow, simpler than
+`BuildModeSystem`'s own multi-surface version since a living creature
+only ever stands on the ground).
+
+**Three new computer apps**, all reusing established shapes rather than
+inventing new ones: **Being Creator** (`BeingCreatorApp.js`) reuses
+`PreviewRenderer.js` and Builder's own two-pane workspace layout
+completely unchanged, plus Builder's own draft-then-save editing model;
+**Being Spawner** hands off to the world-space ghost workflow the same
+way the Builder Phone hands off to Build Mode; **Being Manager** is "the
+Workshop's population manager" — Select/Locate/Rename/Replace
+Template/Move/Remove/Despawn/Respawn, every action a plain store call.
+
+**Believable movement without overcomplicating pathfinding**, per the
+brief's own explicit instruction — wander/patrol targets are validated
+against real wall/furniture colliders when chosen, and a continuous small
+repulsion nudge (including from other placed Beings) steers a Being away
+from anything it's currently overlapping. A believable illusion of care,
+not a solved navigation problem.
+
+**Interaction stays honest about what it is** — Talk/Wave/Inspect surface
+a brief message through the same `hud:toast` mechanism the rest of the
+Workshop already uses, not a chat interface; a Being isn't connected to
+Ollama the way the Workshop's own resident is, and pretending otherwise
+would be more misleading than a plain acknowledgment.
+
+**Resident refinement, continued from Workshop Polish.** Size and
+idle-location spacing were already addressed in Phase 24; this phase adds
+the three remaining persistence fields the brief asks for again — facing
+direction, expression, and connection state — implemented honestly as
+last-known *snapshots* rather than values that drive behaviour on load,
+since the resident's actual orientation is already recomputed fresh each
+session and its expression/connection state must always reflect the
+live, current truth rather than a stale save from last time.
+
+**A known, documented limitation, not silently shipped**: `ModelLoader`
+clones parsed models with a plain `object3D.clone(true)`, correct for
+simple unanimated models but sharing a skeleton across clones of a
+skinned/animated rig. Named plainly in docs/BEINGS.md rather than
+discovered later as a mystery bug.
+
+## Phase 26 — depth in the room that exists
 
 Roughly in priority order, each independently shippable:
 
@@ -1168,7 +1308,7 @@ Roughly in priority order, each independently shippable:
 9. **A true oriented planar reflection**, and reflective surfaces beyond a
    flat plane — see "Future extension points" in `docs/PLAYER.md`.
 
-## Phase 25 — the world becomes alive on its own
+## Phase 27 — the world becomes alive on its own
 
 1. **Seasonal changes** — a plugin (see `PLUGIN_GUIDE.md`) reading the real
    calendar date and adjusting window tint / a handful of decorative
@@ -1192,7 +1332,7 @@ Roughly in priority order, each independently shippable:
    Construction Library's own Switch piece (Phase 13) is one ready-made
    source of that event, waiting for something to listen.
 
-## Phase 26 — beyond one building
+## Phase 28 — beyond one building
 
 - **Additional buildings** — `RoomLayoutSystem` was written with this in
   mind (see its class comment), and `WorldObjectsStore` was made

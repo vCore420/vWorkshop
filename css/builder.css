@@ -384,3 +384,31 @@
   padding: 2px 4px;
   margin: 0 6px;
 }
+
+/* ---------- Being Spawner ---------- */
+.being-spawner-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+.being-spawner-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-body);
+  transition: background var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+}
+.being-spawner-tile:hover { background: rgba(127, 216, 196, 0.1); border-color: var(--screen-glow); }
+.being-spawner-tile-title { font-weight: 600; color: var(--paper); }
+.being-spawner-tile-meta { font-size: var(--text-xs); color: var(--paper-dark); }
+
+/* ---------- Being Manager ---------- */
+.being-manager-row.despawned { opacity: 0.6; }
+.being-manager-row h3 { margin-top: 0; display: flex; align-items: center; gap: 8px; }

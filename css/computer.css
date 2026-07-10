@@ -410,6 +410,13 @@
   text-align: right;
   flex-shrink: 0;
 }
+.settings-info-value {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--paper);
+  text-align: right;
+  margin-left: auto;
+}
 .settings-action-button {
   background: rgba(127, 216, 196, 0.15);
   border: 1px solid rgba(127, 216, 196, 0.4);

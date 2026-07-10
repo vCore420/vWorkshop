@@ -201,12 +201,38 @@ pace — "no intrusive notification is necessary," and there isn't one.
 ## Persistence
 
 `ResidentState.js` is ordinary JSON through the normal `PersistenceSystem`
-path — idle location and mood, nothing more. Identity, model, behaviour
-tuning, memory, and embodiment settings are all `ResidentProfileStore`'s
-own concern already (see `docs/AI.md`); duplicating any of them here would
-be exactly the "implementing its own copies" the brief explicitly warned
-against. Conversation history isn't persisted at all this phase — see
-"Conversation" above.
+path — idle location, mood, and current position, nothing more. Identity,
+model, behaviour tuning, memory, and embodiment settings are all
+`ResidentProfileStore`'s own concern already (see `docs/AI.md`);
+duplicating any of them here would be exactly the "implementing its own
+copies" the brief explicitly warned against. Conversation history isn't
+persisted at all this phase — see "Conversation" above.
+
+**Position persists, including mid-travel** (added in Workshop Polish).
+`currentPosition` is a plain field on `ResidentState`, mutated directly by
+`ResidentController` every frame rather than through an event-emitting
+setter — updating it that often would defeat `PersistenceSystem`'s own
+debouncing entirely; the ordinary autosave/beforeunload cycle already
+captures whatever it happens to be at save time. On load,
+`ResidentMovement`'s constructor accepts this as an optional starting
+position: if it doesn't already match the persisted `idleLocationId`'s own
+fixed point (meaning the resident was mid-journey when the Workshop was
+last saved), it begins a fresh travel from there toward that same
+destination, resuming rather than snapping straight to where it was
+headed or restarting from scratch.
+
+**Facing direction, expression, and connection state** (added in Beings
+Creator) are the same plain-field pattern, but honestly *snapshots only*
+— written every frame, never read back to drive behaviour. The
+resident's actual visual orientation is already recomputed fresh each
+session from its idle location's own look-at target (itself restored via
+`idleLocationId`) plus continuous procedural sway, and its expression and
+connection state must always reflect the live mood and whatever
+`AIConnectionManager.status` genuinely is right now — a stale persisted
+"connected" from last session would be actively misleading rather than
+merely out of date. They exist for continuity and any future
+diagnostic/debug view that wants a "what was last known" read-out without
+needing to query every live system separately.
 
 ## Known simplifications (by design, for this phase)
 

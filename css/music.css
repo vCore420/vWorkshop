@@ -302,6 +302,17 @@
 .music-playback-info { width: 160px; flex-shrink: 0; overflow: hidden; }
 .music-playback-title { font-size: var(--text-sm); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .music-playback-artist { font-size: var(--text-xs); color: var(--paper-dark); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.music-playback-error {
+  font-size: var(--text-xs);
+  color: #e0a878;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-height: 0;
+  opacity: 0;
+  transition: opacity var(--duration-medium) var(--ease-standard);
+}
+.music-playback-error.visible { max-height: none; opacity: 1; }
 
 .music-playback-transport { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .music-icon-button.music-playback-play {

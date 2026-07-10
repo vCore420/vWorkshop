@@ -4,7 +4,7 @@ A living 3D creative workshop, built to be a place you return to rather than
 an app you launch. Runs entirely in the browser, no build step, no backend —
 just static files.
 
-This project has gone through twenty-three phases (with one dedicated
+This project has gone through twenty-five phases (with one dedicated
 refinement pass in between): an architectural foundation and
 one believable room (phase 1), turning the computer into a real,
 self-contained creative workstation with a physical sit-down/stand-up
@@ -90,7 +90,17 @@ companion with no window or interface of its own, preparing the
 Workshop's eventual bridge to your local machine (applications, projects,
 files, plugins) entirely through ordinary Browser pages, alongside a real
 fix for a Browser page-refresh bug that had been quietly there since it
-was first built (phase 23).
+was first built (phase 23) — and, most recently, a dedicated quality
+pass: fixing the player model's own facing direction at its actual root
+cause, French door handle placement, a genuinely non-cosmetic Quiet
+Corner overlay fix, new Atmosphere and Diagnostics tabs in Settings,
+honest cross-browser error handling for music playback, and a resident
+whose position now survives a reload even mid-journey (phase 24) — and,
+most recently, Beings: a complete, general-purpose system for designing,
+saving, placing and managing creatures, animals, robots, or any other
+character as ordinary Workshop assets, with its own Being Creator (a real
+GLB/GLTF model import pipeline shared across the whole Workshop), Being
+Spawner, and Being Manager (phase 25).
 See `docs/ROADMAP.md` for what's next, `docs/ARCHITECTURE.md`
 for how the workshop as a whole is put together, and `docs/COMPUTER.md` /
 `docs/WORKBENCH.md` / `docs/WORLDBUILDER.md` / `docs/WORLD.md` /

@@ -399,22 +399,23 @@
 /* ---------- Rest Nook ---------- */
 .rest-nook-reminder {
   cursor: pointer;
-  transition: opacity var(--duration-medium) var(--ease-standard);
-}
-.rest-nook-reminder.dismissed {
-  opacity: 0;
-  pointer-events: none;
 }
 .rest-nook-dismiss-hint {
   cursor: pointer;
   font-size: var(--text-xs);
   color: var(--paper-dark);
   margin-top: var(--space-3);
-  transition: opacity var(--duration-medium) var(--ease-standard);
 }
-.rest-nook-dismiss-hint.dismissed {
+/* Applied to the overlay's own panel element itself, not just its inner
+   text — dismissing needs to hide the whole thing, not leave an empty,
+   still-visible panel behind. The overlay's own open/closed state is
+   untouched; this is purely visual, which is also why pointer-events is
+   turned off alongside the fade, so the now-invisible panel doesn't keep
+   intercepting clicks meant for whatever's behind it. */
+.rest-nook-panel-dismissed {
   opacity: 0;
   pointer-events: none;
+  transition: opacity var(--duration-medium) var(--ease-standard);
 }
 
 /* ---------- Resident Conversation ---------- */
