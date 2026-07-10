@@ -25,7 +25,7 @@ shaped two decisions everywhere in this codebase:
 
 ```
 index.html                 entry point, import map for Three.js (CDN)
-css/                        tokens.css (design tokens) · main.css (HUD/entry) · overlays.css
+css/                        tokens.css (design tokens) · main.css (HUD/entry) · overlays.css · browser-pages.css (workshop:// page styling)
 src/
   core/                      engine primitives — no Three.js *scene content* lives here
     Engine.js                owns renderer/scene/camera, runs the update/render loop
@@ -38,6 +38,7 @@ src/
     furniture/               one file per furniture definition + registry.js
     room/                    WorkshopRoom.js — floor/walls (real openings + exterior shell)/roof builder
   computer/                  the computer, as one self-contained object — see docs/COMPUTER.md
+  browser/                   PageRegistry.js, BrowserStore.js, WorkshopPages.js, PageShell.js — see docs/BROWSER.md
   workbench/                 the workbench + Project Presence system — see docs/WORKBENCH.md
   worldbuilder/               the world creation system (Builder + Build Mode +
                               ConstructionLibrary.js, the permanent building-block
@@ -47,10 +48,10 @@ src/
   player/                    the player character rig + appearance/outfit/texture persistence — see docs/PLAYER.md
   data/                      plain state: layoutDefault.js, ProjectsStore.js, NotesStore.js
   ui/                        OverlayManager.js, HUD.js, overlays/*.js (one per physical panel)
-  utils/                     PlaceholderFactory, ProceduralTexture, AudioSynth, InputManager, math, storage, ScreenProjector
+  utils/                     PlaceholderFactory, ProceduralTexture, AudioSynth, InputManager, SimpleMarkdown, math, storage, ScreenProjector
   plugins/examples/          reference plugin(s) — see PLUGIN_GUIDE.md
   main.js                    wiring only — construct, register, start. No behaviour here.
-docs/                        this file, COMPUTER.md, WORKBENCH.md, WORLDBUILDER.md, WORLD.md, POLISH.md, MUSIC.md, PERFORMANCE.md, PLAYER.md, REFINEMENT.md, ROADMAP.md, PLUGIN_GUIDE.md
+docs/                        this file, COMPUTER.md, WORKBENCH.md, WORLDBUILDER.md, WORLD.md, POLISH.md, MUSIC.md, PERFORMANCE.md, PLAYER.md, BROWSER.md, REFINEMENT.md, ROADMAP.md, PLUGIN_GUIDE.md
 assets/                      README explaining the "no shipped binary assets yet" decision
 ```
 

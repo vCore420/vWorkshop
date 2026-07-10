@@ -4,7 +4,7 @@ A living 3D creative workshop, built to be a place you return to rather than
 an app you launch. Runs entirely in the browser, no build step, no backend —
 just static files.
 
-This project has gone through nineteen phases (with one dedicated
+This project has gone through twenty phases (with one dedicated
 refinement pass in between): an architectural foundation and
 one believable room (phase 1), turning the computer into a real,
 self-contained creative workstation with a physical sit-down/stand-up
@@ -70,7 +70,13 @@ Surface behaviour lets any chosen part show an uploaded image, and a
 handful of real bugs (a taller character sinking into the floor, the
 mirror's own left-right flip, an "intermittent beeping" that turned out
 to be an over-electronic cricket sound) got root-caused and fixed rather
-than patched over (phase 19).
+than patched over (phase 19) — and, most recently, a real Workshop
+Browser: tabs, an address bar, and persistent sessions that survive
+closing and reopening the Workshop, a `workshop://` protocol serving real,
+live pages (the actual documentation, your actual project list), and an
+architecture — `PageRegistry` — built so a future Workshop Host can slot
+in its own pages without the Browser itself ever needing to change
+(phase 20).
 See `docs/ROADMAP.md` for what's next, `docs/ARCHITECTURE.md`
 for how the workshop as a whole is put together, and `docs/COMPUTER.md` /
 `docs/WORKBENCH.md` / `docs/WORLDBUILDER.md` / `docs/WORLD.md` /

@@ -166,20 +166,133 @@
   margin: 0 0 16px;
 }
 
-/* Browser app: a mock address bar, deliberately inert */
-.browser-address-bar {
+/* ---------- Browser app ---------- */
+.browser-app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  /* Cancels .workstation-content's own padding — a browser should fill
+     the available space edge-to-edge, not sit in a text-article margin
+     the way most other apps' content correctly does. */
+  margin: -18px -22px;
+}
+
+.browser-tab-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 8px 10px 0;
+  background: rgba(0, 0, 0, 0.18);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.browser-tab-bar::-webkit-scrollbar { display: none; }
+
+.browser-tab {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(255, 255, 255, 0.05);
+  max-width: 180px;
+  min-width: 110px;
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  color: var(--paper-dark);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.browser-tab.active {
+  background: var(--screen-bg);
+  color: var(--paper);
+  border-color: rgba(127, 216, 196, 0.3);
+}
+.browser-tab-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.browser-tab-close {
+  flex-shrink: 0;
+  opacity: 0.6;
+  border-radius: 4px;
+  width: 16px;
+  height: 16px;
+  text-align: center;
+  line-height: 16px;
+}
+.browser-tab-close:hover { opacity: 1; background: rgba(255, 255, 255, 0.12); }
+
+.browser-new-tab-btn {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  margin-bottom: 2px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--paper-dark);
+  font-size: 1rem;
+  cursor: pointer;
+}
+.browser-new-tab-btn:hover { color: var(--paper); border-color: var(--brass); }
+
+.browser-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--screen-bg);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.browser-toolbar-button {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--paper);
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+.browser-toolbar-button:hover:not(:disabled) { border-color: var(--brass); color: var(--brass-bright); }
+.browser-toolbar-button:disabled { opacity: 0.35; cursor: default; }
+
+.browser-address-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 999px;
-  padding: 8px 14px;
+  padding: 8px 16px;
   font-family: var(--font-mono);
   font-size: 0.8rem;
-  color: var(--paper-dark);
-  margin-bottom: 16px;
+  color: var(--paper);
 }
+.browser-address-input:focus { outline: none; border-color: var(--screen-glow); }
+
+.browser-content {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--paper);
+}
+
+.browser-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: none;
+}
+.browser-frame.active { display: block; }
 
 /* AI app: a mock input, deliberately disabled */
 .ai-input-row {

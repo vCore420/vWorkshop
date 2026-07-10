@@ -942,7 +942,55 @@ full write-up of each fix.
 Build Mode/Third Person View row — same styling, same "just an ordinary
 tappable button" mechanics, nothing new needed for touch specifically.
 
-## Phase 20 — depth in the room that exists
+## Phase 20 — Digital Workspace
+
+**Goal:** "allow the Workshop to naturally connect to the rest of the
+player's digital world... not about recreating Chrome... a browser that
+feels like it belongs inside the Workshop." See docs/BROWSER.md for the
+full architecture write-up.
+
+Delivered:
+- **A real Browser app** — tabs, address bar, back/forward/refresh/home,
+  new/close tab, all persisted between sessions (`BrowserStore.js`).
+- **`PageRegistry`** — the entire "the Browser doesn't know about
+  Workshop systems, systems expose pages to it" mechanism, one path ->
+  provider mapping, the same registration shape
+  `behaviours/registry.js`/`apps/registry.js` already established.
+- **A real `workshop://` protocol** — Home, Docs, Builder, Animation,
+  Projects, and Settings pages, all real, working pages rather than
+  stubs. Docs pages `fetch()` and render this repository's own actual
+  `README.md`/`docs/WORLDBUILDER.md`/`docs/PLAYER.md` with a new small
+  markdown renderer (`SimpleMarkdown.js`) — genuinely current
+  documentation, not a frozen copy. `workshop://projects` reads
+  `ProjectsStore` live, on every visit.
+- **One persistent iframe per tab**, reconciled against the store rather
+  than torn down and rebuilt — switching tabs never loses a page's live
+  state, and an unchanged URL never triggers a spurious reload.
+- **`workshop://host`, explicitly a placeholder** — "the Workshop Host is
+  NOT being implemented during this phase... prepare the architecture so
+  it can slot in naturally later." A real, honest page describing what's
+  coming, not a stub pretending to be a feature; the moment a real Host
+  exists, registering its own pages with the same `PageRegistry` is the
+  entire integration.
+
+**A real, load-bearing bug caught before it shipped**: the first version
+of `workshop://docs`'s own `fetch()` calls, and `PageShell.js`'s own
+stylesheet link, used root-relative paths (`/README.md`, `/css/...`).
+GitHub Pages project sites are commonly deployed to a subpath rather than
+a domain root, and a root-relative path silently resolves to the wrong
+place on exactly that common deployment shape — `index.html`'s own
+stylesheet links already use relative (`./css/...`) paths for this exact
+reason, which is what caught the inconsistency. Fixed to match.
+
+**An honest limitation, documented rather than hidden**: most real
+websites (GitHub included) block being embedded via `X-Frame-Options`,
+enforced by the visitor's own browser based on headers the remote server
+sends — nothing achievable from inside this Browser changes that, and
+there's no reliable way to even detect it happening. Every tab has a
+permanent "open in a new browser tab" escape hatch instead of a
+sometimes-appearing error message.
+
+## Phase 21 — depth in the room that exists
 
 Roughly in priority order, each independently shippable:
 
@@ -981,7 +1029,7 @@ Roughly in priority order, each independently shippable:
 9. **A true oriented planar reflection**, and reflective surfaces beyond a
    flat plane — see "Future extension points" in `docs/PLAYER.md`.
 
-## Phase 21 — the world becomes alive on its own
+## Phase 22 — the world becomes alive on its own
 
 1. **Seasonal changes** — a plugin (see `PLUGIN_GUIDE.md`) reading the real
    calendar date and adjusting window tint / a handful of decorative
@@ -1005,7 +1053,7 @@ Roughly in priority order, each independently shippable:
    Construction Library's own Switch piece (Phase 13) is one ready-made
    source of that event, waiting for something to listen.
 
-## Phase 22 — beyond one building
+## Phase 23 — beyond one building
 
 - **Additional buildings** — `RoomLayoutSystem` was written with this in
   mind (see its class comment), and `WorldObjectsStore` was made
