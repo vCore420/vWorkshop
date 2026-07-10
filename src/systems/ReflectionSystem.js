@@ -13,7 +13,16 @@ const CAMERA_FAR = 20;
 // mirror is very often mounted close to a wall (this one specifically,
 // after an earlier pass moved it closer to one), and a camera placed
 // behind the glass would have nowhere real to be.
-const MIRROR_CAMERA_OFFSET = 0.05;
+// "The current reflection appears closer than expected... aim for a more
+// natural viewing distance" — 0.05 was tuned purely to avoid clipping
+// into the glass, not chosen with viewing distance in mind; raised to a
+// still-modest 0.25, which reads as roughly an arm's length back from
+// the surface rather than standing with your nose against it. Doesn't
+// reopen the earlier "camera behind a wall-mounted mirror" concern that
+// comment above describes — the camera sits in front of the glass, into
+// the room, so moving it further out is moving it further from any wall
+// behind the mirror, not closer to one.
+const MIRROR_CAMERA_OFFSET = 0.25;
 const MIRROR_LOOK_DISTANCE = 2.6;
 // Squared-distance / (1 - cosine) thresholds below which the mirror's own
 // mesh is treated as "hasn't moved" — see _updateFixedTransform().

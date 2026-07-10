@@ -38,21 +38,69 @@ export class LightingSystem {
     this._lightningFlash = 0; // 0-1, decays after each flash — see update()
   }
 
+  /** Lets another system's own light (built and owned there, since that
+   *  system already knows exactly where it needs to sit — see
+   *  `ComputerSystem.js`'s own desk lamp) participate in the Workshop
+   *  light switch without `LightingSystem` needing to know how to build
+   *  it. "Connect the desk lamp to the Workshop lighting system" is
+   *  exactly this: one call, from wherever the light already lives. */
+  /** Read by Settings' own Diagnostics page — see SettingsApp.js's
+   *  renderDiagnostics(). Kept as a real getter rather than the page
+   *  reaching into `_shadowQuality` directly, respecting the same
+   *  privacy convention every other underscore-prefixed field here
+   *  implies. */
+  getShadowQuality() {
+    return this._shadowQuality;
+  }
+
+  registerPracticalLight(light, { isLampLight = false } = {}) {
+    light.userData.baseIntensity = light.intensity;
+    light.userData.isLampLight = isLampLight;
+    this.practicalLights.push(light);
+    this._applyLightsOn();
+  }
+
   init(engine) {
     this.engine = engine;
 
-    this.hemi = new THREE.HemisphereLight("#bcd7e6", "#4a3a2c", 0.55);
+    // "Open spaces without nearby walls remain noticeably dark... the
+    // goal is not brighter lighting, the goal is more believable
+    // lighting." The ground colour (light bounced up off the floor, in a
+    // hemisphere light's own model) was a dark, nearly-black brown —
+    // brightened to a warmer, lighter tone so floor-facing surfaces get
+    // genuine indirect fill even far from any point light, rather than
+    // uniformly raising intensity everywhere (which would also brighten
+    // areas that already read fine).
+    this.hemi = new THREE.HemisphereLight("#bcd7e6", "#5f4c38", 0.55);
     engine.scene.add(this.hemi);
 
     this.sun = new THREE.DirectionalLight("#fff2df", 1.2);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(1024, 1024);
     this.sun.shadow.camera.near = 1;
-    this.sun.shadow.camera.far = 20;
-    this.sun.shadow.camera.left = -6;
-    this.sun.shadow.camera.right = 6;
-    this.sun.shadow.camera.top = 6;
-    this.sun.shadow.camera.bottom = -6;
+    // "Improve shadow quality by expanding shadow coverage... shadow
+    // distance." The original ±6/far-20 frustum matched the Workshop
+    // room's own footprint exactly, leaving any Builder-created structure
+    // further out in the wider outdoor world with no shadow coverage at
+    // all. Expanded to ±9/far-28 — map size (see setLightingQuality) is
+    // deliberately left unchanged, so this trades a little per-pixel
+    // shadow crispness for genuinely covering more of the world, rather
+    // than also increasing GPU cost to compensate.
+    this.sun.shadow.camera.far = 28;
+    this.sun.shadow.camera.left = -9;
+    this.sun.shadow.camera.right = 9;
+    this.sun.shadow.camera.top = 9;
+    this.sun.shadow.camera.bottom = -9;
+    // "Shadow radius... shadow consistency." radius softens shadow edges
+    // (only visible with PCFSoftShadowMap, already the default — see
+    // Engine.js) rather than leaving them at a harsh, aliased default;
+    // bias/normalBias avoid shadow acne (faint self-shadowing stripes on
+    // flat surfaces from floating-point precision, which read as
+    // inconsistent — flickering slightly as the camera moves — rather
+    // than a stable, believable shadow).
+    this.sun.shadow.radius = 2;
+    this.sun.shadow.bias = -0.0006;
+    this.sun.shadow.normalBias = 0.02;
     engine.scene.add(this.sun, this.sun.target);
 
     this.ambientFill = new THREE.AmbientLight("#4a3a2c", 0.18);
@@ -107,10 +155,10 @@ export class LightingSystem {
     // WORKSHOP_DOOR in layoutDefault.js), and a doorway genuinely splits
     // a wall into two separate segments either side of it, which is what
     // "the opposite wall" means here rather than a literally different
-    // wall. z is nudged from 2.8 to 2.83 — closer to the wall's actual
-    // interior face (~2.85) without quite touching it, avoiding z-fighting
-    // while sitting visibly flush rather than with a noticeable gap.
-    plate.position.set(1.8, 1.3, 2.83);
+    // wall. z nudged to 2.845 — closer still to the wall's actual
+    // interior face (~2.85) than before, sitting flush against it rather
+    // than with a small, noticeable gap, while still avoiding z-fighting.
+    plate.position.set(1.8, 1.3, 2.845);
     switchEntity.addComponent(new MeshComponent(plate, this.engine.scene));
     switchEntity.addComponent(
       new InteractableComponent({

@@ -146,6 +146,30 @@ export class RoomLayoutSystem {
     return this.room.wallColliders;
   }
 
+  /** "Collision geometry should accurately match the visible doors" — the
+   *  wall's own static colliders leave a permanent gap at the doorway
+   *  (see this class's own top comment), which never accounted for
+   *  whether the door panels themselves were actually open or closed —
+   *  meaning the doorway was always walkable even with both doors
+   *  visibly shut. Returns one simple box spanning the full doorway
+   *  opening while the door is substantially closed (`_doorTargetAngle`
+   *  near zero, actual panel rotation eased close to it too — checking
+   *  the live panel rotation, not just the target, so the door only
+   *  actually blocks once it's nearly finished swinging shut, not the
+   *  instant the target changes), or `null` while open or mid-swing. Not
+   *  full rotating-panel collision — a swinging door mid-animation is a
+   *  believable-enough pass-through for a door nobody would realistically
+   *  be pushing through at that exact moment, and the two panels
+   *  approximate to one static slab well enough closed to be worth a
+   *  much more complex rotated-box collider. */
+  getDoorCollider() {
+    if (!this.room?.doorColliderBox) return null;
+    const left = this.room.doorPanels.left;
+    const right = this.room.doorPanels.right;
+    const substantiallyClosed = Math.abs(left.rotation.y) < 0.05 && Math.abs(right.rotation.y) < 0.05;
+    return substantiallyClosed && this._doorTargetAngle < 0.01 ? this.room.doorColliderBox : null;
+  }
+
   update(dt) {
     if (!this.room) return;
     const left = this.room.doorPanels.left;

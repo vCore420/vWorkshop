@@ -49,6 +49,13 @@ import { ResidentBehaviour } from "./resident/ResidentBehaviour.js";
 import { ResidentConnection } from "./resident/ResidentConnection.js";
 import { ResidentController } from "./resident/ResidentController.js";
 import { createResidentConversationOverlay } from "./resident/ResidentConversation.js";
+import { ModelAssetStore } from "./beings/ModelAssetStore.js";
+import { ModelLibrary } from "./beings/ModelLibrary.js";
+import { ModelLoader } from "./beings/ModelLoader.js";
+import { BeingLibrary } from "./beings/BeingLibrary.js";
+import { BeingInstanceStore } from "./beings/BeingInstanceStore.js";
+import { BeingController } from "./beings/BeingController.js";
+import { BeingSpawnerSystem } from "./beings/BeingSpawnerSystem.js";
 import { PlayerCharacterSystem } from "./player/PlayerCharacterSystem.js";
 import { PlayerAnimationSystem } from "./player/PlayerAnimationSystem.js";
 import { AnimationLibraryStore } from "./player/AnimationLibraryStore.js";
@@ -218,6 +225,41 @@ void compassSystem;
 const residentController = engine.addSystem(new ResidentController({ residentState, residentBehaviour, residentConnection, residentProfileStore }));
 void residentController;
 
+// "Beings should also become Workshop assets" — the same three-way split
+// (index / raw bytes / loader-and-cache) src/browser and src/ai already
+// use for their own binary-adjacent assets, applied to imported 3D
+// models. See ModelLibrary.js's own comment for why models aren't owned
+// by BeingLibrary specifically.
+const modelAssetStore = new ModelAssetStore();
+const modelLibrary = new ModelLibrary();
+const modelLoader = new ModelLoader(modelLibrary, modelAssetStore);
+const beingLibrary = new BeingLibrary();
+const beingInstanceStore = new BeingInstanceStore();
+// BeingController (renders/moves every placed Being) and
+// BeingSpawnerSystem (the ghost-preview placement workflow) both need to
+// be registered — and therefore initialised — before ComputerSystem,
+// since BeingManagerApp.js reads `beingController.engine` the same way
+// MediaApp.js already reads `musicSystem.engine`, rather than needing its
+// own dedicated engine dependency.
+const beingController = engine.addSystem(new BeingController({ beingLibrary, beingInstanceStore, modelLoader }));
+const beingSpawnerSystem = engine.addSystem(new BeingSpawnerSystem({ beingLibrary, beingInstanceStore }));
+// "Interaction: Talk, Wave, Inspect, None." Deliberately not a chat
+// interface — a Being isn't connected to Ollama the way the Workshop's
+// own resident is (see docs/AI.md/docs/RESIDENT.md) — a brief, honest
+// acknowledgment via the same "hud:toast" mechanism the rest of the
+// Workshop already uses for short, transient messages.
+engine.events.on("being:interact", ({ instanceId, definitionId }) => {
+  const definition = beingLibrary.get(definitionId);
+  const instance = beingInstanceStore.get(instanceId);
+  const name = instance?.name || definition?.name || "This Being";
+  const text = {
+    talk: `${name}: "${definition?.description || "..."}"`,
+    wave: `${name} waves at you.`,
+    inspect: definition?.description || `${name} doesn't have a description yet.`,
+  }[definition?.interactionBehaviour] ?? `${name}.`;
+  engine.events.emit("hud:toast", { text });
+});
+
 // The Settings app's Danger Zone needs to reach across several stores
 // that don't otherwise know about each other (this is deliberately a
 // plain object of closures, not a new system — "resist adding new
@@ -277,6 +319,17 @@ const computerSystem = engine.addSystem(
     aiConnectionManager,
     modelRegistry,
     residentProfileStore,
+    residentBehaviour,
+    cameraSystem,
+    interiorSystem,
+    hostManager,
+    modelLibrary,
+    modelAssetStore,
+    modelLoader,
+    beingLibrary,
+    beingInstanceStore,
+    beingController,
+    beingSpawnerSystem,
     dangerZoneActions,
   })
 );
@@ -314,6 +367,9 @@ persistenceSystem.registerProvider("browser", browserStore);
 persistenceSystem.registerProvider("aiConnection", aiConnectionManager);
 persistenceSystem.registerProvider("aiResidents", residentProfileStore);
 persistenceSystem.registerProvider("residentState", residentState);
+persistenceSystem.registerProvider("modelLibrary", modelLibrary);
+persistenceSystem.registerProvider("beingLibrary", beingLibrary);
+persistenceSystem.registerProvider("beingInstances", beingInstanceStore);
 persistenceSystem.registerProvider("animationLibrary", animationLibraryStore);
 persistenceSystem.registerProvider("plugins", engine.plugins);
 

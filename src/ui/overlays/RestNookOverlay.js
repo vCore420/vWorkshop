@@ -6,15 +6,20 @@
  * to sit and talk with). This overlay stays brief rather than padding
  * itself out with fake content.
  *
- * "The reminder shown while sitting should disappear when clicked. This
- * should only dismiss the reminder. The player should still leave the
- * chair using Escape exactly as they do now." Clicking the text fades it
- * out and leaves it gone — a `dismissed` flag on the overlay's own
- * instance, not anything CameraSystem or OverlayManager know about,
- * since leaving the chair is still entirely their own, unrelated
- * Escape-driven mechanism. Re-sitting creates a fresh overlay instance
- * (see ComputerSystem.js-style focus wiring), so the reminder is there to
- * dismiss again next time, not permanently gone after the first read.
+ * "The reminder shown while sitting should disappear when clicked...
+ * ensure the entire introductory overlay is dismissed once acknowledged.
+ * Escape should remain the only method of standing back up." Clicking
+ * the text fades out the *whole panel* (`panelEl` itself, not just its
+ * own inner content) — an earlier version of this only faded the text,
+ * leaving the overlay's own background/border panel fully visible and
+ * looking like an empty, still-active overlay, which is exactly the
+ * reported bug. The overlay's own open/closed state is untouched either
+ * way — this is purely a visual dismissal, `pointer-events: none`
+ * alongside the fade so the now-invisible panel can't still intercept
+ * clicks — leaving the chair is still entirely CameraSystem's own,
+ * unrelated Escape-driven mechanism. Re-sitting creates a fresh overlay
+ * instance, so the reminder is there to dismiss again next time, not
+ * permanently gone after the first read.
  */
 export function createRestNookOverlay() {
   return {
@@ -37,8 +42,7 @@ export function createRestNookOverlay() {
       panelEl.appendChild(hint);
 
       const dismiss = () => {
-        content.classList.add("dismissed");
-        hint.classList.add("dismissed");
+        panelEl.classList.add("rest-nook-panel-dismissed");
       };
       content.addEventListener("click", dismiss);
       hint.addEventListener("click", dismiss);

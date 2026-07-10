@@ -29,7 +29,7 @@ const CROUCH_HEIGHT_REDUCTION = 0.5; // how much crouching lowers the eyes below
 const MAX_STANDING_EYE_HEIGHT = 2.0;
 const EYE_HEIGHT_DAMPING = 10; // how quickly standing<->crouch eye height eases, not a snap
 const GRAVITY = 15.5; // metres/second² — tuned for snappy, game-y jump/fall arcs, not real-world 9.8
-const JUMP_HEIGHT = 0.55; // metres — the actual design parameter; JUMP_VELOCITY below is derived from it
+const JUMP_HEIGHT = 0.95; // metres — raised again (0.55 → 0.8 → 0.95) so a jump comfortably clears the top of typical Builder-created furniture and structures, not just a small step; JUMP_VELOCITY below is derived from it
 const JUMP_VELOCITY = Math.sqrt(2 * GRAVITY * JUMP_HEIGHT);
 const STEP_TOLERANCE = 0.6; // metres a surface can sit above the player's own feet and still count as reachable ground — see _computeGroundHeight()
 const LAND_STATE_DURATION = 0.16; // seconds "land" holds before yielding to whatever movement calls for next
@@ -299,13 +299,33 @@ export class CameraSystem {
 
     this._scratchFPQuat.setFromEuler(this._scratchEuler.set(this.pitch, this.yaw, 0, "YXZ"));
 
+    // "Introduce vertical camera orbit... look upwards, look downwards,
+    // orbit around the player smoothly." Reuses the exact same `pitch`
+    // that already drives first-person looking, so third person always
+    // shows roughly the same direction the player is actually looking —
+    // positive pitch (looking down, in this project's own convention;
+    // see the "YXZ" Euler order just above) moves the camera higher and
+    // closer-in horizontally, orbiting over the top to look down at the
+    // player; negative pitch (looking up) moves it lower and closer-in
+    // the other way, orbiting underneath to look up. Ordinary spherical
+    // coordinates — cos(pitch) shrinks the horizontal distance as the
+    // camera swings toward directly overhead/underneath, sin(pitch)
+    // grows the vertical offset by the same amount, so the camera always
+    // stays the same true distance from the player regardless of pitch.
+    const orbitHorizontalDistance = THIRD_PERSON_DISTANCE * Math.cos(this.pitch);
+    const orbitVerticalOffset = THIRD_PERSON_HEIGHT + THIRD_PERSON_DISTANCE * Math.sin(this.pitch);
     // "Behind" the player is the opposite of _updateWalk's own forward
     // vector (Math.sin(yaw), 0, Math.cos(yaw)) rather than its negation.
     const desired = this._scratchThirdDesired.set(
-      this.position.x + Math.sin(this.yaw) * THIRD_PERSON_DISTANCE,
-      this.position.y + THIRD_PERSON_HEIGHT,
-      this.position.z + Math.cos(this.yaw) * THIRD_PERSON_DISTANCE
+      this.position.x + Math.sin(this.yaw) * orbitHorizontalDistance,
+      this.position.y + orbitVerticalOffset,
+      this.position.z + Math.cos(this.yaw) * orbitHorizontalDistance
     );
+    // A floor clamp the horizontal-only wall/furniture push-out below
+    // doesn't provide on its own — orbiting steeply upward (looking far
+    // down) could otherwise put the desired camera position below the
+    // actual floor for a crouched or short-statured moment.
+    desired.y = Math.max(desired.y, 0.15);
     // Reuses the exact same wall/furniture push-out the player's own
     // movement already does — not a second collision system, just the
     // desired camera point treated as a "next position" like any other.
@@ -426,7 +446,11 @@ export class CameraSystem {
    *  suspended, and horizontal drift stays gentle so the player doesn't
    *  need to fight to stay near the rungs while climbing. */
   _updateLadderMovement(dt, zone, input) {
-    this._verticalVelocity = 0;
+    // "Smooth entering" — damping the vertical velocity out rather than
+    // zeroing it instantly reads as smoothly catching the rungs (e.g.
+    // grabbing on mid-fall) instead of an abrupt full stop the moment the
+    // zone is entered.
+    this._verticalVelocity = damp(this._verticalVelocity, 0, 14, dt);
     this._crouching = false;
     this._currentEyeHeight = damp(this._currentEyeHeight, this._getStandingEyeHeight(), EYE_HEIGHT_DAMPING, dt);
 
@@ -456,7 +480,14 @@ export class CameraSystem {
     this.position.z = next.z;
     this.position.y = this._footY + this._currentEyeHeight;
 
-    return Math.abs(climbInput) > 0.05 ? "ladderClimb" : "idle";
+    // Paused on the ladder (not actively climbing) still reports
+    // "ladderClimb", not "idle" — a standing idle pose (relaxed arms at
+    // the sides) would look clearly wrong for a character visually still
+    // positioned vertically on the rungs; holding the climbing pose mid-
+    // reach reads as "gripping the ladder," which is what's actually
+    // happening. "Proper animation integration" applies here as much as
+    // to the climbing motion itself.
+    return "ladderClimb";
   }
 
   /** A simple heightmap-style query, not real physics: the base floor
@@ -482,6 +513,8 @@ export class CameraSystem {
     for (const wallBox of this._roomSystem?.getWallColliders?.() ?? []) {
       this._pushOutOfBox(next, wallBox);
     }
+    const doorBox = this._roomSystem?.getDoorCollider?.();
+    if (doorBox) this._pushOutOfBox(next, doorBox);
     for (const footprint of this._furnitureSystem?.getFootprints?.() ?? []) {
       this._pushOutOfBox(next, footprint);
     }

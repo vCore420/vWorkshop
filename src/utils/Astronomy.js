@@ -139,4 +139,45 @@ export function moonIllumination(phaseFraction) {
   return (1 - Math.cos(phaseFraction * TAU)) / 2;
 }
 
+/** Rise/set hours (decimal, 0-24, or `null` if it doesn't cross the
+ *  horizon at all that day — near the poles, at the right time of year,
+ *  it genuinely might not) for a body whose altitude at a given hour is
+ *  computed by `altitudeAtHour(hour)`. A simple scan in 6-minute steps
+ *  looking for a sign change, not a closed-form solve — "Settings' own
+ *  Atmosphere tab" is the only caller, and a display-only estimate,
+ *  recomputed at most a few times a minute, doesn't need to be exact
+ *  down to the second. */
+function findRiseSet(altitudeAtHour) {
+  const STEP = 0.1; // hours — 6 minutes
+  let rise = null;
+  let set = null;
+  let previousAltitude = altitudeAtHour(0);
+  for (let hour = STEP; hour <= 24; hour += STEP) {
+    const altitude = altitudeAtHour(hour);
+    if (previousAltitude < 0 && altitude >= 0 && rise === null) rise = hour;
+    if (previousAltitude >= 0 && altitude < 0 && set === null) set = hour;
+    previousAltitude = altitude;
+  }
+  return { rise, set };
+}
+
+/** Sunrise/sunset, in decimal hours, for the given latitude/day-of-year —
+ *  the exact same `solarPosition()` formula every other sun placement in
+ *  this project already uses, just scanned across a full day instead of
+ *  evaluated once. */
+export function sunriseSunset(latitude, dayOfYearValue) {
+  return findRiseSet((hour) => solarPosition(hour, latitude, dayOfYearValue).altitude);
+}
+
+/** Moonrise/moonset — uses the exact same "effective hour" offset by
+ *  lunar phase that `TimeOfDaySystem.js`'s own moon *position* already
+ *  relies on (see that file's own comment on why), so a moon phase that
+ *  visibly rises/sets at a different time than the sun is the same
+ *  underlying relationship represented twice, not two different models
+ *  that could ever disagree with each other. */
+export function moonriseMoonset(latitude, dayOfYearValue, phaseFraction) {
+  const offsetHours = phaseFraction * 24;
+  return findRiseSet((hour) => solarPosition((hour + offsetHours) % 24, latitude, dayOfYearValue).altitude);
+}
+
 export { dayOfYear };

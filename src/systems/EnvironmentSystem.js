@@ -118,6 +118,7 @@ export class EnvironmentSystem {
     this.manualState = "clear"; // remembered independently, so switching back to Manual restores your last choice rather than defaulting
     this.windSpeed = WIND_BASE.clear; // 0-1, smoothed toward the current state's WIND_BASE with gentle gusts
     this.windDirectionRad = 0;
+    this.temperatureC = null; // only ever set by live weather — see requestLiveWeather(); Settings' own Atmosphere tab shows "not available" while this is null
     this.liveStatus = "idle"; // "idle" | "loading" | "ok" | "error"
     this.liveError = null;
 
@@ -224,6 +225,7 @@ export class EnvironmentSystem {
       this.windSpeed = Math.min(1, result.windSpeedKmh / 60);
       this._windTarget = this.windSpeed;
       if (Number.isFinite(result.windDirectionDeg)) this.windDirectionRad = (result.windDirectionDeg * Math.PI) / 180;
+      if (Number.isFinite(result.temperatureC)) this.temperatureC = result.temperatureC;
       this._setState(result.state);
     } catch (err) {
       this.liveStatus = "error";
