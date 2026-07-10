@@ -484,6 +484,78 @@
 }
 .danger-zone-button-severe:hover { background: rgba(184, 74, 58, 0.32); }
 
+/* ---------- AI Mission Control ---------- */
+.ai-status-card {
+  background: rgba(127, 216, 196, 0.06);
+  border-color: rgba(127, 216, 196, 0.25);
+}
+.ai-status-card h3 { margin-top: 0; }
+.ai-status-line {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  margin: 4px 0 0;
+}
+.ai-status-dot { font-size: 0.7em; margin-right: 4px; }
+.ai-status-connected .ai-status-dot { color: #7fd8a0; }
+.ai-status-connecting .ai-status-dot { color: var(--brass-bright); }
+.ai-status-disconnected .ai-status-dot { color: var(--paper-dark); }
+
+.ai-future-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--paper-dark);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 2px 10px;
+  margin-bottom: 12px;
+}
+
+.ai-textarea-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.ai-textarea-row label { font-size: 0.8rem; color: var(--paper-dark); }
+.ai-textarea-row textarea {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--paper);
+  resize: vertical;
+}
+.ai-textarea-row textarea:focus { outline: none; border-color: var(--screen-glow); }
+
+.ai-generated-prompt {
+  margin-top: 10px;
+  background: var(--wood-dark);
+  color: var(--paper);
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.ai-test-result {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+.ai-test-result p { margin: 4px 0 0; }
+.ai-test-success { background: rgba(127, 216, 160, 0.12); border: 1px solid rgba(127, 216, 160, 0.35); color: #bdeccf; }
+.ai-test-failure { background: rgba(184, 92, 74, 0.12); border: 1px solid rgba(184, 92, 74, 0.35); color: #f0b3a4; }
+
 @media (max-width: 700px) {
   .workstation-rail { width: 48px; }
   .workstation-rail button .rail-glyph { font-size: 15px; }

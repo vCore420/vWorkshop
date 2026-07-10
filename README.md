@@ -4,7 +4,7 @@ A living 3D creative workshop, built to be a place you return to rather than
 an app you launch. Runs entirely in the browser, no build step, no backend —
 just static files.
 
-This project has gone through twenty phases (with one dedicated
+This project has gone through twenty-one phases (with one dedicated
 refinement pass in between): an architectural foundation and
 one believable room (phase 1), turning the computer into a real,
 self-contained creative workstation with a physical sit-down/stand-up
@@ -76,7 +76,11 @@ closing and reopening the Workshop, a `workshop://` protocol serving real,
 live pages (the actual documentation, your actual project list), and an
 architecture — `PageRegistry` — built so a future Workshop Host can slot
 in its own pages without the Browser itself ever needing to change
-(phase 20).
+(phase 20) — and, most recently, AI Mission Control: a calm, honest place
+to prepare a future Workshop resident's connection to a local Ollama
+server, its identity (in plain words, not raw prompt text), behaviour
+tuning, and multiple saved profiles, with memory and embodiment settings
+already shaped for phases still to come (phase 21).
 See `docs/ROADMAP.md` for what's next, `docs/ARCHITECTURE.md`
 for how the workshop as a whole is put together, and `docs/COMPUTER.md` /
 `docs/WORKBENCH.md` / `docs/WORLDBUILDER.md` / `docs/WORLD.md` /

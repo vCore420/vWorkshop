@@ -990,7 +990,57 @@ there's no reliable way to even detect it happening. Every tab has a
 permanent "open in a new browser tab" escape hatch instead of a
 sometimes-appearing error message.
 
-## Phase 21 — depth in the room that exists
+## Phase 21 — AI Mission Control
+
+**Goal:** "This is NOT the AI itself... preparing another presence that
+will eventually live inside the Workshop." See docs/AI.md for the full
+architecture write-up.
+
+Delivered, six small, separated responsibilities (`src/ai/`):
+- **`AIConnectionManager.js`** — a calm, ten-second polling loop against a
+  configured Ollama server, folding every possible failure (network,
+  CORS, timeout — indistinguishable from a browser, and deliberately
+  treated identically) into one plain status, never thrown, never
+  logged as an error. "Never block the Workshop. Never interrupt
+  gameplay. Never spam errors" implemented literally, not just followed
+  in spirit.
+- **`ModelRegistry.js`** — a pure, refreshable cache, translating
+  Ollama's own raw `/api/tags` shape into what the UI actually displays.
+  Manual "Refresh Models" only replaces the known list on an actual
+  success, leaving a working list alone through a transient failure.
+- **`ResidentProfileStore.js`** — Create/Duplicate/Rename/Delete
+  profiles, each the entire description of one possible future resident,
+  always at least one ("Workshop Resident," matching the Status Card's
+  own example), persisted between sessions.
+- **`MemoryConfiguration.js`/`EmbodimentConfiguration.js`** — shape and
+  defaults, not implementations. "The goal is to establish the
+  architecture" — real fields with real defaults, honestly badged
+  "not active yet" in the UI, not commented-out placeholders.
+- **`PromptComposer.js`** — one pure function turning identity fields into
+  the actual system prompt, importable identically by Mission Control's
+  own Advanced section and a future real AI Resident.
+
+**A real identity editor, not a system-prompt textbox.** Name, Purpose,
+Identity, Personality, Behaviour, Conversation Style — six plain free-text
+fields, ahead of the numeric Behaviour tuning both in the file and the
+rendered form. "The player should feel like they are defining who this
+resident is rather than editing raw prompt text" — the Advanced section
+still shows the generated prompt, collapsed by default, for whoever wants
+to see it.
+
+**Connection Testing** sends one fixed prompt ("Hello.") to the selected
+model and shows the real response or the real error inline — "purely for
+testing, not yet the Workshop chat interface."
+
+**A UI bug caught before it shipped**: the Memory/Embodiment section
+badges were first written reusing `.workshop-page-badge`, a class that
+only exists inside `browser-pages.css` — loaded by the Browser's own
+`srcdoc` iframe content, not the main computer UI Mission Control actually
+renders into. Caught by checking which stylesheet the class was actually
+defined in before assuming it would apply; fixed with a dedicated
+`.ai-future-badge` styled directly in `computer.css`.
+
+## Phase 22 — depth in the room that exists
 
 Roughly in priority order, each independently shippable:
 
@@ -1029,7 +1079,7 @@ Roughly in priority order, each independently shippable:
 9. **A true oriented planar reflection**, and reflective surfaces beyond a
    flat plane — see "Future extension points" in `docs/PLAYER.md`.
 
-## Phase 22 — the world becomes alive on its own
+## Phase 23 — the world becomes alive on its own
 
 1. **Seasonal changes** — a plugin (see `PLUGIN_GUIDE.md`) reading the real
    calendar date and adjusting window tint / a handful of decorative
@@ -1053,7 +1103,7 @@ Roughly in priority order, each independently shippable:
    Construction Library's own Switch piece (Phase 13) is one ready-made
    source of that event, waiting for something to listen.
 
-## Phase 23 — beyond one building
+## Phase 24 — beyond one building
 
 - **Additional buildings** — `RoomLayoutSystem` was written with this in
   mind (see its class comment), and `WorldObjectsStore` was made
