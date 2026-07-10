@@ -39,6 +39,8 @@ import { ImageAssetStore } from "./systems/ImageAssetStore.js";
 import { PageRegistry } from "./browser/PageRegistry.js";
 import { BrowserStore } from "./browser/BrowserStore.js";
 import { registerWorkshopPages } from "./browser/WorkshopPages.js";
+import { HostManager } from "./host/HostManager.js";
+import { registerHostPages } from "./host/HostPages.js";
 import { AIConnectionManager } from "./ai/AIConnectionManager.js";
 import { ModelRegistry } from "./ai/ModelRegistry.js";
 import { ResidentProfileStore } from "./ai/ResidentProfileStore.js";
@@ -116,11 +118,16 @@ const musicLibraryStore = new MusicLibraryStore();
 const playlistStore = new PlaylistStore();
 const browserStore = new BrowserStore();
 const pageRegistry = new PageRegistry();
+// "The Host should be treated as a lightweight companion service" — see
+// HostManager.js's own comment. Constructed here, right alongside
+// pageRegistry, since PluginRegistry (owned by HostManager) needs the
+// real registry to register future plugin pages against directly.
+const hostManager = new HostManager(pageRegistry);
 // "Workshop systems should simply expose pages that the Browser can
 // display" — see WorkshopPages.js/PageRegistry.js's own comments. Called
 // here, once every store it needs already exists, not from inside
 // BrowserApp.js itself, which only ever talks to pageRegistry.resolve().
-registerWorkshopPages(pageRegistry, { projectsStore, browserStore });
+registerWorkshopPages(pageRegistry, { projectsStore, browserStore, hostProjectsService: hostManager.services.get("projects") });
 
 // "This is NOT the AI itself... preparing another presence." See
 // src/ai/AIConnectionManager.js's own comment for why polling starts
@@ -130,6 +137,13 @@ const aiConnectionManager = new AIConnectionManager();
 const modelRegistry = new ModelRegistry();
 const residentProfileStore = new ResidentProfileStore();
 aiConnectionManager.init();
+// "workshop://models... live from the same connection AI Mission Control
+// uses" — registered here, once modelRegistry exists, rather than inside
+// registerWorkshopPages() above alongside the docs/projects/settings
+// pages, since HostPages.js is specifically the Host's own contribution
+// to the Browser, kept in its own file for the same "systems expose
+// pages, the Browser doesn't know or care which system" separation.
+registerHostPages(pageRegistry, { hostManager, modelRegistry });
 
 // "This is not an AI assistant. It is the Workshop's first resident." —
 // ResidentConnection is a thin adapter over aiConnectionManager (see its
