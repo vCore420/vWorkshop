@@ -23,25 +23,24 @@ import { HOME_URL } from "./BrowserStore.js";
  * deployment layout) falls back to a short, honest explanation rather
  * than a blank page or a thrown error.
  *
- * **`workshop://host` is explicitly a placeholder, not a stub pretending
- * to be a feature.** "The Workshop Host is NOT being implemented during
- * this phase... simply prepare the architecture so they can slot in
- * naturally later." Registering it here — a real, working page, just one
- * that honestly says what it will become — is that preparation: the
- * moment a real Workshop Host exists, replacing this one
- * `pageRegistry.register("host", ...)` call (or adding
- * `programs`/`models`/`plugins`/`services` beside it) is the entire
- * integration. Nothing about `BrowserApp.js` or `PageRegistry.js` needs
- * to change at all.
+ * **`workshop://host` used to be a placeholder here** — "the Workshop
+ * Host is NOT being implemented during this phase... simply prepare the
+ * architecture so they can slot in naturally later," from the phase this
+ * file was first written in. That preparation held up exactly as
+ * intended: `HostPages.js` now registers the real `workshop://host` (and
+ * `programs`/`files`/`models`/`plugins`/`automation` beside it),
+ * overwriting this file's own old placeholder the moment
+ * `main.js` calls `registerHostPages()` after this function — nothing
+ * about `BrowserApp.js` or `PageRegistry.js` needed to change at all to
+ * make that swap possible.
  */
-export function registerWorkshopPages(pageRegistry, { projectsStore, browserStore }) {
+export function registerWorkshopPages(pageRegistry, { projectsStore, browserStore, hostProjectsService }) {
   pageRegistry.register("", () => homePage(browserStore));
   pageRegistry.register("docs", () => docFilePage("Workshop Documentation", "./README.md"));
   pageRegistry.register("builder", () => docFilePage("Builder Documentation", "./docs/WORLDBUILDER.md"));
   pageRegistry.register("animation", () => docFilePage("Player & Animation Documentation", "./docs/PLAYER.md"));
-  pageRegistry.register("projects", () => projectsPage(projectsStore));
+  pageRegistry.register("projects", () => projectsPage(projectsStore, hostProjectsService));
   pageRegistry.register("settings", () => settingsPage());
-  pageRegistry.register("host", () => hostPlaceholderPage());
 }
 
 async function fetchText(path) {
@@ -104,7 +103,7 @@ function collectRecentUrls(browserStore) {
   return urls.slice(0, 8);
 }
 
-function projectsPage(projectsStore) {
+function projectsPage(projectsStore, hostProjectsService) {
   const projects = projectsStore?.all() ?? [];
   const rows = projects.length
     ? projects
@@ -116,12 +115,30 @@ function projectsPage(projectsStore) {
         .join("")
     : `<p class="workshop-page-empty">No projects yet — start one from the Notebook, Pinboard, or Workbench.</p>`;
 
+  // "Projects" means two genuinely different things that happen to share
+  // a name — the Workshop's own Notebook entries (above, real today) and
+  // local filesystem projects on the player's actual computer (below,
+  // prepared architecture via the Workshop Host's own ProjectsService,
+  // not yet functional — see docs/HOST.md). Shown together on one page
+  // rather than a confusing second "projects" URL.
+  const hostStatus = hostProjectsService?.getStatus?.() ?? { summary: "Not available." };
   const html = `
-    <h1>Workshop Projects</h1>
-    <p class="workshop-page-subtitle">Live from ProjectsStore — the same board as the Notebook, Pinboard, and Workbench.</p>
-    <div class="workshop-home-grid">${rows}</div>
+    <h1>Projects</h1>
+    <p class="workshop-page-subtitle">Everything you're building — inside the Workshop, and (eventually) on your own computer.</p>
+
+    <div class="workshop-home-section">
+      <h2>Workshop Projects</h2>
+      <p class="workshop-page-subtitle" style="margin-bottom:12px;">Live from ProjectsStore — the same board as the Notebook, Pinboard, and Workbench.</p>
+      <div class="workshop-home-grid">${rows}</div>
+    </div>
+
+    <div class="workshop-home-section">
+      <h2>Local Projects</h2>
+      <span class="workshop-page-badge">Workshop Host \u2014 not active yet</span>
+      <p>${escapeHtml(hostStatus.summary)}</p>
+    </div>
   `;
-  return { title: "Workshop Projects", html: wrapPage("Workshop Projects", html) };
+  return { title: "Projects", html: wrapPage("Projects", html) };
 }
 
 function settingsPage() {
@@ -139,17 +156,6 @@ function settingsPage() {
     </script>
   `;
   return { title: "Browser Settings", html: wrapPage("Browser Settings", html) };
-}
-
-function hostPlaceholderPage() {
-  const html = `
-    <span class="workshop-page-badge">Coming later</span>
-    <h1>Workshop Host</h1>
-    <p class="workshop-page-subtitle">Not part of the Workshop yet — this page exists so the Browser is already prepared for it.</p>
-    <p>The Workshop Host will become the bridge between the Workshop and your local machine — launching installed applications, opening local projects and files, connecting to local AI models, managing plugins, and eventually future hardware integrations.</p>
-    <p>The Browser itself doesn't need to change at all when that day comes: <code>workshop://host</code>, and pages like <code>workshop://programs</code>, <code>workshop://models</code>, <code>workshop://plugins</code>, and <code>workshop://services</code>, are simply pages the Host will register with the same <code>PageRegistry</code> every other Workshop page already uses.</p>
-  `;
-  return { title: "Workshop Host", html: wrapPage("Workshop Host", html) };
 }
 
 function tile(url, title, meta) {

@@ -88,25 +88,73 @@ export function createBrowserApp({ browserStore, pageRegistry }) {
         return browserStore.getActiveTab().id;
       }
 
-      function ensureFrame(tabId) {
-        let frame = frames.get(tabId);
-        if (frame) return frame;
-        frame = document.createElement("iframe");
-        frame.className = "browser-frame";
-        frame.dataset.tabId = tabId;
+      /** Creates and installs a brand new iframe for `tabId`, showing
+       *  `url`, replacing whatever was there before — deliberately never
+       *  reusing an existing element and mutating its own `src`/`srcdoc`.
+       *  That reuse was the actual root cause of "the Browser often does
+       *  not visually update until the player switches to another tab and
+       *  back": an iframe's own rendered layer isn't always reliably
+       *  invalidated by the browser when its content changes while the
+       *  element itself never moves, resizes, or toggles visibility —
+       *  exactly what happens navigating within an already-active tab.
+       *  Switching tabs "fixed" it purely as a side effect, by forcing a
+       *  display:none/block toggle, which happens to force a real
+       *  relayout — not a coincidence, the actual mechanism. A fresh
+       *  element is guaranteed a fresh compositing layer from the
+       *  browser's own perspective, closing the gap architecturally
+       *  rather than papering over it with an explicit forced reflow.
+       *
+       *  There's no state worth preserving across this replacement
+       *  either: navigating to a new URL already resets scroll position
+       *  (`BrowserStore.navigate()`'s own behaviour, since a fresh page
+       *  starts at the top regardless), so nothing about keeping tabs'
+       *  own frames alive *between* navigations (still true — see
+       *  `reconcileFrames()`) is lost by replacing the element *within*
+       *  one. */
+      function loadIntoFrame(tabId, url) {
+        const oldFrame = frames.get(tabId);
+        const newFrame = document.createElement("iframe");
+        newFrame.className = "browser-frame";
+        if (oldFrame?.classList.contains("active")) newFrame.classList.add("active");
+        newFrame.dataset.tabId = tabId;
+        newFrame.dataset.currentUrl = url;
         // Deliberately not sandboxed — a sandboxed srcdoc frame loses
         // same-origin access to its own contentWindow, which is exactly
         // what scroll-position tracking for workshop:// pages needs (see
         // BrowserStore.js's own note on why that's only ever practical
         // for same-origin content in the first place).
-        frame.addEventListener("load", () => onFrameLoad(tabId, frame));
-        content.appendChild(frame);
-        frames.set(tabId, frame);
-        return frame;
+        newFrame.addEventListener("load", () => onFrameLoad(tabId, newFrame));
+
+        if (url.startsWith("workshop://")) {
+          const path = url.slice("workshop://".length);
+          pageRegistry
+            .resolve(path)
+            .then((page) => {
+              if (disposed || frames.get(tabId) !== newFrame) return; // superseded by a newer navigation before this resolved
+              if (page) {
+                newFrame.srcdoc = page.html;
+                browserStore.setTitle(tabId, page.title);
+              } else {
+                newFrame.srcdoc = wrapPage("Not found", notFoundHtml(url));
+                browserStore.setTitle(tabId, "Not found");
+              }
+              if (tabId === activeTabId()) renderChrome();
+            })
+            .catch(() => {
+              if (disposed || frames.get(tabId) !== newFrame) return;
+              newFrame.srcdoc = wrapPage("Couldn't load", notFoundHtml(url));
+            });
+        } else {
+          newFrame.src = url;
+        }
+
+        if (oldFrame) oldFrame.remove();
+        content.appendChild(newFrame);
+        frames.set(tabId, newFrame);
       }
 
       function onFrameLoad(tabId, frame) {
-        if (disposed) return;
+        if (disposed || frames.get(tabId) !== frame) return; // a stale frame's own late load event, already replaced
         const url = frame.dataset.currentUrl ?? "";
         if (url.startsWith("workshop://")) {
           try {
@@ -132,50 +180,14 @@ export function createBrowserApp({ browserStore, pageRegistry }) {
         if (tabId === activeTabId()) renderChrome();
       }
 
-      function loadIntoFrame(tabId, url) {
-        const frame = ensureFrame(tabId);
-        frame.dataset.currentUrl = url;
-        if (url.startsWith("workshop://")) {
-          const path = url.slice("workshop://".length);
-          frame.removeAttribute("src");
-          pageRegistry
-            .resolve(path)
-            .then((page) => {
-              if (disposed || frame.dataset.currentUrl !== url) return; // navigated elsewhere before this resolved
-              if (page) {
-                frame.srcdoc = page.html;
-                browserStore.setTitle(tabId, page.title);
-              } else {
-                frame.srcdoc = wrapPage("Not found", notFoundHtml(url));
-                browserStore.setTitle(tabId, "Not found");
-              }
-              if (tabId === activeTabId()) renderChrome();
-            })
-            .catch(() => {
-              if (disposed || frame.dataset.currentUrl !== url) return;
-              frame.srcdoc = wrapPage("Couldn't load", notFoundHtml(url));
-            });
-        } else {
-          frame.removeAttribute("srcdoc");
-          // Setting iframe.src to a value it already has typically does
-          // NOT reload it in real browsers, since nothing about the
-          // attribute actually changed — which would make Refresh quietly
-          // do nothing for an http(s) tab whose URL hasn't changed. A
-          // genuine attribute change first (even to about:blank) forces
-          // an actual reload either way.
-          if (frame.src === url) frame.src = "about:blank";
-          frame.src = url;
-        }
-      }
-
       /** Reconciles the live `frames` map against BrowserStore's own tab
        *  list: new tabs get a frame created and loaded, existing tabs only
-       *  get reloaded if their *current URL actually changed* (comparing
-       *  against the frame's own last-loaded url, tracked in
-       *  `dataset.currentUrl`) — switching to a tab that's already showing
-       *  the right thing must never reload it, or every bit of the point
-       *  of keeping frames alive is lost. Closed tabs get their frame
-       *  removed and disposed. */
+       *  get a *replacement* frame if their current URL actually changed
+       *  (comparing against the existing frame's own last-loaded url,
+       *  tracked in `dataset.currentUrl`) — switching to a tab that's
+       *  already showing the right thing must never reload it, or every
+       *  bit of the point of keeping frames alive between navigations is
+       *  lost. Closed tabs get their frame removed and disposed. */
       function reconcileFrames() {
         const liveIds = new Set(browserStore.all().map((t) => t.id));
         for (const [tabId, frame] of frames) {
@@ -186,8 +198,8 @@ export function createBrowserApp({ browserStore, pageRegistry }) {
         }
         for (const tab of browserStore.all()) {
           const url = browserStore.getCurrentUrl(tab.id);
-          const frame = ensureFrame(tab.id);
-          if (frame.dataset.currentUrl !== url) loadIntoFrame(tab.id, url);
+          const existing = frames.get(tab.id);
+          if (!existing || existing.dataset.currentUrl !== url) loadIntoFrame(tab.id, url);
         }
         const activeId = activeTabId();
         for (const [tabId, frame] of frames) {
@@ -251,11 +263,8 @@ export function createBrowserApp({ browserStore, pageRegistry }) {
       homeBtn.addEventListener("click", () => browserStore.navigate(activeTabId(), "workshop://"));
       refreshBtn.addEventListener("click", () => {
         const tabId = activeTabId();
-        const frame = frames.get(tabId);
-        if (!frame) return;
-        const url = browserStore.getCurrentUrl(tabId);
-        frame.dataset.currentUrl = ""; // forces loadIntoFrame to treat this as a genuine (re)load
-        loadIntoFrame(tabId, url);
+        if (!frames.has(tabId)) return;
+        loadIntoFrame(tabId, browserStore.getCurrentUrl(tabId));
       });
       openExternalBtn.addEventListener("click", () => {
         const url = browserStore.getCurrentUrl(activeTabId());
