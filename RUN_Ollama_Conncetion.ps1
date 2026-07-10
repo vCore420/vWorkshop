@@ -1,23 +1,22 @@
 <#
 --------------------------------------------------
-vWorkshop - Ollama Startup
+vWorkshop - Ollama Launcher
 
-Allows the hosted Workshop to communicate with
-the local Ollama server.
+Starts a local Ollama server configured for
+vWorkshop development and GitHub Pages.
 
 Run this before opening the Workshop.
 --------------------------------------------------
 #>
 
-# Allow the Workshop GitHub Pages site to connect
 $env:OLLAMA_ORIGINS = "http://127.0.0.1:5500,https://vcore420.github.io"
 
-try {
-    Invoke-RestMethod "http://localhost:11434/api/tags" | Out-Null
+Write-Host ""
+Write-Host "Restarting Ollama for vWorkshop..."
+Write-Host ""
 
-    Write-Host "Ollama is already running."
-}
-catch {
-    Write-Host "Starting Ollama..."
-    ollama serve
-}
+# Stop any existing Ollama server
+Get-Process ollama -ErrorAction SilentlyContinue | Stop-Process -Force
+
+# Start a fresh server with the correct environment
+ollama serve
