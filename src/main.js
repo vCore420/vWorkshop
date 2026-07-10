@@ -42,6 +42,11 @@ import { registerWorkshopPages } from "./browser/WorkshopPages.js";
 import { AIConnectionManager } from "./ai/AIConnectionManager.js";
 import { ModelRegistry } from "./ai/ModelRegistry.js";
 import { ResidentProfileStore } from "./ai/ResidentProfileStore.js";
+import { ResidentState } from "./resident/ResidentState.js";
+import { ResidentBehaviour } from "./resident/ResidentBehaviour.js";
+import { ResidentConnection } from "./resident/ResidentConnection.js";
+import { ResidentController } from "./resident/ResidentController.js";
+import { createResidentConversationOverlay } from "./resident/ResidentConversation.js";
 import { PlayerCharacterSystem } from "./player/PlayerCharacterSystem.js";
 import { PlayerAnimationSystem } from "./player/PlayerAnimationSystem.js";
 import { AnimationLibraryStore } from "./player/AnimationLibraryStore.js";
@@ -125,6 +130,17 @@ const aiConnectionManager = new AIConnectionManager();
 const modelRegistry = new ModelRegistry();
 const residentProfileStore = new ResidentProfileStore();
 aiConnectionManager.init();
+
+// "This is not an AI assistant. It is the Workshop's first resident." —
+// ResidentConnection is a thin adapter over aiConnectionManager (see its
+// own comment for why it isn't a second connection manager);
+// ResidentBehaviour/ResidentState are shared between ResidentController
+// (the engine system driving the resident every frame) and the
+// conversation overlay below, which is why both are constructed here
+// rather than owned internally by either one.
+const residentState = new ResidentState();
+const residentBehaviour = new ResidentBehaviour();
+const residentConnection = new ResidentConnection(aiConnectionManager);
 const settingsStore = new SettingsStore();
 const appearanceStore = new PlayerAppearanceStore();
 const outfitStore = new OutfitStore();
@@ -185,6 +201,8 @@ const emoteWheelSystem = engine.addSystem(new EmoteWheelSystem({ animationLibrar
 void emoteWheelSystem;
 const compassSystem = engine.addSystem(new CompassSystem());
 void compassSystem;
+const residentController = engine.addSystem(new ResidentController({ residentState, residentBehaviour, residentConnection, residentProfileStore }));
+void residentController;
 
 // The Settings app's Danger Zone needs to reach across several stores
 // that don't otherwise know about each other (this is deliberately a
@@ -281,6 +299,7 @@ persistenceSystem.registerProvider("imageLibrary", imageLibraryStore);
 persistenceSystem.registerProvider("browser", browserStore);
 persistenceSystem.registerProvider("aiConnection", aiConnectionManager);
 persistenceSystem.registerProvider("aiResidents", residentProfileStore);
+persistenceSystem.registerProvider("residentState", residentState);
 persistenceSystem.registerProvider("animationLibrary", animationLibraryStore);
 persistenceSystem.registerProvider("plugins", engine.plugins);
 
@@ -294,6 +313,7 @@ overlayManager.register("notebook", createNotebookOverlay({ notesStore }));
 overlayManager.register("music", createMusicOverlay({ musicSystem, libraryStore: musicLibraryStore, playlistStore }));
 overlayManager.register("archive", createArchiveOverlay({ projectsStore }));
 overlayManager.register("toolStorage", createToolStorageOverlay());
+overlayManager.register("residentConversation", createResidentConversationOverlay({ residentConnection, residentProfileStore, residentBehaviour }));
 overlayManager.register("window", createWindowOverlay({ environmentSystem, timeOfDaySystem }));
 overlayManager.register("restNook", createRestNookOverlay());
 overlayManager.register("wardrobe", createWardrobeOverlay({ appearanceStore, outfitStore, textureStore }));
