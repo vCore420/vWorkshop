@@ -52,6 +52,7 @@ const KEY_TO_ACTION = {
   KeyB: "buildMode",
   KeyV: "toggleView",
   KeyG: "emoteWheel",
+  KeyM: "compass",
 };
 
 // Reverse of KEY_TO_ACTION, built once: action -> every code that means it.
@@ -64,6 +65,7 @@ for (const [code, action] of Object.entries(KEY_TO_ACTION)) {
 
 const JOYSTICK_RADIUS = 42; // px the nub can travel from centre before clamping
 const LOOK_DEADZONE = 1.2; // px of per-frame touch jitter to ignore, so a light tap doesn't twitch the camera
+const RUN_JOYSTICK_THRESHOLD = 0.85; // joystick pushed this close to its own edge reads as "running" — see isHeld("run")
 
 export class InputManager {
   constructor(canvas, touchRoot) {
@@ -88,6 +90,7 @@ export class InputManager {
     this._invertLook = false;
     this._lookTouchId = null;
     this._lookLast = { x: 0, y: 0 };
+    this._touchCrouchActive = false; // toggled by the touch crouch button — see _setupTouchActionButtons()
 
     window.addEventListener("keydown", (e) => this._onKeyDown(e));
     window.addEventListener("keyup", (e) => this._onKeyUp(e));
@@ -119,6 +122,8 @@ export class InputManager {
     this._joystickVector.set(0, 0);
     if (this.joystickNub) this.joystickNub.style.transform = "translate(0, 0)";
     this._lookTouchId = null;
+    this._touchCrouchActive = false;
+    this._crouchButton?.classList.remove("active");
   }
 
   _onKeyDown(e) {
@@ -199,7 +204,17 @@ export class InputManager {
     return v;
   }
 
+  /** Keyboard/gamepad-style "is this action currently held" for most
+   *  actions — but "run" and "crouch" also have their own touch
+   *  equivalents (joystick-push-intensity, and a toggle button,
+   *  respectively — see _setupTouchActionButtons()), checked here so
+   *  every caller (CameraSystem) only ever needs the one method
+   *  regardless of input device. */
   isHeld(action) {
+    if (action === "run" && this._joystickTouchId !== null) {
+      return this._joystickVector.length() > RUN_JOYSTICK_THRESHOLD;
+    }
+    if (action === "crouch" && this._touchCrouchActive) return true;
     return this._isActionHeld(action);
   }
 
@@ -236,6 +251,7 @@ export class InputManager {
     this._revealTouchControlsOnce();
     this._bindJoystick();
     this._bindLook();
+    this._setupTouchActionButtons(touchRoot);
   }
 
   /** Desktop never sees the joystick — it only appears once an actual touch happens. */
@@ -325,5 +341,43 @@ export class InputManager {
     this.canvas.addEventListener("touchmove", move, { passive: true });
     this.canvas.addEventListener("touchend", end, { passive: true });
     this.canvas.addEventListener("touchcancel", end, { passive: true });
+  }
+
+  /** "Mobile controls should now naturally support: walking, running,
+   *  jumping, crouching, ladder climbing" — three of those five need
+   *  nothing new here at all: walking already comes from the joystick,
+   *  running comes from how *far* the joystick is pushed (see
+   *  isHeld("run") above — no separate control, just pushing further),
+   *  and ladder climbing already works through the exact same forward/
+   *  back joystick input that drives ordinary ground movement (see
+   *  CameraSystem's own `input.moveVector.y` use for climbing). Only
+   *  jump (a one-shot action, the same as the existing interact prompt's
+   *  own tap-to-trigger) and crouch (a held *toggle*, since there's no
+   *  natural drag gesture for it the way running already has one) need
+   *  actual new buttons — kept to exactly two, positioned opposite the
+   *  joystick, same glass/wood styling, same reveal-on-first-touch
+   *  behaviour as everything else in this file. */
+  _setupTouchActionButtons(touchRoot) {
+    const jumpButton = document.createElement("button");
+    jumpButton.type = "button";
+    jumpButton.id = "touch-jump-button";
+    jumpButton.textContent = "Jump";
+    jumpButton.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      this.triggerAction("jump");
+    }, { passive: false });
+    touchRoot.appendChild(jumpButton);
+
+    const crouchButton = document.createElement("button");
+    crouchButton.type = "button";
+    crouchButton.id = "touch-crouch-button";
+    crouchButton.textContent = "Crouch";
+    crouchButton.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      this._touchCrouchActive = !this._touchCrouchActive;
+      crouchButton.classList.toggle("active", this._touchCrouchActive);
+    }, { passive: false });
+    touchRoot.appendChild(crouchButton);
+    this._crouchButton = crouchButton;
   }
 }

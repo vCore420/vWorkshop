@@ -11,7 +11,9 @@ import { EnvironmentSystem } from "./systems/EnvironmentSystem.js";
 import { AudioSystem } from "./systems/AudioSystem.js";
 import { CameraSystem } from "./systems/CameraSystem.js";
 import { LadderSystem } from "./systems/LadderSystem.js";
+import { InteriorSystem } from "./systems/InteriorSystem.js";
 import { EmoteWheelSystem } from "./systems/EmoteWheelSystem.js";
+import { CompassSystem } from "./systems/CompassSystem.js";
 import { InteractionSystem } from "./systems/InteractionSystem.js";
 import { PersistenceSystem } from "./systems/PersistenceSystem.js";
 import { ComputerSystem } from "./computer/ComputerSystem.js";
@@ -140,8 +142,12 @@ const playerAnimationSystem = new PlayerAnimationSystem({ characterSystem: playe
 engine.addSystem(playerAnimationSystem);
 const ladderSystem = engine.addSystem(new LadderSystem());
 void ladderSystem;
+const interiorSystem = engine.addSystem(new InteriorSystem());
+void interiorSystem;
 const emoteWheelSystem = engine.addSystem(new EmoteWheelSystem({ animationLibraryStore }));
 void emoteWheelSystem;
+const compassSystem = engine.addSystem(new CompassSystem());
+void compassSystem;
 
 // The Settings app's Danger Zone needs to reach across several stores
 // that don't otherwise know about each other (this is deliberately a
