@@ -39,6 +39,9 @@ import { ImageAssetStore } from "./systems/ImageAssetStore.js";
 import { PageRegistry } from "./browser/PageRegistry.js";
 import { BrowserStore } from "./browser/BrowserStore.js";
 import { registerWorkshopPages } from "./browser/WorkshopPages.js";
+import { AIConnectionManager } from "./ai/AIConnectionManager.js";
+import { ModelRegistry } from "./ai/ModelRegistry.js";
+import { ResidentProfileStore } from "./ai/ResidentProfileStore.js";
 import { PlayerCharacterSystem } from "./player/PlayerCharacterSystem.js";
 import { PlayerAnimationSystem } from "./player/PlayerAnimationSystem.js";
 import { AnimationLibraryStore } from "./player/AnimationLibraryStore.js";
@@ -113,6 +116,15 @@ const pageRegistry = new PageRegistry();
 // here, once every store it needs already exists, not from inside
 // BrowserApp.js itself, which only ever talks to pageRegistry.resolve().
 registerWorkshopPages(pageRegistry, { projectsStore, browserStore });
+
+// "This is NOT the AI itself... preparing another presence." See
+// src/ai/AIConnectionManager.js's own comment for why polling starts
+// immediately and unconditionally here rather than waiting on anything
+// else — it never blocks the Workshop either way, connected or not.
+const aiConnectionManager = new AIConnectionManager();
+const modelRegistry = new ModelRegistry();
+const residentProfileStore = new ResidentProfileStore();
+aiConnectionManager.init();
 const settingsStore = new SettingsStore();
 const appearanceStore = new PlayerAppearanceStore();
 const outfitStore = new OutfitStore();
@@ -230,6 +242,9 @@ const computerSystem = engine.addSystem(
     imageAssetStore,
     browserStore,
     pageRegistry,
+    aiConnectionManager,
+    modelRegistry,
+    residentProfileStore,
     dangerZoneActions,
   })
 );
@@ -264,6 +279,8 @@ persistenceSystem.registerProvider("playerAppearance", appearanceStore);
 persistenceSystem.registerProvider("outfits", outfitStore);
 persistenceSystem.registerProvider("imageLibrary", imageLibraryStore);
 persistenceSystem.registerProvider("browser", browserStore);
+persistenceSystem.registerProvider("aiConnection", aiConnectionManager);
+persistenceSystem.registerProvider("aiResidents", residentProfileStore);
 persistenceSystem.registerProvider("animationLibrary", animationLibraryStore);
 persistenceSystem.registerProvider("plugins", engine.plugins);
 
