@@ -11,8 +11,22 @@ const WALK_SPEED = 2.3; // metres/second
 const RUN_MULTIPLIER = 1.8;
 const CROUCH_SPEED_MULTIPLIER = 0.55;
 const PLAYER_RADIUS = 0.32;
-const STANDING_EYE_HEIGHT = 1.65;
-const CROUCH_EYE_HEIGHT = 1.15;
+// A fallback only — see "Player Height" in the class doc comment below.
+// The real standing eye height is dynamic, read every frame from
+// PlayerCharacterSystem's own current rig, since a taller or shorter
+// character genuinely needs a different one.
+const DEFAULT_STANDING_EYE_HEIGHT = 1.65;
+const CROUCH_HEIGHT_REDUCTION = 0.5; // how much crouching lowers the eyes below whatever the standing height currently is — proportional to the character, not a fixed absolute number
+// The Wardrobe's own proportion sliders (0.4x-2x per body part) can
+// combine to produce a rig eye height around 3.76m at their extremes —
+// comfortably above the workshop's own 3m ceiling. Clamping here means
+// fixing "a taller character's feet end up below the floor" doesn't
+// simply trade it for "a very tall character's camera clips through the
+// ceiling instead" — the rig itself still builds at its full requested
+// height (nothing about appearance/proportions is touched), only the
+// camera's own eye height is bounded, the same "believable over
+// physically exact" trade already made elsewhere in this project.
+const MAX_STANDING_EYE_HEIGHT = 2.0;
 const EYE_HEIGHT_DAMPING = 10; // how quickly standing<->crouch eye height eases, not a snap
 const GRAVITY = 15.5; // metres/second² — tuned for snappy, game-y jump/fall arcs, not real-world 9.8
 const JUMP_HEIGHT = 0.55; // metres — the actual design parameter; JUMP_VELOCITY below is derived from it
@@ -23,7 +37,7 @@ const LADDER_CLIMB_SPEED = 1.6; // metres/second
 const LOOK_SENSITIVITY = 0.0022;
 const MAX_PITCH = Math.PI / 2 - 0.05;
 const THIRD_PERSON_DISTANCE = 3.2; // metres behind the player
-const THIRD_PERSON_HEIGHT = 0.85; // additional height above STANDING_EYE_HEIGHT — total ~2.5m, comfortably under the workshop's 3m ceiling (see ROOM_DIMENSIONS in layoutDefault.js)
+const THIRD_PERSON_HEIGHT = 0.85; // additional height above the standing eye height — comfortably under the workshop's 3m ceiling (see ROOM_DIMENSIONS in layoutDefault.js) even for a noticeably taller character
 const THIRD_PERSON_LOOK_DROP = 0.35; // looks slightly down at the player rather than dead-level
 
 /**
@@ -105,13 +119,14 @@ export class CameraSystem {
     this._viewBlend = 0; // 0 = first person, 1 = third person — eased toward viewMode's target every frame, see update()
     // Vertical movement — see this class's own doc comment on _footY vs.
     // this.position.y. Spawns "grounded" at the default spawn height.
-    this._footY = DEFAULT_SPAWN.position[1] - STANDING_EYE_HEIGHT;
+    this._footY = DEFAULT_SPAWN.position[1] - DEFAULT_STANDING_EYE_HEIGHT;
     this._verticalVelocity = 0;
     this._grounded = true;
-    this._currentEyeHeight = STANDING_EYE_HEIGHT;
+    this._currentEyeHeight = DEFAULT_STANDING_EYE_HEIGHT;
     this._crouching = false;
     this._landTimer = 0;
     this._onLadder = false;
+    this._characterSystem = null; // set via setCharacterSystem() from main.js — see "Player Height" in this class's own doc comment for why not a direct import
   }
 
   init(engine) {
@@ -154,8 +169,8 @@ export class CameraSystem {
       // Crouch/vertical-velocity state isn't meaningful to persist across
       // sessions — every load lands standing, on whatever the loaded
       // height implies for its own footing.
-      this._footY = this.position.y - STANDING_EYE_HEIGHT;
-      this._currentEyeHeight = STANDING_EYE_HEIGHT;
+      this._footY = this.position.y - this._getStandingEyeHeight();
+      this._currentEyeHeight = this._getStandingEyeHeight();
       this._verticalVelocity = 0;
       this._grounded = true;
     });
@@ -195,6 +210,33 @@ export class CameraSystem {
    *  doc comment. Toggling while focused (sitting at the computer, say)
    *  is simply a no-op rather than a state a future exitFocus() would
    *  need to unwind. */
+  /** Wired from main.js, not a direct import — PlayerCharacterSystem
+   *  already imports CameraSystem (to follow its position/yaw), so this
+   *  system importing PlayerCharacterSystem back would create a genuine
+   *  circular import between the two files, the same situation
+   *  PlayerAnimationSystem's own constructor-injected reference already
+   *  avoids for the same reason. main.js constructs both and wires this
+   *  one reference through directly. */
+  setCharacterSystem(characterSystem) {
+    this._characterSystem = characterSystem;
+  }
+
+  /** "Player Height" — the actual eye height a standing player should
+   *  have right now, read fresh from the live rig every time this is
+   *  called rather than assumed to be a universal constant. A taller or
+   *  shorter character genuinely needs a different eye height; treating
+   *  1.65m as the same number for every body is what let a taller
+   *  character end up with their feet pushed below the floor — the rig
+   *  itself always computed the correct number
+   *  (`PlayerCharacterSystem.getEyeHeight()`), this system just wasn't
+   *  asking it. Falls back to a fixed default before the character
+   *  system exists yet (this class's own constructor) or before the very
+   *  first rig has finished building. */
+  _getStandingEyeHeight() {
+    const rigHeight = this._characterSystem?.getEyeHeight() ?? DEFAULT_STANDING_EYE_HEIGHT;
+    return Math.min(rigHeight, MAX_STANDING_EYE_HEIGHT);
+  }
+
   toggleViewMode() {
     if (this.mode === "focus") return;
     this.viewMode = this.viewMode === "first" ? "third" : "first";
@@ -218,11 +260,11 @@ export class CameraSystem {
     this.position.set(...DEFAULT_SPAWN.position);
     this.yaw = DEFAULT_SPAWN.yaw;
     this.pitch = 0;
-    this._footY = DEFAULT_SPAWN.position[1] - STANDING_EYE_HEIGHT;
+    this._footY = DEFAULT_SPAWN.position[1] - this._getStandingEyeHeight();
     this._verticalVelocity = 0;
     this._grounded = true;
     this._crouching = false;
-    this._currentEyeHeight = STANDING_EYE_HEIGHT;
+    this._currentEyeHeight = this._getStandingEyeHeight();
     this._landTimer = 0;
     this._onLadder = false;
     this.viewMode = "first";
@@ -363,7 +405,8 @@ export class CameraSystem {
       this._grounded = false;
     }
 
-    const targetEyeHeight = this._crouching ? CROUCH_EYE_HEIGHT : STANDING_EYE_HEIGHT;
+    const standingEyeHeight = this._getStandingEyeHeight();
+    const targetEyeHeight = this._crouching ? standingEyeHeight - CROUCH_HEIGHT_REDUCTION : standingEyeHeight;
     this._currentEyeHeight = damp(this._currentEyeHeight, targetEyeHeight, EYE_HEIGHT_DAMPING, dt);
     this.position.y = this._footY + this._currentEyeHeight;
 
@@ -385,7 +428,7 @@ export class CameraSystem {
   _updateLadderMovement(dt, zone, input) {
     this._verticalVelocity = 0;
     this._crouching = false;
-    this._currentEyeHeight = damp(this._currentEyeHeight, STANDING_EYE_HEIGHT, EYE_HEIGHT_DAMPING, dt);
+    this._currentEyeHeight = damp(this._currentEyeHeight, this._getStandingEyeHeight(), EYE_HEIGHT_DAMPING, dt);
 
     // input.moveVector.y is "how much forward input", relative to the
     // player's own facing — not wish.y, which is wish's *world-space* Z

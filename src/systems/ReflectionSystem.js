@@ -151,6 +151,20 @@ export class ReflectionSystem {
     //      a normally tone-mapped material applies tone mapping a second
     //      time, compressing (and further darkening) the result again.
     renderTarget.texture.colorSpace = THREE.SRGBColorSpace;
+    // A real mirror preserves the viewer's own left-right orientation —
+    // raise your right hand and the reflection raises its hand on the
+    // same side, from your own point of view. This mirror's camera uses
+    // lookAt() to build its orientation (see this class's own top
+    // comment for why: it sidesteps a real winding/handedness risk a
+    // truly reflected transform has), which always produces a normal,
+    // unflipped camera basis — meaning the raw render is "how a camera
+    // facing the player sees them" instead, the same left-right sense as
+    // a video call, not a mirror. A horizontal flip of the texture here
+    // is what actually turns that into a believable reflection, applied
+    // once at the texture level rather than by fighting the camera math.
+    renderTarget.texture.wrapS = THREE.RepeatWrapping;
+    renderTarget.texture.repeat.x = -1;
+    renderTarget.texture.offset.x = 1;
     const camera = new THREE.PerspectiveCamera(50, resolution / (resolution * aspect), CAMERA_NEAR, CAMERA_FAR);
 
     // Cloned, never mutated in place — the same reasoning Build Mode's own

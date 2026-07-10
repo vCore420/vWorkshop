@@ -1,5 +1,6 @@
 import { PersistenceSystem } from "../systems/PersistenceSystem.js";
 import { CameraSystem } from "../systems/CameraSystem.js";
+import { EmoteWheelSystem } from "../systems/EmoteWheelSystem.js";
 
 /**
  * HUD
@@ -71,7 +72,11 @@ export class HUD {
     lostBtn.textContent = "I'm Lost!";
     lostBtn.title = "Return to the Workshop";
     lostBtn.addEventListener("click", () => engine.getSystem(CameraSystem)?.recoverToSpawn());
-    this.backupControls.append(exportBtn, importBtn, buildModeBtn, viewModeBtn, lostBtn);
+    const emoteBtn = document.createElement("button");
+    emoteBtn.type = "button";
+    emoteBtn.textContent = "Emotes (G)";
+    emoteBtn.addEventListener("click", () => engine.getSystem(EmoteWheelSystem)?.toggle());
+    this.backupControls.append(exportBtn, importBtn, buildModeBtn, viewModeBtn, emoteBtn, lostBtn);
     this.root.appendChild(this.backupControls);
 
     this.touchControls = document.getElementById("touch-controls");
