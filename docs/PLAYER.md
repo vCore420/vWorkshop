@@ -654,6 +654,80 @@ player used to be. Cancels focus mode outright rather than trying to
 ease out of it — being lost is exactly the situation where a
 guaranteed-safe reset matters more than a smooth transition.
 
+### Builder & Workshop Living Follow-up
+
+Another dedicated bug-fixing pass — see docs/ROADMAP.md's Phase 19 entry
+for the full account, and docs/WORLDBUILDER.md/docs/WORLD.md for the
+Builder- and Environment-side fixes from the same phase.
+
+**Player Height, actually fixed at the root.** "Adjusting player height
+currently pushes the player into the floor" traced to `CameraSystem`
+treating eye height as a fixed 1.65m constant, while
+`PlayerCharacterSystem` positions the rig using its *own* computed
+`eyeHeight` — which genuinely changes with a character's actual
+proportions. A taller character's rig had a taller `eyeHeight` than the
+camera assumed, so `root.position.y = cam.position.y - rig.eyeHeight`
+placed the rig's own feet below `_footY` — pushed into the floor by
+exactly the difference between the fixed assumption and reality.
+`PlayerCharacterSystem.getEyeHeight()` now exposes the rig's actual
+current value, and `CameraSystem._getStandingEyeHeight()` reads it fresh
+every frame as the target the existing crouch-damping logic already eases
+toward — "the camera height should recalculate appropriately" needed no
+new easing mechanism, only a dynamic target for the one already there.
+Wired through a `setCharacterSystem()` setter called from main.js, not a
+direct import in either direction — `PlayerCharacterSystem` already
+imports `CameraSystem` to follow its position, so the reverse import
+would create a genuine circular dependency between the two files, the
+same avoidance `PlayerAnimationSystem`'s own constructor-injected
+reference already established.
+
+**A related bug this fix could otherwise have introduced, and didn't**:
+the Wardrobe's own proportion sliders (0.4x-2x per body part) can combine
+to produce a rig eye height around 3.76m at their extremes — comfortably
+above the workshop's 3m ceiling. Fixing "a taller character's feet end up
+below the floor" without also bounding the eye height itself would simply
+trade it for "a very tall character's camera clips through the ceiling
+instead." `MAX_STANDING_EYE_HEIGHT` (2.0m) clamps the camera's own eye
+height without touching the rig's actual build height at all — the
+character still builds exactly as tall as requested, only the camera
+following it has a ceiling of its own.
+
+**The mirror's left-right flip, actually understood, not guessed at.**
+"Still appears horizontally incorrect" — the mirror's own camera builds
+its orientation with `lookAt()` (a deliberate choice from the earlier
+Mirror Refinement pass, to sidestep a real winding/handedness risk a
+truly reflected transform has), which always produces a normal,
+unflipped camera basis. That means the raw render was "how a camera
+facing the player sees them" — the same left-right sense as a video
+call — not "how a real mirror shows them," which preserves the viewer's
+own left-right orientation instead. The fix is a horizontal flip of the
+render target's own texture (`repeat.x = -1`, `offset.x = 1`, with
+`RepeatWrapping` so the flip samples correctly), applied once where the
+surface is registered, rather than fighting the camera's own orientation
+math — the fixed-viewpoint approach from the earlier refinement pass
+stays exactly as it was.
+
+**The Emote Wheel gained a touch button**, matching the Build Mode and
+Third Person View buttons' own design philosophy exactly — the same
+`.hud-backup-controls` row, same styling, calling
+`EmoteWheelSystem.toggle()`. Nothing new needed for the reveal/hide
+mechanics touch already relies on; a plain HTML button already responds
+to a tap the same way it responds to a click.
+
+**The "intermittent beeping," investigated to an actual root cause.**
+Traced to `AudioSynth.js`'s cricket ambience: a single, isolated
+square-wave pulse through a narrow bandpass filter, repeated every
+0.4-0.7 seconds through the night, is close to the same synthesis an
+electronic chirp alarm uses. It was intentional — meant to be a cricket
+sound — but didn't achieve its own intent; a real cricket chirps in a
+rapid trill of several pulses in quick succession, not one isolated tone.
+Redesigned as a short burst of 3-5 quick sub-pulses through a softer
+triangle wave and a wider filter, which reads as insect texture rather
+than a repeated electronic tone. It was already configurable, as it
+happens — the existing Settings → Audio → Ambient Volume slider already
+scales the entire nature-ambience layer (`AudioSystem._updateNatureIntensity()`),
+crickets included; no separate toggle was added on top of it.
+
 ## Known limitations
 
 - **"Never see themselves" in first person is physics, not a rule.** The
@@ -691,3 +765,11 @@ guaranteed-safe reset matters more than a smooth transition.
   rotation on more than one axis at once can occasionally interpolate
   through an unexpected intermediate angle, the well-known trade-off of
   Euler-angle interpolation in general.
+- **The standing eye height clamp (2.0m) trades one edge case for a
+  smaller one** — see "Player Height" above. A character built at the
+  most extreme possible proportion-slider settings (every slider at its
+  own maximum) still ends up with its feet very slightly below the floor,
+  since the clamp bounds the camera's own eye height without changing how
+  tall the rig itself actually builds. Deliberate: the alternative was a
+  camera clipping visibly through the ceiling instead, which reads as a
+  much larger problem for a much more common range of settings.

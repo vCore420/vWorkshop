@@ -395,3 +395,24 @@
   padding: var(--space-2) var(--space-3);
   cursor: pointer;
 }
+
+/* ---------- Rest Nook ---------- */
+.rest-nook-reminder {
+  cursor: pointer;
+  transition: opacity var(--duration-medium) var(--ease-standard);
+}
+.rest-nook-reminder.dismissed {
+  opacity: 0;
+  pointer-events: none;
+}
+.rest-nook-dismiss-hint {
+  cursor: pointer;
+  font-size: var(--text-xs);
+  color: var(--paper-dark);
+  margin-top: var(--space-3);
+  transition: opacity var(--duration-medium) var(--ease-standard);
+}
+.rest-nook-dismiss-hint.dismissed {
+  opacity: 0;
+  pointer-events: none;
+}

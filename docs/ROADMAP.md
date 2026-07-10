@@ -868,7 +868,81 @@ movement for Builder-created interior volumes the way ladders/mirrors
 already are (a static box, reasonable for something building-sized) — see
 "Known simplifications" and "Future extension points" in docs/WORLD.md.
 
-## Phase 19 — depth in the room that exists
+## Phase 19 — Builder & Workshop Living
+
+**Goal:** "make both building and living inside the Workshop feel more
+natural... would these improvements quietly make [a long afternoon
+inside] feel smoother and more natural?" Not feature-heavy by design —
+see docs/WORLDBUILDER.md's "Object placement"/"Behaviours" sections and
+docs/PLAYER.md's "Builder & Workshop Living Follow-up" section for the
+full write-up of each fix.
+
+**Builder:**
+- **Placement confirms with a left-click in the world**, not a Phone
+  button — the Phone's "Place" button is gone entirely.
+  `BuildModeSystem._handlePointerDown()` treats a ghost-active click as
+  confirmation for the left mouse button specifically, reversing an
+  earlier, explicit decision (worth being honest about, not quietly
+  rewriting — see docs/WORLDBUILDER.md). That decision was about touch
+  ambiguity; this fix is specifically about desktop mouse ergonomics
+  (moving the mouse to a button and back on every single placement), and
+  leaves touch's own drag-to-position gesture untouched.
+- **Display Surface**, a new behaviour: any chosen part ("partRef", a new
+  propsSchema field type — a dropdown of the object's own parts) can show
+  an uploaded image ("imageRef" — a dropdown of the player's own image
+  library plus an inline upload button). `ImageLibraryStore.js`/
+  `ImageAssetStore.js` mirror the Music Library's own index-vs-bytes
+  split. Applied as an ordinary texture on the target part's own cloned
+  material — a future video/canvas/slideshow display only ever needs to
+  change what feeds `material.map`.
+- **A real, pre-existing bug found and fixed incidentally**: the
+  `propsSchema` "select" field type's callback treated the value it
+  received as a label and searched for it by label match — but
+  `selectField()` actually passes the raw option *value* to that
+  callback. Selecting a different audio track in `AudioSourceBehaviour`
+  never actually updated which track was chosen. Found while adding the
+  new "partRef"/"imageRef" field types to the same function.
+
+**Workshop Living:**
+- **Player Height, fixed at the root.** `CameraSystem` treated eye
+  height as a fixed 1.65m constant while the rig's own actual height
+  varied with proportions — "adjusting player height... pushes the
+  player into the floor" was that mismatch. Now reads the rig's real
+  current eye height every frame as the target the existing crouch-
+  damping already eases toward, clamped to a sensible maximum so fixing
+  "too short" didn't just trade it for "camera clips through the
+  ceiling" at extreme proportion settings.
+- **The mirror's horizontal flip, root-caused.** The mirror's own camera
+  builds its orientation with `lookAt()` (deliberately, from the earlier
+  Mirror Refinement pass), which always produces a normal, unflipped
+  camera basis — the raw render was "how a camera facing the player sees
+  them," not "how a real mirror shows them." Fixed with a horizontal
+  texture flip where the surface is registered, not by fighting the
+  camera math.
+- **The "intermittent beeping," root-caused rather than muted.** A
+  single isolated square-wave pulse through a narrow bandpass filter,
+  repeated every 0.4-0.7s at night, is close to the same synthesis as an
+  electronic chirp alarm — intentional (meant to be a cricket sound) but
+  not achieving its own intent. Redesigned as a short trill of quick
+  sub-pulses through a softer waveform. Already configurable via the
+  existing Ambient Volume setting.
+- **The computer's own blur reduced** (5px → 2px) — enough to still pull
+  focus toward the monitor without the room behind it feeling indistinct
+  for as long as someone sits at the desk.
+- **The keyboard, mouse, and monitor stand were sinking slightly into
+  the desk** — `box()`/`cylinder()` geometry is centred at its own local
+  origin, so the desk top's own half-thickness was never accounted for
+  when positioning things "on top" of it.
+- **The Quiet Corner's reminder now dismisses on click**, fading out and
+  staying gone — without touching how leaving the chair itself works
+  (still Escape, still entirely `CameraSystem`'s own unrelated
+  mechanism).
+
+**Touch:** the Emote Wheel gained a button in the HUD's existing
+Build Mode/Third Person View row — same styling, same "just an ordinary
+tappable button" mechanics, nothing new needed for touch specifically.
+
+## Phase 20 — depth in the room that exists
 
 Roughly in priority order, each independently shippable:
 
@@ -907,7 +981,7 @@ Roughly in priority order, each independently shippable:
 9. **A true oriented planar reflection**, and reflective surfaces beyond a
    flat plane — see "Future extension points" in `docs/PLAYER.md`.
 
-## Phase 20 — the world becomes alive on its own
+## Phase 21 — the world becomes alive on its own
 
 1. **Seasonal changes** — a plugin (see `PLUGIN_GUIDE.md`) reading the real
    calendar date and adjusting window tint / a handful of decorative
@@ -931,7 +1005,7 @@ Roughly in priority order, each independently shippable:
    Construction Library's own Switch piece (Phase 13) is one ready-made
    source of that event, waiting for something to listen.
 
-## Phase 21 — beyond one building
+## Phase 22 — beyond one building
 
 - **Additional buildings** — `RoomLayoutSystem` was written with this in
   mind (see its class comment), and `WorldObjectsStore` was made

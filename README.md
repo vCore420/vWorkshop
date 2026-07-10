@@ -4,7 +4,7 @@ A living 3D creative workshop, built to be a place you return to rather than
 an app you launch. Runs entirely in the browser, no build step, no backend —
 just static files.
 
-This project has gone through eighteen phases (with one dedicated
+This project has gone through nineteen phases (with one dedicated
 refinement pass in between): an architectural foundation and
 one believable room (phase 1), turning the computer into a real,
 self-contained creative workstation with a physical sit-down/stand-up
@@ -63,7 +63,14 @@ actually understand the world around you: a toggleable compass, real
 solar/lunar astronomy driven by your own location, a Workshop Time
 control that eases the sun and moon to wherever you set it rather than
 jumping, rain that correctly recognises when you're indoors, and an
-"I'm Lost!" button for exactly what it sounds like (phase 18).
+"I'm Lost!" button for exactly what it sounds like (phase 18) — and, most
+recently, a round of everyday comfort fixes: placing a Builder object is
+now a left-click in the world instead of a Phone button, a new Display
+Surface behaviour lets any chosen part show an uploaded image, and a
+handful of real bugs (a taller character sinking into the floor, the
+mirror's own left-right flip, an "intermittent beeping" that turned out
+to be an over-electronic cricket sound) got root-caused and fixed rather
+than patched over (phase 19).
 See `docs/ROADMAP.md` for what's next, `docs/ARCHITECTURE.md`
 for how the workshop as a whole is put together, and `docs/COMPUTER.md` /
 `docs/WORKBENCH.md` / `docs/WORLDBUILDER.md` / `docs/WORLD.md` /

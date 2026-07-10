@@ -181,7 +181,7 @@ instance* with this behaviour spawns) — plus, since this pass, an optional
 `dispose(ctx)` for the rare behaviour that holds a real resource beyond
 the scene graph (see `reflective`, below). `BuilderApp` never has bespoke
 code for any specific behaviour — it renders whatever `propsSchema` says,
-for all eleven built-ins and any future one, identically.
+for all fourteen built-ins and any future one, identically.
 
 Nearly every behaviour's `apply()` just attaches an ordinary
 `InteractableComponent` — the exact same component furniture and the
@@ -192,12 +192,13 @@ handled by the interaction pipeline no differently than the workbench's
 chair.
 
 Because an `Entity` can only hold one `InteractableComponent`, eight of the
-eleven behaviours (Interactable, Seat, Storage, Door, Computer, Trigger,
+fourteen behaviours (Interactable, Seat, Storage, Door, Computer, Trigger,
 Audio source, Music player) are mutually exclusive with each other —
 checking one in the Builder unchecks any other from that group. Light
-Source, Decoration, and Reflective Surface don't touch
-`InteractableComponent` at all, so they combine freely with anything —
-a mirror can also glow, or be a seat, or both.
+Source, Decoration, Reflective Surface, Ladder, Interior Volume, and
+Display Surface don't touch `InteractableComponent` at all, so they
+combine freely with anything and each other — a mirror can also glow, or
+be a seat, or both.
 
 **Trigger** is the deliberately open-ended one: it emits
 `worldObject:trigger` with whatever event name was typed in, and nothing in
@@ -213,6 +214,39 @@ half of a small, generic reflection capability any Workshop object can use;
 see docs/PLAYER.md's "Reflections and third person" section for the full
 story, including the physical wardrobe mirror that calls the exact same
 underlying function directly.
+
+**Display Surface** — "allow any chosen face of a Builder object to
+display an image... picture frames, posters, whiteboards, signs, computer
+screens, decorative displays." Two properties: `partId` (a new
+**"partRef"** propsSchema field type — a dropdown of the object's own
+parts, labelled the same "1. Box", "2. Plane" way the Builder's own part
+list already labels them, rather than exposing an internal part id to
+type in by hand) and `imageId` (a new **"imageRef"** field type — a
+dropdown of the player's uploaded image library, plus an inline "Upload…"
+button beside it). "Images should be loaded from the player's local
+files using the same design philosophy as the Music Library wherever
+practical" specifically means: the library's own index
+(`ImageLibraryStore.js` — names, ids) is never the same store as the
+actual bytes (`ImageAssetStore.js` — its own IndexedDB object store), the
+same `HandleStore.js`/`TextureStore.js` split every binary asset in this
+project already uses. One upload becomes one reusable library entry, not
+something re-uploaded for every wall it appears on.
+
+The image itself lands as an ordinary texture on the target part's own
+(cloned, never shared) material — nothing about how it's applied assumes
+a static image is the *only* thing a display surface could ever show.
+"Design this behaviour so it can naturally expand... without requiring
+architectural changes" is true by construction here: a future version
+swapping in a video texture, a live-rendered canvas, or a cycling
+slideshow only ever needs to change what feeds `material.map`; the
+part-targeting and the property schema shape don't change at all.
+
+**Ladder** and **Interior Volume** are the same "one small, generic
+capability, called directly by a hand-built object and by this Builder
+behaviour, neither aware the other exists" shape Reflective Surface
+already established — see docs/PLAYER.md's "Movement & Expression"
+section and docs/WORLD.md's "Interior weather" section respectively for
+the full story on each.
 
 ## Why Build Mode looks like this
 
@@ -299,12 +333,25 @@ four functions: an entry point that creates the ghost, `_rotateGhost()`,
   press. Deliberately not a keyboard shortcut: a visible, tappable button
   works identically on desktop and touch and doesn't require knowing a
   hidden key exists.
-- **Confirming or cancelling is always an explicit Phone button**, never a
-  canvas click. A raw click/tap confirming placement was considered and
-  rejected — it's ambiguous on touch (was that a tap to reposition, or to
-  confirm?) and risks placing something by accident while just looking
-  around. The canvas is purely for *positioning* the ghost; the Phone's
-  own buttons are the only way anything actually happens.
+- **Confirming is a left-click in the world; cancelling is still an
+  explicit Phone button.** This reverses an earlier, explicit decision —
+  worth being honest about, not quietly rewriting history over. That
+  decision's own reasoning was that a raw click/tap confirming placement
+  is ambiguous on touch (was that a tap to reposition, or to confirm?)
+  and risks placing something by accident while just looking around. The
+  actual problem this phase raised was narrower and specifically about
+  *desktop mouse* ergonomics: "the player cannot comfortably keep the
+  mouse positioned in the world while also clicking the Place button" —
+  moving the mouse to a Phone button and back is real friction a
+  keyboard-and-mouse player feels on every single placement. Rather than
+  reopening the touch ambiguity, `_handlePointerDown()` only treats a
+  ghost-active click as a confirmation for the left mouse button
+  specifically (`event.button === 0`) — touch's own drag-to-position
+  gesture (`pointermove`) is untouched, and a touch tap-to-confirm was
+  deliberately not added on top of it, for exactly the ambiguity reason
+  the original decision already identified. Cancelling stays a Phone
+  button on every input device — there's no equivalent "obviously safe"
+  gesture for cancelling the way a plain click reads for confirming.
 - **Cancelling a new placement** disposes the ghost's temporary materials
   and removes it from the scene — carefully never disposing its
   *geometry*, which is `ObjectCompiler`'s shared, cached unit geometry
@@ -484,6 +531,15 @@ than special-casing one construction piece.
   into `_raycastGhostSurfaces()` as an additional step after the raycast
   hit point is found, before it's applied to the ghost. Nothing about the
   ghost mechanic itself assumes an unsnapped, freely-continuous position.
+- **Richer Display Surface content** — video, a live canvas, a cycling
+  slideshow — see the Behaviours section above for why none of these
+  need an architectural change, only a different source feeding
+  `material.map`.
+- **True per-face (not per-part) targeting for Display Surface** — right
+  now "any chosen face" means any chosen *part*; a dedicated thin display
+  part is the intended way to add a poster to a larger object today. Full
+  per-face UV targeting on a single multi-purpose box would need a
+  multi-material setup this pass deliberately didn't take on.
 - **A true oriented (rather than axis-aligned) collision box** for
   Builder objects — `WorldObjectsSystem`'s footprint is currently an AABB
   from `Box3.setFromObject()`, the same approximation furniture's own
