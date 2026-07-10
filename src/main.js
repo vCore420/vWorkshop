@@ -34,6 +34,8 @@ import { SettingsSystem } from "./settings/SettingsSystem.js";
 import { PlayerAppearanceStore } from "./player/PlayerAppearanceStore.js";
 import { OutfitStore } from "./player/OutfitStore.js";
 import { TextureStore } from "./player/TextureStore.js";
+import { ImageLibraryStore } from "./systems/ImageLibraryStore.js";
+import { ImageAssetStore } from "./systems/ImageAssetStore.js";
 import { PlayerCharacterSystem } from "./player/PlayerCharacterSystem.js";
 import { PlayerAnimationSystem } from "./player/PlayerAnimationSystem.js";
 import { AnimationLibraryStore } from "./player/AnimationLibraryStore.js";
@@ -105,6 +107,8 @@ const settingsStore = new SettingsStore();
 const appearanceStore = new PlayerAppearanceStore();
 const outfitStore = new OutfitStore();
 const textureStore = new TextureStore();
+const imageLibraryStore = new ImageLibraryStore();
+const imageAssetStore = new ImageAssetStore();
 
 // WorldObjectsSystem has no dependency on other systems at init() time — it
 // only needs engine.scene/engine.entities, which exist from construction —
@@ -136,6 +140,11 @@ void settingsSystem;
 // and CameraSystem.js.
 const playerCharacterSystem = new PlayerCharacterSystem({ appearanceStore, textureStore });
 engine.addSystem(playerCharacterSystem);
+// See CameraSystem.js's own "Player Height" comment for why this is a
+// setter call here rather than either system importing the other
+// directly — the same circular-import avoidance PlayerAnimationSystem's
+// own constructor-injected reference below already uses.
+cameraSystem.setCharacterSystem(playerCharacterSystem);
 
 const animationLibraryStore = new AnimationLibraryStore();
 const playerAnimationSystem = new PlayerAnimationSystem({ characterSystem: playerCharacterSystem, libraryStore: animationLibraryStore });
@@ -144,6 +153,12 @@ const ladderSystem = engine.addSystem(new LadderSystem());
 void ladderSystem;
 const interiorSystem = engine.addSystem(new InteriorSystem());
 void interiorSystem;
+// Registered as a system purely so DisplaySurfaceBehaviour.js (and any
+// future behaviour needing the same) can resolve it via
+// engine.getSystem() the same way every other cross-system reference in
+// this project works — it has no init()/update() of its own, which
+// engine.init()'s own optional-chaining call already tolerates.
+engine.addSystem(imageAssetStore);
 const emoteWheelSystem = engine.addSystem(new EmoteWheelSystem({ animationLibraryStore }));
 void emoteWheelSystem;
 const compassSystem = engine.addSystem(new CompassSystem());
@@ -201,6 +216,8 @@ const computerSystem = engine.addSystem(
     outfitStore,
     textureStore,
     animationLibraryStore,
+    imageLibraryStore,
+    imageAssetStore,
     dangerZoneActions,
   })
 );
@@ -233,6 +250,7 @@ persistenceSystem.registerProvider("playlists", playlistStore);
 persistenceSystem.registerProvider("settings", settingsStore);
 persistenceSystem.registerProvider("playerAppearance", appearanceStore);
 persistenceSystem.registerProvider("outfits", outfitStore);
+persistenceSystem.registerProvider("imageLibrary", imageLibraryStore);
 persistenceSystem.registerProvider("animationLibrary", animationLibraryStore);
 persistenceSystem.registerProvider("plugins", engine.plugins);
 

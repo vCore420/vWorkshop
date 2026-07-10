@@ -99,7 +99,6 @@ export class BuildModeSystem {
     this.ui = new BuilderPhoneUI(document.getElementById("buildmode-root"), {
       onArmDefinition: (id, source) => this._armDefinition(id, source),
       onRotateGhost: () => this._rotateGhost(),
-      onConfirmGhost: () => this._confirmGhost(),
       onCancelGhost: () => this._cancelGhost(),
       onStartMove: () => this._startMoveSelected(),
       onTransformChange: (patch) => this._applyDirectTransformEdit(patch),
@@ -321,7 +320,16 @@ export class BuildModeSystem {
   _handlePointerDown(event) {
     if (!this.active) return;
     this._updatePointerNDC(event);
-    if (this._ghost) return; // canvas interaction only repositions a ghost — the Phone's own buttons confirm/cancel
+    if (this._ghost) {
+      // "Left-clicking in the world should place the currently previewed
+      // object" — the ghost's own position is already current, from the
+      // most recent pointermove, so confirming here needs no further
+      // raycast first. Gated to the left button specifically (button 0 —
+      // also what a touch tap reports), so a right-click or middle-click
+      // doesn't accidentally confirm a placement mid-adjustment.
+      if (event.button === 0) this._confirmGhost();
+      return;
+    }
 
     this._raycaster.setFromCamera(this._pointerNDC, this.engine.camera);
     const targets = [...(this._worldObjectsSystem?.getAllLiveObjects() ?? []), ...this._furnitureObjects()];

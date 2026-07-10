@@ -149,24 +149,39 @@ export function createNatureAmbience(audioContext, destinationNode) {
     }
   }
 
+  /** A short trill of 3-5 rapid sub-pulses, not one isolated tone — see
+   *  this file's own top-level note on the "intermittent beeping" this
+   *  replaced. A single square-wave pulse through a narrow bandpass
+   *  filter, repeated every 0.4-0.7s through the night, is essentially
+   *  the same synthesis as an electronic chirp alarm; real crickets
+   *  chirp in a rapid trill of several pulses in quick succession, and a
+   *  softer waveform through a wider filter reads as insect texture
+   *  rather than a pure, "electronic" tone. */
   function playCricketPulse() {
     const now = audioContext.currentTime;
-    const osc = audioContext.createOscillator();
-    osc.type = "square";
-    osc.frequency.value = 4200 + Math.random() * 300;
-    const filter = audioContext.createBiquadFilter();
-    filter.type = "bandpass";
-    filter.frequency.value = 4300;
-    filter.Q.value = 8;
-    const pulseGain = audioContext.createGain();
-    pulseGain.gain.setValueAtTime(0.0001, now);
-    pulseGain.gain.linearRampToValueAtTime(0.22, now + 0.006);
-    pulseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-    osc.connect(filter);
-    filter.connect(pulseGain);
-    pulseGain.connect(gain);
-    osc.start(now);
-    osc.stop(now + 0.06);
+    const baseFreq = 4000 + Math.random() * 400;
+    const pulseCount = 3 + Math.floor(Math.random() * 3); // 3-5 quick sub-pulses per trill
+    const pulseSpacing = 0.026; // fast enough to blur into one trill, not read as separate beeps
+
+    for (let i = 0; i < pulseCount; i++) {
+      const pulseStart = now + i * pulseSpacing;
+      const osc = audioContext.createOscillator();
+      osc.type = "triangle"; // softer than a square wave — less "electronic beep," more insect buzz
+      osc.frequency.value = baseFreq + (Math.random() - 0.5) * 150;
+      const filter = audioContext.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.frequency.value = baseFreq;
+      filter.Q.value = 4; // wider than a single pure tone — texture, not a whistle
+      const pulseGain = audioContext.createGain();
+      pulseGain.gain.setValueAtTime(0.0001, pulseStart);
+      pulseGain.gain.linearRampToValueAtTime(0.16, pulseStart + 0.004);
+      pulseGain.gain.exponentialRampToValueAtTime(0.001, pulseStart + 0.03);
+      osc.connect(filter);
+      filter.connect(pulseGain);
+      pulseGain.connect(gain);
+      osc.start(pulseStart);
+      osc.stop(pulseStart + 0.035);
+    }
   }
 
   function scheduleNext() {

@@ -143,7 +143,13 @@ export class BuilderPhoneUI {
 
     const hint = document.createElement("p");
     hint.className = "builder-phone-hint";
-    hint.textContent = "Move your pointer (or drag, on touch) to position it, then rotate if you need to.";
+    // confirmLabel ("Place"/"Move here") used to label a button; now that
+    // confirming is a left-click in the world instead (see
+    // BuildModeSystem.js's own _handlePointerDown), it describes the
+    // action in the hint text instead — the distinction between placing
+    // something new and moving something that already exists is still
+    // worth saying, just not as a button anymore.
+    hint.textContent = `Move your pointer (or drag, on touch) to position it, rotate if you need to, then left-click in the world to ${confirmLabel.toLowerCase()}.`;
     this.screen.appendChild(hint);
 
     const actions = document.createElement("div");
@@ -155,13 +161,6 @@ export class BuilderPhoneUI {
     rotateBtn.textContent = "\u21BB Rotate";
     rotateBtn.addEventListener("click", () => this.callbacks.onRotateGhost());
     actions.appendChild(rotateBtn);
-
-    const confirmBtn = document.createElement("button");
-    confirmBtn.type = "button";
-    confirmBtn.className = "builder-phone-button builder-phone-button-primary";
-    confirmBtn.textContent = confirmLabel;
-    confirmBtn.addEventListener("click", () => this.callbacks.onConfirmGhost());
-    actions.appendChild(confirmBtn);
 
     const cancelBtn = document.createElement("button");
     cancelBtn.type = "button";

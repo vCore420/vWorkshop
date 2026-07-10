@@ -20,5 +20,6 @@ import "./MusicPlayerBehaviour.js";
 import "./ReflectiveBehaviour.js";
 import "./LadderBehaviour.js";
 import "./InteriorBehaviour.js";
+import "./DisplaySurfaceBehaviour.js";
 
 export { registerBehaviour, getBehaviourTypes, getBehaviourConfig, applyBehaviour, disposeBehaviour, defaultPropertiesFor } from "./registry.js";
