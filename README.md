@@ -4,7 +4,7 @@ A living 3D creative workshop, built to be a place you return to rather than
 an app you launch. Runs entirely in the browser, no build step, no backend —
 just static files.
 
-This project has gone through twenty-one phases (with one dedicated
+This project has gone through twenty-two phases (with one dedicated
 refinement pass in between): an architectural foundation and
 one believable room (phase 1), turning the computer into a real,
 self-contained creative workstation with a physical sit-down/stand-up
@@ -80,7 +80,11 @@ in its own pages without the Browser itself ever needing to change
 to prepare a future Workshop resident's connection to a local Ollama
 server, its identity (in plain words, not raw prompt text), behaviour
 tuning, and multiple saved profiles, with memory and embodiment settings
-already shaped for phases still to come (phase 21).
+already shaped for phases still to come (phase 21) — and, most recently,
+the Workshop's first resident: a small, semi-transparent floating bubble
+that simply lives there, gently aware of you when you're nearby, willing
+to talk when you walk up to it, and quietly waiting rather than
+disappearing whenever Ollama happens to be offline (phase 22).
 See `docs/ROADMAP.md` for what's next, `docs/ARCHITECTURE.md`
 for how the workshop as a whole is put together, and `docs/COMPUTER.md` /
 `docs/WORKBENCH.md` / `docs/WORLDBUILDER.md` / `docs/WORLD.md` /

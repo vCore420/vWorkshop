@@ -40,6 +40,7 @@ src/
   computer/                  the computer, as one self-contained object — see docs/COMPUTER.md
   browser/                   PageRegistry.js, BrowserStore.js, WorkshopPages.js, PageShell.js — see docs/BROWSER.md
   ai/                        AIConnectionManager.js, ModelRegistry.js, ResidentProfileStore.js, MemoryConfiguration.js, EmbodimentConfiguration.js, PromptComposer.js — see docs/AI.md
+  resident/                  ResidentEntity.js, ResidentMovement.js, ResidentBehaviour.js, ResidentRenderer.js, ResidentConnection.js, ResidentConversation.js, ResidentState.js, ResidentController.js — see docs/RESIDENT.md
   workbench/                 the workbench + Project Presence system — see docs/WORKBENCH.md
   worldbuilder/               the world creation system (Builder + Build Mode +
                               ConstructionLibrary.js, the permanent building-block
@@ -52,7 +53,7 @@ src/
   utils/                     PlaceholderFactory, ProceduralTexture, AudioSynth, InputManager, SimpleMarkdown, math, storage, ScreenProjector
   plugins/examples/          reference plugin(s) — see PLUGIN_GUIDE.md
   main.js                    wiring only — construct, register, start. No behaviour here.
-docs/                        this file, COMPUTER.md, WORKBENCH.md, WORLDBUILDER.md, WORLD.md, POLISH.md, MUSIC.md, PERFORMANCE.md, PLAYER.md, BROWSER.md, AI.md, REFINEMENT.md, ROADMAP.md, PLUGIN_GUIDE.md
+docs/                        this file, COMPUTER.md, WORKBENCH.md, WORLDBUILDER.md, WORLD.md, POLISH.md, MUSIC.md, PERFORMANCE.md, PLAYER.md, BROWSER.md, AI.md, RESIDENT.md, REFINEMENT.md, ROADMAP.md, PLUGIN_GUIDE.md
 assets/                      README explaining the "no shipped binary assets yet" decision
 ```
 

@@ -1040,7 +1040,46 @@ renders into. Caught by checking which stylesheet the class was actually
 defined in before assuming it would apply; fixed with a dedicated
 `.ai-future-badge` styled directly in `computer.css`.
 
-## Phase 22 — depth in the room that exists
+## Phase 22 — The First Resident
+
+**Goal:** "This is not an AI assistant. It is the Workshop's first
+resident... a presence, someone (or something) that simply belongs
+there." See docs/RESIDENT.md for the full architecture write-up.
+
+Delivered, eight small, separated files (`src/resident/`):
+- **A small, semi-transparent floating bubble** — real refraction
+  (`MeshPhysicalMaterial` transmission, not faked transparency), an
+  emissive inner glow whose colour genuinely shifts with mood, ten
+  slowly-drifting sparkle particles, a small point light of its own.
+  "Digital rather than magical" — no fairy-dust, no sparkle trails.
+- **A subtle, canvas-drawn face** — five simple expressions (sleeping,
+  content, curious, happy, thinking), redrawn only when the expression
+  actually changes rather than every frame, deliberately restrained —
+  "playful teeth" is two small rectangles, not a cartoon grin.
+- **Movement that stays almost entirely still** — a seven-second eased
+  glide between six real, furniture-anchored idle locations, chosen at
+  random on a 90-240 second interval; continuous, low-frequency
+  procedural bob/sway/rotation underneath so it never looks frozen even
+  at rest.
+- **Player awareness as one smoothed value**, not a combinatorial state
+  machine — `ResidentBehaviour.awarenessBlend` eases toward the player
+  within a 3.2m radius and back down as they leave it, "watching the
+  player walk past" falling naturally out of that rise and fall.
+- **Real conversation**, opened by walking up and interacting exactly
+  like any other physical object — no new interaction mechanism needed.
+  Every message reads the active Mission Control profile's model,
+  temperature, context size, and system prompt fresh, never cached,
+  never duplicated.
+- **Honest offline behaviour** — softer glow, a sleepy expression, one
+  calm sentence on interaction ("waiting for its connection"), and a
+  quiet wake-up (brighter glow, resumed sparkle pace) the moment
+  `AIConnectionManager` reconnects — no intrusive notification, since
+  none was asked for.
+- **Narrow, genuinely non-duplicating persistence** — `ResidentState.js`
+  remembers only idle location and mood; identity, model, and behaviour
+  tuning stay exactly where Mission Control already put them.
+
+## Phase 23 — depth in the room that exists
 
 Roughly in priority order, each independently shippable:
 
@@ -1079,7 +1118,7 @@ Roughly in priority order, each independently shippable:
 9. **A true oriented planar reflection**, and reflective surfaces beyond a
    flat plane — see "Future extension points" in `docs/PLAYER.md`.
 
-## Phase 23 — the world becomes alive on its own
+## Phase 24 — the world becomes alive on its own
 
 1. **Seasonal changes** — a plugin (see `PLUGIN_GUIDE.md`) reading the real
    calendar date and adjusting window tint / a handful of decorative
@@ -1103,7 +1142,7 @@ Roughly in priority order, each independently shippable:
    Construction Library's own Switch piece (Phase 13) is one ready-made
    source of that event, waiting for something to listen.
 
-## Phase 24 — beyond one building
+## Phase 25 — beyond one building
 
 - **Additional buildings** — `RoomLayoutSystem` was written with this in
   mind (see its class comment), and `WorldObjectsStore` was made
