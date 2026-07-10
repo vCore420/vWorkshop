@@ -15,6 +15,12 @@
  */
 import { WEATHER_STATES } from "../../systems/EnvironmentSystem.js";
 
+function formatClockTime(hour) {
+  const h = Math.floor(hour) % 24;
+  const m = Math.round((hour - Math.floor(hour)) * 60);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
 export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySystem, environmentSystem, musicSystem, dangerZoneActions }) {
   const engine = musicSystem.engine; // same trick MediaApp.js uses — avoids a dedicated engine dependency just for this
 
@@ -86,6 +92,37 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         timeSelect.addEventListener("change", () => timeOfDaySystem.setMode(timeSelect.value));
         timeRow.append(timeLabel, timeSelect);
         el.appendChild(timeRow);
+
+        // "The player should be able to adjust the Workshop time directly
+        // from the computer settings... the transition should feel calm
+        // and believable" — setTime() itself owns the actual easing (see
+        // TimeOfDaySystem.js); this control is just the one slider that
+        // requests it.
+        const setTimeRow = document.createElement("div");
+        setTimeRow.className = "panel-row";
+        const setTimeLabel = document.createElement("label");
+        setTimeLabel.textContent = "Set time";
+        const setTimeInput = document.createElement("input");
+        setTimeInput.type = "range";
+        setTimeInput.min = "0";
+        setTimeInput.max = "23.75";
+        setTimeInput.step = "0.25";
+        setTimeInput.value = String(timeOfDaySystem.currentTime);
+        const setTimeValue = document.createElement("span");
+        setTimeValue.className = "settings-range-value";
+        setTimeValue.textContent = formatClockTime(timeOfDaySystem.currentTime);
+        setTimeInput.addEventListener("input", () => {
+          setTimeValue.textContent = formatClockTime(parseFloat(setTimeInput.value));
+        });
+        setTimeInput.addEventListener("change", () => {
+          timeOfDaySystem.setTime(parseFloat(setTimeInput.value));
+        });
+        setTimeRow.append(setTimeLabel, setTimeInput, setTimeValue);
+        el.appendChild(setTimeRow);
+        const setTimeHint = document.createElement("p");
+        setTimeHint.className = "app-subtitle";
+        setTimeHint.textContent = "Eases there gradually rather than jumping — the sun and moon actually move to their new positions.";
+        el.appendChild(setTimeHint);
 
         const weatherRow = document.createElement("p");
         weatherRow.className = "app-subtitle";

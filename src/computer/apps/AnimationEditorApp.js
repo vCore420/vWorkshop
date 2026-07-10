@@ -57,7 +57,7 @@ export function createAnimationEditorApp({ appearanceStore, textureStore, animat
     id: "animationEditor",
     label: "Animation Editor",
     glyph: "\u{1F3AC}",
-    async mount(container) {
+    mount(container) {
       const heading = document.createElement("h2");
       heading.textContent = "Animation Editor";
       container.appendChild(heading);
@@ -151,7 +151,18 @@ export function createAnimationEditorApp({ appearanceStore, textureStore, animat
         playbackT = 0;
         lastTimestamp = null;
         renderPlaybackBar();
-        tick();
+        // requestAnimationFrame, not a direct tick() call — tick()'s very
+        // first invocation needs a real `timestamp` from the browser's
+        // own RAF scheduler. Calling tick() directly here used to pass no
+        // argument at all, making the first dt computation
+        // (undefined - undefined) a genuine NaN — which then never
+        // recovers through ordinary arithmetic, silently poisoning
+        // playbackT, then the blend parameter, then every interpolated
+        // rotation, on every following frame too. That's the actual
+        // cause of "the rendered player model disappears": NaN rotations
+        // corrupt the whole rig's transform hierarchy below whichever
+        // pivot receives them, which WebGL then simply fails to draw.
+        rafHandle = requestAnimationFrame(tick);
       }
 
       function stopPlayback() {
@@ -672,7 +683,13 @@ export function createAnimationEditorApp({ appearanceStore, textureStore, animat
       }
 
       // --- Boot ---
-      await rebuildPreviewRig();
+      // Not awaited — mount() itself must return synchronously (see the
+      // comment on its own signature above), so the preview rig builds
+      // in the background the same way WardrobeApp's own refreshPreview()
+      // does; render() below doesn't depend on it existing yet, only the
+      // preview pane does, and that updates itself the moment
+      // rebuildPreviewRig() actually finishes.
+      rebuildPreviewRig();
       const offAppearance = appearanceStore.events.on("appearance:changed", rebuildPreviewRig);
       const offLibrary = animationLibraryStore.events.on("library:changed", () => {
         // Another tab of this same app, or an import, could have changed
