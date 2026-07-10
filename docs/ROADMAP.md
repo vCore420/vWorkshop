@@ -1079,7 +1079,57 @@ Delivered, eight small, separated files (`src/resident/`):
   remembers only idle location and mood; identity, model, and behaviour
   tuning stay exactly where Mission Control already put them.
 
-## Phase 23 — depth in the room that exists
+## Phase 23 — Workshop Host
+
+**Goal:** "This is NOT about creating another application. This is about
+creating the Workshop's bridge to the local machine." See docs/HOST.md
+for the full architecture write-up.
+
+**Browser Refinement, first.** A real, reported bug — "after navigating
+to a page, the Browser often does not visually update until the player
+switches to another tab and then returns" — traced to `BrowserApp.js`
+reusing the same `<iframe>` element across navigations within a tab,
+mutating its `src`/`srcdoc` in place. A well-known class of browser
+rendering quirk: an iframe's own rendered layer isn't always reliably
+invalidated when its content changes while the element itself never
+moves, resizes, or toggles visibility — switching tabs only ever "fixed"
+it as a side effect of forcing a genuine relayout. Fixed at the
+architectural root: a fresh iframe element for every navigation, not an
+extra forced redraw layered on top of the old behaviour. Nothing about
+keeping frames alive *between* tab switches was lost — a URL change
+already resets scroll position regardless, so there was nothing worth
+preserving across it in the first place.
+
+**The Workshop Host**, delivered as eight small, separated files
+(`src/host/`) with no user-facing surface of its own — no computer app,
+no rail icon, no window:
+- **`ServiceRegistry.js`/`HostManager.js`** — the same registration-
+  pattern shape `PageRegistry.js` already established, applied to
+  services instead of pages. A new service registers itself and appears
+  in the Dashboard automatically, with zero changes required elsewhere.
+- **`ProgramsService.js`/`ProjectsService.js`/`FilesService.js`/
+  `AutomationService.js`/`HardwareService.js`** — honestly unimplemented,
+  each with a real `getStatus()` explaining exactly that, and every
+  future-facing method throwing a clear, named error rather than
+  silently doing nothing.
+- **`PluginRegistry.js`** — distinct from the existing `PluginManager.js`
+  (general plugin lifecycle); this is specifically "which `workshop://`
+  pages a plugin contributes," and already works end to end even though
+  nothing calls it yet.
+- **The Host Dashboard** (`workshop://host`) and its sibling pages
+  (`HostPages.js`) — `workshop://models` is a real, working page reading
+  `ModelRegistry` live, not a placeholder; `workshop://projects` shows
+  the Workshop's own real projects and the Host's own future local
+  projects side by side, rather than a naming collision or a regression
+  of a page that already worked.
+
+**Ollama's migration path is prepared, not taken.** `AIConnectionManager`
+still talks to Ollama directly — the actual preparation is that it always
+already lived in one small, isolated class, making "swap what's inside
+`checkConnection()`/`sendTestPrompt()` for a Host service call" a
+contained future change rather than a rewrite.
+
+## Phase 24 — depth in the room that exists
 
 Roughly in priority order, each independently shippable:
 
@@ -1118,7 +1168,7 @@ Roughly in priority order, each independently shippable:
 9. **A true oriented planar reflection**, and reflective surfaces beyond a
    flat plane — see "Future extension points" in `docs/PLAYER.md`.
 
-## Phase 24 — the world becomes alive on its own
+## Phase 25 — the world becomes alive on its own
 
 1. **Seasonal changes** — a plugin (see `PLUGIN_GUIDE.md`) reading the real
    calendar date and adjusting window tint / a handful of decorative
@@ -1142,7 +1192,7 @@ Roughly in priority order, each independently shippable:
    Construction Library's own Switch piece (Phase 13) is one ready-made
    source of that event, waiting for something to listen.
 
-## Phase 25 — beyond one building
+## Phase 26 — beyond one building
 
 - **Additional buildings** — `RoomLayoutSystem` was written with this in
   mind (see its class comment), and `WorldObjectsStore` was made

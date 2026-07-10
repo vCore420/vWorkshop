@@ -95,17 +95,29 @@ embedded browser view that has ever existed, not a Workshop limitation to
 engineer around. `BrowserApp.js` only ever tracks/restores scroll for
 `workshop://` tabs, where `iframe.contentWindow` is genuinely accessible.
 
-## Browser architecture: one persistent iframe per tab
+## Browser architecture: one persistent iframe *identity* per tab
 
-`BrowserApp.js` keeps one real `<iframe>` element alive per open tab —
-created once, hidden via CSS (`display: none` on the inactive ones) rather
-than destroyed when its tab isn't the active one, so switching tabs never
-loses a page's live state. Every render reconciles this map against
-`BrowserStore`'s own tab list: new tabs get a frame; closed tabs lose
-theirs; an existing tab's frame is only ever reloaded if its *current URL
-actually changed* (tracked via the frame's own `dataset.currentUrl`) — a
-tab switch alone must never trigger a reload, or the entire point of
-keeping frames alive is lost.
+`BrowserApp.js` keeps one `<iframe>` alive per open *tab* — hidden via CSS
+(`display: none` on the inactive ones) rather than destroyed when its tab
+isn't the active one, so switching tabs never loses a page's live state.
+Every render reconciles this against `BrowserStore`'s own tab list: new
+tabs get a frame; closed tabs lose theirs; switching to a tab that's
+already showing the right thing never touches its frame at all.
+
+**Navigating to a new URL *within* a tab creates a fresh iframe element**,
+replacing rather than mutating the existing one's `src`/`srcdoc` — a
+deliberate fix, not the original design. The first version reused the
+same element and just changed its content, which turned out to be the
+actual root cause of a real reported bug ("the Browser often does not
+visually update until the player switches to another tab and back") — an
+iframe's own rendered layer isn't always reliably invalidated by the
+browser when its content changes while the element itself never moves,
+resizes, or toggles visibility, and switching tabs only ever "fixed" it
+as a side effect of forcing a genuine relayout. See `docs/HOST.md`'s own
+"Browser Refinement" section for the full account. Nothing about
+state-preservation *between* tabs was lost by this — a URL change already
+resets scroll position regardless, so there was never anything worth
+keeping across it in the first place.
 
 **Two kinds of page, one display mechanism.** An ordinary `http(s)://` URL
 becomes `iframe.src`; a `workshop://` URL resolves through `PageRegistry`
