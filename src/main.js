@@ -36,6 +36,9 @@ import { OutfitStore } from "./player/OutfitStore.js";
 import { TextureStore } from "./player/TextureStore.js";
 import { ImageLibraryStore } from "./systems/ImageLibraryStore.js";
 import { ImageAssetStore } from "./systems/ImageAssetStore.js";
+import { PageRegistry } from "./browser/PageRegistry.js";
+import { BrowserStore } from "./browser/BrowserStore.js";
+import { registerWorkshopPages } from "./browser/WorkshopPages.js";
 import { PlayerCharacterSystem } from "./player/PlayerCharacterSystem.js";
 import { PlayerAnimationSystem } from "./player/PlayerAnimationSystem.js";
 import { AnimationLibraryStore } from "./player/AnimationLibraryStore.js";
@@ -103,6 +106,13 @@ const objectLibraryStore = new ObjectLibraryStore();
 const worldObjectsStore = new WorldObjectsStore();
 const musicLibraryStore = new MusicLibraryStore();
 const playlistStore = new PlaylistStore();
+const browserStore = new BrowserStore();
+const pageRegistry = new PageRegistry();
+// "Workshop systems should simply expose pages that the Browser can
+// display" — see WorkshopPages.js/PageRegistry.js's own comments. Called
+// here, once every store it needs already exists, not from inside
+// BrowserApp.js itself, which only ever talks to pageRegistry.resolve().
+registerWorkshopPages(pageRegistry, { projectsStore, browserStore });
 const settingsStore = new SettingsStore();
 const appearanceStore = new PlayerAppearanceStore();
 const outfitStore = new OutfitStore();
@@ -218,6 +228,8 @@ const computerSystem = engine.addSystem(
     animationLibraryStore,
     imageLibraryStore,
     imageAssetStore,
+    browserStore,
+    pageRegistry,
     dangerZoneActions,
   })
 );
@@ -251,6 +263,7 @@ persistenceSystem.registerProvider("settings", settingsStore);
 persistenceSystem.registerProvider("playerAppearance", appearanceStore);
 persistenceSystem.registerProvider("outfits", outfitStore);
 persistenceSystem.registerProvider("imageLibrary", imageLibraryStore);
+persistenceSystem.registerProvider("browser", browserStore);
 persistenceSystem.registerProvider("animationLibrary", animationLibraryStore);
 persistenceSystem.registerProvider("plugins", engine.plugins);
 
