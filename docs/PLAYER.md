@@ -591,6 +591,69 @@ body model, wearable system, or animation improvement is additive —
 exactly what let this entire phase arrive without a single existing file
 needing a structural rewrite, only extensions to what was already there.
 
+### Movement Follow-up: touch controls, Animation Editor stabilisation, and getting unstuck
+
+A dedicated follow-up pass, before moving on to Navigation & Environment —
+see docs/ROADMAP.md's Phase 18 entry for the full account.
+
+**Touch controls now cover every new movement mechanic**, with exactly
+two new buttons, not five. Running comes from *how far* the joystick is
+pushed (`isHeld("run")` reads the joystick's own magnitude once it's
+active — see InputManager.js), not a separate control; ladder climbing
+already worked with zero changes at all, since it reads the same
+forward/back joystick input ordinary ground movement always has
+(`input.moveVector.y`). Only jump (a one-shot tap, the same pattern the
+existing interact prompt already uses) and crouch (a held toggle, since
+there's no natural drag gesture for it the way running already has one)
+needed actual new buttons — positioned opposite the joystick, same glass/
+wood styling, same reveal-on-first-touch behaviour as everything else in
+`css/touch.css`. Desktop controls (Shift/C/Space) are completely
+unchanged.
+
+**Three real bugs in the Animation Editor, found and fixed, not
+suppressed:**
+
+- **"this._mountedDispose is not a function," on switching tabs or
+  leaving the computer.** The Animation Editor's own `mount()` was
+  declared `async`, which meant calling it returned a *Promise* rather
+  than the disposer function `WorkstationPanel` expects synchronously
+  (`this._mountedDispose = app.mount(...) ?? null` — a Promise is
+  truthy, so `?? null` never caught it). Every other app in the Workshop
+  handles its own async work (loading textures, building a preview
+  rig) *inside* an ordinary, synchronous `mount()` — calling an async
+  helper without awaiting it, the same "fire and forget, update the
+  preview whenever it actually finishes" pattern `WardrobeApp.js`
+  already established. The fix was making `mount()` match that pattern
+  exactly, not adding error handling to paper over the crash. Leaving the
+  computer failing the same way makes sense in hindsight too: the
+  exception thrown by calling a Promise as a function interrupted
+  whatever cleanup code was supposed to run immediately after it,
+  including restoring normal player control — one root cause explained
+  both reported symptoms.
+- **The preview model disappearing during playback.** The playback
+  loop's very first `tick()` call passed no timestamp at all (calling it
+  directly rather than through `requestAnimationFrame`), making the
+  first frame's `dt` computation `undefined - undefined` — a genuine
+  `NaN`. That `NaN` then never recovers through ordinary arithmetic: it
+  poisoned `playbackT`, then the blend parameter, then every interpolated
+  rotation, silently, forever, until playback was stopped and restarted.
+  Applying `NaN` rotations to a rig's pivots corrupts its entire
+  transform hierarchy below whichever pivot receives them, which WebGL
+  then simply fails to draw — not a rendering bug, a numeric one with a
+  rendering symptom. Fixed by starting playback through
+  `requestAnimationFrame` like every other animation loop in this
+  project already does, guaranteeing `tick()`'s first call always
+  receives a real timestamp.
+
+**A quality-of-life "I'm Lost!" button** (`CameraSystem.recoverToSpawn()`,
+in the HUD's own backup controls) resets every piece of position state
+this system owns — not just position/yaw/pitch, but `_footY`/
+`_verticalVelocity`/`_grounded` too, so the very next frame's gravity
+doesn't immediately act on stale values left over from wherever the
+player used to be. Cancels focus mode outright rather than trying to
+ease out of it — being lost is exactly the situation where a
+guaranteed-safe reset matters more than a smooth transition.
+
 ## Known limitations
 
 - **"Never see themselves" in first person is physics, not a rule.** The
@@ -615,12 +678,6 @@ needing a structural rewrite, only extensions to what was already there.
   uses; very fine detail in a large imported image won't survive that.
 - **The paint tool is deliberately simple** — one brush size, flat fill,
   no layers or undo. It's a wardrobe, not an image editor.
-- **No dedicated touch UI for running, crouching, or jumping yet** —
-  those three arrived as keyboard bindings (Shift, C, Space) alongside
-  the existing joystick/drag-look/tappable-interact touch controls, which
-  cover walking and looking around exactly as before. A touch-friendly
-  affordance for the three new actions is a reasonable next step, not
-  something this pass got to.
 - **Ground-height detection is a heightmap query, not real 3D collision**
   — see "Movement & Expression" above. A player can't land on the
   underside of an overhang, and very thin or steeply angled Builder

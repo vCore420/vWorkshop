@@ -228,3 +228,50 @@ html, body {
   font-family: var(--font-mono);
   color: var(--paper-dark);
 }
+
+/* ---------- Compass ---------- */
+#compass-root {
+  position: fixed;
+  top: max(18px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 55;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--duration-medium) var(--ease-standard);
+}
+#compass-root.visible { opacity: 1; }
+.compass-card {
+  position: relative;
+  width: 220px;
+  height: 34px;
+  overflow: hidden;
+  background: var(--surface-glass);
+  border: 1px solid var(--wood-mid);
+  border-radius: var(--radius-md);
+}
+.compass-strip {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  height: 100%;
+}
+.compass-mark {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--paper);
+  white-space: nowrap;
+}
+.compass-needle {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--brass-bright);
+  box-shadow: 0 0 6px rgba(184, 134, 59, 0.7);
+}

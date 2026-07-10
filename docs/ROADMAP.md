@@ -804,7 +804,71 @@ quaternion-based animation interpolation (plain per-axis Euler lerp,
 the same "believable, not physically perfect" trade the reflection
 system already made) — see "Known limitations" in docs/PLAYER.md.
 
-## Phase 18 — depth in the room that exists
+## Phase 18 — World Navigation & Environment
+
+**Goal:** "help the player naturally understand where they are, what time
+it is and how the world around them behaves... not simply a weather
+pass." See docs/WORLD.md's Astronomy/Interior weather/Workshop Time/
+Compass sections and docs/PLAYER.md's "Movement Follow-up" section for
+the full write-up.
+
+**Movement Follow-up** (completed first, before the new navigation work):
+- **Touch controls now cover every new movement mechanic with exactly
+  two new buttons.** Running comes from how far the joystick is pushed,
+  not a separate control; ladder climbing needed nothing new at all,
+  since it already reads the same forward/back joystick input ground
+  movement always has. Only jump and crouch needed real buttons.
+- **Three real Animation Editor bugs, found and fixed.** "this.
+  _mountedDispose is not a function" (on switching tabs, and on leaving
+  the computer) traced to `mount()` being declared `async` — returning a
+  Promise instead of the disposer function `WorkstationPanel` expects
+  synchronously, exactly the same "fire and forget an async helper
+  rather than awaiting it inside mount() itself" pattern every other app
+  already follows, just not followed here. The preview model
+  disappearing during playback traced to `tick()`'s very first call
+  passing no timestamp at all, making the first `dt` a genuine `NaN` that
+  then silently poisoned every subsequent frame's pose — fixed by
+  starting playback through `requestAnimationFrame` like every other
+  animation loop in the project already does.
+- **An "I'm Lost!" button** — a pure quality-of-life escape hatch,
+  resetting every piece of position state `CameraSystem` owns, not just
+  position/yaw/pitch.
+
+**Navigation & Environment:**
+- **A toggleable Compass** (**M**) — a single translating strip of
+  direction labels, reading its heading from the exact same
+  `directionToAzimuth()` function the sun and moon use, so the compass
+  and the sky always agree about where north is.
+- **Real solar-position astronomy** (`src/utils/Astronomy.js`) — a
+  standard approximate formula driven by the player's own geolocation
+  when available, replacing the old fixed, direction-agnostic arc. The
+  moon's position is derived from the same formula, offset by its actual
+  current phase, rather than always sitting opposite the sun regardless
+  of phase. Stars turn slowly with the hour, approximating the real
+  sky's own apparent rotation. Occasional, genuinely subtle shooting
+  stars on clear, dark nights.
+- **Workshop Time**, extending the existing Settings app rather than
+  adding a new one — `TimeOfDaySystem.setTime()` eases toward the
+  requested hour along whichever direction around the clock is shorter,
+  never jumping.
+- **Interior weather, fixed architecturally.** Rain particles spawn in a
+  box centred on the camera; standing inside an enclosed room put some of
+  them inside that same room too, genuinely co-located with the player
+  rather than occluded by anything. `InteriorSystem.registerVolume()` is
+  the fix — one generic function, the same shape
+  `ReflectionSystem`/`LadderSystem` already established, called directly
+  by the Workshop's own room and available to any future Builder-created
+  building through `InteriorBehaviour.js`.
+
+**Explicitly *not* attempted, on purpose**: a full real-star constellation
+catalogue (stars turn with the hour, but aren't mapped to actual named
+stars); the equation of time and longitude-within-timezone solar
+correction (local clock time is treated as solar time directly); tracking
+movement for Builder-created interior volumes the way ladders/mirrors
+already are (a static box, reasonable for something building-sized) — see
+"Known simplifications" and "Future extension points" in docs/WORLD.md.
+
+## Phase 19 — depth in the room that exists
 
 Roughly in priority order, each independently shippable:
 
@@ -843,7 +907,7 @@ Roughly in priority order, each independently shippable:
 9. **A true oriented planar reflection**, and reflective surfaces beyond a
    flat plane — see "Future extension points" in `docs/PLAYER.md`.
 
-## Phase 19 — the world becomes alive on its own
+## Phase 20 — the world becomes alive on its own
 
 1. **Seasonal changes** — a plugin (see `PLUGIN_GUIDE.md`) reading the real
    calendar date and adjusting window tint / a handful of decorative
@@ -867,7 +931,7 @@ Roughly in priority order, each independently shippable:
    Construction Library's own Switch piece (Phase 13) is one ready-made
    source of that event, waiting for something to listen.
 
-## Phase 20 — beyond one building
+## Phase 21 — beyond one building
 
 - **Additional buildings** — `RoomLayoutSystem` was written with this in
   mind (see its class comment), and `WorldObjectsStore` was made

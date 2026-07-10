@@ -4,7 +4,7 @@ A living 3D creative workshop, built to be a place you return to rather than
 an app you launch. Runs entirely in the browser, no build step, no backend —
 just static files.
 
-This project has gone through seventeen phases (with one dedicated
+This project has gone through eighteen phases (with one dedicated
 refinement pass in between): an architectural foundation and
 one believable room (phase 1), turning the computer into a real,
 self-contained creative workstation with a physical sit-down/stand-up
@@ -58,7 +58,12 @@ and real vertical collision including climbable ladders; a second,
 independently-customisable body model; and a full keyframe Animation
 System with its own frame-by-frame editor, a shared library of default
 and player-created animations, import/export, and a lightweight Emote
-Wheel to trigger them (phase 17).
+Wheel to trigger them (phase 17), and — most recently — helping you
+actually understand the world around you: a toggleable compass, real
+solar/lunar astronomy driven by your own location, a Workshop Time
+control that eases the sun and moon to wherever you set it rather than
+jumping, rain that correctly recognises when you're indoors, and an
+"I'm Lost!" button for exactly what it sounds like (phase 18).
 See `docs/ROADMAP.md` for what's next, `docs/ARCHITECTURE.md`
 for how the workshop as a whole is put together, and `docs/COMPUTER.md` /
 `docs/WORKBENCH.md` / `docs/WORLDBUILDER.md` / `docs/WORLD.md` /
@@ -107,10 +112,12 @@ way.
 | Mouse | Look around |
 | E | Interact with whatever's prompted at the bottom of the screen |
 | G | Open the Emote Wheel — trigger a gesture or animation |
+| M | Toggle the Compass |
 | B | Toggle Build Mode (also a button, top-left) — see below |
 | V | Toggle first/third person (also a button, top-left) — mainly for viewing outfits, appreciating what you've built, and screenshots; the Workshop is still designed primarily for first person |
 | Esc | Step back out of whatever's open |
 | Click the canvas | Re-lock the mouse cursor (after pressing Esc, for instance) |
+| "I'm Lost!" (button, top-left) | Safely returns you to the Workshop if you've wandered somewhere stuck or disorienting |
 
 **On touch** (phones, tablets): a virtual joystick appears bottom-left the
 moment you first touch the screen (never shown on desktop) — drag it to

@@ -264,6 +264,121 @@ thinner haze than Fog rather than a weaker version of it; Storm reads
 darkest and coldest of anything. Clear, Partly Cloudy, and Windy have no
 tint at all — they're meant to read as ordinary, undramatic sky days.
 
+### Astronomy: a real solar-position formula, not a fixed arc
+
+"Correct sunrise direction based on the player's location... correct
+sunset direction... moon movement matching the current date and time."
+`src/utils/Astronomy.js` replaced the sun's old fixed,
+direction-agnostic arc with a standard approximate solar-position
+formula — the kind countless simple sun-calculators use, not
+observatory-grade precision, but a genuine astronomical calculation
+driven by real inputs (latitude, day of year, hour) rather than an
+arbitrary phase sine. `solarPosition(hour, latitude, dayOfYear)` returns
+an altitude/azimuth pair; `azimuthAltitudeToDirection()` is the single
+place that becomes a world-space vector, using one fixed convention
+(world -Z is north, +X is east) that everything astronomical in the
+Workshop — the sun, the moon, and the Compass's own heading — shares,
+rather than each computing its own.
+
+**Geolocation** (`requestGeolocation()`) mirrors `WeatherProvider.js`'s
+own shape deliberately: ask once, and on any failure — denied,
+unsupported, offline — fall back to a fixed, reasonable default (45°N)
+rather than a crash or a blank sky. A real location, when granted, means
+the sun genuinely rises out of true east and sets in true west adjusted
+for wherever the player actually is, rather than an idealised,
+latitude-agnostic arc.
+
+**The moon's position is derived from the exact same formula**, not
+placed "roughly opposite" the sun the way it used to be — it uses an
+"effective hour" offset from the sun's own by how far through its current
+phase the moon is (`moonPhaseFraction() * 24`). A new moon (phase 0) sits
+at essentially the same position as the sun — which is what "new moon"
+astronomically *is*, the two rising and setting together — a full moon
+(phase 0.5) is a 12-hour offset, opposite the sun exactly as it always
+was, and everything in between falls proportionally around the same daily
+arc. That relationship, not just a fixed opposite-the-sun placement
+regardless of phase, is what "moon movement matching the current date and
+time" means astronomically.
+
+**Stars turn slowly with the hour** (`WorldEnvironmentSystem.js`'s own
+`stars.rotation.y`) — a simplified rotation about the world's vertical
+axis (not a properly latitude-tilted polar one), approximating the real
+sky's own apparent motion from Earth's rotation, rather than a field
+frozen in one arrangement regardless of what time it is. "Stars mapped to
+the real night sky where practical" stopped short of a full constellation
+catalogue — a genuinely different-scale undertaking, real star positions
+for hundreds of named stars — in favour of this one, much simpler
+astronomical property that was practical to get right.
+
+**Occasional shooting stars** — one reusable streak (a two-point line,
+the same cheap-geometry approach the rain particles already use),
+triggered at a random, unhurried interval (roughly every 15-55 seconds)
+and only on a genuinely dark, clear night (`starVisibility` and low cloud
+coverage/precipitation both gate it). "These effects should remain
+subtle. The goal is quiet realism rather than spectacle" — a brief,
+occasional flourish, not a meteor shower simulation.
+
+### Workshop Time: the Settings app's own slider, easing rather than jumping
+
+"The player should be able to adjust the Workshop time directly from the
+computer settings... avoid instantly teleporting the sun or moon. The
+transition should feel calm and believable." `TimeOfDaySystem.setTime(hour)`
+switches to simulated mode and sets a transition target; `update()` eases
+`currentTime` toward it along whichever direction around the 24-hour
+clock is shorter (so 23:00 → 01:00 moves forward two hours, not backward
+twenty-two) at a fixed rate — a few real seconds even for the most
+extreme, 12-hour jump. "Moving from morning to evening should smoothly
+move the sun across the sky... night should naturally transition into
+dawn" is implemented as literally advancing the clock forward (or back)
+through every moment in between, not a cut — the sun and moon's own
+positions are simply a function of `currentTime`, so easing that one
+number is the entire mechanism. Arriving at the requested time pauses
+there, rather than continuing to run afterward — it's "go look at this
+specific moment," not "start a new clock running from here."
+
+### Interior weather: an architectural fix, not a Workshop-specific one
+
+"Rain should no longer fall inside enclosed buildings... future
+Builder-created buildings should naturally support this system without
+requiring special cases." What was actually happening: rain particles
+spawn within a box centred on the camera (see "Atmosphere" above) — if
+the camera is standing inside an enclosed room, a good number of them
+end up inside that same enclosed space too, genuinely co-located with
+the player, not behind a wall or roof from their perspective at all.
+Depth testing (the original reasoning for why this seemed like it should
+already work) only ever occludes geometry that actually sits *between*
+the camera and a particle; it does nothing for a particle that was never
+behind anything to begin with.
+
+The fix is `InteriorSystem.js` — one generic function,
+`registerVolume(box)`, the same "one small, generic thing multiple
+independent callers use" shape `ReflectionSystem`/`LadderSystem` already
+established. `RoomLayoutSystem` registers the Workshop's own interior
+volume directly, built from `ROOM_DIMENSIONS` rather than the exterior
+shell's own bounding box (which would also sweep in wall thickness and
+the roof's overhang — this is deliberately just the room's actual
+interior air). `InteriorBehaviour.js` is the identical capability for
+Builder objects — attach it to any enclosed structure and it registers
+its own volume the exact same way, unaware the Workshop's own room does
+the same thing. `WorldEnvironmentSystem`'s rain checks
+`InteriorSystem.isInside(cameraPosition)` and fades its own opacity to
+zero while true, rather than trying to reason about which specific walls
+or roof panels are "in the way" for any given raindrop.
+
+### The Compass: one convention, two consumers
+
+"A single key press should smoothly show or hide the compass... clean,
+minimal, easy to read, non-intrusive." `CompassSystem.js` (toggled with
+**M**) is a single translating strip of direction labels, not a circular
+dial or a minimap — reads as "glance, orient, dismiss," matching "should
+not remain permanently visible... behave similarly to the Build Mode
+phone and third-person toggle." Its heading comes from the exact same
+`directionToAzimuth()` function `Astronomy.js` uses for the sun and
+moon, applied to the player's own facing direction (from
+`CameraSystem.yaw`) — the compass and the sky were never two separate
+things that needed to be kept in agreement by hand; there's only one
+azimuth convention in the entire Workshop, and both just read from it.
+
 ## A simple exterior shell, aligned to the interior
 
 The workshop's exterior — thicker two-sided walls, a flat roof with a
@@ -382,6 +497,18 @@ what's still current everywhere.)
 - **Lightning is a light-only flash.** `LightingSystem`'s storm flash
   brightens the hemisphere/ambient fill briefly; there's no visible bolt,
   no thunder-clap sound tied to it, no view-dependent flash timing.
+- **Solar position is a standard approximate formula, not
+  minute-precise.** Local clock time is treated as solar time directly
+  (see `Astronomy.js`'s own comment) — a common simplification that
+  ignores the equation of time and the small longitude-within-timezone
+  offset, which can shift real sunrise/sunset by up to roughly half an
+  hour. Believable, not almanac-accurate.
+- **An interior volume is a fixed box, not tracked for movement** — see
+  `InteriorBehaviour.js`'s own comment. Reasonable for something the size
+  of a building; a Builder-created interior repositioned after being
+  placed would leave its registered volume behind at the old location.
+- **Star rotation is a simplified vertical-axis spin, not a properly
+  latitude-tilted polar one** — see "Astronomy" above.
 
 ## Future extension points
 
@@ -401,3 +528,16 @@ what's still current everywhere.)
 - **Snow's own visual and ambience**, once genuinely wanted — the
   `WeatherProvider.js` mapping already isolates exactly where this would
   plug in.
+- **A real constellation catalogue**, if the simplified vertical-axis
+  star rotation ever needs to become genuinely accurate — real star
+  positions (right ascension/declination) for a modest named set would
+  slot into the same `_buildStars()` that currently scatters them
+  randomly, without needing to change how the rotation itself is applied.
+- **The equation of time and longitude-within-timezone offset**
+  (`Astronomy.js`'s own known simplification) — real observatories
+  correct for both; the Workshop treats local clock time as solar time
+  directly, which is believable but not minute-precise.
+- **A moving (not just static-box) interior volume** for Builder
+  structures repositioned after placement — `LadderSystem`/
+  `ReflectionSystem`'s own "cheap per-frame movement check" pattern is
+  the ready-made template, not a new one that would need inventing.
