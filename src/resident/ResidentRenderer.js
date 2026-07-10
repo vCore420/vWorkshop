@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-const RADIUS = 0.16; // small — a presence in the room, not a centrepiece
+const RADIUS = 0.11; // reduced from 0.16 — "feels more like a small companion than the focal point of the room"
 const FACE_TEXTURE_SIZE = 128;
 
 const MOOD_COLORS = {

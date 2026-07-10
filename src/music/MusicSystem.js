@@ -36,6 +36,7 @@ export class MusicSystem {
     this.shuffle = false;
     this.repeat = "off"; // "off" | "all" | "one"
     this.isPlaying = false;
+    this.playbackError = null; // set by _onPlaybackError() — a plain, honest message for the UI, cleared the moment a track actually starts playing successfully
     this.volume = 0.7;
     this.muted = false;
     // Settings app's Audio tab (master x music) — layered on top of the
@@ -68,6 +69,16 @@ export class MusicSystem {
     this.audio.addEventListener("ended", () => this._onEnded());
     this.audio.addEventListener("timeupdate", () => this._onTimeUpdate());
     this.audio.addEventListener("loadedmetadata", () => this._onLoadedMetadata());
+    // "Music loading behaves differently between Chromium, Firefox and
+    // Safari" — different browsers support different audio codecs, so a
+    // track that plays fine in one can genuinely fail to decode in
+    // another. Previously nothing here listened for that at all — a
+    // failed track left isPlaying stuck true with nothing actually
+    // playing and no explanation. playbackError carries a plain, honest
+    // message the UI can show (MediaApp.js's own now-playing display),
+    // the same shape EnvironmentSystem.liveError already establishes for
+    // "this failed, and here's why, without treating it as a crash."
+    this.audio.addEventListener("error", () => this._onPlaybackError());
 
     engine.events.on("persistence:save", (bag) => {
       bag.music = {
@@ -358,10 +369,29 @@ export class MusicSystem {
   }
 
   _onLoadedMetadata() {
+    this.playbackError = null; // successfully decoding metadata means this track genuinely works in this browser
     const song = this.currentSong;
     if (song && (song.duration == null || Math.abs(song.duration - this.audio.duration) > 0.5)) {
       this.libraryStore.setSongDuration(song.id, this.audio.duration);
     }
+  }
+
+  /** "Music loading behaves differently between Chromium, Firefox and
+   *  Safari" — most often a codec this particular browser simply can't
+   *  decode, even though the same file plays fine elsewhere. Rather than
+   *  leaving `isPlaying` stuck true with nothing actually audible,
+   *  reports it plainly and skips ahead — the same "keep going, don't get
+   *  stuck" instinct `_onEnded()` already has for repeat/queue exhaustion,
+   *  just triggered by a decode failure instead of the track finishing. */
+  _onPlaybackError() {
+    const code = this.audio.error?.code;
+    const reason =
+      code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED || code === MediaError.MEDIA_ERR_DECODE
+        ? "This browser can't play this track's audio format."
+        : "This track couldn't be loaded.";
+    this.playbackError = this.currentSong ? `${reason} (${this.currentSong.title})` : reason;
+    this.isPlaying = false;
+    this._emitPlaybackState();
   }
 
   _countPlay() {

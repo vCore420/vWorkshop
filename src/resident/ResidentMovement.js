@@ -25,12 +25,23 @@ import * as THREE from "three";
  */
 
 export const IDLE_LOCATIONS = [
-  { id: "besideComputer", label: "beside the computer", position: new THREE.Vector3(2.35, 1.5, -2.0), lookAt: new THREE.Vector3(3.15, 1.4, -2.35) },
-  { id: "aboveWorkbench", label: "above the workbench", position: new THREE.Vector3(-3.0, 1.65, -0.6), lookAt: new THREE.Vector3(-3.35, 1.0, -0.6) },
-  { id: "nearBookshelf", label: "near the bookshelf", position: new THREE.Vector3(3.25, 1.35, -0.9), lookAt: new THREE.Vector3(3.8, 1.3, -0.8) },
-  { id: "byMusicPlayer", label: "by the music player", position: new THREE.Vector3(2.95, 1.25, 2.0), lookAt: new THREE.Vector3(3.5, 1.1, 2.15) },
-  { id: "besideQuietCorner", label: "beside the quiet corner", position: new THREE.Vector3(1.75, 1.3, 1.15), lookAt: new THREE.Vector3(2.3, 1.0, 0.9) },
-  { id: "lookingOutWindow", label: "looking out the window", position: new THREE.Vector3(-2.0, 1.55, -2.55), lookAt: new THREE.Vector3(-2.0, 1.55, -3.5) },
+  // "Do not idle directly in front of chairs. Do not block access to the
+  // computer. Do not hover where the player needs to stand to use
+  // furniture. Leave comfortable space around interactable objects." Two
+  // changes from the original placements achieve this together: every
+  // position sits well above head height (1.9m+, clear of where a
+  // standing or seated player's own body actually is) — a floating
+  // companion naturally reads as "nearby" without needing to share
+  // ground-level space at all — and each is pushed further out
+  // horizontally than the interaction radius of whatever it's near, so
+  // it's never actually within the zone a player would need to stand in
+  // to interact with that piece of furniture.
+  { id: "besideComputer", label: "beside the computer", position: new THREE.Vector3(2.1, 2.0, -1.6), lookAt: new THREE.Vector3(3.15, 1.4, -2.35) },
+  { id: "aboveWorkbench", label: "above the workbench", position: new THREE.Vector3(-3.0, 2.1, -0.6), lookAt: new THREE.Vector3(-3.35, 1.0, -0.6) },
+  { id: "nearBookshelf", label: "near the bookshelf", position: new THREE.Vector3(3.15, 1.95, -0.4), lookAt: new THREE.Vector3(3.8, 1.3, -0.8) },
+  { id: "byMusicPlayer", label: "by the music player", position: new THREE.Vector3(2.65, 1.9, 2.0), lookAt: new THREE.Vector3(3.5, 1.1, 2.15) },
+  { id: "besideQuietCorner", label: "beside the quiet corner", position: new THREE.Vector3(1.4, 1.95, 0.75), lookAt: new THREE.Vector3(2.3, 1.0, 0.9) },
+  { id: "lookingOutWindow", label: "looking out the window", position: new THREE.Vector3(-2.0, 2.0, -2.55), lookAt: new THREE.Vector3(-2.0, 1.55, -3.5) },
 ];
 
 const TRAVEL_DURATION = 7; // seconds — slow and comfortable, never a dash across the room
@@ -48,15 +59,39 @@ export function randomIdleLocationId(excludingId) {
 }
 
 export class ResidentMovement {
-  constructor(startLocationId) {
+  /** `startLocationId` is always the resident's current *destination* —
+   *  see ResidentState.js's own comment on why `idleLocationId` is set
+   *  the moment travel starts, not once it finishes. `startPosition`
+   *  (optional) is its actual last-known world position, which may not
+   *  match that destination at all if it was saved mid-travel — when
+   *  given, this begins a fresh travel from there toward
+   *  `startLocationId`, resuming the journey rather than snapping
+   *  straight to the destination or restarting from scratch. Omitting it
+   *  (a brand new resident, no persisted state yet) starts already
+   *  arrived, exactly as before. */
+  constructor(startLocationId, startPosition = null) {
     const start = getIdleLocation(startLocationId);
-    this.currentPosition = start.position.clone();
-    this.currentLookAt = start.lookAt.clone();
-    this._fromPosition = start.position.clone();
-    this._toPosition = start.position.clone();
-    this._fromLookAt = start.lookAt.clone();
-    this._toLookAt = start.lookAt.clone();
-    this._travelT = 1; // 1 = arrived, not travelling
+    if (startPosition) {
+      this.currentPosition = new THREE.Vector3(startPosition.x, startPosition.y, startPosition.z);
+      this.currentLookAt = start.lookAt.clone();
+      this._fromPosition = this.currentPosition.clone();
+      this._toPosition = start.position.clone();
+      this._fromLookAt = this.currentLookAt.clone();
+      this._toLookAt = start.lookAt.clone();
+      // Already exactly there (a stationary resident's own persisted
+      // position always equals its idle location's fixed point) travels
+      // instantly, which reads as simply standing still rather than a
+      // visible journey to nowhere.
+      this._travelT = this.currentPosition.distanceToSquared(start.position) < 0.0001 ? 1 : 0;
+    } else {
+      this.currentPosition = start.position.clone();
+      this.currentLookAt = start.lookAt.clone();
+      this._fromPosition = start.position.clone();
+      this._toPosition = start.position.clone();
+      this._fromLookAt = start.lookAt.clone();
+      this._toLookAt = start.lookAt.clone();
+      this._travelT = 1; // 1 = arrived, not travelling
+    }
     this._restTimer = this._randomRestDuration();
     this._bobPhase = Math.random() * Math.PI * 2; // desynchronised, not every resident bobbing in lockstep if this ever supports more than one
   }

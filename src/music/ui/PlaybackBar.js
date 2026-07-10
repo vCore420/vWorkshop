@@ -24,7 +24,9 @@ export function buildPlaybackBar({ musicSystem }) {
   title.className = "music-playback-title";
   const artist = document.createElement("div");
   artist.className = "music-playback-artist";
-  info.append(title, artist);
+  const playbackErrorEl = document.createElement("div");
+  playbackErrorEl.className = "music-playback-error";
+  info.append(title, artist, playbackErrorEl);
   bar.appendChild(info);
 
   const transport = document.createElement("div");
@@ -110,6 +112,12 @@ export function buildPlaybackBar({ musicSystem }) {
     repeatBtn.textContent = musicSystem.repeat === "one" ? "\u{1F501}\u00B9" : "\u{1F501}";
     muteBtn.textContent = musicSystem.muted || musicSystem.volume === 0 ? "\u{1F507}" : "\u{1F50A}";
     volumeInput.value = String(musicSystem.muted ? 0 : musicSystem.volume);
+    // "Music loading behaves differently between Chromium, Firefox and
+    // Safari" — see MusicSystem.js's own _onPlaybackError() comment. A
+    // plain, honest line rather than leaving playback looking silently
+    // stuck with no explanation.
+    playbackErrorEl.textContent = musicSystem.playbackError ?? "";
+    playbackErrorEl.classList.toggle("visible", !!musicSystem.playbackError);
   }
 
   function renderTime({ currentTime, duration } = {}) {

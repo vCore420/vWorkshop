@@ -41,7 +41,12 @@ export class ResidentController {
     this._cameraSystem = engine.getSystem(CameraSystem);
 
     if (!this.residentState.idleLocationId) this.residentState.setIdleLocation(IDLE_LOCATIONS[0].id);
-    this.movement = new ResidentMovement(this.residentState.idleLocationId);
+    // "Reloading the Workshop should restore the resident naturally to
+    // where it was when the player last left" — passing the persisted
+    // position resumes it exactly there (including mid-travel) rather
+    // than snapping to idleLocationId's own fixed point; see
+    // ResidentMovement.js's own constructor comment.
+    this.movement = new ResidentMovement(this.residentState.idleLocationId, this.residentState.currentPosition);
     this.renderer = new ResidentRenderer();
     createResidentEntity({ engine, root: this.renderer.root });
   }
@@ -69,6 +74,17 @@ export class ResidentController {
     const lookTarget = motion.lookAt.clone();
     if (playerDistance !== null) lookTarget.lerp(this._playerPos, this.residentBehaviour.awarenessBlend);
 
+    // Plain field writes, not setters — see ResidentState.js's own
+    // comment on why these don't emit "persistence:saveRequested" every
+    // frame, and on why facingDirection/expression/connectionState are
+    // snapshots only. this.movement.currentPosition (the smooth base
+    // position, not motion.position's own tiny bob/sway offset) is the
+    // meaningful value to remember.
+    const p = this.movement.currentPosition;
+    this.residentState.currentPosition = { x: p.x, y: p.y, z: p.z };
+    this.residentState.facingDirection = this.renderer.root.rotation.y;
+    this.residentState.connectionState = this.residentConnection.status;
+
     this.renderer.update(dt, { position: motion.position, idleRotationY: motion.idleRotationY, scale: motion.scale, lookTarget });
 
     this._expressionTimer -= dt;
@@ -76,6 +92,7 @@ export class ResidentController {
       this._expressionTimer = EXPRESSION_CHECK_INTERVAL;
       const expression = this.residentBehaviour.computeExpression(isAwake, this.residentState.mood);
       this.renderer.setExpression(expression);
+      this.residentState.expression = expression;
     }
   }
 

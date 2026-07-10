@@ -229,10 +229,33 @@ export function buildCharacter(appearance, bodyModelId, textureImages = {}) {
  * sequence of poses to interpolate between and apply this way, one frame
  * at a time.
  */
+/**
+ * Applies a pose — `{ pivotName: [x, y, z] }`, Euler angles in radians —
+ * to a live rig's pivots. Every pivot is explicitly set, not just the
+ * ones the pose mentions — anything left out is reset to its rest
+ * rotation ([0,0,0]) rather than left at whatever it happened to be (see
+ * this function's own history: without that, a rotation from whichever
+ * clip played previously could silently persist into a new clip that
+ * never mentions that pivot at all).
+ *
+ * **X and Z are negated; Y is not.** This compensates for
+ * `PlayerCharacterSystem`'s own 180° root-orientation fix (see that
+ * file's own comment on "Player Model" for the full root-cause account)
+ * — rotating the whole rig by 180° around the vertical axis to correct
+ * its facing direction also rotates every animated pivot along with it,
+ * which would otherwise flip each clip's own forward/backward alignment
+ * with actual movement (every clip's authored X/Z values were tuned
+ * against the *old*, unrotated orientation). Negating X/Z here — the
+ * exact compensation a 180° yaw rotation requires, since it flips the X
+ * and Z axes while leaving Y untouched — keeps every clip looking
+ * identical to how it always did, now correctly oriented. This is the
+ * one place that correction needs to live, rather than hand-editing
+ * every frame's numbers across every clip in AnimationClips.js.
+ */
 export function applyPose(pivots, pose) {
   for (const name of Object.keys(pivots)) {
     const rotation = pose[name];
-    if (rotation) pivots[name].rotation.set(rotation[0], rotation[1], rotation[2]);
+    if (rotation) pivots[name].rotation.set(-rotation[0], rotation[1], -rotation[2]);
     else pivots[name].rotation.set(0, 0, 0);
   }
 }

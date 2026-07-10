@@ -124,7 +124,23 @@ export class PlayerCharacterSystem {
     const cam = this._cameraSystem;
     if (!cam) return;
     this._current.root.position.set(cam.position.x, cam.position.y - this._current.eyeHeight, cam.position.z);
-    this._current.root.rotation.y = cam.yaw;
+    // "The player model is currently facing the wrong direction" — root
+    // cause: an unrotated rig's own local +Z (the plain, ordinary "front"
+    // a symmetric box-built rig naturally has, with no explicit face or
+    // asymmetry to override it) rotates, under a bare `rotation.y = yaw`,
+    // toward world (sin(yaw), 0, cos(yaw)) — the exact opposite of this
+    // project's own established forward convention,
+    // (-sin(yaw), 0, -cos(yaw)), used everywhere else: CameraSystem's own
+    // movement code, and its third-person camera positioning (which
+    // places the camera *behind* the player using that same convention).
+    // The +π here corrects it. See PlayerCharacter.js's own applyPose()
+    // for the other half of this fix — rotating the whole rig by 180°
+    // also rotates every animated pose along with it, which would
+    // otherwise flip each clip's own forward/backward alignment with
+    // actual movement; applyPose() compensates by negating each pose's
+    // own X/Z components, keeping every clip looking exactly as it
+    // always did, now correctly oriented.
+    this._current.root.rotation.y = cam.yaw + Math.PI;
   }
 }
 
