@@ -8,6 +8,7 @@ import { InteractableComponent } from "../core/components/InteractableComponent.
 import { pickWanderTarget, buildPatrolRoute, avoidObstacles, randomRestDuration, idleMotionOffset } from "./BeingMovementSystem.js";
 
 const SAVE_SYNC_INTERVAL = 2; // seconds — how often a moving Being's live position is written back to BeingInstanceStore, not every frame (see this file's own comment)
+const MIN_CONTINUITY_SECONDS = 30; // a Being reasonably notices and moves on within this short a gap; below it, nothing visibly changes on reload, matching "nothing should feel scripted"
 const AWARENESS_RADIUS = 3.5;
 const AWARENESS_FULL_RADIUS = 1.8;
 
@@ -50,6 +51,37 @@ export class BeingController {
     for (const instance of this.beingInstanceStore.active()) this._spawnRuntime(instance);
 
     this._offInstances = this.beingInstanceStore.events.on("instances:changed", () => this._reconcile());
+    // "Beings should also begin participating in world continuity...
+    // continue simple movement routines... resume believable positions.
+    // This does not require advanced AI. Simple continuity is
+    // sufficient." See _applyContinuity()'s own comment.
+    engine.events.on("world:continuity", (continuity) => this._applyContinuity(continuity));
+  }
+
+  /** The same "pick one new plausible spot, don't animate the journey"
+   *  answer Bubble's own continuity uses (`ResidentController.js`) —
+   *  simpler here even than that, since a Being's own wander/patrol
+   *  target is already just a point within its home radius, not a named
+   *  location to choose between. A `movementStyle: "static"` Being never
+   *  moves regardless of elapsed time, matching what it would actually do
+   *  if the player had stayed and watched the whole time. */
+  _applyContinuity({ cappedElapsedSeconds, isFirstSession }) {
+    if (isFirstSession || cappedElapsedSeconds < MIN_CONTINUITY_SECONDS) return;
+    const colliders = this._colliders();
+    for (const [id, runtime] of this._runtime) {
+      const instance = this.beingInstanceStore.get(id);
+      const definition = instance && this.beingLibrary.get(instance.definitionId);
+      if (!instance || !definition || definition.movementStyle === "static" || instance.despawned) continue;
+
+      const home = new THREE.Vector3(instance.homePosition[0], instance.homePosition[1], instance.homePosition[2]);
+      const target = pickWanderTarget(home, instance.homeRadius, colliders);
+      runtime.root.position.copy(target);
+      runtime.wanderTarget = null; // next ordinary wander pick starts fresh from here, not toward a now-irrelevant old target
+      runtime.patrolRoute = null; // patrol resumes its own loop from wherever continuity just placed it, not from a stale route built around the old position
+      runtime.patrolIndex = 0;
+      runtime.restTimer = randomRestDuration();
+      this.beingInstanceStore.update(id, { position: [target.x, target.y, target.z] });
+    }
   }
 
   _colliders() {
