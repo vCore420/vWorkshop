@@ -99,6 +99,24 @@ origin) before starting Ollama — not something fixable from inside this
 file, the same category of limitation `docs/BROWSER.md`'s own
 `X-Frame-Options` note documents for a different reason entirely.
 
+**Generous timeouts for a cold model load.** The lightweight "is Ollama
+even reachable" poll (`/api/tags`) stays quick — a few seconds is more
+than enough for an endpoint that doesn't load anything. Actually
+generating a reply (`sendMessage()`, `sendTestPrompt()`) is different:
+Ollama loads a model's own weights from disk into memory the first time
+it's used (or after it's been idle long enough to be unloaded again),
+and for a larger model on modest hardware that alone can take well over
+a minute before generation even begins. Both real-generation calls use a
+three-minute timeout — generous enough that a genuinely slow cold load
+isn't mistaken for a failure, without pretending to solve the underlying
+"maybe your hardware is meaningfully slower than the model you picked"
+problem, which is a modelling/hardware question this file has no
+business making decisions about. The resident conversation overlay
+itself shows a quiet, one-line reassurance ("still working — the model
+may be loading for the first time") once a reply has genuinely been
+taking a while, so a long wait never reads as the Workshop having simply
+frozen.
+
 ## Model Selection
 
 "Refresh Models, Current Model, Model Information where available." A

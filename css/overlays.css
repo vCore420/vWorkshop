@@ -417,6 +417,17 @@
   pointer-events: none;
   transition: opacity var(--duration-medium) var(--ease-standard);
 }
+/* "The screen should immediately return to normal." The actual reported
+   bug — .overlay--panel's own full-screen dark background lives on the
+   outer .overlay element, a separate element from .rest-nook-panel-
+   dismissed above, which only ever fades panelEl itself. Fading this
+   one too is what actually clears the screen back to normal, not just
+   hides the card that was sitting on top of it. */
+.rest-nook-backdrop-dismissed {
+  background: transparent !important;
+  pointer-events: none;
+  transition: background var(--duration-medium) var(--ease-standard);
+}
 
 /* ---------- Resident Conversation ---------- */
 .resident-conversation-messages {
@@ -448,6 +459,38 @@
   border: 1px solid rgba(127, 216, 196, 0.3);
   color: var(--paper);
   border-bottom-left-radius: 4px;
+}
+/* "Keep this subtle and in keeping with Bubble's personality." Three
+   dots easing between a dim and a soft glow, one after another — a
+   gentle pulse, not a spinning loader borrowed from a generic app. */
+.resident-message-thinking {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 12px 16px;
+}
+.resident-message-thinking span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--screen-glow);
+  opacity: 0.3;
+  animation: resident-thinking-pulse 1.3s ease-in-out infinite;
+}
+.resident-message-thinking span:nth-child(2) { animation-delay: 0.18s; }
+.resident-message-thinking span:nth-child(3) { animation-delay: 0.36s; }
+@keyframes resident-thinking-pulse {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.85); }
+  40% { opacity: 0.9; transform: scale(1); }
+}
+/* "Better waiting behaviour while models load... improved loading
+   feedback." A quiet, small line — reassurance, not an alert — shown
+   only once a reply has genuinely been taking a while. */
+.resident-thinking-hint {
+  font-size: var(--text-xs);
+  color: var(--paper-dark);
+  margin: 2px 0 0 4px;
+  font-style: italic;
 }
 .resident-conversation-input-row {
   display: flex;

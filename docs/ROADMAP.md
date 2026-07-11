@@ -1505,6 +1505,131 @@ genuinely fresh Workshop (`isFirstSession`, from the previous phase's
 own `WorldTimeService`), never overwriting an existing player's own
 deliberate choice.
 
+## Phase 31A — Workshop Polish (final Version 1 pass)
+
+**Goal:** "Before moving into Version 2.0, the Workshop deserves one
+final polish pass... make Version 2.0 feel calm, comfortable and
+consistent." A refinement pass, not a feature pass.
+
+**A real, concrete bug fixed at its actual root cause**: the Computer's
+own clock read "NaN : NaN" because `TimeOfDaySystem`'s own state object
+returns the current hour under the key `hour`, not `currentTime` —
+`WorkstationPanel.js` had been destructuring a field that never existed
+on the payload at all. A second, equally real bug: the Phone's own Home
+button was hidden on the *Workshop app's own screen*, because an earlier
+version decided visibility by comparing the title string against
+`"Workshop"` — which happened to also be that app's own label. Fixed
+with an explicit `isHome` flag instead of a string comparison.
+
+**Bubble gained a subtle thinking indicator** — three staggered, pulsing
+dots in the conversation overlay itself, appended while
+`residentConnection.sendMessage()` is in flight and removed the instant
+the real reply arrives, communicating "thinking," not "frozen."
+
+**A held-key camera zoom** (Z) — `CameraSystem.pauseLook()`'s own
+`damp()`-based easing pattern, reused for a smooth FOV lerp
+(62°→38°→62°) rather than a snap, gated to `mode === "walk"` so it does
+nothing meaningful while already sitting down looking at a screen.
+
+**The Quiet Corner's own real bug, finally traced to its actual cause**:
+dismissing the introductory message only ever faded `panelEl` itself —
+but every `materialClass: "panel"` overlay's own *outer* element carries
+its own separate full-screen dark backdrop, untouched by that fade,
+which is what stayed visible. Fixed by fading both. Along the way, a
+second, more substantial gap: sitting anywhere used the same fully-fixed
+camera the Computer/Workbench use, with no way to look around at all —
+`allowLookAround`, a new opt-in field on a focus pose, hands yaw/pitch
+back to ordinary mouse input once seated while position stays locked
+forever after, and only the Quiet Corner's own pose opts into it.
+
+**Emotes became a real Phone app**, not an immediate wheel-trigger — a
+plain list, reading the exact same `animationLibraryStore` and
+triggering through the exact same `playerAnimationSystem.play(id)` the
+radial wheel's own grid already used. The direct key shortcut still
+opens the wheel exactly as before; this is a second way to reach the
+same gestures, not a replacement.
+
+**The dust motes "proof of concept" evolved into a permanent, more
+polished effect** — two clusters (one per actual window) instead of one
+vaguely "between" them, and a gentle, continuous inward pull rather than
+a mechanical instant-reversal bounce at each cluster's own edge.
+
+**Documentation tidied**: the README's front matter is now a genuinely
+short description/philosophy/features/quick-start, with the full
+phase-by-phase history moved into a collapsible changelog section
+further down. A PowerShell launcher
+(`start-ollama-for-workshop.ps1`) was added to the repo root, with
+matching "when and why" instructions in the README.
+
+## Phase 31B — Technical Refinement (engineering pass before 2.0)
+
+**Goal:** "Imagine you have inherited this project as a long-term
+maintainer... leave the project cleaner, more maintainable and easier
+to expand." A code-quality and architecture review, not a feature pass.
+
+**A genuine, investigated rendering issue, not just browser noise.** The
+recurring "generateMipmap... lazy initialization" warning traced to
+every `THREE.CanvasTexture`/`THREE.Texture` in the Workshop (the
+resident's own face, player clothing, procedural wood/paper/fabric
+textures, display-surface images) being created with Three.js's own
+default mipmap-requiring filters, never explicitly configured either
+way — the browser only actually builds that mipmap chain the first time
+each texture is drawn, not when it's created, which is exactly what
+"lazy initialization" describes. None of these textures are ever viewed
+at the wide range of distances/angles mipmapping exists to help with;
+`configureFlatTexture()` (`TextureUtils.js`), one new shared helper,
+disables it across all fifteen instances at once rather than resizing
+every canvas to a power of two or leaving the warning as accepted noise.
+
+**AI connectivity, actually root-caused rather than just given a bigger
+number.** "Current behaviour sometimes disconnects before slower systems
+have finished loading a model" — traced to both real-generation calls
+(`sendMessage()`, `sendTestPrompt()`) sharing a 30-60 second timeout,
+while Ollama itself can spend well over a minute loading a larger
+model's own weights from disk on modest hardware before generating
+anything at all. Both now use a three-minute timeout; the lightweight
+"is Ollama even reachable" poll (`/api/tags`, which loads nothing) stays
+exactly as quick as it already was. The resident conversation overlay
+also gained a quiet, one-line reassurance once a reply has genuinely
+been taking a while, so a long wait never reads as the Workshop having
+simply frozen.
+
+**A clean architecture, largely confirmed rather than needing rework.**
+A full unused-import/dead-file sweep found the codebase already
+following its own established conventions consistently — no stray
+`console.log`s, no orphaned files (the only false positives were
+side-effect imports my own detection script's regex couldn't see),
+shared math utilities (`clamp`/`lerp`/`damp`) already centralised in one
+place rather than duplicated. This pass's own real contribution was the
+texture-mipmap fix and the AI timeout fix above — both genuine,
+previously-undiagnosed issues — rather than a wholesale restructuring of
+architecture that was already sound.
+
+## Phase 31C — The Workshop 2.0
+
+**Goal:** not a spec — "you have one opportunity to contribute something
+of your own... because after living inside this project you genuinely
+believe it belongs."
+
+**One small contribution**: Bubble is now a little more likely to wander
+to the window while it's raining, or during a warm sunrise/sunset sky,
+than to any other idle spot at that moment. No new system — one small
+method (`ResidentController._windowWatchWeights()`) nudging the odds on
+the exact same random idle-location pick that already existed, using two
+signals (`EnvironmentSystem.getEffectivePrecipitation()`, and the same
+golden-hour window `TimeOfDaySystem` already uses for the sun's own
+colour shift) that were already true and already meaningful elsewhere.
+`randomIdleLocationId()`'s new optional `weights` argument is the one
+genuinely reusable piece of this — available to any future Being or
+resident wanting the same "usually random, occasionally shaped by
+something real" texture, without needing to invent the mechanism again.
+
+The full reasoning — what was added, why this over everything else it
+could have been, how it fits the Workshop's own philosophy, and a
+maintainer's honest reflection on thirty-one phases — lives in the
+README's own "One contribution" and "Reflecting, after thirty-one
+phases" sections, not repeated here.
+
 ## Phase 31 — depth in the room that exists
 
 Roughly in priority order, each independently shippable:

@@ -129,11 +129,32 @@ procedural motion strictly separate:
 
 ### Idle locations
 
-Six spots, each a real offset from `FURNITURE_LAYOUT`'s own coordinates
-in `src/data/layoutDefault.js` — beside the computer, above the
-workbench, near the bookshelf, by the music player, beside the quiet
-corner, and looking out the window (facing one of the two actual window
-openings `WorkshopRoom.js` cuts into the wall).
+Nine spots — the original six, each a real offset from
+`FURNITURE_LAYOUT`'s own coordinates in `src/data/layoutDefault.js`
+(beside the computer, above the workbench, near the bookshelf, by the
+music player, beside the quiet corner, and looking out the window,
+facing one of the two actual window openings `WorkshopRoom.js` cuts into
+the wall), plus three more added once the World Builder made an outside
+worth wandering to (by the front door, and two spots further out on the
+Workshop grounds — see `docs/WORLD.md`).
+
+### A quiet habit
+
+Phase 31C's own one small contribution, chosen after living inside the
+project rather than requested: Bubble is a little more likely to wander
+to the window specifically while it's raining, or during a warm
+sunrise/sunset sky, than to any other idle spot at that moment —
+`ResidentController._windowWatchWeights()`, a plain weight nudge on the
+exact same random pick that already existed, using signals
+(`EnvironmentSystem.getEffectivePrecipitation()`, and the same golden-
+hour window `TimeOfDaySystem._computeState()` already uses for the sun's
+own colour shift) that were already true and already meaningful, not
+invented for this. Nothing is scripted or guaranteed — it's still an
+ordinary weighted pick among idle locations that already existed; a
+patient, observant player might eventually notice it forms a pattern of
+its own, which is exactly the point. See the README's own "One
+contribution" section for the fuller reasoning behind choosing this,
+specifically, over everything else it could have been.
 
 ## Player awareness
 
