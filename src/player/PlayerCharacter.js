@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { getBodyModel } from "./BodyModels.js";
+import { configureFlatTexture } from "../utils/TextureUtils.js";
 
 /**
  * PlayerCharacter
@@ -68,6 +69,7 @@ function buildMaterial(partId, appearance, textureImage) {
   if (textureImage) {
     const texture = new THREE.CanvasTexture(textureImage);
     texture.colorSpace = THREE.SRGBColorSpace;
+    configureFlatTexture(texture);
     options.map = texture;
     delete options.color; // let the texture provide colour; the flat colour becomes the "no texture" fallback only
   }

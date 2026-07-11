@@ -61,6 +61,15 @@ export const SittingAreaDefinition = {
       // "the sitting camera is rotated approximately 180 degrees,
       // causing the player to appear to sit backwards."
       lookAt: [0, 0.9, 1.2],
+      // "Mouse look should remain available. Walking should remain
+      // disabled until standing normally." Unlike sitting at the
+      // Computer or Workbench — where the camera stays fixed on a
+      // screen because looking away would defeat the point — the Quiet
+      // Corner is just a comfortable place to sit and look around.
+      // Position still never moves again once seated (see
+      // CameraSystem.js's own _updateFocus() comment on why); only
+      // yaw/pitch respond to the mouse.
+      allowLookAround: true,
     },
   },
 };

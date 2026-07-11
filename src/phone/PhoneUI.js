@@ -68,9 +68,17 @@ export class PhoneUI {
     setTimeout(() => this.root.classList.add("hidden"), 380);
   }
 
-  setTitle(title) {
+  /** `isHome` is an explicit flag, not a string comparison against the
+   *  title text — an earlier version compared `title === "Workshop"` to
+   *  decide whether to hide the Home button, which happened to also be
+   *  exactly the Workshop *app*'s own label, hiding the Home button on
+   *  that app's own screen the same way it's hidden on the actual home
+   *  screen. "Add the same Home button behaviour used by the other
+   *  applications" — every app screen shows it now, regardless of what
+   *  its own label happens to say. */
+  setTitle(title, isHome = false) {
     this.titleEl.textContent = title;
-    this.homeBtn.style.visibility = title === "Workshop" ? "hidden" : "visible";
+    this.homeBtn.style.visibility = isHome ? "hidden" : "visible";
   }
 
   /** "Display applications as a simple grid of icons... the design
@@ -78,7 +86,7 @@ export class PhoneUI {
    *  a plain button — an emoji glyph and a label, nothing trying to look
    *  like Android or iOS. */
   showHome(apps) {
-    this.setTitle("Workshop");
+    this.setTitle("Workshop", true);
     this.content.innerHTML = "";
     const grid = document.createElement("div");
     grid.className = "workshop-phone-home-grid";
@@ -103,7 +111,7 @@ export class PhoneUI {
    *  returns the element to mount into, the same convention
    *  `WorkstationPanel.js` already uses for computer apps. */
   prepareAppContainer(title) {
-    this.setTitle(title);
+    this.setTitle(title, false);
     this.content.innerHTML = "";
     return this.content;
   }
