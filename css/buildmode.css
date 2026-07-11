@@ -89,10 +89,23 @@
 }
 
 .builder-phone-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  overflow-y: auto;
+}
+.builder-phone-group-heading {
+  margin: 0 0 6px;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--paper-dark);
+}
+.builder-phone-group-grid,
+.builder-phone-cards-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: var(--space-2);
-  overflow-y: auto;
 }
 .builder-phone-card {
   display: flex;
@@ -219,6 +232,19 @@
   gap: 6px;
   margin-top: auto;
   padding-top: var(--space-2);
+}
+.builder-phone-snap-row {
+  display: flex;
+  gap: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--paper-dark);
+  margin: 4px 0;
+}
+.builder-phone-snap-row label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
 }
 .builder-phone-button {
   font-family: var(--font-body);

@@ -1341,7 +1341,47 @@ computer's own seated eye height raised again (1.27 → 1.32); shadow
 camera frustum expanded (±9 → ±13, far 28 → 34) to reach further into
 the world, including Bubble's own new outdoor idle spots.
 
-## Phase 27 — depth in the room that exists
+## Phase 27 — World Expansion
+
+**Goal:** "This is NOT simply an outdoor expansion. This is about evolving
+the Builder into a true World Builder... the original Workshop should
+simply become the first building within a player-created world." See
+docs/WORLD.md's own new "World Builder" section for the full write-up.
+
+**Interior Recognition — the most important goal of this phase.**
+`BuildingDetectionSystem.js` automatically recognises enclosed player-built
+spaces, geometrically rather than by hardcoded piece type: any placed
+World Object whose own real bounding box (the exact same boxes collision
+already uses) is wall-shaped counts as an enclosure piece. A debounced,
+coarse 2D flood-fill over a bounded area finds enclosed regions and
+registers each with `InteriorSystem.registerVolume()` — the *exact* call
+`RoomLayoutSystem.js` already makes for the Workshop's own room, so a
+player-built room gets interior lighting, weather protection, and
+ambience through the same systems, no special case required. Players
+never mark anything as an interior; the world simply recognises it.
+
+**Builder Library grew substantially** — Foundation and Railing complete
+the Buildings list; Nature, Paths, and Lighting arrived as entirely new
+categories (every lighting piece reusing the existing `lightSource`
+behaviour); Mailbox rounded out Utilities. With the catalogue now well
+past its original size, the library screen groups pieces by category
+with section headings rather than one long grid.
+
+**Blueprints**: reusable multi-object Builder creations
+(`BlueprintStore.js`). Placing one creates genuinely independent,
+individually-editable World Object instances, never a single combined
+thing — "players should still be able to modify them after placement" is
+true by construction. Capture is honestly scoped to a radius around the
+current selection rather than a full multi-select interface, a real
+simplification named plainly rather than hidden.
+
+**Snapping (optional, off by default) and multi-axis rotation** — grid
+and rotation snap toggle from the ghost screen; Shift/Ctrl+wheel add
+pitch/roll tilt to the existing yaw-only wheel rotation, with
+`WorldObjectsStore` gaining optional `rotationX`/`rotationZ` fields to
+actually persist it, not just preview it on the ghost.
+
+## Phase 28 — depth in the room that exists
 
 Roughly in priority order, each independently shippable:
 
@@ -1380,7 +1420,7 @@ Roughly in priority order, each independently shippable:
 9. **A true oriented planar reflection**, and reflective surfaces beyond a
    flat plane — see "Future extension points" in `docs/PLAYER.md`.
 
-## Phase 28 — the world becomes alive on its own
+## Phase 29 — the world becomes alive on its own
 
 1. **Seasonal changes** — a plugin (see `PLUGIN_GUIDE.md`) reading the real
    calendar date and adjusting window tint / a handful of decorative
@@ -1404,7 +1444,7 @@ Roughly in priority order, each independently shippable:
    Construction Library's own Switch piece (Phase 13) is one ready-made
    source of that event, waiting for something to listen.
 
-## Phase 29 — beyond one building
+## Phase 30 — beyond one building
 
 - **Additional buildings** — `RoomLayoutSystem` was written with this in
   mind (see its class comment), and `WorldObjectsStore` was made

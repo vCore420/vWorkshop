@@ -537,7 +537,109 @@ what's still current everywhere.)
   (`Astronomy.js`'s own known simplification) — real observatories
   correct for both; the Workshop treats local clock time as solar time
   directly, which is believable but not minute-precise.
-- **A moving (not just static-box) interior volume** for Builder
-  structures repositioned after placement — `LadderSystem`/
-  `ReflectionSystem`'s own "cheap per-frame movement check" pattern is
-  the ready-made template, not a new one that would need inventing.
+## World Builder — evolving Build Mode into a true World Builder
+
+"The original Workshop should no longer be treated as a special
+location. Instead, it should become the first building within a much
+larger player-created world." This section covers what changed; the rest
+of this document (lighting, weather, time) already applied to the whole
+world before this phase and needed no changes at all to keep doing so.
+
+### Interior Recognition — the most important goal of this phase
+
+"Whenever a player constructs an enclosed building, the Workshop should
+naturally recognise it as an interior... players should never need to
+manually mark a building as an interior." `BuildingDetectionSystem.js`
+is that recognition, and it's deliberately geometric rather than tied to
+which specific piece was used — "avoid creating hardcoded world content"
+applies here as much as anywhere else. Any placed World Object whose own
+real bounding box (`WorldObjectsSystem.getFootprints()` — the exact same
+boxes collision already uses) is tall enough (≥1.6m) and reaches up from
+near the ground (base ≤1.2m) counts as a wall-like enclosure piece,
+whether it's the built-in "wall" construction piece, a custom-designed
+object, or an imported model used as a wall.
+
+**A coarse 2D flood-fill**, not full 3D voxel analysis: a grid over a
+bounded area around the Workshop marks cells overlapping a wall-like
+footprint as blocked, floods inward from the grid's own guaranteed-
+outside edge, and whatever's never reached is enclosed. Connected
+enclosed regions become bounding boxes, registered with
+`InteriorSystem.registerVolume()` — the *exact* call
+`RoomLayoutSystem.js` already makes for the Workshop's own room. Neither
+one is a special case the other needs to know about; a player-built room
+gets interior lighting, weather protection, and ambience through the
+same systems, not a parallel set built just for them.
+
+Debounced (700ms after the last placement/move settles) rather than run
+on every single `instances:changed` event, and re-run automatically
+whenever anything changes — a wall moved, added, or removed
+re-evaluates every detected region from scratch.
+
+**Real, acknowledged limitations**: a single horizontal slice, not a true
+3D volume — a multi-storey building or one whose floor doesn't align
+with the Workshop's own ground level isn't something this system reasons
+about; a detected region's own height is the tallest nearby wall
+piece's own height (or a flat default), not a roofline actually traced.
+"Avoid overcomplicating" — this covers the ordinary case (four walls and
+a doorway) well; see this file's own "Future extension points" for what a
+fuller version would need.
+
+### Builder Library — Structural/Openings/Nature/Paths/Lighting/Utilities/Workshop
+
+"If something naturally exists within the Workshop world, it should also
+exist as a Builder asset." The construction catalogue grew substantially
+this phase — Foundation and Railing complete the Buildings list (Floors,
+Walls, Corners, Roofs, Doors, Windows, Stairs already existed); Nature
+(tree, bush, flower, rock, log, grass patch, garden bed), Paths (stone,
+gravel, dirt, timber, concrete), and Lighting (garden light, street
+light, lantern, floodlight, campfire — every one carrying the same
+`lightSource` behaviour the original ceiling light already used) are
+entirely new categories; Mailbox completes Utilities (Fence, Gate, and
+Sign, which already doubled as a signpost, existed already).
+
+With the catalogue now well past its original size, the library screen
+groups pieces by category (`CONSTRUCTION_GROUPS`, a compact id → group
+lookup kept separate from each piece's own definition) with section
+headings, rather than one long undifferentiated grid.
+
+### Blueprints
+
+"Blueprints are reusable Builder creations... players should still be
+able to modify them after placement." `BlueprintStore.js` saves a
+cluster of World Objects and their relative positions to each other;
+placing one creates that many genuinely independent `WorldObjectsStore`
+instances at once, each immediately selectable and editable on its own —
+never a single combined thing with special editing rules.
+
+**Capture, honestly scoped**: rather than a full multi-object selection
+interface, "Save as Blueprint" captures the currently selected object
+plus everything else within 3m of it — select one wall of an
+already-built shed and the rest comes with it. A real simplification, not
+a hidden one; a proper multi-select tool is the natural next step (see
+"Future extension points").
+
+### Snapping and multi-axis rotation
+
+"Snapping should remain optional. Players should always remain free to
+build without restrictions if they prefer." Both grid snap (position) and
+rotation snap default off, toggled per-placement from the ghost screen's
+own checkboxes. Multi-axis rotation reuses the wheel rather than adding
+new UI: plain wheel still turns yaw exactly as before, Shift+wheel tilts
+pitch, Ctrl+wheel tilts roll — a player who never needs anything but yaw
+sees no change at all. `WorldObjectsStore` gained optional
+`rotationX`/`rotationZ` fields (defaulting to 0) to actually persist
+this, not just preview it on the ghost.
+
+### Known simplifications (by design, for this phase)
+
+- **Interior detection is a single horizontal slice** — see "Interior
+  Recognition" above.
+- **Blueprint capture is radius-based, not true multi-select.**
+- **"Surface snapping" wasn't added as a distinct third toggle** — the
+  ghost already snaps to whatever surface it raycasts against; a
+  dedicated edge/corner-alignment mode is future work, not implemented
+  this phase.
+- **Grid/interior-detection bounds are fixed to a generous area around
+  the Workshop**, not the whole conceivable world — reasonable for "a
+  village beside the Workshop," not yet for an unbounded map.
+
