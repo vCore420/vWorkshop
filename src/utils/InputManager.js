@@ -50,6 +50,7 @@ const KEY_TO_ACTION = {
   KeyC: "crouch",
   Escape: "cancel",
   KeyB: "phone",
+  KeyZ: "zoom",
   KeyV: "toggleView",
   KeyG: "emoteWheel",
   KeyM: "compass",

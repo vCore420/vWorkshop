@@ -397,7 +397,8 @@ const phoneApps = buildPhoneApps({
   musicSystem,
   lightingSystem,
   cameraSystem,
-  emoteWheelSystem,
+  animationLibraryStore,
+  playerAnimationSystem,
   settingsStore,
   engine,
 });

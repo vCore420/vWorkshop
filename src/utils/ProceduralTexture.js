@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { configureFlatTexture } from "./TextureUtils.js";
 
 /**
  * ProceduralTexture
@@ -35,6 +36,7 @@ export function woodGrainTexture(baseColor = "#6b4a34", grainColor = "#4a3120") 
     ctx.stroke();
   }
   const texture = new THREE.CanvasTexture(canvas);
+  configureFlatTexture(texture);
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
@@ -51,6 +53,7 @@ export function paperTexture(base = "#ede3d0") {
     ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 1, 1);
   }
   const texture = new THREE.CanvasTexture(canvas);
+  configureFlatTexture(texture);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
 }
@@ -68,6 +71,7 @@ export function concreteTexture(base = "#8d8577") {
     ctx.fill();
   }
   const texture = new THREE.CanvasTexture(canvas);
+  configureFlatTexture(texture);
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(4, 4);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -91,6 +95,7 @@ export function rainStreakTexture() {
     ctx.stroke();
   }
   const texture = new THREE.CanvasTexture(canvas);
+  configureFlatTexture(texture);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(1, 2);
@@ -111,7 +116,9 @@ export function radialGlowTexture(color = "#fff2df") {
   gradient.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  return new THREE.CanvasTexture(canvas);
+  const texture = new THREE.CanvasTexture(canvas);
+  configureFlatTexture(texture);
+  return texture;
 }
 
 /** A soft, irregular white blob — several overlapping soft circles rather
@@ -134,7 +141,9 @@ export function cloudBlobTexture() {
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fill();
   }
-  return new THREE.CanvasTexture(canvas);
+  const texture = new THREE.CanvasTexture(canvas);
+  configureFlatTexture(texture);
+  return texture;
 }
 
 /** A single small soft dot — used (as a sprite map, not a texture atlas)
@@ -149,7 +158,9 @@ export function starSpriteTexture() {
   gradient.addColorStop(1, "rgba(255,255,255,0)");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  return new THREE.CanvasTexture(canvas);
+  const texture = new THREE.CanvasTexture(canvas);
+  configureFlatTexture(texture);
+  return texture;
 }
 
 /** Blueprint-style texture: blue ground, white grid + a few "drawn" lines. */
@@ -187,6 +198,7 @@ export function blueprintTexture() {
   ctx.stroke();
 
   const texture = new THREE.CanvasTexture(canvas);
+  configureFlatTexture(texture);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
 }
@@ -215,6 +227,7 @@ export function sketchTexture() {
   ctx.stroke();
 
   const texture = new THREE.CanvasTexture(canvas);
+  configureFlatTexture(texture);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
 }
@@ -235,6 +248,7 @@ export function metalBrushedTexture(base = "#9a978f") {
     ctx.stroke();
   }
   const texture = new THREE.CanvasTexture(canvas);
+  configureFlatTexture(texture);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
 }
@@ -262,6 +276,7 @@ export function groundTexture() {
     ctx.fill();
   }
   const texture = new THREE.CanvasTexture(canvas);
+  configureFlatTexture(texture);
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
@@ -287,6 +302,7 @@ export function sidingTexture(base = "#5a4a3d") {
     ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 2, 2);
   }
   const texture = new THREE.CanvasTexture(canvas);
+  configureFlatTexture(texture);
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { registerBehaviour } from "./registry.js";
 import { ImageAssetStore } from "../../systems/ImageAssetStore.js";
+import { configureFlatTexture } from "../../utils/TextureUtils.js";
 
 /**
  * Display Surface
@@ -64,6 +65,7 @@ registerBehaviour("displaySurface", {
         if (!img || mesh.material !== material) return; // behaviour was reconfigured or removed while this was loading
         const texture = new THREE.Texture(img);
         texture.colorSpace = THREE.SRGBColorSpace;
+        configureFlatTexture(texture);
         texture.needsUpdate = true;
         material.map = texture;
         material.color.set("#ffffff"); // let the image show through at full, undamped colour
