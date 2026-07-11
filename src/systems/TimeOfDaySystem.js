@@ -94,6 +94,20 @@ export class TimeOfDaySystem {
       Object.assign(this, bag.timeOfDay);
       this._applyAndEmit();
     });
+
+    // "Time progression... the world should feel as though it continued
+    // naturally between visits." "realtime" mode already needs nothing
+    // here — it computes directly from the actual clock every frame, so
+    // there's nothing to catch up on. "simulated" mode is the real gap:
+    // it stores a fixed `currentTime` that would otherwise resume
+    // exactly where it was left, frozen, no matter how long the gap
+    // actually was.
+    engine.events.on("world:continuity", ({ cappedElapsedSeconds, isFirstSession }) => {
+      if (isFirstSession || this.mode !== "simulated" || this.paused) return;
+      const elapsedGameHours = (cappedElapsedSeconds * this.speedMultiplier) / 3600;
+      this.currentTime = ((this.currentTime + elapsedGameHours) % 24 + 24) % 24;
+      this._applyAndEmit();
+    });
   }
 
   setMode(mode) {

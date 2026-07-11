@@ -58,7 +58,7 @@ export const IDLE_LOCATIONS = [
 ];
 
 const TRAVEL_DURATION = 7; // seconds — slow and comfortable, never a dash across the room
-const MIN_REST_SECONDS = 90;
+export const MIN_REST_SECONDS = 90;
 const MAX_REST_SECONDS = 240; // "movement should be infrequent... the Workshop should never feel busy"
 
 export function getIdleLocation(id) {

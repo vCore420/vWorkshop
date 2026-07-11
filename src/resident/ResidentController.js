@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { CameraSystem } from "../systems/CameraSystem.js";
-import { ResidentMovement, IDLE_LOCATIONS } from "./ResidentMovement.js";
+import { ResidentMovement, IDLE_LOCATIONS, MIN_REST_SECONDS } from "./ResidentMovement.js";
 import { ResidentRenderer } from "./ResidentRenderer.js";
 import { createResidentEntity } from "./ResidentEntity.js";
 
@@ -88,6 +88,36 @@ export class ResidentController {
     this._onPointerUp = () => this._stopDragging();
     engine.canvas.addEventListener("pointerdown", this._onPointerDown);
     window.addEventListener("pointerup", this._onPointerUp);
+
+    // "Bubble should begin feeling like an independent resident...
+    // continue moving between favourite locations... arrive at a
+    // believable location when the Workshop loads." See
+    // _applyContinuity()'s own comment for the actual reasoning.
+    engine.events.on("world:continuity", (continuity) => this._applyContinuity(continuity));
+  }
+
+  /** "What should I have been doing while the player was away?" — not a
+   *  real simulation of every idle-location hop that would have happened
+   *  (the player never saw any of them, so modelling each one has no
+   *  payoff), just a single, honest answer: has enough time passed that
+   *  Bubble would plausibly have moved on from exactly where it was left?
+   *  Below `MIN_REST_SECONDS` (the shortest it would ever actually rest
+   *  somewhere), the answer is no — reopening the Workshop seconds after
+   *  closing it should show Bubble exactly where it was, not somewhere
+   *  new, or "nothing should feel scripted" stops being true. Past that,
+   *  it picks one new idle location (never the one it was already at)
+   *  and arrives there directly — no visible travel animation plays,
+   *  since whatever journey led there happened while nobody was watching;
+   *  only the destination needs to be believable, not the route. */
+  _applyContinuity({ cappedElapsedSeconds, isFirstSession }) {
+    if (isFirstSession || cappedElapsedSeconds < MIN_REST_SECONDS) return;
+
+    const currentId = this.residentState.idleLocationId;
+    const candidates = IDLE_LOCATIONS.filter((loc) => loc.id !== currentId);
+    const next = candidates[Math.floor(Math.random() * candidates.length)] ?? IDLE_LOCATIONS[0];
+    this.residentState.setIdleLocation(next.id);
+    this.movement.setDraggedPosition(next.position); // arrives directly — see comment above on why no travel animation plays
+    this.movement.setDraggedLookAt(next.lookAt ?? next.position);
   }
 
   _handlePointerDown(event) {

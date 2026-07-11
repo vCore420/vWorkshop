@@ -92,11 +92,27 @@ export class PersistenceSystem {
 
   _loadFromStorage() {
     const envelope = StorageUtils.get(SAVE_KEY);
-    if (!envelope) return; // fresh workshop — every system already applied sensible defaults in init()
+    const now = new Date();
+    if (!envelope) {
+      // A fresh Workshop — every system already applied sensible defaults
+      // in init(). Still resolves continuity (with lastSavedAt: null,
+      // meaning "nothing to catch up on") so WorldTimeService and any
+      // continuity-aware system always hear exactly one
+      // "world:continuityReady" per session, first-time or not.
+      this.engine.events.emit("world:continuityReady", { lastSavedAt: null, now });
+      return;
+    }
     const startingVersion = envelope.version ?? 1;
     const migrated = migrateEnvelope(envelope);
     this._applyEnvelope(migrated);
     if (migrated.version !== startingVersion) this.save(); // persist the migrated shape immediately, not just once something else next triggers a save
+    // Only after every system's own "persistence:load" handler has
+    // already run (EventBus.emit() is synchronous, so that's already
+    // guaranteed by the time _applyEnvelope() above returns) — a
+    // continuity handler reacting to elapsed time needs to see each
+    // system's own *restored* state, not whatever default it started
+    // life with.
+    this.engine.events.emit("world:continuityReady", { lastSavedAt: migrated.savedAt ?? null, now });
   }
 
   _applyEnvelope(envelope) {
