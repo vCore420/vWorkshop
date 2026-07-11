@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { FurnitureSystem } from "../systems/FurnitureSystem.js";
 import { LightingSystem } from "../systems/LightingSystem.js";
 import { damp, clamp, lerp } from "../utils/MathUtils.js";
-import { makeRectCorners, projectRect } from "../utils/ScreenProjector.js";
+import { makeRectCorners, projectRect, comfortableRect } from "../utils/ScreenProjector.js";
 import { WorkstationPanel } from "./WorkstationPanel.js";
 import { buildApps } from "./apps/registry.js";
 
@@ -124,7 +124,7 @@ export class ComputerSystem {
     if (this.progress > 0.001) {
       const rect = projectRect(this.screenMesh, this._screenCorners, this.engine.camera, window.innerWidth, window.innerHeight);
       const panelOpacity = clamp((this.progress - PANEL_REVEAL_START) / (PANEL_REVEAL_END - PANEL_REVEAL_START), 0, 1);
-      this.panel.updateRect(rect, panelOpacity);
+      this.panel.updateRect(comfortableRect(rect, window.innerWidth, window.innerHeight), panelOpacity);
     }
 
     if (!this.active && this.progress === 0 && !this._panelClosed) {
