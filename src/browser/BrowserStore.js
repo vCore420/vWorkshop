@@ -32,6 +32,24 @@ export class BrowserStore {
     /** @type {Array<{id:string, history:string[], historyIndex:number, scrollY:number, title:string}>} */
     this.tabs = [first];
     this.activeTabId = first.id;
+    // "Bookmarks, Saved Workshop pages" (Browser Phone app) — a small,
+    // flat list, shared with the full computer Browser too, since a
+    // bookmark saved from either place ought to show up in the other.
+    /** @type {Array<{url:string, title:string}>} */
+    this.bookmarks = [];
+  }
+
+  addBookmark(url, title) {
+    if (this.bookmarks.some((b) => b.url === url)) return;
+    this.bookmarks.push({ url, title: title || url });
+    this.events.emit("browser:changed");
+    this.events.emit("persistence:saveRequested");
+  }
+
+  removeBookmark(url) {
+    this.bookmarks = this.bookmarks.filter((b) => b.url !== url);
+    this.events.emit("browser:changed");
+    this.events.emit("persistence:saveRequested");
   }
 
   _makeTab(url = HOME_URL) {
@@ -153,13 +171,14 @@ export class BrowserStore {
 
   // ---- persistence contract, read by PersistenceSystem ----
   save() {
-    return { tabs: this.tabs, activeTabId: this.activeTabId };
+    return { tabs: this.tabs, activeTabId: this.activeTabId, bookmarks: this.bookmarks };
   }
 
   load(data) {
     if (!data?.tabs?.length) return;
     this.tabs = data.tabs;
     this.activeTabId = data.activeTabId && this.tabs.some((t) => t.id === data.activeTabId) ? data.activeTabId : this.tabs[0].id;
+    this.bookmarks = data.bookmarks ?? [];
     this.events.emit("browser:changed");
   }
 }
