@@ -19,10 +19,12 @@ import { EmoteWheelSystem } from "./systems/EmoteWheelSystem.js";
 import { CompassSystem } from "./systems/CompassSystem.js";
 import { InteractionSystem } from "./systems/InteractionSystem.js";
 import { PersistenceSystem } from "./systems/PersistenceSystem.js";
+import { WorldTimeService } from "./systems/WorldTimeService.js";
 import { ComputerSystem } from "./computer/ComputerSystem.js";
 import { WorkbenchSystem } from "./workbench/WorkbenchSystem.js";
 import { ObjectLibraryStore } from "./worldbuilder/ObjectLibraryStore.js";
 import { BlueprintStore } from "./worldbuilder/BlueprintStore.js";
+import { WorkshopProjectStore } from "./data/WorkshopProjectStore.js";
 import { WorldObjectsStore } from "./worldbuilder/WorldObjectsStore.js";
 import { WorldObjectsSystem } from "./worldbuilder/WorldObjectsSystem.js";
 import { BuildModeSystem } from "./worldbuilder/BuildModeSystem.js";
@@ -125,6 +127,12 @@ const projectsStore = new ProjectsStore();
 const notesStore = new NotesStore();
 const objectLibraryStore = new ObjectLibraryStore();
 const blueprintStore = new BlueprintStore();
+// "Begin preparing for long-running Workshop activities... this phase
+// does not need to fully implement these future systems. Simply prepare
+// the architecture for them." See WorkshopProjectStore.js's own comment
+// — deliberately not wired to any UI yet.
+const workshopProjectStore = new WorkshopProjectStore();
+void workshopProjectStore;
 const worldObjectsStore = new WorldObjectsStore();
 // Constructed here, ahead of WorldObjectsSystem/BuildModeSystem below —
 // "the Builder should treat imported models similarly to any other
@@ -395,6 +403,12 @@ const phoneApps = buildPhoneApps({
 });
 const phoneSystem = engine.addSystem(new PhoneSystem(phoneApps));
 
+// "Introduce a shared persistence service responsible for session
+// timestamps, elapsed real-world time, world continuation helpers."
+// Constructed here, immediately before PersistenceSystem, so its own
+// init() is already listening for "world:continuityReady" by the time
+// that fires — see WorldTimeService.js's own comment.
+const worldTimeService = engine.addSystem(new WorldTimeService());
 const persistenceSystem = engine.addSystem(new PersistenceSystem()); // last: loads after everyone has registered listeners
 
 void interactionSystem;
@@ -403,6 +417,7 @@ persistenceSystem.registerProvider("projects", projectsStore);
 persistenceSystem.registerProvider("notes", notesStore);
 persistenceSystem.registerProvider("objectLibrary", objectLibraryStore);
 persistenceSystem.registerProvider("blueprints", blueprintStore);
+persistenceSystem.registerProvider("workshopProjects", workshopProjectStore);
 persistenceSystem.registerProvider("phone", phoneSystem);
 persistenceSystem.registerProvider("worldObjects", worldObjectsStore);
 persistenceSystem.registerProvider("musicLibrary", musicLibraryStore);
