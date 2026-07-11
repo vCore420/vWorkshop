@@ -5,6 +5,7 @@ import { ResidentRenderer } from "./ResidentRenderer.js";
 import { createResidentEntity } from "./ResidentEntity.js";
 
 const EXPRESSION_CHECK_INTERVAL = 0.5; // seconds — expression/awake checks don't need to run every single frame
+const FOLLOW_DISTANCE = 1.3; // metres — "Follow Me" stops closing the gap once this near, hovering companionably rather than stepping right up to the player's own eye position
 const DRAG_LOOK_COS_THRESHOLD = Math.cos((10 * Math.PI) / 180); // ~10° cone — a little more forgiving than the interaction one, since grabbing hold of something is a coarser gesture than a precise "talk to this" click
 const DRAG_REACH = 3; // metres — how far away Bubble can be and still be grabbed
 const DRAG_DISTANCE = 1.4; // metres in front of the camera Bubble is held at while dragged
@@ -61,6 +62,12 @@ export class ResidentController {
     this._dragTarget = new THREE.Vector3();
     this._scratchForward = new THREE.Vector3();
     this._scratchDirection = new THREE.Vector3();
+    // "Stay Here, Follow Me, Return Home" (Bubble Phone app) — null is
+    // ordinary autonomous wandering, "stay" simply skips ever picking a
+    // new idle destination, "follow" steps toward the player every frame
+    // instead. Return Home isn't a persistent mode at all — see
+    // returnHome() below.
+    this.playerCommand = null; // null | "stay" | "follow"
   }
 
   init(engine) {
@@ -106,6 +113,40 @@ export class ResidentController {
     this._dragging = false;
   }
 
+  /** "Stay Here" (Bubble Phone app) — simply stops ever picking a new
+   *  idle destination; whatever it's doing right now (resting, or
+   *  mid-journey) finishes naturally, it just never starts another one
+   *  on its own until told otherwise. */
+  stayHere() {
+    this.playerCommand = "stay";
+  }
+
+  /** "Follow Me" — steps toward the player every frame (see
+   *  `ResidentMovement.stepToward()`) instead of choosing its own idle
+   *  destinations, stopping a comfortable distance short rather than
+   *  overlapping the player. */
+  followMe() {
+    this.playerCommand = "follow";
+  }
+
+  /** "Return Home" — not a persistent mode at all, just a one-time
+   *  request: clears whatever command was active and starts an ordinary
+   *  idle-location journey toward the very first idle location
+   *  (`IDLE_LOCATIONS[0]`, "beside the computer") — after arriving, it
+   *  simply resumes normal autonomous wandering, exactly like any other
+   *  idle-location arrival. */
+  returnHome() {
+    this.playerCommand = null;
+    this.movement.travelTo(IDLE_LOCATIONS[0].id);
+    this.residentState.setIdleLocation(IDLE_LOCATIONS[0].id);
+  }
+
+  /** Clears Stay/Follow, returning to ordinary autonomous wandering
+   *  without also forcing a trip home the way returnHome() does. */
+  resumeWandering() {
+    this.playerCommand = null;
+  }
+
   update(dt) {
     if (!this.renderer) return;
 
@@ -120,14 +161,16 @@ export class ResidentController {
       return;
     }
 
+    const playerDistance = this._computePlayerDistance();
     const isConversing = this.residentBehaviour.mode === "conversing";
-    if (!isConversing) {
+    if (this.playerCommand === "follow" && playerDistance !== null && playerDistance > FOLLOW_DISTANCE) {
+      this.movement.stepToward(this._playerPos, dt);
+    } else if (!isConversing && this.playerCommand !== "stay") {
       const currentId = this.residentState.idleLocationId;
       const newId = this.movement.maybePickNewLocation(dt, currentId);
       if (newId) this.residentState.setIdleLocation(newId);
     }
 
-    const playerDistance = this._computePlayerDistance();
     this.residentBehaviour.update(dt, playerDistance);
 
     const motion = this.movement.update(dt, { thinking: this.residentBehaviour.isThinking });

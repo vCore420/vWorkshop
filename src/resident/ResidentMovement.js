@@ -131,6 +131,25 @@ export class ResidentMovement {
     this._toLookAt.copy(target);
   }
 
+  /** "Follow Me" — a continuous step toward `target` at a fixed speed,
+   *  called every frame while the command is active. Deliberately
+   *  separate from `travelTo()`'s own ease-based idle-location system,
+   *  which is tuned for occasional, slow journeys between fixed points,
+   *  not for chasing a constantly-moving player position frame after
+   *  frame. Cancels any idle travel in progress the same way
+   *  `setDraggedPosition()` does. */
+  stepToward(target, dt, speed = 1.4) {
+    this._fromPosition.copy(this.currentPosition);
+    this._toPosition.copy(this.currentPosition);
+    this._travelT = 1;
+    const toTarget = target.clone().sub(this.currentPosition);
+    toTarget.y = 0;
+    const dist = toTarget.length();
+    if (dist < 0.05) return;
+    toTarget.normalize();
+    this.currentPosition.addScaledVector(toTarget, Math.min(dist, speed * dt));
+  }
+
   get isTravelling() {
     return this._travelT < 1;
   }
