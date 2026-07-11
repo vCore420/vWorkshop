@@ -77,6 +77,55 @@ function infoRow(labelText, valueText) {
   return row;
 }
 
+/** A checkbox ("override this or follow the preset") plus a 0-1 slider,
+ *  shared by every manual-override control in the Atmosphere tab —
+ *  `currentValue` is `null` when not overridden, a 0-1 number otherwise;
+ *  `onChange(value | null)` is called with `null` the moment the
+ *  checkbox is unchecked, handing control back to whatever the current
+ *  weather preset (or, for Moon Phase, the real calendar date) would
+ *  otherwise provide. */
+function overrideSliderRow(labelText, currentValue, onChange) {
+  const row = document.createElement("div");
+  row.className = "panel-row";
+  const label = document.createElement("label");
+  label.textContent = labelText;
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.checked = currentValue !== null;
+  checkbox.title = "Override";
+
+  const slider = document.createElement("input");
+  slider.type = "range";
+  slider.min = "0";
+  slider.max = "1";
+  slider.step = "0.02";
+  slider.value = String(currentValue ?? 0.5);
+  slider.disabled = currentValue === null;
+
+  const valueEl = document.createElement("span");
+  valueEl.className = "settings-range-value";
+  valueEl.textContent = currentValue === null ? "auto" : `${Math.round(currentValue * 100)}%`;
+
+  checkbox.addEventListener("change", () => {
+    slider.disabled = !checkbox.checked;
+    if (checkbox.checked) {
+      onChange(parseFloat(slider.value));
+      valueEl.textContent = `${Math.round(parseFloat(slider.value) * 100)}%`;
+    } else {
+      onChange(null);
+      valueEl.textContent = "auto";
+    }
+  });
+  slider.addEventListener("input", () => {
+    valueEl.textContent = `${Math.round(parseFloat(slider.value) * 100)}%`;
+    if (checkbox.checked) onChange(parseFloat(slider.value));
+  });
+
+  row.append(label, checkbox, slider, valueEl);
+  return row;
+}
+
 export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySystem, environmentSystem, musicSystem, dangerZoneActions, aiConnectionManager, residentProfileStore, residentBehaviour, cameraSystem, interiorSystem, hostManager }) {
   const engine = musicSystem.engine; // same trick MediaApp.js uses — avoids a dedicated engine dependency just for this
 
@@ -187,6 +236,16 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         el.appendChild(infoRow("Wind", `${Math.round(environmentSystem.windSpeed * 60)} km/h, from ${compassLabel(environmentSystem.windDirectionRad)}`));
         el.appendChild(infoRow("Temperature", environmentSystem.temperatureC !== null ? `${Math.round(environmentSystem.temperatureC)}\u00b0C` : "Not available \u2014 switch to Live Weather"));
 
+        el.appendChild(sectionHeading("Manual Overrides"));
+        const overrideHint = document.createElement("p");
+        overrideHint.className = "app-subtitle";
+        overrideHint.textContent = "Pulls a single property away from whatever the current weather preset would otherwise give it. Set one back to \u201cFollow weather\u201d to let the preset take over again.";
+        el.appendChild(overrideHint);
+        el.appendChild(overrideSliderRow("Clouds", environmentSystem.manualOverrides.cloudCoverage, (v) => environmentSystem.setManualOverride("cloudCoverage", v)));
+        el.appendChild(overrideSliderRow("Rain", environmentSystem.manualOverrides.precipitation, (v) => environmentSystem.setManualOverride("precipitation", v)));
+        el.appendChild(overrideSliderRow("Fog", environmentSystem.manualOverrides.fogDensity, (v) => environmentSystem.setManualOverride("fogDensity", v)));
+        el.appendChild(overrideSliderRow("Wind", environmentSystem.manualOverrides.windSpeed, (v) => environmentSystem.setManualOverride("windSpeed", v)));
+
         el.appendChild(sectionHeading("Location"));
         el.appendChild(infoRow("Current location", `${location.latitude.toFixed(2)}\u00b0, ${location.longitude.toFixed(2)}\u00b0 ${location.isReal ? "" : "(default \u2014 location not shared)"}`));
 
@@ -234,14 +293,23 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         el.appendChild(sectionHeading("Sun"));
         el.appendChild(infoRow("Sunrise", sunTimes.rise !== null ? formatClockTime(sunTimes.rise) : "Doesn't rise today"));
         el.appendChild(infoRow("Sunset", sunTimes.set !== null ? formatClockTime(sunTimes.set) : "Doesn't set today"));
+        const sunHint = document.createElement("p");
+        sunHint.className = "app-subtitle";
+        sunHint.textContent = "The sun's own position already follows Set Time above \u2014 there's nothing separate to override here.";
+        el.appendChild(sunHint);
 
         el.appendChild(sectionHeading("Moon"));
         el.appendChild(infoRow("Phase", `${moonPhaseName(phaseFrac)} \u2014 ${Math.round(illum * 100)}% illuminated`));
         el.appendChild(infoRow("Moonrise", moonTimes.rise !== null ? formatClockTime(moonTimes.rise) : "Doesn't rise today"));
         el.appendChild(infoRow("Moonset", moonTimes.set !== null ? formatClockTime(moonTimes.set) : "Doesn't set today"));
+        el.appendChild(overrideSliderRow("Moon Phase", timeOfDaySystem.moonPhaseOverride, (v) => timeOfDaySystem.setMoonPhaseOverride(v)));
 
         el.appendChild(sectionHeading("Stars"));
         el.appendChild(infoRow("Visibility", starsVisible ? "Visible \u2014 the sky is dark enough" : "Not visible \u2014 too much daylight"));
+        const starsHint = document.createElement("p");
+        starsHint.className = "app-subtitle";
+        starsHint.textContent = "Star visibility already follows Set Time above (how dark the sky currently is) \u2014 nothing separate to override here either.";
+        el.appendChild(starsHint);
 
         return null;
       }
@@ -348,9 +416,20 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
       function renderControls(el) {
         const c = settingsStore.get("controls");
         const patch = (fields) => settingsStore.update("controls", fields);
-        el.appendChild(buildRangeRow("Mouse Sensitivity", c.mouseSensitivity, 0.2, 3, 0.1, "\u00d7", (v) => patch({ mouseSensitivity: v }), 1));
+        el.appendChild(sectionHeading("Camera"));
+        // "Add third-person camera options to the Workshop Control
+        // Settings. Examples include: Invert Vertical, Camera
+        // Sensitivity, Future camera preferences." Mouse/Touch
+        // Sensitivity already cover "Camera Sensitivity" in practice —
+        // they're exactly what governs how fast the camera turns, in
+        // both first- and third-person — and InputManager.js already
+        // applies invertLook directly to lookDelta.y itself, so no new
+        // wiring was needed here, just grouping these clearly as the
+        // Workshop's own camera preferences and naming the checkbox to
+        // match the brief's own term.
+        el.appendChild(buildRangeRow("Camera Sensitivity", c.mouseSensitivity, 0.2, 3, 0.1, "\u00d7", (v) => patch({ mouseSensitivity: v }), 1));
         el.appendChild(buildRangeRow("Touch Sensitivity", c.touchSensitivity, 0.2, 3, 0.1, "\u00d7", (v) => patch({ touchSensitivity: v }), 1));
-        el.appendChild(buildCheckboxRow("Invert look", c.invertLook, (checked) => patch({ invertLook: checked })));
+        el.appendChild(buildCheckboxRow("Invert Vertical", c.invertLook, (checked) => patch({ invertLook: checked })));
         return null;
       }
 

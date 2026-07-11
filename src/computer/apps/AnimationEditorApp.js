@@ -52,7 +52,7 @@ const DEG = 180 / Math.PI;
  * so posing it for editing never has any effect on what's actually
  * happening in the Workshop right now.
  */
-export function createAnimationEditorApp({ appearanceStore, textureStore, animationLibraryStore }) {
+export function createAnimationEditorApp({ appearanceStore, textureStore, animationLibraryStore, beingLibrary, modelLibrary, modelLoader }) {
   return {
     id: "animationEditor",
     label: "Animation Editor",
@@ -71,10 +71,17 @@ export function createAnimationEditorApp({ appearanceStore, textureStore, animat
 
       const previewSlot = document.createElement("div");
       previewSlot.className = "builder-preview";
-      previewSlot.style.flex = "1";
+      previewSlot.style.height = "100%";
       previewPane.appendChild(previewSlot);
       const preview = new PreviewRenderer(previewSlot, { lookAtHeight: 0.9, distance: 3 });
 
+      // "Playback controls should simply overlay the bottom of the
+      // preview" — an absolutely-positioned overlay (see
+      // .anim-playback-bar's own CSS) rather than a separate stacked
+      // element sharing the pane's height with the preview, so the
+      // preview itself can use the full available space. Appended after
+      // previewSlot so it paints on top, matching the CSS z-order that
+      // relies on.
       const playbackBar = document.createElement("div");
       playbackBar.className = "anim-playback-bar";
       previewPane.appendChild(playbackBar);
@@ -84,13 +91,91 @@ export function createAnimationEditorApp({ appearanceStore, textureStore, animat
       workspace.appendChild(form);
       container.appendChild(workspace);
 
+      // --- Model Selection — "Player models, Saved Being models,
+      // Imported Workshop models." A plain select, grouped by source;
+      // "modelSource" is {type: "player"} | {type: "being", id} |
+      // {type: "model", id}. Only the Player rig has the named pivots
+      // (upperLegLeft/torso/etc) this pose-based animation system
+      // actually understands — a Being or imported model previews
+      // correctly (proving out what an animation will look like against
+      // that model's own proportions/scale), but the keyframe pose
+      // controls below only ever move the Player rig's own pivots, since
+      // an arbitrary imported mesh has no reason to share those same
+      // named parts. The honest note below says so plainly rather than
+      // silently doing nothing.
+      let modelSource = { type: "player" };
+      const modelSelectRow = document.createElement("div");
+      modelSelectRow.className = "panel-row";
+      const modelSelectLabel = document.createElement("label");
+      modelSelectLabel.textContent = "Model";
+      const modelSelect = document.createElement("select");
+      const modelNote = document.createElement("p");
+      modelNote.className = "app-subtitle";
+
+      function populateModelSelect() {
+        modelSelect.innerHTML = "";
+        const playerOpt = document.createElement("option");
+        playerOpt.value = "player";
+        playerOpt.textContent = "Player";
+        modelSelect.appendChild(playerOpt);
+
+        if (beingLibrary?.all().length) {
+          const beingGroup = document.createElement("optgroup");
+          beingGroup.label = "Saved Beings";
+          for (const being of beingLibrary.all()) {
+            const opt = document.createElement("option");
+            opt.value = `being:${being.id}`;
+            opt.textContent = being.name;
+            beingGroup.appendChild(opt);
+          }
+          modelSelect.appendChild(beingGroup);
+        }
+        if (modelLibrary?.all().length) {
+          const modelGroup = document.createElement("optgroup");
+          modelGroup.label = "Imported Models";
+          for (const model of modelLibrary.all()) {
+            const opt = document.createElement("option");
+            opt.value = `model:${model.id}`;
+            opt.textContent = model.name;
+            modelGroup.appendChild(opt);
+          }
+          modelSelect.appendChild(modelGroup);
+        }
+        modelSelect.value =
+          modelSource.type === "player" ? "player" : modelSource.type === "being" ? `being:${modelSource.id}` : `model:${modelSource.id}`;
+      }
+
+      modelSelect.addEventListener("change", () => {
+        const [type, id] = modelSelect.value.split(":");
+        modelSource = type === "player" ? { type: "player" } : { type, id };
+        modelNote.textContent =
+          modelSource.type === "player"
+            ? ""
+            : "Previewing this model's own proportions \u2014 the pose controls below still only move the Player rig's own named parts, since this model doesn't share them.";
+        rebuildPreviewRig();
+      });
+      populateModelSelect();
+      modelSelectRow.append(modelSelectLabel, modelSelect);
+      previewPane.appendChild(modelSelectRow);
+      previewPane.appendChild(modelNote);
+      const offBeingsChanged = beingLibrary?.events.on("beings:changed", populateModelSelect);
+      const offModelsChanged = modelLibrary?.events.on("library:changed", populateModelSelect);
+
       // --- Preview rig (a second, isolated rig — never the live player's own) ---
       let rig = null;
       let disposed = false;
 
       async function rebuildPreviewRig() {
+        if (modelSource.type !== "player") {
+          const libraryEntry = modelSource.type === "being" ? beingLibrary?.get(modelSource.id) : modelLibrary?.get(modelSource.id);
+          const modelId = modelSource.type === "being" ? libraryEntry?.modelId : modelSource.id;
+          const object3D = (modelId && (await modelLoader?.load(modelId))) ?? modelLoader?.buildPlaceholder();
+          if (disposed || modelSource.type === "player") return; // selection changed again while this resolved
+          preview.setObject(object3D);
+          return;
+        }
         const textureImages = await resolveTextureImages(appearanceStore.appearance, textureStore);
-        if (disposed) return;
+        if (disposed || modelSource.type !== "player") return;
         if (rig) disposeCharacter(rig);
         rig = buildCharacter(appearanceStore.appearance, appearanceStore.bodyModelId, textureImages);
         preview.setObject(rig.root);
@@ -704,6 +789,8 @@ export function createAnimationEditorApp({ appearanceStore, textureStore, animat
         stopPlayback();
         offAppearance();
         offLibrary();
+        offBeingsChanged?.();
+        offModelsChanged?.();
         if (rig) disposeCharacter(rig);
         preview.dispose();
       };

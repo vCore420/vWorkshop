@@ -22,6 +22,15 @@ import { Component } from "../Component.js";
  * @property {boolean} [opensOverlay=false] - true if onInteract opens a
  *   full-screen overlay that needs an explicit exit (Escape or its close
  *   button). Instant toggles like a light switch leave this false.
+ * @property {boolean} [requiresLookAt=false] - true if being *within
+ *   radius* alone should never be enough to activate this interactable;
+ *   the player's own view direction must also be pointed close enough to
+ *   directly at it. "Bubble should only become interactable when the
+ *   player's reticle is directly over it. Distance alone should no
+ *   longer activate interaction" — a general-purpose flag here rather
+ *   than a resident-specific special case in InteractionSystem.js itself,
+ *   so any future Being or object can opt into the same stricter
+ *   behaviour. See InteractionSystem.js's own `_isLookingAt()`.
  */
 export class InteractableComponent extends Component {
   /** @param {InteractableOptions} options */
@@ -34,6 +43,7 @@ export class InteractableComponent extends Component {
     this.focusPose = options.focusPose ?? null;
     this.opensOverlay = options.opensOverlay ?? false;
     this.enabled = options.enabled ?? true;
+    this.requiresLookAt = options.requiresLookAt ?? false;
   }
 
   worldPosition(out) {

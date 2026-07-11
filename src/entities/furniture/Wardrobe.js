@@ -112,7 +112,7 @@ export const WardrobeDefinition = {
     // same root cause an earlier pass found and fixed for the front
     // doors (see docs/REFINEMENT.md). 2.0 comfortably covers the vertical
     // offset with real horizontal reach left over.
-    radius: 2.0,
+    radius: 2.35, // slightly increased — was feeling a touch tight to reach comfortably
     overlayId: "wardrobe",
     focusPoseLocal: {
       // A few steps back from the mirror, facing the wardrobe/mirror

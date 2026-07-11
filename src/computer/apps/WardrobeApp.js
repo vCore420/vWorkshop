@@ -32,7 +32,7 @@ const PAINT_CANVAS_SIZE = 64;
  * this file only ever builds the form and reads the current values back;
  * see docs/PLAYER.md for the full architecture.
  */
-export function createWardrobeApp({ appearanceStore, outfitStore, textureStore }) {
+export function createWardrobeApp({ appearanceStore, outfitStore, textureStore, modelLibrary }) {
   return {
     id: "wardrobe",
     label: "Wardrobe",
@@ -90,6 +90,7 @@ export function createWardrobeApp({ appearanceStore, outfitStore, textureStore }
       function render() {
         form.innerHTML = "";
         form.appendChild(buildBodyModelSection());
+        form.appendChild(buildImportedModelSection());
         form.appendChild(buildPartTabs());
         form.appendChild(buildProportionsSection());
         form.appendChild(buildAppearanceSection());
@@ -125,6 +126,49 @@ export function createWardrobeApp({ appearanceStore, outfitStore, textureStore }
           tabs.appendChild(btn);
         }
         section.appendChild(tabs);
+        return section;
+      }
+
+      /** "Allow imported Workshop models to become optional player
+       *  models through the Wardrobe system." A separate section from
+       *  the ordinary Body one above — this isn't another procedural
+       *  body model, it's a completely different kind of thing (an
+       *  arbitrary imported mesh, with none of the named pivots this
+       *  Workshop's own animation system expects), so the honest note
+       *  below says so plainly rather than letting someone wonder why
+       *  their walk cycle stopped moving. */
+      function buildImportedModelSection() {
+        const section = document.createElement("div");
+        section.className = "builder-section";
+        const heading = document.createElement("h2");
+        heading.textContent = "Alternate Models";
+        section.appendChild(heading);
+
+        const models = modelLibrary?.all() ?? [];
+        const row = document.createElement("div");
+        row.className = "panel-row";
+        const label = document.createElement("label");
+        label.textContent = "Model";
+        const select = document.createElement("select");
+        const noneOpt = document.createElement("option");
+        noneOpt.value = "";
+        noneOpt.textContent = models.length ? "\u2014 ordinary body \u2014" : "No models imported yet";
+        select.appendChild(noneOpt);
+        for (const model of models) {
+          const opt = document.createElement("option");
+          opt.value = model.id;
+          opt.textContent = model.name;
+          if (appearanceStore.importedModelId === model.id) opt.selected = true;
+          select.appendChild(opt);
+        }
+        select.addEventListener("change", () => appearanceStore.setImportedModel(select.value || null));
+        row.append(label, select);
+        section.appendChild(row);
+
+        const hint = document.createElement("p");
+        hint.className = "app-subtitle";
+        hint.textContent = "Renders correctly, but won't animate through walking/running/etc \u2014 an imported model doesn't share the Workshop's own rig, so pose-based animation has nothing on it to move.";
+        section.appendChild(hint);
         return section;
       }
 

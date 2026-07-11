@@ -110,8 +110,14 @@ export const ComputerDeskDefinition = {
       // more of the view rather than sitting small and high in the frame
       // — "the Workshop computer should feel comfortable for long
       // creative sessions."
-      position: [0, 1.27, 0.19],
-      lookAt: [0, 1.07, -0.16],
+      // "The computer screen framing is now much improved. However the
+      // player's seated viewpoint still sits slightly too low." Raised
+      // again (1.27 → 1.32); lookAt nudged up to match (1.07 → 1.10) so
+      // the downward viewing angle stays proportionally the same, not
+      // just shifting the whole view upward without adjusting where it
+      // actually looks.
+      position: [0, 1.32, 0.19],
+      lookAt: [0, 1.1, -0.16],
     },
     // No overlayId — the computer doesn't use the generic full-screen
     // overlay pipeline (see OverlayManager). Sitting down and standing up
