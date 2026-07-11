@@ -60,6 +60,20 @@ export class TimeOfDaySystem {
     this.paused = false;
     this._emitAccumulator = 0;
     this._transitionTarget = null; // hours, 0-24 — non-null while easing toward a Settings-requested time; see setTime()
+    // "Every environmental property currently displayed should also
+    // support manual override... Moon Phase." The one property here
+    // genuinely derived from the calendar date rather than time of day
+    // (sun/moon *position*, stars already follow from the existing Time
+    // override) — 0-1, or null to keep following the real date.
+    this.moonPhaseOverride = null;
+  }
+
+  /** `value` is a 0-1 phase fraction (see Astronomy.js's own
+   *  moonPhaseFraction()), or `null` to return to following the real
+   *  calendar date. */
+  setMoonPhaseOverride(value) {
+    this.moonPhaseOverride = value;
+    this.engine?.events.emit("persistence:saveRequested");
   }
 
   init(engine) {
@@ -174,7 +188,7 @@ export class TimeOfDaySystem {
     // daily arc. That relationship — not just "always opposite the sun
     // regardless of phase" — is what "moon movement matching the current
     // date and time" actually means astronomically.
-    const moonPhaseFrac = moonPhaseFraction();
+    const moonPhaseFrac = this.moonPhaseOverride ?? moonPhaseFraction();
     const moonHour = (this.currentTime + moonPhaseFrac * 24) % 24;
     const moon = solarPosition(moonHour, latitude, doy);
     const moonDirection = azimuthAltitudeToDirection(moon.azimuth, Math.max(moon.altitude, -8.6));

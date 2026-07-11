@@ -38,9 +38,11 @@ import { COLLISION_HEIGHT_LIMIT } from "../entities/room/WorkshopRoom.js";
  * already follow.
  */
 export class WorldObjectsSystem {
-  constructor({ objectLibraryStore, worldObjectsStore }) {
+  constructor({ objectLibraryStore, worldObjectsStore, modelLibrary, modelLoader }) {
     this.objectLibraryStore = objectLibraryStore;
     this.worldObjectsStore = worldObjectsStore;
+    this.modelLibrary = modelLibrary;
+    this.modelLoader = modelLoader;
     /** @type {Map<number, {entity: import('../core/Entity').Entity}>} */
     this.liveInstances = new Map();
     /** @type {Map<number, THREE.Box3>} instanceId -> cached collision box, skipped from the map entirely if the object sits entirely above head height */
@@ -151,7 +153,33 @@ export class WorldObjectsSystem {
 
   _resolveDefinition(instance) {
     if (instance.definitionSource === "construction") return getConstructionPiece(instance.definitionId);
+    if (instance.definitionSource === "importedModel") return this.modelLibrary?.get(instance.definitionId) ?? null;
     return this.objectLibraryStore.get(instance.definitionId);
+  }
+
+  /** "The Builder should treat imported models similarly to any other
+   *  available shape." For an ordinary definition, this is just
+   *  `compileDefinition()`. For an imported model, `ObjectCompiler`'s own
+   *  synchronous geometry building doesn't apply at all — a wrapping
+   *  group holds `ModelLoader`'s own honest placeholder immediately,
+   *  swapped out for the real model the moment loading resolves, the
+   *  same pattern `BeingController.js`/`BuildModeSystem.js`'s own ghost
+   *  ing already use. The group itself is what `MeshComponent` gets, so
+   *  its own identity (and this entity's transform) never changes
+   *  regardless of which child is inside it at any given moment. */
+  _buildObject3D(instance, definition) {
+    if (instance.definitionSource !== "importedModel") {
+      return compileDefinition(definition, { colorOverride: instance.colorOverride });
+    }
+    const group = new THREE.Group();
+    const placeholder = this.modelLoader?.buildPlaceholder() ?? new THREE.Group();
+    group.add(placeholder);
+    this.modelLoader?.load(instance.definitionId).then((model) => {
+      if (!model || !group.children.includes(placeholder)) return; // despawned/replaced before this resolved
+      group.remove(placeholder);
+      group.add(model);
+    });
+    return group;
   }
 
   _spawn(instance) {
@@ -161,7 +189,7 @@ export class WorldObjectsSystem {
       return null;
     }
 
-    const object3D = compileDefinition(definition, { colorOverride: instance.colorOverride });
+    const object3D = this._buildObject3D(instance, definition);
     object3D.position.set(...instance.position);
     object3D.rotation.y = instance.rotationY ?? 0;
     object3D.scale.setScalar(instance.scale ?? 1);

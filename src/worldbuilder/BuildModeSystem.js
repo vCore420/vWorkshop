@@ -12,6 +12,7 @@ import { BuilderPhoneUI } from "./BuilderPhoneUI.js";
 import { makeTransparent, restoreMaterials, disposeGhostMaterials, defaultGhostPoint } from "./GhostPreview.js";
 
 const ROTATE_STEP = Math.PI / 4; // 45° per press — coarse enough to feel deliberate, fine enough to square something up
+const WHEEL_ROTATE_STEP = Math.PI / 36; // 5° per tick — fine, continuous control matching common 3D editing workflows, not the button's own coarse step
 
 /**
  * BuildModeSystem
@@ -61,9 +62,11 @@ const ROTATE_STEP = Math.PI / 4; // 45° per press — coarse enough to feel del
  * that.
  */
 export class BuildModeSystem {
-  constructor({ objectLibraryStore, worldObjectsStore }) {
+  constructor({ objectLibraryStore, worldObjectsStore, modelLibrary, modelLoader }) {
     this.objectLibraryStore = objectLibraryStore;
     this.worldObjectsStore = worldObjectsStore;
+    this.modelLibrary = modelLibrary;
+    this.modelLoader = modelLoader;
     this.active = false;
 
     /** { kind: "furniture"|"worldObject", id } | null — a *confirmed*, non-editing selection */
@@ -111,8 +114,10 @@ export class BuildModeSystem {
 
     this._onPointerMove = (e) => this._handlePointerMove(e);
     this._onPointerDown = (e) => this._handlePointerDown(e);
+    this._onWheel = (e) => this._handleWheel(e);
     engine.canvas.addEventListener("pointermove", this._onPointerMove);
     engine.canvas.addEventListener("pointerdown", this._onPointerDown);
+    engine.canvas.addEventListener("wheel", this._onWheel, { passive: false });
 
     engine.events.on("buildmode:toggleRequested", () => this.toggle());
     engine.events.on("library:changed", () => {
@@ -155,11 +160,12 @@ export class BuildModeSystem {
   }
 
   _renderLibrary() {
-    this.ui.renderLibrary(CONSTRUCTION_PIECES, this.objectLibraryStore.all());
+    this.ui.renderLibrary(CONSTRUCTION_PIECES, this.objectLibraryStore.all(), this.modelLibrary?.all() ?? []);
   }
 
   _resolveDefinition(definitionId, source) {
     if (source === "construction") return getConstructionPiece(definitionId);
+    if (source === "importedModel") return this.modelLibrary?.get(definitionId) ?? null;
     return this.objectLibraryStore.get(definitionId);
   }
 
@@ -172,7 +178,14 @@ export class BuildModeSystem {
     const definition = this._resolveDefinition(definitionId, source);
     if (!definition) return;
 
-    const object3D = compileDefinition(definition);
+    // "The Builder should treat imported models similarly to any other
+    // available shape." ObjectCompiler.compileDefinition() builds
+    // geometry synchronously; loading a model is inherently async — the
+    // same "show a placeholder immediately, swap in the real thing once
+    // it resolves" pattern BeingController.js already uses for exactly
+    // this reason, rather than making the whole ghost-placement pipeline
+    // async for this one source.
+    const object3D = source === "importedModel" ? this.modelLoader?.buildPlaceholder() ?? compileDefinition({ parts: [] }) : compileDefinition(definition);
     const point = this._raycastGhostSurfaces() ?? defaultGhostPoint(this.engine.camera);
     object3D.position.copy(point);
     this.engine.scene.add(object3D);
@@ -186,6 +199,19 @@ export class BuildModeSystem {
       materialSwap: makeTransparent(object3D),
     };
     object3D.rotation.y = this._ghost.rotationY;
+
+    if (source === "importedModel" && this.modelLoader) {
+      this.modelLoader.load(definitionId).then((model) => {
+        if (!model || this._ghost?.object3D !== object3D) return; // cancelled/confirmed/superseded before this resolved
+        const { position, rotation } = object3D;
+        this.engine.scene.remove(object3D);
+        model.position.copy(position);
+        model.rotation.copy(rotation);
+        this.engine.scene.add(model);
+        this._ghost.object3D = model;
+        this._ghost.materialSwap = makeTransparent(model);
+      });
+    }
 
     this._select(null);
     this.ui.showGhostScreen(definition, "Place");
@@ -235,6 +261,22 @@ export class BuildModeSystem {
   _rotateGhost() {
     if (!this._ghost) return;
     this._ghost.rotationY += ROTATE_STEP;
+    this._ghost.object3D.rotation.y = this._ghost.rotationY;
+  }
+
+  /** "Once an object has been placed but is still being adjusted, the
+   *  mouse wheel should rotate the object naturally — matching common
+   *  3D editing workflows." Finer-grained than the button's own discrete
+   *  `ROTATE_STEP` — a continuous nudge per tick, in whichever direction
+   *  the wheel turns, rather than a fixed large step. Only ever active
+   *  while a ghost exists (placing or moving something); an ordinary
+   *  scroll does nothing here otherwise, and `preventDefault()` only
+   *  fires once there's actually a ghost to rotate, so page/document
+   *  scrolling elsewhere is never affected. */
+  _handleWheel(event) {
+    if (!this._ghost) return;
+    event.preventDefault();
+    this._ghost.rotationY += Math.sign(event.deltaY) * WHEEL_ROTATE_STEP;
     this._ghost.object3D.rotation.y = this._ghost.rotationY;
   }
 
@@ -497,5 +539,6 @@ export class BuildModeSystem {
   dispose() {
     this.engine.canvas.removeEventListener("pointermove", this._onPointerMove);
     this.engine.canvas.removeEventListener("pointerdown", this._onPointerDown);
+    this.engine.canvas.removeEventListener("wheel", this._onWheel);
   }
 }

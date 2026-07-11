@@ -3,6 +3,7 @@ import { InteractableComponent } from "../core/components/InteractableComponent.
 import { CameraSystem } from "./CameraSystem.js";
 
 const SCAN_INTERVAL = 0.08; // ~12.5Hz — see the class comment on why this doesn't need to run every frame
+const LOOK_AT_COS_THRESHOLD = Math.cos((7 * Math.PI) / 180); // ~7° cone — "the reticle is directly over it," forgiving enough to be usable on a small, moving target without feeling like a precise raycast hit-test
 
 /**
  * InteractionSystem
@@ -44,6 +45,8 @@ export class InteractionSystem {
     this._nearest = null;
     this._suspended = false;
     this._scratch = new THREE.Vector3();
+    this._scratchDirection = new THREE.Vector3();
+    this._scratchCameraForward = new THREE.Vector3();
     this._scanAccumulator = 0;
   }
 
@@ -80,8 +83,9 @@ export class InteractionSystem {
   }
 
   _scanForNearest() {
-    if (!this._camera) return;
+    if (!this._camera || !this.engine.camera) return;
     const playerPos = this._camera.position;
+    this.engine.camera.getWorldDirection(this._scratchCameraForward);
 
     let nearest = null;
     let nearestDist = Infinity;
@@ -90,10 +94,10 @@ export class InteractionSystem {
       if (!interactable.enabled) continue;
       const worldPos = interactable.worldPosition(this._scratch);
       const dist = worldPos.distanceTo(playerPos);
-      if (dist <= interactable.radius && dist < nearestDist) {
-        nearest = { entity, interactable };
-        nearestDist = dist;
-      }
+      if (dist > interactable.radius || dist >= nearestDist) continue;
+      if (interactable.requiresLookAt && !this._isLookingAt(worldPos, playerPos)) continue;
+      nearest = { entity, interactable };
+      nearestDist = dist;
     }
 
     if (nearest?.entity !== this._nearest?.entity) {
@@ -103,6 +107,17 @@ export class InteractionSystem {
       // Prompt text can change (e.g. door: "Open" <-> "Close") even for the same entity.
       this.engine.events.emit("hud:prompt", { visible: true, text: nearest.interactable.prompt });
     }
+  }
+
+  /** "The player's reticle is directly over it" — a forgiving angular
+   *  cone test against the camera's own actual forward direction, not a
+   *  precise raycast hit-test against the target's own geometry. A small,
+   *  gently moving target (Bubble) would be a frustrating raycast to
+   *  land exactly on; a several-degree cone reads as "looking at it"
+   *  without demanding pixel precision. */
+  _isLookingAt(targetWorldPos, playerPos) {
+    this._scratchDirection.subVectors(targetWorldPos, playerPos).normalize();
+    return this._scratchDirection.dot(this._scratchCameraForward) >= LOOK_AT_COS_THRESHOLD;
   }
 
   _trigger({ entity, interactable }) {

@@ -70,8 +70,8 @@ export class BuilderPhoneUI {
   // Screen: Library
   // -----------------------------------------------------------------
 
-  renderLibrary(constructionPieces, libraryDefinitions) {
-    this._libraryData = { constructionPieces, libraryDefinitions };
+  renderLibrary(constructionPieces, libraryDefinitions, importedModels = []) {
+    this._libraryData = { constructionPieces, libraryDefinitions, importedModels };
     if (this._currentScreen === "library") this.showLibraryScreen();
   }
 
@@ -81,7 +81,7 @@ export class BuilderPhoneUI {
 
     const tabs = document.createElement("div");
     tabs.className = "builder-phone-tabs";
-    for (const [id, label] of [["construction", "Construction Library"], ["saved", "Saved Objects"]]) {
+    for (const [id, label] of [["construction", "Construction Library"], ["saved", "Saved Objects"], ["models", "Imported Models"]]) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.textContent = label;
@@ -96,14 +96,17 @@ export class BuilderPhoneUI {
 
     const grid = document.createElement("div");
     grid.className = "builder-phone-grid";
-    const { constructionPieces, libraryDefinitions } = this._libraryData;
-    const items = this._activeTab === "construction" ? constructionPieces : libraryDefinitions;
-    const source = this._activeTab === "construction" ? "construction" : "library";
+    const { constructionPieces, libraryDefinitions, importedModels } = this._libraryData;
+    const items = this._activeTab === "construction" ? constructionPieces : this._activeTab === "saved" ? libraryDefinitions : importedModels;
+    const source = this._activeTab === "construction" ? "construction" : this._activeTab === "saved" ? "library" : "importedModel";
 
     if (items.length === 0) {
       const empty = document.createElement("div");
       empty.className = "builder-phone-empty";
-      empty.textContent = "Nothing designed yet — build one in the computer's Builder app.";
+      empty.textContent =
+        this._activeTab === "models"
+          ? "No models imported yet \u2014 import one in the Being Creator's own Model section."
+          : "Nothing designed yet — build one in the computer's Builder app.";
       grid.appendChild(empty);
     } else {
       for (const def of items) grid.appendChild(this._buildGridCard(def, source));

@@ -22,7 +22,15 @@ const CAMERA_FAR = 20;
 // comment above describes — the camera sits in front of the glass, into
 // the room, so moving it further out is moving it further from any wall
 // behind the mirror, not closer to one.
-const MIRROR_CAMERA_OFFSET = 0.25;
+// "Please move the mirror camera even further backwards. Ignore
+// previous notes indicating this was already adjusted." Raised again
+// (0.05 → 0.25 → 0.6) — closer to how far back someone actually stands
+// from a mirror to see themselves properly, not just avoid clipping the
+// glass. Still sits in front of the glass, into the room, so this
+// doesn't reopen the wall-mounted-mirror clipping concern the comment
+// above describes — that's about a wall *behind* the mirror, and moving
+// further into the room only moves further from it.
+const MIRROR_CAMERA_OFFSET = 0.6;
 const MIRROR_LOOK_DISTANCE = 2.6;
 // Squared-distance / (1 - cosine) thresholds below which the mirror's own
 // mesh is treated as "hasn't moved" — see _updateFixedTransform().

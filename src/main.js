@@ -121,6 +121,15 @@ const projectsStore = new ProjectsStore();
 const notesStore = new NotesStore();
 const objectLibraryStore = new ObjectLibraryStore();
 const worldObjectsStore = new WorldObjectsStore();
+// Constructed here, ahead of WorldObjectsSystem/BuildModeSystem below —
+// "the Builder should treat imported models similarly to any other
+// available shape" needed both of those to resolve/render imported-model
+// instances, so the model stores themselves have to exist first. See
+// ModelLibrary.js's own comment for why models aren't owned by
+// BeingLibrary specifically, even though Beings need them too.
+const modelAssetStore = new ModelAssetStore();
+const modelLibrary = new ModelLibrary();
+const modelLoader = new ModelLoader(modelLibrary, modelAssetStore);
 const musicLibraryStore = new MusicLibraryStore();
 const playlistStore = new PlaylistStore();
 const browserStore = new BrowserStore();
@@ -173,7 +182,7 @@ const imageAssetStore = new ImageAssetStore();
 // only needs engine.scene/engine.entities, which exist from construction —
 // so its registration position is flexible; it's grouped here because it's
 // conceptually "world contents", alongside the room and furniture.
-const worldObjectsSystem = engine.addSystem(new WorldObjectsSystem({ objectLibraryStore, worldObjectsStore }));
+const worldObjectsSystem = engine.addSystem(new WorldObjectsSystem({ objectLibraryStore, worldObjectsStore, modelLibrary, modelLoader }));
 
 // Same flexibility as WorldObjectsSystem above — MusicSystem only needs
 // engine.events at init() time. See src/music/MusicSystem.js.
@@ -197,7 +206,7 @@ void settingsSystem;
 // the other via engine.getSystem(), which would create a genuine
 // three-way circular import between this file, PlayerAnimationSystem.js,
 // and CameraSystem.js.
-const playerCharacterSystem = new PlayerCharacterSystem({ appearanceStore, textureStore });
+const playerCharacterSystem = new PlayerCharacterSystem({ appearanceStore, textureStore, modelLoader });
 engine.addSystem(playerCharacterSystem);
 // See CameraSystem.js's own "Player Height" comment for why this is a
 // setter call here rather than either system importing the other
@@ -230,9 +239,6 @@ void residentController;
 // use for their own binary-adjacent assets, applied to imported 3D
 // models. See ModelLibrary.js's own comment for why models aren't owned
 // by BeingLibrary specifically.
-const modelAssetStore = new ModelAssetStore();
-const modelLibrary = new ModelLibrary();
-const modelLoader = new ModelLoader(modelLibrary, modelAssetStore);
 const beingLibrary = new BeingLibrary();
 const beingInstanceStore = new BeingInstanceStore();
 // BeingController (renders/moves every placed Being) and
@@ -347,7 +353,7 @@ const interactionSystem = engine.addSystem(new InteractionSystem());
 // WorldObjectsSystem at the moment it needs them, not at init() time, so it
 // has no strict ordering requirement beyond "after the systems it looks up
 // already exist in the list" (they do, above).
-const buildModeSystem = engine.addSystem(new BuildModeSystem({ objectLibraryStore, worldObjectsStore }));
+const buildModeSystem = engine.addSystem(new BuildModeSystem({ objectLibraryStore, worldObjectsStore, modelLibrary, modelLoader }));
 
 const persistenceSystem = engine.addSystem(new PersistenceSystem()); // last: loads after everyone has registered listeners
 

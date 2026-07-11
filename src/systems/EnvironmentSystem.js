@@ -121,6 +121,16 @@ export class EnvironmentSystem {
     this.temperatureC = null; // only ever set by live weather — see requestLiveWeather(); Settings' own Atmosphere tab shows "not available" while this is null
     this.liveStatus = "idle"; // "idle" | "loading" | "ok" | "error"
     this.liveError = null;
+    // "Every environmental property currently displayed should also
+    // support manual override... Clouds, Rain, Wind, Fog." Independent
+    // per-property overrides, layered on top of whichever weather state
+    // preset is currently active (see _emit()'s own use of these) —
+    // rather than only being able to pick a whole preset and accept
+    // whatever combination it bundles together, each of these four can
+    // be pulled away from the preset's own value individually. `null`
+    // means "use the preset's own value," matching the same
+    // null-means-unset convention `temperatureC` already uses above.
+    this.manualOverrides = { cloudCoverage: null, precipitation: null, fogDensity: null, windSpeed: null };
 
     this._enteredAt = Date.now();
     this._durationMs = pickDurationMs("clear");
@@ -129,6 +139,20 @@ export class EnvironmentSystem {
     this._windGustPhase = Math.random() * 1000;
     this._rainMeshes = [];
     this._rainScroll = 0;
+  }
+
+  /** `key` is one of `manualOverrides`' own keys; `value` a 0-1 number,
+   *  or `null` to go back to following the current weather state's own
+   *  preset value for that property. */
+  setManualOverride(key, value) {
+    if (!(key in this.manualOverrides)) return;
+    this.manualOverrides[key] = value;
+    if (key === "windSpeed" && value !== null) {
+      this.windSpeed = value;
+      this._windTarget = value;
+    }
+    this._emit();
+    this.engine?.events.emit("persistence:saveRequested");
   }
 
   init(engine) {
@@ -282,23 +306,28 @@ export class EnvironmentSystem {
       windSpeed: this.windSpeed,
       windDirectionRad: this.windDirectionRad,
       options: Object.keys(WEATHER_STATES),
+      manualOverrides: this.manualOverrides,
     };
   }
 
   _emit() {
     const def = WEATHER_STATES[this.current] ?? WEATHER_STATES.clear;
+    const o = this.manualOverrides;
+    const fogDensity = o.fogDensity ?? def.fogDensity;
+    const cloudCoverage = o.cloudCoverage ?? def.cloudCoverage;
+    const precipitation = o.precipitation ?? def.precipitation;
     this.engine.events.emit("environment:changed", {
       id: this.current,
       label: def.label,
       lightDampening: def.lightDampening,
-      fogDensity: def.fogDensity,
-      cloudCoverage: def.cloudCoverage,
-      precipitation: def.precipitation,
+      fogDensity,
+      cloudCoverage,
+      precipitation,
       ambience: def.ambience,
       windSpeed: this.windSpeed,
       windDirectionRad: this.windDirectionRad,
     });
-    const rainOpacity = def.precipitation > 0 ? 0.35 + def.precipitation * 0.5 : 0;
+    const rainOpacity = precipitation > 0 ? 0.35 + precipitation * 0.5 : 0;
     for (const mesh of this._rainMeshes) mesh.material.opacity = rainOpacity;
   }
 
@@ -317,7 +346,8 @@ export class EnvironmentSystem {
     }
 
     const def = WEATHER_STATES[this.current];
-    if (def?.precipitation > 0) {
+    const effectivePrecipitation = this.manualOverrides.precipitation ?? def?.precipitation ?? 0;
+    if (effectivePrecipitation > 0) {
       this._rainScroll += dt * (0.6 + this.windSpeed * 0.4);
       const drift = Math.sin(this.windDirectionRad) * this.windSpeed * dt * 0.5;
       for (const mesh of this._rainMeshes) {

@@ -86,11 +86,11 @@ export class LightingSystem {
     // deliberately left unchanged, so this trades a little per-pixel
     // shadow crispness for genuinely covering more of the world, rather
     // than also increasing GPU cost to compensate.
-    this.sun.shadow.camera.far = 28;
-    this.sun.shadow.camera.left = -9;
-    this.sun.shadow.camera.right = 9;
-    this.sun.shadow.camera.top = 9;
-    this.sun.shadow.camera.bottom = -9;
+    this.sun.shadow.camera.far = 34;
+    this.sun.shadow.camera.left = -13;
+    this.sun.shadow.camera.right = 13;
+    this.sun.shadow.camera.top = 13;
+    this.sun.shadow.camera.bottom = -13;
     // "Shadow radius... shadow consistency." radius softens shadow edges
     // (only visible with PCFSoftShadowMap, already the default — see
     // Engine.js) rather than leaving them at a harsh, aliased default;

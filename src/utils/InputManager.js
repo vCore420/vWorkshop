@@ -130,8 +130,15 @@ export class InputManager {
     // Any of the computer/workbench/library forms can have a real text
     // input or textarea focused — typing "b" or "e" there should type a
     // letter, not toggle Build Mode or re-trigger an interaction.
+    // Escape is deliberately exempt from this — "the notebook should
+    // close using Escape... behave consistently with every other
+    // Workshop interface." A text field auto-focused on open (the
+    // Notebook's own textarea, specifically) was silently swallowing
+    // Escape along with every other key, since Escape never conflicts
+    // with typing (it isn't a printable character) there was never a
+    // real reason for it to be caught by this same suppression.
     const tag = document.activeElement?.tagName;
-    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    if (e.code !== "Escape" && (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT")) return;
 
     const action = KEY_TO_ACTION[e.code];
     if (!action) return;
