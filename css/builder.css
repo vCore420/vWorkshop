@@ -417,3 +417,29 @@
 /* ---------- Being Manager ---------- */
 .being-manager-row.despawned { opacity: 0.6; }
 .being-manager-row h3 { margin-top: 0; display: flex; align-items: center; gap: 8px; }
+
+/* ---------- Responsive: the shared preview/form workspace split ---------- */
+/* "Large screens may continue using multiple editing panels. Smaller
+   devices should intelligently reorganise the workspace without
+   sacrificing functionality. The model preview should remain the
+   primary focus." Below this width, the same two panes that sit side by
+   side on a spacious desktop screen stack vertically instead — the
+   preview first (already first in DOM order, so column stacking puts it
+   on top with no other change needed) and given a firm minimum height so
+   it stays the clear visual anchor, the form below it, scrollable, never
+   shrunk to the point of being unusable. */
+@media (max-width: 700px) {
+  .builder-workspace {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .builder-workspace-preview {
+    flex: none;
+    min-height: 260px;
+    height: 42vh;
+  }
+  .builder-workspace-form {
+    flex: none;
+    min-height: 0;
+  }
+}

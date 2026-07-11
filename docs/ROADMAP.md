@@ -1467,7 +1467,45 @@ whether or not the Workshop was open at that moment — but isn't wired to
 any UI yet; that's a future Workbench/Construction/Automation phase's
 own work.
 
-## Phase 30 — depth in the room that exists
+## Phase 30 — Universal Experience
+
+**Goal:** "There should never be a Desktop Workshop and a Mobile
+Workshop. There is only the Workshop." A refinement pass, no major new
+features. See docs/RESPONSIVE.md for the full write-up.
+
+**The single highest-leverage fix**: the Computer's own screen and the
+Workbench's own clipboard are both DOM panels positioned every frame to
+match a rectangle projected from the 3D scene — and that projection had
+no minimum size at all. `comfortableRect()` (`ScreenProjector.js`) is a
+shared floor under it, used by both — below a comfortable size, or on a
+narrow viewport, the rect widens back out, centred on wherever the
+projection itself was centred. Every Computer app (Builder, Being
+Creator, Wardrobe, AI Mission Control, Diagnostics, Settings, Animation
+Editor) inherited this fix simultaneously, since they all render inside
+that one panel.
+
+**The shared `builder-workspace` split** (Builder, Being Creator,
+Animation Editor) now stacks vertically below 700px — preview first,
+given a firm minimum height so it stays "the primary focus," form below
+it, scrollable. The Workshop Phone gained its own narrow-viewport
+treatment, becoming a full-width, bottom-anchored sheet below 420px
+rather than a fixed 300px corner panel — easier to reach with a thumb.
+
+**Global, not per-file, for touch and accessibility.** A `(pointer:
+coarse)` baseline in `tokens.css` raises the minimum size of every
+button/select/checkbox/radio/range across the whole Workshop at once,
+rather than touching dozens of individual button classes one at a time;
+a `:focus-visible` fallback does the same for keyboard focus rings.
+
+**Automatic performance detection, but only where it's safe.** The
+device-capability heuristic already existed but only ran when a player
+found and clicked a Settings button — meaningless for a first
+impression. It now applies automatically, exactly once, only on a
+genuinely fresh Workshop (`isFirstSession`, from the previous phase's
+own `WorldTimeService`), never overwriting an existing player's own
+deliberate choice.
+
+## Phase 31 — depth in the room that exists
 
 Roughly in priority order, each independently shippable:
 
@@ -1506,7 +1544,7 @@ Roughly in priority order, each independently shippable:
 9. **A true oriented planar reflection**, and reflective surfaces beyond a
    flat plane — see "Future extension points" in `docs/PLAYER.md`.
 
-## Phase 31 — the world becomes alive on its own
+## Phase 32 — the world becomes alive on its own
 
 1. **Seasonal changes** — a plugin (see `PLUGIN_GUIDE.md`) reading the real
    calendar date and adjusting window tint / a handful of decorative
@@ -1530,7 +1568,7 @@ Roughly in priority order, each independently shippable:
    Construction Library's own Switch piece (Phase 13) is one ready-made
    source of that event, waiting for something to listen.
 
-## Phase 32 — beyond one building
+## Phase 33 — beyond one building
 
 - **Additional buildings** — `RoomLayoutSystem` was written with this in
   mind (see its class comment), and `WorldObjectsStore` was made

@@ -64,3 +64,47 @@
     --duration-slow: 0ms;
   }
 }
+
+/* "Larger touch targets. Comfortable button spacing... reduced
+   accidental touches." One shared baseline, applied globally, rather
+   than touching every individual button class across every interface —
+   `min-height`/`min-width` only ever grows something that falls short of
+   a comfortable size; nothing already tall/wide enough is affected, and
+   nothing here overrides an element's own explicit sizing decisions if
+   it already meets the bar. Scoped to `(pointer: coarse)` — the actual
+   signal for "this is being tapped with a finger, not clicked with a
+   precise mouse cursor" — rather than viewport width, so a touch laptop
+   and a mouse-driven one at the same narrow width don't get treated the
+   same way. */
+@media (pointer: coarse) {
+  button,
+  select,
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="range"] {
+    min-height: 40px;
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-width: 22px;
+    min-height: 22px;
+  }
+  a[role="button"] {
+    min-height: 40px;
+  }
+}
+
+/* "Clear interaction states." A global fallback, keyboard-only
+   (:focus-visible, not :focus) so it never draws a ring around an
+   ordinary mouse click or touch tap — only every interactive element
+   that doesn't already define its own explicit focus treatment gets it,
+   since :focus-visible only ever wins when nothing more specific already
+   set outline/box-shadow for that same state. */
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--brass-bright);
+  outline-offset: 2px;
+}

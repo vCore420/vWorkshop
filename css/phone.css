@@ -28,6 +28,24 @@
   transform: translateY(0);
 }
 
+/* "Comfortable one-handed use... safe button placement... proper
+   scaling." A fixed 300px corner panel works on desktop/tablet, where
+   there's plenty of room either side of it, but on an actual small
+   phone viewport it can crowd the edge or even overflow. Below this
+   width, the phone becomes a full-width, bottom-anchored sheet instead
+   — still slides up the same way, still the same shell, just sized to
+   actually fit a thumb's reach rather than a fixed desktop measurement. */
+@media (max-width: 420px) {
+  .workshop-phone {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: auto;
+    height: 78vh;
+    border-radius: 22px;
+  }
+}
+
 .workshop-phone-header {
   flex-shrink: 0;
   display: flex;

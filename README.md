@@ -4,7 +4,7 @@ A living 3D creative workshop, built to be a place you return to rather than
 an app you launch. Runs entirely in the browser, no build step, no backend —
 just static files.
 
-This project has gone through twenty-nine phases (with one dedicated
+This project has gone through thirty phases (with one dedicated
 refinement pass in between): an architectural foundation and
 one believable room (phase 1), turning the computer into a real,
 self-contained creative workstation with a physical sit-down/stand-up
@@ -120,7 +120,13 @@ freezes the player while it's open (phase 28) — and, most recently, a
 Persistent World: a shared time service so Bubble, Beings, and the
 environment all answer "what should I have been doing while the player
 was away?" from the same elapsed-time calculation, rather than resuming
-frozen exactly as they were left (phase 29).
+frozen exactly as they were left (phase 29) — and, most recently, a
+Universal Experience pass: the Computer and Workbench's own 3D-projected
+screens gained a comfortable-size floor so no interface built on them
+ever becomes unreadably small, the shared editing workspace and the
+Phone both reorganise on a narrow screen, and touch targets, focus
+states, and first-launch performance detection now apply consistently
+across the whole Workshop (phase 30).
 See `docs/ROADMAP.md` for what's next, `docs/ARCHITECTURE.md`
 for how the workshop as a whole is put together, and `docs/COMPUTER.md` /
 `docs/WORKBENCH.md` / `docs/WORLDBUILDER.md` / `docs/WORLD.md` /
