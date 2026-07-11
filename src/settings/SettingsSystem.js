@@ -36,6 +36,21 @@ export class SettingsSystem {
 
     this._applyAll(this.settingsStore.settings);
     this.settingsStore.events.on("settings:changed", (settings) => this._applyAll(settings));
+
+    // "Please review performance across lower-powered devices. Rather
+    // than reducing Workshop functionality, adapt graphical quality
+    // where appropriate." The device-capability detection already
+    // existed (`detectRecommendedPreset()`) but only ever ran when a
+    // player found and clicked Settings' own "Optimise For This Device"
+    // button — meaningless for the very first impression, on exactly the
+    // device that needs it most. Applied automatically, but only once,
+    // only on a genuinely fresh Workshop (`isFirstSession`, from
+    // WorldTimeService) — an existing player's own deliberate choice is
+    // never overwritten by a later session's own detection.
+    engine.events.on("world:continuity", ({ isFirstSession }) => {
+      if (!isFirstSession) return;
+      this.settingsStore.applyPreset(this.settingsStore.detectRecommendedPreset());
+    });
   }
 
   _applyAll(settings) {
