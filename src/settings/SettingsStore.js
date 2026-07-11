@@ -35,7 +35,13 @@ export const DEFAULT_SETTINGS = {
   controls: {
     mouseSensitivity: 1,
     touchSensitivity: 1,
-    invertLook: false,
+    // "Invert the default vertical camera controls." The setting already
+    // existed (Settings' own Controls tab) but had never actually been
+    // wired to CameraSystem.js at all — see that file's own comment.
+    // Flipping the default here, now that it's genuinely connected, is
+    // what actually changes the Workshop's own default feel; a player
+    // who prefers the non-inverted convention can still switch it back.
+    invertLook: true,
   },
   audio: {
     masterVolume: 1,

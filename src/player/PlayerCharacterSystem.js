@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import { buildCharacter, disposeCharacter } from "./PlayerCharacter.js";
 import { CameraSystem } from "../systems/CameraSystem.js";
 
@@ -37,9 +38,10 @@ const DEFAULT_EYE_HEIGHT = 1.65; // fallback for getEyeHeight() before the very 
  * needed no changes here at all.
  */
 export class PlayerCharacterSystem {
-  constructor({ appearanceStore, textureStore }) {
+  constructor({ appearanceStore, textureStore, modelLoader }) {
     this.appearanceStore = appearanceStore;
     this.textureStore = textureStore;
+    this.modelLoader = modelLoader;
     this._current = null;
     this._rebuildTimer = null;
     this._rebuildInFlight = false;
@@ -78,8 +80,21 @@ export class PlayerCharacterSystem {
     }
     this._rebuildInFlight = true;
 
-    const textureImages = await resolveTextureImages(this.appearanceStore.appearance, this.textureStore);
-    const next = buildCharacter(this.appearanceStore.appearance, this.appearanceStore.bodyModelId, textureImages);
+    // "Allow imported Workshop models to become optional player models
+    // through the Wardrobe system." An honest, contained addition rather
+    // than a deep rework of this system: an imported model has no reason
+    // to share the procedural rig's own named pivots
+    // (upperLegLeft/torso/etc), so it renders as itself — correctly
+    // positioned, correctly eye-heighted from its own real bounding box —
+    // but `pivots: {}` means PlayerAnimationSystem's own applyPose() calls
+    // simply have nothing to iterate, a safe no-op rather than a crash or
+    // a silently-wrong pose.
+    const importedModelId = this.appearanceStore.importedModelId;
+    let next = importedModelId && this.modelLoader ? await this._buildImportedModelRig(importedModelId) : null;
+    if (!next) {
+      const textureImages = await resolveTextureImages(this.appearanceStore.appearance, this.textureStore);
+      next = buildCharacter(this.appearanceStore.appearance, this.appearanceStore.bodyModelId, textureImages);
+    }
 
     if (this._current) {
       this.engine.scene.remove(this._current.root);
@@ -93,6 +108,17 @@ export class PlayerCharacterSystem {
       this._rebuildAgainAfter = false;
       this._rebuild();
     }
+  }
+
+  async _buildImportedModelRig(modelId) {
+    const model = await this.modelLoader.load(modelId);
+    if (!model) return null;
+    const box = new THREE.Box3().setFromObject(model);
+    const height = box.max.y - box.min.y;
+    const root = new THREE.Group();
+    model.position.y -= box.min.y; // feet at the group's own origin, matching the procedural rig's own convention
+    root.add(model);
+    return { root, pivots: {}, eyeHeight: height > 0 ? height * 0.93 : DEFAULT_EYE_HEIGHT, meshes: {} };
   }
 
   /** The live rig's pivots — `PlayerAnimationSystem` reads this every

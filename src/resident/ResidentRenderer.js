@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-const RADIUS = 0.11; // reduced from 0.16 — "feels more like a small companion than the focal point of the room"
+const RADIUS = 0.13; // "increase Bubble's size very slightly. It should still feel like a companion rather than the focal point of the room." Nudged up again (0.16 → 0.11 → 0.13) — still small, just a touch less easy to lose track of.
 const FACE_TEXTURE_SIZE = 128;
 
 const MOOD_COLORS = {

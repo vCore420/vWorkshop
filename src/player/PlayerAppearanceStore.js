@@ -32,6 +32,14 @@ export class PlayerAppearanceStore {
     this.appearanceByModel = {};
     for (const model of getBodyModelList()) this.appearanceByModel[model.id] = model.defaultAppearance();
     this.currentOutfitId = null;
+    // "Allow imported Workshop models to become optional player models
+    // through the Wardrobe system." `null` means "use the ordinary
+    // procedural rig" (bodyModelId/appearance, above) — set, it replaces
+    // the player's rendered body with that imported model instead; see
+    // PlayerCharacterSystem.js's own _buildImportedModelRig() for the
+    // honest limitation (renders correctly, doesn't animate through this
+    // pose system, since it has none of the expected named pivots).
+    this.importedModelId = null;
   }
 
   get appearance() {
@@ -74,6 +82,14 @@ export class PlayerAppearanceStore {
     this._emitChanged();
   }
 
+  /** `modelId` from ModelLibrary, or `null` to go back to the ordinary
+   *  procedural rig. */
+  setImportedModel(modelId) {
+    if (modelId === this.importedModelId) return;
+    this.importedModelId = modelId;
+    this._emitChanged();
+  }
+
   /** Used by the Settings app's Danger Zone ("Reset Player Data") — back
    *  to the default figure for every body model, wearing nothing
    *  customised. Doesn't touch TextureStore itself; the caller is
@@ -101,11 +117,12 @@ export class PlayerAppearanceStore {
 
   // ---- persistence contract, read by PersistenceSystem ----
   save() {
-    return { bodyModelId: this.bodyModelId, appearanceByModel: this.appearanceByModel, currentOutfitId: this.currentOutfitId };
+    return { bodyModelId: this.bodyModelId, appearanceByModel: this.appearanceByModel, currentOutfitId: this.currentOutfitId, importedModelId: this.importedModelId };
   }
 
   load(data) {
     if (!data) return;
+    this.importedModelId = data.importedModelId ?? null;
     if (data.appearanceByModel) {
       this.appearanceByModel = data.appearanceByModel;
       this.bodyModelId = data.bodyModelId ?? DEFAULT_BODY_MODEL;

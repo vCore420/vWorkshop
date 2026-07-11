@@ -24,7 +24,16 @@ export function createResidentEntity({ engine, root }) {
   entity.addComponent(
     new InteractableComponent({
       prompt: "Talk",
-      radius: 1.6,
+      // "Bubble should only become interactable when the player's
+      // reticle is directly over it. Distance alone should no longer
+      // activate interaction. Interaction radius should also be
+      // slightly reduced." requiresLookAt adds the angular check (see
+      // InteractionSystem.js's own _isLookingAt()); radius on its own is
+      // now just the outer bound that check still has to fall within,
+      // not something that alone can trigger it — reduced from 1.6 to
+      // 1.3 to match.
+      radius: 1.3,
+      requiresLookAt: true,
       opensOverlay: true,
       onInteract: () => engine.events.emit("interaction:trigger", { overlayId: "residentConversation", context: {} }),
     })

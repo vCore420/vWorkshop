@@ -128,14 +128,14 @@ const JUMP_CLIP = {
   speed: 1,
   frames: [
     frame(0.1, {
-      upperLegLeft: [-0.3, 0, 0], upperLegRight: [-0.3, 0, 0],
-      lowerLegLeft: [0.6, 0, 0], lowerLegRight: [0.6, 0, 0],
-      upperArmLeft: [-0.9, 0, 0.15], upperArmRight: [-0.9, 0, -0.15],
+      upperLegLeft: [0.3, 0, 0], upperLegRight: [0.3, 0, 0],
+      lowerLegLeft: [-0.6, 0, 0], lowerLegRight: [-0.6, 0, 0],
+      upperArmLeft: [0.9, 0, -0.15], upperArmRight: [0.9, 0, 0.15],
     }),
     frame(0.5, {
-      upperLegLeft: [-0.15, 0, 0], upperLegRight: [-0.15, 0, 0],
-      lowerLegLeft: [0.35, 0, 0], lowerLegRight: [0.35, 0, 0],
-      upperArmLeft: [-0.5, 0, 0.1], upperArmRight: [-0.5, 0, -0.1],
+      upperLegLeft: [0.15, 0, 0], upperLegRight: [0.15, 0, 0],
+      lowerLegLeft: [-0.35, 0, 0], lowerLegRight: [-0.35, 0, 0],
+      upperArmLeft: [0.5, 0, -0.1], upperArmRight: [0.5, 0, 0.1],
     }),
   ],
 };
@@ -149,14 +149,14 @@ const FALL_CLIP = {
   speed: 1,
   frames: [
     frame(0.6, {
-      upperLegLeft: [-0.1, 0, 0], upperLegRight: [-0.1, 0, 0],
-      lowerLegLeft: [0.25, 0, 0], lowerLegRight: [0.25, 0, 0],
-      upperArmLeft: [-0.25, 0, 0.2], upperArmRight: [-0.25, 0, -0.2],
+      upperLegLeft: [0.1, 0, 0], upperLegRight: [0.1, 0, 0],
+      lowerLegLeft: [-0.25, 0, 0], lowerLegRight: [-0.25, 0, 0],
+      upperArmLeft: [0.25, 0, -0.2], upperArmRight: [0.25, 0, 0.2],
     }),
     frame(0.6, {
-      upperLegLeft: [-0.15, 0, 0], upperLegRight: [-0.15, 0, 0],
-      lowerLegLeft: [0.3, 0, 0], lowerLegRight: [0.3, 0, 0],
-      upperArmLeft: [-0.3, 0, 0.22], upperArmRight: [-0.3, 0, -0.22],
+      upperLegLeft: [0.15, 0, 0], upperLegRight: [0.15, 0, 0],
+      lowerLegLeft: [-0.3, 0, 0], lowerLegRight: [-0.3, 0, 0],
+      upperArmLeft: [0.3, 0, -0.22], upperArmRight: [0.3, 0, 0.22],
     }),
   ],
 };
@@ -170,18 +170,30 @@ const LAND_CLIP = {
   speed: 1,
   frames: [
     frame(0.08, {
-      upperLegLeft: [-0.55, 0, 0], upperLegRight: [-0.55, 0, 0],
-      lowerLegLeft: [1.0, 0, 0], lowerLegRight: [1.0, 0, 0],
-      torso: [0.15, 0, 0],
+      upperLegLeft: [0.55, 0, 0], upperLegRight: [0.55, 0, 0],
+      lowerLegLeft: [-1.0, 0, 0], lowerLegRight: [-1.0, 0, 0],
+      torso: [-0.15, 0, 0],
     }),
     frame(0.16, {
-      upperLegLeft: [-0.1, 0, 0], upperLegRight: [-0.1, 0, 0],
-      lowerLegLeft: [0.2, 0, 0], lowerLegRight: [0.2, 0, 0],
-      torso: [0.02, 0, 0],
+      upperLegLeft: [0.1, 0, 0], upperLegRight: [0.1, 0, 0],
+      lowerLegLeft: [-0.2, 0, 0], lowerLegRight: [-0.2, 0, 0],
+      torso: [-0.02, 0, 0],
     }),
   ],
 };
 
+// "The current crouch animation appears inverted and pushes the player
+// downward into the floor... feet remain planted, player lowers
+// naturally." Root cause: this clip (like JUMP/FALL/LAND above) is a
+// symmetric, non-alternating pose — unlike WALK/RUN's alternating gait,
+// which stays a valid-looking cycle under a global sign flip (swapping
+// which leg is "forward" is invisible to the eye), a symmetric knee-bend
+// flipped the same way in both legs bends the *wrong direction*, which
+// reads as sinking into the ground rather than settling into a crouch.
+// These values are renegated from their original authoring (see
+// PlayerCharacter.js's own applyPose() comment for the full root-cause
+// account) to compensate for applyPose()'s own X/Z negation, restoring
+// the originally-intended, correct-looking pose.
 const CROUCH_CLIP = {
   id: "default-crouch",
   name: "Crouch",
@@ -191,16 +203,16 @@ const CROUCH_CLIP = {
   speed: 1,
   frames: [
     frame(1.6, {
-      upperLegLeft: [-0.85, 0, 0], upperLegRight: [-0.85, 0, 0],
-      lowerLegLeft: [1.5, 0, 0], lowerLegRight: [1.5, 0, 0],
-      torso: [0.28, 0, 0],
-      upperArmLeft: [0.1, 0, 0.05], upperArmRight: [0.1, 0, -0.05],
+      upperLegLeft: [0.85, 0, 0], upperLegRight: [0.85, 0, 0],
+      lowerLegLeft: [-1.5, 0, 0], lowerLegRight: [-1.5, 0, 0],
+      torso: [-0.28, 0, 0],
+      upperArmLeft: [-0.1, 0, -0.05], upperArmRight: [-0.1, 0, 0.05],
     }),
     frame(1.6, {
-      upperLegLeft: [-0.82, 0, 0], upperLegRight: [-0.82, 0, 0],
-      lowerLegLeft: [1.45, 0, 0], lowerLegRight: [1.45, 0, 0],
-      torso: [0.26, 0, 0],
-      upperArmLeft: [0.08, 0, 0.05], upperArmRight: [0.08, 0, -0.05],
+      upperLegLeft: [0.82, 0, 0], upperLegRight: [0.82, 0, 0],
+      lowerLegLeft: [-1.45, 0, 0], lowerLegRight: [-1.45, 0, 0],
+      torso: [-0.26, 0, 0],
+      upperArmLeft: [-0.08, 0, -0.05], upperArmRight: [-0.08, 0, 0.05],
     }),
   ],
 };

@@ -5,6 +5,9 @@ import { ResidentRenderer } from "./ResidentRenderer.js";
 import { createResidentEntity } from "./ResidentEntity.js";
 
 const EXPRESSION_CHECK_INTERVAL = 0.5; // seconds — expression/awake checks don't need to run every single frame
+const DRAG_LOOK_COS_THRESHOLD = Math.cos((10 * Math.PI) / 180); // ~10° cone — a little more forgiving than the interaction one, since grabbing hold of something is a coarser gesture than a precise "talk to this" click
+const DRAG_REACH = 3; // metres — how far away Bubble can be and still be grabbed
+const DRAG_DISTANCE = 1.4; // metres in front of the camera Bubble is held at while dragged
 
 /**
  * ResidentController
@@ -24,6 +27,26 @@ const EXPRESSION_CHECK_INTERVAL = 0.5; // seconds — expression/awake checks do
  * present." There's no spawn/despawn logic anywhere in this file — the
  * resident is created once in `init()`, exactly like every piece of
  * furniture, and simply exists for the rest of the session.
+ *
+ * **Dragging** — "look directly at Bubble, click and hold, drag Bubble
+ * naturally through 3D space, release anywhere" — is handled entirely
+ * through raw mouse-button events (`pointerdown`/`pointerup` on the
+ * canvas), deliberately never touching the "interact" key/action Talk
+ * already uses. `InteractionSystem.js`'s own pipeline fires `onInteract`
+ * immediately on key-down, with no way to tell a quick press from the
+ * start of a hold before it's already happened — routing dragging
+ * through an entirely separate input (the mouse button, not a bound
+ * game action) sidesteps that rather than complicating the shared
+ * interaction system for one object's own special case. While dragging,
+ * Bubble is held at a fixed distance in front of the camera and eased
+ * toward wherever the player is currently looking, not warped there
+ * instantly — "gently reposition," not teleport. Releasing simply stops
+ * moving it — `ResidentMovement`'s own `currentPosition` (and
+ * `ResidentState`'s persisted copy) already reflect wherever it was
+ * let go, so "the next time it chooses to move, it should simply
+ * continue from the nearest point" is true with no special-casing at
+ * all: the next wander target is chosen relative to the resident's own
+ * current position exactly like any other time.
  */
 export class ResidentController {
   constructor({ residentState, residentBehaviour, residentConnection, residentProfileStore }) {
@@ -34,6 +57,10 @@ export class ResidentController {
     this._wasAwake = null; // null so the very first frame always applies the correct awake/asleep visual, rather than assuming
     this._expressionTimer = 0;
     this._playerPos = new THREE.Vector3();
+    this._dragging = false;
+    this._dragTarget = new THREE.Vector3();
+    this._scratchForward = new THREE.Vector3();
+    this._scratchDirection = new THREE.Vector3();
   }
 
   init(engine) {
@@ -49,6 +76,34 @@ export class ResidentController {
     this.movement = new ResidentMovement(this.residentState.idleLocationId, this.residentState.currentPosition);
     this.renderer = new ResidentRenderer();
     createResidentEntity({ engine, root: this.renderer.root });
+
+    this._onPointerDown = (e) => this._handlePointerDown(e);
+    this._onPointerUp = () => this._stopDragging();
+    engine.canvas.addEventListener("pointerdown", this._onPointerDown);
+    window.addEventListener("pointerup", this._onPointerUp);
+  }
+
+  _handlePointerDown(event) {
+    if (event.button !== 0) return; // left button only
+    if (!this.engine.input?.pointerLocked) return; // "using the normal interaction reticle (not mouse cursor mode)"
+    if (this.residentBehaviour.mode === "conversing") return; // don't start dragging out from under an open conversation
+    if (!this._isLookingAtBubble()) return;
+    this._dragging = true;
+  }
+
+  _isLookingAtBubble() {
+    if (!this._cameraSystem || !this.engine.camera) return false;
+    const playerPos = this._cameraSystem.position;
+    const bubblePos = this.movement.currentPosition;
+    const dist = playerPos.distanceTo(bubblePos);
+    if (dist > DRAG_REACH) return false;
+    this.engine.camera.getWorldDirection(this._scratchForward);
+    this._scratchDirection.subVectors(bubblePos, playerPos).normalize();
+    return this._scratchDirection.dot(this._scratchForward) >= DRAG_LOOK_COS_THRESHOLD;
+  }
+
+  _stopDragging() {
+    this._dragging = false;
   }
 
   update(dt) {
@@ -58,6 +113,11 @@ export class ResidentController {
     if (isAwake !== this._wasAwake) {
       this._wasAwake = isAwake;
       this.renderer.setAwake(isAwake);
+    }
+
+    if (this._dragging) {
+      this._updateDragging(dt);
+      return;
     }
 
     const isConversing = this.residentBehaviour.mode === "conversing";
@@ -74,17 +134,7 @@ export class ResidentController {
     const lookTarget = motion.lookAt.clone();
     if (playerDistance !== null) lookTarget.lerp(this._playerPos, this.residentBehaviour.awarenessBlend);
 
-    // Plain field writes, not setters — see ResidentState.js's own
-    // comment on why these don't emit "persistence:saveRequested" every
-    // frame, and on why facingDirection/expression/connectionState are
-    // snapshots only. this.movement.currentPosition (the smooth base
-    // position, not motion.position's own tiny bob/sway offset) is the
-    // meaningful value to remember.
-    const p = this.movement.currentPosition;
-    this.residentState.currentPosition = { x: p.x, y: p.y, z: p.z };
-    this.residentState.facingDirection = this.renderer.root.rotation.y;
-    this.residentState.connectionState = this.residentConnection.status;
-
+    this._syncPersistedState();
     this.renderer.update(dt, { position: motion.position, idleRotationY: motion.idleRotationY, scale: motion.scale, lookTarget });
 
     this._expressionTimer -= dt;
@@ -96,9 +146,51 @@ export class ResidentController {
     }
   }
 
+  /** "Drag Bubble naturally through 3D space" — held at a fixed distance
+   *  in front of the camera, eased toward that point rather than snapped
+   *  there instantly, matching "gently reposition." Movement/idle-location
+   *  logic is entirely bypassed for the duration (see `update()`'s own
+   *  early return above) — a dragged Bubble isn't wandering or resting,
+   *  it's being carried. */
+  _updateDragging(dt) {
+    if (!this.engine.input?.pointerLocked || !this.engine.camera) {
+      this._stopDragging();
+      return;
+    }
+    this.engine.camera.getWorldDirection(this._scratchForward);
+    this._dragTarget.copy(this._cameraSystem.position).addScaledVector(this._scratchForward, DRAG_DISTANCE);
+    this.movement.currentPosition.lerp(this._dragTarget, Math.min(1, dt * 6));
+    this.movement.setDraggedPosition(this.movement.currentPosition);
+    this.movement.setDraggedLookAt(this._cameraSystem.position);
+
+    this._syncPersistedState();
+    this.renderer.update(dt, {
+      position: this.movement.currentPosition,
+      idleRotationY: this.renderer.root.rotation.y,
+      scale: new THREE.Vector3(1, 1, 1),
+      lookTarget: this._cameraSystem.position,
+    });
+  }
+
+  /** The plain-field persistence writes shared by both the normal update
+   *  path and dragging — see ResidentState.js's own comment on why these
+   *  don't emit "persistence:saveRequested" every frame, and on why
+   *  facingDirection/expression/connectionState are snapshots only. */
+  _syncPersistedState() {
+    const p = this.movement.currentPosition;
+    this.residentState.currentPosition = { x: p.x, y: p.y, z: p.z };
+    this.residentState.facingDirection = this.renderer.root.rotation.y;
+    this.residentState.connectionState = this.residentConnection.status;
+  }
+
   _computePlayerDistance() {
     if (!this._cameraSystem) return null;
     this._playerPos.copy(this._cameraSystem.position);
     return this._playerPos.distanceTo(this.movement.currentPosition);
+  }
+
+  dispose() {
+    this.engine.canvas.removeEventListener("pointerdown", this._onPointerDown);
+    window.removeEventListener("pointerup", this._onPointerUp);
   }
 }

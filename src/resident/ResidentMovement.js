@@ -42,6 +42,19 @@ export const IDLE_LOCATIONS = [
   { id: "byMusicPlayer", label: "by the music player", position: new THREE.Vector3(2.65, 1.9, 2.0), lookAt: new THREE.Vector3(3.5, 1.1, 2.15) },
   { id: "besideQuietCorner", label: "beside the quiet corner", position: new THREE.Vector3(1.4, 1.95, 0.75), lookAt: new THREE.Vector3(2.3, 1.0, 0.9) },
   { id: "lookingOutWindow", label: "looking out the window", position: new THREE.Vector3(-2.0, 2.0, -2.55), lookAt: new THREE.Vector3(-2.0, 1.55, -3.5) },
+  // "Bubble should naturally spend time... around the Workshop grounds.
+  // Bubble should occasionally use the front door naturally." Positioned
+  // near x=0 — the front door's own span (WORKSHOP_DOOR, ±1.3 around
+  // x=0) — so a straight-line journey to or from most indoor locations
+  // already tends to pass close to the doorway itself, without needing
+  // any dedicated path-through-the-door logic; some pairings will still
+  // cross a wall directly instead, which is fine — "because Bubble is a
+  // digital entity, it may also occasionally pass directly through
+  // walls or windows. This should feel intentional rather than like a
+  // collision bug," not something to prevent.
+  { id: "byFrontDoor", label: "by the front door", position: new THREE.Vector3(0.4, 1.9, 3.6), lookAt: new THREE.Vector3(0, 1.6, 0) },
+  { id: "workshopGroundsNear", label: "on the Workshop grounds", position: new THREE.Vector3(-1.2, 1.8, 4.8), lookAt: new THREE.Vector3(0, 1.6, 3) },
+  { id: "workshopGroundsFar", label: "further out on the grounds", position: new THREE.Vector3(1.6, 1.8, 5.6), lookAt: new THREE.Vector3(0, 1.6, 3) },
 ];
 
 const TRAVEL_DURATION = 7; // seconds — slow and comfortable, never a dash across the room
@@ -94,6 +107,28 @@ export class ResidentMovement {
     }
     this._restTimer = this._randomRestDuration();
     this._bobPhase = Math.random() * Math.PI * 2; // desynchronised, not every resident bobbing in lockstep if this ever supports more than one
+  }
+
+  /** Called every frame while Bubble is being dragged — directly sets
+   *  its current position and cancels any travel in progress, so once
+   *  released, `maybePickNewLocation()`'s next pick starts fresh from
+   *  wherever it was actually let go rather than resuming an old
+   *  half-finished journey toward a now-irrelevant point. */
+  setDraggedPosition(position) {
+    this.currentPosition.copy(position);
+    this._fromPosition.copy(position);
+    this._toPosition.copy(position);
+    this._travelT = 1; // arrived — no travel in progress
+  }
+
+  /** Called every frame while Bubble is being dragged — directly sets a
+   *  look-at target, since a dragged Bubble should face wherever it's
+   *  being carried toward rather than whatever it was looking at before
+   *  the drag started. */
+  setDraggedLookAt(target) {
+    this.currentLookAt.copy(target);
+    this._fromLookAt.copy(target);
+    this._toLookAt.copy(target);
   }
 
   get isTravelling() {
