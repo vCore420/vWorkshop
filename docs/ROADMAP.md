@@ -1424,7 +1424,50 @@ Emotes (triggers the existing wheel, doesn't duplicate it), and Settings
 phone always returns to whatever app was open when it last closed,
 never resetting to the home screen just because the phone itself did.
 
-## Phase 29 — depth in the room that exists
+## Phase 29 — Persistent World
+
+**Goal:** "Teach the Workshop that life does not stop simply because
+the player looks away... nothing should appear to have been waiting for
+the player." See docs/PERSISTENCE.md for the full write-up.
+
+**A genuinely shared time service**, not each system computing its own
+elapsed time. `WorldTimeService.js` reads the `savedAt` timestamp
+`PersistenceSystem.js` already wrote into every save envelope (nothing
+new stored for this), and — the instant every system's own
+`persistence:load` handler has already run, guaranteed by
+`EventBus.emit()`'s synchronous dispatch — turns it into one clean event,
+`"world:continuity"`, carrying `{elapsedMs, elapsedSeconds,
+cappedElapsedSeconds, isFirstSession}`. Capped at six hours: "simple
+continuity is sufficient" means a month-long absence produces the same
+"something plausible changed" result as a shorter one would, not an
+attempt at true long-term simulation.
+
+**Bubble and Beings both answer "what should I have been doing?" with a
+single, honest decision, not a real simulation** — the player never saw
+any of the intermediate hops a full simulation would produce, so
+modelling them has no payoff. Below a believable minimum (Bubble's own
+`MIN_REST_SECONDS`, already a real constant its ordinary wandering uses),
+nothing changes at all, preserving "nothing should feel scripted" for
+short gaps. Past it, each picks one new, plausible position and arrives
+there directly — no travel animation plays, since whatever journey led
+there happened while nobody was watching.
+
+**Weather continuity already existed** — `EnvironmentSystem`'s own
+`_catchUpDynamic()` predates this phase and already correctly steps
+through weather transitions based on real elapsed time. Time
+continuity had a genuine gap: `"realtime"` mode needs nothing (it reads
+the actual clock every frame), but `"simulated"` mode stored a fixed
+value that would have resumed frozen after any gap; it now advances
+using the same capped elapsed time everything else uses.
+
+**Workshop Projects — architecture only**, per the brief's own explicit
+scope. `WorkshopProjectStore.js` computes progress as a pure function of
+`Date.now()` and a stored duration — genuinely finishing on schedule
+whether or not the Workshop was open at that moment — but isn't wired to
+any UI yet; that's a future Workbench/Construction/Automation phase's
+own work.
+
+## Phase 30 — depth in the room that exists
 
 Roughly in priority order, each independently shippable:
 
@@ -1463,7 +1506,7 @@ Roughly in priority order, each independently shippable:
 9. **A true oriented planar reflection**, and reflective surfaces beyond a
    flat plane — see "Future extension points" in `docs/PLAYER.md`.
 
-## Phase 30 — the world becomes alive on its own
+## Phase 31 — the world becomes alive on its own
 
 1. **Seasonal changes** — a plugin (see `PLUGIN_GUIDE.md`) reading the real
    calendar date and adjusting window tint / a handful of decorative
@@ -1487,7 +1530,7 @@ Roughly in priority order, each independently shippable:
    Construction Library's own Switch piece (Phase 13) is one ready-made
    source of that event, waiting for something to listen.
 
-## Phase 31 — beyond one building
+## Phase 32 — beyond one building
 
 - **Additional buildings** — `RoomLayoutSystem` was written with this in
   mind (see its class comment), and `WorldObjectsStore` was made
