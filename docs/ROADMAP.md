@@ -1269,7 +1269,79 @@ simple unanimated models but sharing a skeleton across clones of a
 skinned/animated rig. Named plainly in docs/BEINGS.md rather than
 discovered later as a mystery bug.
 
-## Phase 26 — depth in the room that exists
+## Phase 26 — Living Refinement
+
+**Goal:** "Not a feature expansion phase... a quality pass focused on
+improving interaction, usability, consistency and overall immersion."
+
+**Another root-cause animation fix, this time a direct consequence of
+Phase 24's own.** "The crouch animation appears inverted and pushes the
+player downward into the floor" traced back to `applyPose()`'s own global
+X/Z negation (introduced in Phase 24 to fix the player's facing
+direction) — correct for WALK/RUN's alternating gait, which stays a
+valid-looking cycle either way, but wrong for CROUCH/JUMP/FALL/LAND's own
+symmetric, non-alternating poses, which flip the wrong direction under
+the same global negation. Fixed by renegating those four clips' own
+authored values to compensate.
+
+**Bubble**: interaction now requires the reticle be directly over it
+(`InteractableComponent`'s new general-purpose `requiresLookAt` flag, not
+a resident-specific special case), radius reduced; a genuine drag-to-
+reposition mechanic, deliberately routed through raw mouse-button events
+rather than the shared "interact" action, since `InteractionSystem`'s own
+pipeline fires immediately on key-down with no way to distinguish a quick
+press from the start of a hold; slightly larger again; new outdoor idle
+locations near and beyond the front door, with wall/window clipping
+during travel explicitly embraced rather than avoided — "because Bubble
+is a digital entity... this should feel intentional."
+
+**A real, root-caused consistency bug.** The Notebook's own Escape key
+wasn't closing it — traced to `InputManager`'s own text-input key
+suppression (correctly meant to stop "b"/"e" from toggling Build Mode
+while typing) also swallowing Escape, which never actually conflicts
+with typing at all. One exemption fixes the Notebook and the resident's
+own conversation overlay together, not a Notebook-specific patch.
+
+**Camera**: default vertical invert flipped (the setting already existed
+and was already fully wired through `InputManager`'s own
+`lookDelta`, just off by default); Settings' own Controls tab relabelled
+and grouped as "Camera" to match the brief's own terms.
+
+**Atmosphere**: independent manual overrides for Clouds, Rain, Fog, and
+Wind, layered on top of whichever weather preset is active rather than
+requiring a preset to match every desired combination; a Moon Phase
+override for the one property genuinely tied to the calendar date rather
+than time of day. Sun position and Star visibility already follow the
+existing Time override — noted plainly rather than duplicating controls
+that would do nothing new.
+
+**Animation Editor**: a real Model Selector (Player / Saved Beings /
+Imported Models, all through `ModelLoader.js`) with an honest limit
+clearly stated — only the Player rig has the named pivots this pose
+system understands, so a Being/model previews at its own correct
+proportions without pretending to animate through parts it doesn't have.
+The split preview/playback layout became a single large preview with the
+playback bar as a bottom overlay, freeing the space a separate stacked
+row used to take.
+
+**Model Integration**, reusing the same "synchronous placeholder, async
+swap" pattern `BeingController.js` already established for exactly this
+async-vs-sync mismatch: imported models are now selectable Builder shapes
+(a third source alongside Construction/Saved, both for fresh placement
+and for instances restored on reload) and optional player bodies via the
+Wardrobe (rendering correctly, honestly not animating, since an arbitrary
+mesh has none of the rig's own named pivots).
+
+**Builder**: mouse wheel now rotates a ghost in fine, continuous steps
+during placement/adjustment, alongside the existing coarse rotate button.
+
+**Mirror, Wardrobe, Computer, Lighting**: mirror camera moved back again
+(0.25 → 0.6); Wardrobe interaction radius nudged out slightly; the
+computer's own seated eye height raised again (1.27 → 1.32); shadow
+camera frustum expanded (±9 → ±13, far 28 → 34) to reach further into
+the world, including Bubble's own new outdoor idle spots.
+
+## Phase 27 — depth in the room that exists
 
 Roughly in priority order, each independently shippable:
 
@@ -1308,7 +1380,7 @@ Roughly in priority order, each independently shippable:
 9. **A true oriented planar reflection**, and reflective surfaces beyond a
    flat plane — see "Future extension points" in `docs/PLAYER.md`.
 
-## Phase 27 — the world becomes alive on its own
+## Phase 28 — the world becomes alive on its own
 
 1. **Seasonal changes** — a plugin (see `PLUGIN_GUIDE.md`) reading the real
    calendar date and adjusting window tint / a handful of decorative
@@ -1332,7 +1404,7 @@ Roughly in priority order, each independently shippable:
    Construction Library's own Switch piece (Phase 13) is one ready-made
    source of that event, waiting for something to listen.
 
-## Phase 28 — beyond one building
+## Phase 29 — beyond one building
 
 - **Additional buildings** — `RoomLayoutSystem` was written with this in
   mind (see its class comment), and `WorldObjectsStore` was made

@@ -355,10 +355,15 @@
 
 /* ---------- Animation Editor ---------- */
 .anim-playback-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   gap: 8px;
-  padding: var(--space-2);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: var(--space-2) var(--space-3);
+  background: linear-gradient(to top, rgba(20, 24, 26, 0.85), rgba(20, 24, 26, 0));
+  backdrop-filter: blur(2px);
 }
 .anim-readonly-notice {
   display: flex;
