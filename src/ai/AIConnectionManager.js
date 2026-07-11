@@ -115,7 +115,10 @@ export class AIConnectionManager {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model, prompt, stream: false }),
-      signal: AbortSignal.timeout(30000),
+      // Same reasoning as ResidentConnection.js's own sendMessage() —
+      // this is a real generation request too, and can trigger the exact
+      // same cold model load on slower hardware.
+      signal: AbortSignal.timeout(180000),
     });
     if (!response.ok) throw new Error(`Ollama responded with ${response.status}`);
     const data = await response.json();

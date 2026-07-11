@@ -54,9 +54,9 @@ export class WorkstationPanel {
     this.el.append(this.rail, this.main);
     rootEl.appendChild(this.el);
 
-    this._unsubClock = engine.events.on("timeofday:changed", ({ currentTime }) => {
-      const h = Math.floor(currentTime);
-      const m = Math.floor((currentTime - h) * 60);
+    this._unsubClock = engine.events.on("timeofday:changed", ({ hour }) => {
+      const h = Math.floor(hour);
+      const m = Math.floor((hour - h) * 60);
       this.clockEl.textContent = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
     });
   }
