@@ -4,7 +4,7 @@ A living 3D creative workshop, built to be a place you return to rather than
 an app you launch. Runs entirely in the browser, no build step, no backend —
 just static files.
 
-This project has gone through twenty-seven phases (with one dedicated
+This project has gone through twenty-eight phases (with one dedicated
 refinement pass in between): an architectural foundation and
 one believable room (phase 1), turning the computer into a real,
 self-contained creative workstation with a physical sit-down/stand-up
@@ -112,7 +112,11 @@ structure a player builds as a real interior (the same systems the
 Workshop's own room already uses, no manual marking required), a
 substantially larger construction catalogue organised into clear
 categories, reusable multi-object Blueprints, and optional grid/rotation
-snapping with true multi-axis rotation (phase 27).
+snapping with true multi-axis rotation (phase 27) — and, most recently,
+the Workshop Phone: a proper personal device carried everywhere,
+replacing the old Builder Phone with a modular app framework (Builder,
+Beings, Wardrobe, Bubble, Browser, Workshop, Emotes, Settings) that never
+freezes the player while it's open (phase 28).
 See `docs/ROADMAP.md` for what's next, `docs/ARCHITECTURE.md`
 for how the workshop as a whole is put together, and `docs/COMPUTER.md` /
 `docs/WORKBENCH.md` / `docs/WORLDBUILDER.md` / `docs/WORLD.md` /

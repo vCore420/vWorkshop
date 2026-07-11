@@ -1381,7 +1381,50 @@ pitch/roll tilt to the existing yaw-only wheel rotation, with
 `WorldObjectsStore` gaining optional `rotationX`/`rotationZ` fields to
 actually persist it, not just preview it on the ghost.
 
-## Phase 28 — depth in the room that exists
+## Phase 28 — Workshop Phone
+
+**Goal:** "The Computer is for creating. The Phone is for using." See
+docs/PHONE.md for the full write-up.
+
+**A genuinely modular app framework**, not a redesign of the old Builder
+Phone — `PhoneSystem.js`/`PhoneUI.js` own the open/close lifecycle,
+mouse/camera handling, and home screen uniformly, reusing the exact
+proven slide-from-hand shell animation the old Builder Phone already
+established. Every app is the same plain `{id, label, glyph,
+mount(container)}` shape a computer app already uses, registered through
+`phone/apps/registry.js` — the identical factory-list pattern
+`src/computer/apps/registry.js` already established.
+
+**"Using the phone should NOT freeze the player"** needed a genuinely new
+primitive: `CameraSystem.pauseLook()`/`resumeLook()`, deliberately
+narrower than the existing `lock()`/`unlock()` — gating only the
+mouse-look block inside `_updateWalk()`, leaving movement, running,
+jumping, crouching, and ladders completely untouched. Build Mode itself
+changed to match: it no longer calls `lock()` on its own, so placing an
+object no longer freezes the player either, matching "continue allowing
+world building while walking naturally through the environment."
+
+**Eight apps**: Builder (migrated, not rebuilt — `BuildModeSystem.js`/
+`BuilderPhoneUI.js` kept all their own behaviour, only losing the shell/
+mouse/camera ownership the Phone now handles centrally), Beings (spawn/
+move/remove/view/quick behaviour changes for *placed* Beings; creating
+definitions stays on the computer, whose own separate Spawner/Manager
+tabs were removed once this migrated), Wardrobe (outfit switching, a
+colour swatch standing in for "preview" rather than a full 3D render),
+Bubble (Talk/Stay Here/Follow Me/Return Home — three genuinely new
+`ResidentController` commands, plus a `stepToward()` continuous-follow
+method on `ResidentMovement`, separate from the idle-location system's
+own occasional-slow-journey ease), Browser (Workshop docs/bookmarks
+inline via the same `PageRegistry` the full browser already uses),
+Workshop (weather/time/lighting/music quick controls plus "I'm Lost!"),
+Emotes (triggers the existing wheel, doesn't duplicate it), and Settings
+(a small, deliberate subset of the full computer Settings).
+
+**Application Persistence**: a single `activeAppId` field — reopening the
+phone always returns to whatever app was open when it last closed,
+never resetting to the home screen just because the phone itself did.
+
+## Phase 29 — depth in the room that exists
 
 Roughly in priority order, each independently shippable:
 
@@ -1420,7 +1463,7 @@ Roughly in priority order, each independently shippable:
 9. **A true oriented planar reflection**, and reflective surfaces beyond a
    flat plane — see "Future extension points" in `docs/PLAYER.md`.
 
-## Phase 29 — the world becomes alive on its own
+## Phase 30 — the world becomes alive on its own
 
 1. **Seasonal changes** — a plugin (see `PLUGIN_GUIDE.md`) reading the real
    calendar date and adjusting window tint / a handful of decorative
@@ -1444,7 +1487,7 @@ Roughly in priority order, each independently shippable:
    Construction Library's own Switch piece (Phase 13) is one ready-made
    source of that event, waiting for something to listen.
 
-## Phase 30 — beyond one building
+## Phase 31 — beyond one building
 
 - **Additional buildings** — `RoomLayoutSystem` was written with this in
   mind (see its class comment), and `WorldObjectsStore` was made
