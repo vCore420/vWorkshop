@@ -310,12 +310,24 @@ export class EnvironmentSystem {
     };
   }
 
+  /** The precipitation that's actually in effect right now — a manual
+   *  override if one's set, otherwise whatever the current weather
+   *  state's own preset says. Shared by `_emit()`, the rain-scroll
+   *  animation in `update()`, and `ResidentController.js`'s own
+   *  window-watching preference — previously computed inline in the
+   *  first two independently; a third consumer was reason enough to
+   *  stop duplicating it. */
+  getEffectivePrecipitation() {
+    const def = WEATHER_STATES[this.current] ?? WEATHER_STATES.clear;
+    return this.manualOverrides.precipitation ?? def.precipitation ?? 0;
+  }
+
   _emit() {
     const def = WEATHER_STATES[this.current] ?? WEATHER_STATES.clear;
     const o = this.manualOverrides;
     const fogDensity = o.fogDensity ?? def.fogDensity;
     const cloudCoverage = o.cloudCoverage ?? def.cloudCoverage;
-    const precipitation = o.precipitation ?? def.precipitation;
+    const precipitation = this.getEffectivePrecipitation();
     this.engine.events.emit("environment:changed", {
       id: this.current,
       label: def.label,
@@ -345,8 +357,7 @@ export class EnvironmentSystem {
       this.requestLiveWeather();
     }
 
-    const def = WEATHER_STATES[this.current];
-    const effectivePrecipitation = this.manualOverrides.precipitation ?? def?.precipitation ?? 0;
+    const effectivePrecipitation = this.getEffectivePrecipitation();
     if (effectivePrecipitation > 0) {
       this._rainScroll += dt * (0.6 + this.windSpeed * 0.4);
       const drift = Math.sin(this.windDirectionRad) * this.windSpeed * dt * 0.5;

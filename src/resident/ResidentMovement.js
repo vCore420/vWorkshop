@@ -65,10 +65,25 @@ export function getIdleLocation(id) {
   return IDLE_LOCATIONS.find((loc) => loc.id === id) ?? IDLE_LOCATIONS[0];
 }
 
-export function randomIdleLocationId(excludingId) {
+/** Uniform by default — `weights` (optional, `{locationId: multiplier}`)
+ *  lets a caller nudge the odds toward a particular location without
+ *  this function (or `ResidentMovement` itself) needing to know *why*.
+ *  See `ResidentController.js`'s own `_windowWatchWeights()` for the one
+ *  real use of this: Bubble drawn to "lookingOutWindow" a little more
+ *  often while it's raining, or during a golden-hour sky — this stays a
+ *  plain weighted pick either way, never anything more elaborate. */
+export function randomIdleLocationId(excludingId, weights = null) {
   const choices = IDLE_LOCATIONS.filter((loc) => loc.id !== excludingId);
   const pool = choices.length ? choices : IDLE_LOCATIONS;
-  return pool[Math.floor(Math.random() * pool.length)].id;
+  if (!weights) return pool[Math.floor(Math.random() * pool.length)].id;
+
+  const totalWeight = pool.reduce((sum, loc) => sum + (weights[loc.id] ?? 1), 0);
+  let roll = Math.random() * totalWeight;
+  for (const loc of pool) {
+    roll -= weights[loc.id] ?? 1;
+    if (roll <= 0) return loc.id;
+  }
+  return pool[pool.length - 1].id; // floating-point safety net — should only ever be reached by a hair
 }
 
 export class ResidentMovement {
@@ -174,13 +189,15 @@ export class ResidentMovement {
    *  overridden) — counts down to the next infrequent move and starts one
    *  when it's time. Returns the new location id if it just started
    *  moving, otherwise `null`, so `ResidentController.js` can persist the
-   *  new destination via `ResidentState.setIdleLocation()`. */
-  maybePickNewLocation(dt, currentLocationId) {
+   *  new destination via `ResidentState.setIdleLocation()`. `weights`
+   *  (optional) passes straight through to `randomIdleLocationId()` —
+   *  see that function's own comment. */
+  maybePickNewLocation(dt, currentLocationId, weights = null) {
     if (this.isTravelling) return null;
     this._restTimer -= dt;
     if (this._restTimer > 0) return null;
     this._restTimer = this._randomRestDuration();
-    const nextId = randomIdleLocationId(currentLocationId);
+    const nextId = randomIdleLocationId(currentLocationId, weights);
     this.travelTo(nextId);
     return nextId;
   }

@@ -81,8 +81,37 @@ export function createResidentConversationOverlay({ residentConnection, resident
           bubble.textContent = message.content;
           messageList.appendChild(bubble);
         }
+        if (isThinking) {
+          const thinkingBubble = document.createElement("div");
+          thinkingBubble.className = "resident-message resident-message-resident resident-message-thinking";
+          // Three plain spans, not just three dots in the text content —
+          // "keep this subtle and in keeping with Bubble's personality" is
+          // a CSS animation (see overlays.css) staggering their opacity,
+          // not an emoji spinner or anything that reads as a loading
+          // spinner from a generic app.
+          for (let i = 0; i < 3; i++) thinkingBubble.appendChild(document.createElement("span"));
+          messageList.appendChild(thinkingBubble);
+          // "Better waiting behaviour while models load... improved
+          // loading feedback." Ollama can take well over the first few
+          // seconds to load a model's own weights from disk before
+          // generating anything at all — past that point, the dots
+          // alone, unchanging the whole time, start to feel stuck even
+          // though nothing has actually gone wrong. One honest,
+          // reassuring line, not a progress bar with numbers this class
+          // has no way to know.
+          if (longWait) {
+            const hint = document.createElement("p");
+            hint.className = "resident-thinking-hint";
+            hint.textContent = "Still working \u2014 the model may be loading for the first time.";
+            messageList.appendChild(hint);
+          }
+        }
         messageList.scrollTop = messageList.scrollHeight;
       }
+
+      let isThinking = false;
+      let longWait = false;
+      let longWaitTimer = null;
 
       async function send() {
         const text = input.value.trim();
@@ -92,7 +121,14 @@ export function createResidentConversationOverlay({ residentConnection, resident
         renderMessages();
 
         sendBtn.disabled = true;
+        isThinking = true;
+        longWait = false;
         residentBehaviour.setThinking(true);
+        renderMessages();
+        longWaitTimer = setTimeout(() => {
+          longWait = true;
+          renderMessages();
+        }, 8000);
         try {
           const systemPrompt = composeSystemPrompt(profile);
           const reply = await residentConnection.sendMessage(profile, history, systemPrompt);
@@ -100,6 +136,9 @@ export function createResidentConversationOverlay({ residentConnection, resident
         } catch {
           history.push({ role: "assistant", content: "(couldn't reach the model just now \u2014 try again in a moment)" });
         }
+        clearTimeout(longWaitTimer);
+        isThinking = false;
+        longWait = false;
         residentBehaviour.setThinking(false);
         sendBtn.disabled = false;
         renderMessages();

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { configureFlatTexture } from "../utils/TextureUtils.js";
 
 const RADIUS = 0.13; // "increase Bubble's size very slightly. It should still feel like a companion rather than the focal point of the room." Nudged up again (0.16 → 0.11 → 0.13) — still small, just a touch less easy to lose track of.
 const FACE_TEXTURE_SIZE = 128;
@@ -92,6 +93,7 @@ export class ResidentRenderer {
     this._faceCtx = this._faceCanvas.getContext("2d");
     this._faceTexture = new THREE.CanvasTexture(this._faceCanvas);
     this._faceTexture.colorSpace = THREE.SRGBColorSpace;
+    configureFlatTexture(this._faceTexture);
 
     const faceMaterial = new THREE.MeshBasicMaterial({ map: this._faceTexture, transparent: true, depthWrite: false });
     const faceGeometry = new THREE.PlaneGeometry(RADIUS * 1.1, RADIUS * 1.1);

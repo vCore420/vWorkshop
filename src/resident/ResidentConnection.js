@@ -50,7 +50,17 @@ export class ResidentConnection {
           num_predict: behaviourConfig.maxResponseLength,
         },
       }),
-      signal: AbortSignal.timeout(60000),
+      // "Longer connection timeouts for slower hardware... current
+      // behaviour sometimes disconnects before slower systems have
+      // finished loading a model." Ollama loads a model's own weights
+      // from disk into memory the first time it's used (or after it's
+      // been idle long enough to unload) — for a larger model on modest
+      // hardware, that alone can take well over a minute, before
+      // generation even begins. 60s was cutting a legitimate, still-in-
+      // progress load off as if it had failed; this is a generous upper
+      // bound for "the model is genuinely loading," not a sign anything
+      // is actually stuck.
+      signal: AbortSignal.timeout(180000),
     });
     if (!response.ok) throw new Error(`Ollama responded with ${response.status}`);
     const data = await response.json();

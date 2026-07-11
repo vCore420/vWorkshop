@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { CameraSystem } from "../systems/CameraSystem.js";
+import { EnvironmentSystem } from "../systems/EnvironmentSystem.js";
+import { TimeOfDaySystem } from "../systems/TimeOfDaySystem.js";
 import { ResidentMovement, IDLE_LOCATIONS, MIN_REST_SECONDS } from "./ResidentMovement.js";
 import { ResidentRenderer } from "./ResidentRenderer.js";
 import { createResidentEntity } from "./ResidentEntity.js";
@@ -73,6 +75,8 @@ export class ResidentController {
   init(engine) {
     this.engine = engine;
     this._cameraSystem = engine.getSystem(CameraSystem);
+    this._environmentSystem = engine.getSystem(EnvironmentSystem);
+    this._timeOfDaySystem = engine.getSystem(TimeOfDaySystem);
 
     if (!this.residentState.idleLocationId) this.residentState.setIdleLocation(IDLE_LOCATIONS[0].id);
     // "Reloading the Workshop should restore the resident naturally to
@@ -118,6 +122,27 @@ export class ResidentController {
     this.residentState.setIdleLocation(next.id);
     this.movement.setDraggedPosition(next.position); // arrives directly — see comment above on why no travel animation plays
     this.movement.setDraggedLookAt(next.lookAt ?? next.position);
+  }
+
+  /** Phase 31C's own one small contribution — see docs/RESIDENT.md's
+   *  "A quiet habit" section for the full reasoning behind it, and the
+   *  README's own "One contribution" note for why this one, specifically.
+   *  In short: Bubble is a little more likely to wander to the window
+   *  while it's raining, or during a warm sunrise/sunset sky, than at any
+   *  other idle pick — the exact same golden-hour window
+   *  `TimeOfDaySystem._computeState()` already uses for the sun's own
+   *  colour shift, and `EnvironmentSystem.getEffectivePrecipitation()`,
+   *  not a new concept invented for this. Never guaranteed, never a
+   *  scripted event — still an ordinary weighted pick among the same
+   *  idle locations that already exist, just one a patient, observant
+   *  player might eventually notice forms a pattern of its own. */
+  _windowWatchWeights() {
+    if (!this._environmentSystem || !this._timeOfDaySystem) return null;
+    const isRaining = this._environmentSystem.getEffectivePrecipitation() > 0;
+    const hour = this._timeOfDaySystem.currentTime;
+    const isGoldenHour = (hour > 5 && hour < 8) || (hour > 16 && hour < 19);
+    if (!isRaining && !isGoldenHour) return null;
+    return { lookingOutWindow: 4 };
   }
 
   _handlePointerDown(event) {
@@ -197,7 +222,7 @@ export class ResidentController {
       this.movement.stepToward(this._playerPos, dt);
     } else if (!isConversing && this.playerCommand !== "stay") {
       const currentId = this.residentState.idleLocationId;
-      const newId = this.movement.maybePickNewLocation(dt, currentId);
+      const newId = this.movement.maybePickNewLocation(dt, currentId, this._windowWatchWeights());
       if (newId) this.residentState.setIdleLocation(newId);
     }
 

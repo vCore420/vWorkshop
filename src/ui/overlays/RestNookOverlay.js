@@ -6,20 +6,25 @@
  * to sit and talk with). This overlay stays brief rather than padding
  * itself out with fake content.
  *
- * "The reminder shown while sitting should disappear when clicked...
- * ensure the entire introductory overlay is dismissed once acknowledged.
- * Escape should remain the only method of standing back up." Clicking
- * the text fades out the *whole panel* (`panelEl` itself, not just its
- * own inner content) — an earlier version of this only faded the text,
- * leaving the overlay's own background/border panel fully visible and
- * looking like an empty, still-active overlay, which is exactly the
- * reported bug. The overlay's own open/closed state is untouched either
- * way — this is purely a visual dismissal, `pointer-events: none`
- * alongside the fade so the now-invisible panel can't still intercept
- * clicks — leaving the chair is still entirely CameraSystem's own,
- * unrelated Escape-driven mechanism. Re-sitting creates a fresh overlay
- * instance, so the reminder is there to dismiss again next time, not
- * permanently gone after the first read.
+ * "Currently dismissing the introductory message removes the text but
+ * leaves part of the screen darkened. After dismissing the message, the
+ * screen should immediately return to normal." Root cause: every
+ * `materialClass: "panel"` overlay's own outer `.overlay` element
+ * (`OverlayManager.js`'s own wrapper, not `panelEl` this file is handed)
+ * carries its own full-screen dark backdrop
+ * (`.overlay--panel { background: rgba(10,8,6,0.7) }`) — a separate
+ * element from `panelEl` entirely. Fading `panelEl` alone (an earlier
+ * fix for this same overlay) correctly hid the reminder's own visible
+ * card, but never touched that outer backdrop, which stayed fully
+ * opaque across the whole screen regardless. Dismissing now also fades
+ * `panelEl.parentElement` — the actual `.overlay` element carrying that
+ * background — back to transparent, alongside the same
+ * `pointer-events: none` this overlay's own dismiss already relied on so
+ * neither element can intercept clicks once invisible. The overlay's own
+ * open/closed state is still untouched either way — this is purely a
+ * visual dismissal; leaving the chair is still entirely CameraSystem's
+ * own, unrelated Escape-driven mechanism, and re-sitting creates a fresh
+ * overlay instance, so the reminder is there to dismiss again next time.
  */
 export function createRestNookOverlay() {
   return {
@@ -43,6 +48,7 @@ export function createRestNookOverlay() {
 
       const dismiss = () => {
         panelEl.classList.add("rest-nook-panel-dismissed");
+        panelEl.parentElement?.classList.add("rest-nook-backdrop-dismissed");
       };
       content.addEventListener("click", dismiss);
       hint.addEventListener("click", dismiss);

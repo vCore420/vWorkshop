@@ -35,6 +35,8 @@ const STEP_TOLERANCE = 0.6; // metres a surface can sit above the player's own f
 const LAND_STATE_DURATION = 0.16; // seconds "land" holds before yielding to whatever movement calls for next
 const LADDER_CLIMB_SPEED = 1.6; // metres/second
 const LOOK_SENSITIVITY = 0.0022;
+const DEFAULT_FOV = 62; // matches Engine.js's own PerspectiveCamera construction — the one place this number is otherwise hardcoded
+const ZOOM_FOV = 38; // a comfortable, noticeable zoom without feeling like a sniper scope
 const MAX_PITCH = Math.PI / 2 - 0.05;
 const THIRD_PERSON_DISTANCE = 3.2; // metres behind the player
 const THIRD_PERSON_HEIGHT = 0.85; // additional height above the standing eye height — comfortably under the workshop's 3m ceiling (see ROOM_DIMENSIONS in layoutDefault.js) even for a noticeably taller character
@@ -113,6 +115,7 @@ export class CameraSystem {
     this.mode = "walk";
     this.locked = false;
     this._lookPaused = false; // see pauseLook()/resumeLook() — the Workshop Phone's own, less restrictive alternative to lock()
+    this._zoomBlend = 0; // 0-1, eased toward whether "zoom" is currently held — see _updateZoom()
     this._preFocus = null;
     this._focusPose = null;
     this._focusT = 0;
@@ -287,6 +290,9 @@ export class CameraSystem {
     this._onLadder = false;
     this.viewMode = "first";
     this._viewBlend = 0;
+    this._zoomBlend = 0;
+    this.engine.camera.fov = DEFAULT_FOV;
+    this.engine.camera.updateProjectionMatrix();
     this.engine.events.emit("persistence:saveRequested");
   }
 
@@ -298,7 +304,30 @@ export class CameraSystem {
 
     const thirdPersonActive = this.viewMode === "third" && this.mode === "walk";
     this._viewBlend = damp(this._viewBlend, thirdPersonActive ? 1 : 0, 6, dt);
+    this._updateZoom(dt);
     this._applyCameraTransform();
+  }
+
+  /** "Holding the Z key should smoothly zoom the camera in. Releasing
+   *  the key should smoothly return the camera to its normal field of
+   *  view. This should work naturally in both first-person and
+   *  third-person views where appropriate." A held key, not a toggle —
+   *  `isHeld`, not `wasJustPressed` — and a smooth `damp()` on the
+   *  camera's own FOV rather than a snap, matching every other eased
+   *  transition this class already uses (view-mode blending, focus
+   *  poses). Deliberately does nothing while sitting down (`mode ===
+   *  "focus"`, at the Computer or Workbench) — the camera is fixed on a
+   *  screen there, and "where appropriate" is exactly this: zoom is a
+   *  walking-around gesture, not something that means anything while
+   *  already looking at a screen. */
+  _updateZoom(dt) {
+    const held = this.mode === "walk" && !this.locked && (this.engine.input?.isHeld("zoom") ?? false);
+    this._zoomBlend = damp(this._zoomBlend, held ? 1 : 0, 8, dt);
+    const fov = DEFAULT_FOV + (ZOOM_FOV - DEFAULT_FOV) * this._zoomBlend;
+    if (Math.abs(this.engine.camera.fov - fov) > 0.01) {
+      this.engine.camera.fov = fov;
+      this.engine.camera.updateProjectionMatrix();
+    }
   }
 
   /** Where `engine.camera` actually ends up — always derived from
@@ -582,6 +611,28 @@ export class CameraSystem {
     const dir = this._scratchForward.set(...this._focusPose.lookAt).sub(this.position).normalize();
     const targetYaw = Math.atan2(-dir.x, -dir.z);
     const targetPitch = Math.asin(clamp(dir.y, -1, 1));
+
+    // "Mouse look should remain available" (the Quiet Corner) vs. the
+    // Computer/Workbench's own fully-fixed camera, sitting in front of a
+    // screen where looking away would make no sense — the one thing that
+    // differs between them. Once the seating-down ease finishes, a focus
+    // pose that opts in (`allowLookAround: true`) hands yaw/pitch back to
+    // ordinary mouse input, exactly like `_updateWalk()`'s own handling,
+    // while position stays locked to `_focusPose.position` forever after
+    // — "walking should remain disabled until standing normally" is true
+    // by construction, since nothing here ever moves `this.position`
+    // again once seated.
+    if (this._focusPose.allowLookAround && this._focusT >= 1) {
+      const input = this.engine.input;
+      if (input?.lookActive && !this._lookPaused) {
+        this.yaw -= input.lookDelta.x * LOOK_SENSITIVITY;
+        this.pitch -= input.lookDelta.y * LOOK_SENSITIVITY;
+        this.pitch = clamp(this.pitch, -MAX_PITCH, MAX_PITCH);
+        this.yaw = wrapAngle(this.yaw);
+      }
+      return;
+    }
+
     this.yaw = shortestAngleLerp(this._focusFrom.yaw, targetYaw, t);
     this.pitch = THREE.MathUtils.lerp(this._focusFrom.pitch, targetPitch, t);
   }
