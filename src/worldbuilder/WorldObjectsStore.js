@@ -36,7 +36,7 @@ export class WorldObjectsStore {
     this.instances = [];
   }
 
-  create({ definitionId, definitionSource = "library", roomId = CURRENT_ROOM_ID, position, rotationY = 0, scale = 1, colorOverride = null }) {
+  create({ definitionId, definitionSource = "library", roomId = CURRENT_ROOM_ID, position, rotationY = 0, rotationX = 0, rotationZ = 0, scale = 1, colorOverride = null }) {
     const instance = {
       id: _nextId++,
       definitionId,
@@ -44,6 +44,12 @@ export class WorldObjectsStore {
       roomId,
       position,
       rotationY,
+      // "Expand rotation controls to allow for rotation on multiple
+      // axis." Optional and defaulted to 0 — an ordinary object placed
+      // the ordinary way (yaw only) never sets these at all, so nothing
+      // about the existing schema or any existing save changes shape.
+      rotationX,
+      rotationZ,
       scale,
       colorOverride,
       createdAt: new Date().toISOString(),

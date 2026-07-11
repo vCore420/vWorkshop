@@ -27,6 +27,8 @@
  *     Position (furniture, only once it's actually been moved from its
  *     Workshop default).
  */
+import { getConstructionGroup, CONSTRUCTION_GROUP_ORDER } from "./ConstructionLibrary.js";
+
 export class BuilderPhoneUI {
   constructor(rootEl, callbacks) {
     this.root = rootEl;
@@ -70,8 +72,8 @@ export class BuilderPhoneUI {
   // Screen: Library
   // -----------------------------------------------------------------
 
-  renderLibrary(constructionPieces, libraryDefinitions, importedModels = []) {
-    this._libraryData = { constructionPieces, libraryDefinitions, importedModels };
+  renderLibrary(constructionPieces, libraryDefinitions, importedModels = [], blueprints = []) {
+    this._libraryData = { constructionPieces, libraryDefinitions, importedModels, blueprints };
     if (this._currentScreen === "library") this.showLibraryScreen();
   }
 
@@ -81,7 +83,7 @@ export class BuilderPhoneUI {
 
     const tabs = document.createElement("div");
     tabs.className = "builder-phone-tabs";
-    for (const [id, label] of [["construction", "Construction Library"], ["saved", "Saved Objects"], ["models", "Imported Models"]]) {
+    for (const [id, label] of [["construction", "Construction Library"], ["saved", "Saved Objects"], ["models", "Imported Models"], ["blueprints", "Blueprints"]]) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.textContent = label;
@@ -96,9 +98,9 @@ export class BuilderPhoneUI {
 
     const grid = document.createElement("div");
     grid.className = "builder-phone-grid";
-    const { constructionPieces, libraryDefinitions, importedModels } = this._libraryData;
-    const items = this._activeTab === "construction" ? constructionPieces : this._activeTab === "saved" ? libraryDefinitions : importedModels;
-    const source = this._activeTab === "construction" ? "construction" : this._activeTab === "saved" ? "library" : "importedModel";
+    const { constructionPieces, libraryDefinitions, importedModels, blueprints } = this._libraryData;
+    const items = { construction: constructionPieces, saved: libraryDefinitions, models: importedModels, blueprints }[this._activeTab];
+    const source = { construction: "construction", saved: "library", models: "importedModel", blueprints: "blueprint" }[this._activeTab];
 
     if (items.length === 0) {
       const empty = document.createElement("div");
@@ -106,12 +108,47 @@ export class BuilderPhoneUI {
       empty.textContent =
         this._activeTab === "models"
           ? "No models imported yet \u2014 import one in the Being Creator's own Model section."
-          : "Nothing designed yet — build one in the computer's Builder app.";
+          : this._activeTab === "blueprints"
+            ? "No Blueprints yet \u2014 select something you've built and choose \u201cSave as Blueprint.\u201d"
+            : "Nothing designed yet — build one in the computer's Builder app.";
       grid.appendChild(empty);
-    } else {
-      for (const def of items) grid.appendChild(this._buildGridCard(def, source));
+      this.screen.appendChild(grid);
+      return;
     }
+
+    if (this._activeTab !== "construction") {
+      const cardsGrid = document.createElement("div");
+      cardsGrid.className = "builder-phone-cards-grid";
+      for (const def of items) cardsGrid.appendChild(this._buildGridCard(def, source));
+      grid.appendChild(cardsGrid);
+      this.screen.appendChild(grid);
+      return;
+    }
+
+    // "Please continue organising Builder assets into clear categories as
+    // the library expands" — grouped section by section (Structural,
+    // Openings, Nature, Paths, Lighting, Utilities, Workshop) rather than
+    // one long undifferentiated grid, now that the catalog has grown well
+    // past its original size.
     this.screen.appendChild(grid);
+    const byGroup = new Map();
+    for (const def of items) {
+      const group = getConstructionGroup(def.id);
+      if (!byGroup.has(group)) byGroup.set(group, []);
+      byGroup.get(group).push(def);
+    }
+    for (const group of CONSTRUCTION_GROUP_ORDER) {
+      const defs = byGroup.get(group);
+      if (!defs?.length) continue;
+      const heading = document.createElement("h4");
+      heading.className = "builder-phone-group-heading";
+      heading.textContent = group;
+      grid.appendChild(heading);
+      const groupGrid = document.createElement("div");
+      groupGrid.className = "builder-phone-group-grid";
+      for (const def of defs) groupGrid.appendChild(this._buildGridCard(def, source));
+      grid.appendChild(groupGrid);
+    }
   }
 
   _buildGridCard(def, source) {
@@ -152,8 +189,25 @@ export class BuilderPhoneUI {
     // action in the hint text instead — the distinction between placing
     // something new and moving something that already exists is still
     // worth saying, just not as a button anymore.
-    hint.textContent = `Move your pointer (or drag, on touch) to position it, rotate if you need to, then left-click in the world to ${confirmLabel.toLowerCase()}.`;
+    hint.textContent = `Move your pointer (or drag, on touch) to position it, rotate (button, or scroll the mouse wheel) if you need to, then left-click in the world to ${confirmLabel.toLowerCase()}.`;
     this.screen.appendChild(hint);
+
+    const snapRow = document.createElement("div");
+    snapRow.className = "builder-phone-snap-row";
+    const gridLabel = document.createElement("label");
+    const gridCheckbox = document.createElement("input");
+    gridCheckbox.type = "checkbox";
+    gridCheckbox.checked = this.callbacks.getSnapToGrid();
+    gridCheckbox.addEventListener("change", () => this.callbacks.onToggleSnapToGrid());
+    gridLabel.append(gridCheckbox, " Snap to grid");
+    const rotationLabel = document.createElement("label");
+    const rotationCheckbox = document.createElement("input");
+    rotationCheckbox.type = "checkbox";
+    rotationCheckbox.checked = this.callbacks.getSnapRotation();
+    rotationCheckbox.addEventListener("change", () => this.callbacks.onToggleSnapRotation());
+    rotationLabel.append(rotationCheckbox, " Snap rotation");
+    snapRow.append(gridLabel, rotationLabel);
+    this.screen.appendChild(snapRow);
 
     const actions = document.createElement("div");
     actions.className = "builder-phone-ghost-actions";
@@ -288,6 +342,14 @@ export class BuilderPhoneUI {
       duplicateBtn.textContent = "Duplicate";
       duplicateBtn.addEventListener("click", () => this.callbacks.onDuplicate());
       actions.appendChild(duplicateBtn);
+
+      const blueprintBtn = document.createElement("button");
+      blueprintBtn.type = "button";
+      blueprintBtn.className = "builder-phone-button";
+      blueprintBtn.textContent = "Save as Blueprint";
+      blueprintBtn.title = "Captures this and everything placed nearby as one reusable Blueprint";
+      blueprintBtn.addEventListener("click", () => this.callbacks.onSaveAsBlueprint());
+      actions.appendChild(blueprintBtn);
 
       const deleteBtn = document.createElement("button");
       deleteBtn.type = "button";

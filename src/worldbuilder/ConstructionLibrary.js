@@ -31,6 +31,15 @@ const DOOR_COLOR = "#5a4632";
 const WOOD_COLOR = "#6b4a34";
 const CRATE_COLOR = "#7a5a3a";
 const LIGHT_FIXTURE_COLOR = "#e8dcc0";
+const FOLIAGE_COLOR = "#4a7a3a";
+const FOLIAGE_COLOR_LIGHT = "#5c9048";
+const BARK_COLOR = "#5c4530";
+const STONE_COLOR = "#8c8880";
+const GRAVEL_COLOR = "#a89e88";
+const DIRT_COLOR = "#6b5238";
+const CONCRETE_COLOR = "#b8b4ac";
+const SOIL_COLOR = "#4a3826";
+const FLAME_COLOR = "#ff9040";
 
 function piece({ id, name, description, parts, behaviours = [] }) {
   return {
@@ -360,8 +369,230 @@ export const CONSTRUCTION_PIECES = [
     description: "A single inclined panel.",
     parts: [{ id: "a", type: "box", position: [0, 0.35, 0], rotationX: -0.35, rotationY: 0, rotationZ: 0, scale: [1.2, 0.15, 2.4], color: RAW_MATERIAL_COLOR }],
   }),
+
+  // ============================================================
+  // Structures — completing the Buildings list (Floors, Walls, Corners,
+  // Roofs, Roof sections, Doors, Windows, Stairs already existed above)
+  // ============================================================
+  piece({
+    id: "foundation",
+    name: "Foundation",
+    description: "A sturdy stone base to build a floor on top of — raises a building slightly off the ground.",
+    parts: [{ id: "a", type: "box", position: [0, 0.25, 0], rotationY: 0, scale: [2.2, 0.5, 2.2], color: STONE_COLOR }],
+  }),
+  piece({
+    id: "railing",
+    name: "Railing",
+    description: "A run of balusters and a top rail, 2m wide — for a balcony edge or beside a stair run.",
+    parts: [
+      { id: "postA", type: "box", position: [-0.95, 0.45, 0], rotationY: 0, scale: [0.06, 0.9, 0.06], color: WOOD_COLOR },
+      { id: "postB", type: "box", position: [-0.32, 0.45, 0], rotationY: 0, scale: [0.06, 0.9, 0.06], color: WOOD_COLOR },
+      { id: "postC", type: "box", position: [0.32, 0.45, 0], rotationY: 0, scale: [0.06, 0.9, 0.06], color: WOOD_COLOR },
+      { id: "postD", type: "box", position: [0.95, 0.45, 0], rotationY: 0, scale: [0.06, 0.9, 0.06], color: WOOD_COLOR },
+      { id: "rail", type: "box", position: [0, 0.87, 0], rotationY: 0, scale: [2.0, 0.06, 0.06], color: WOOD_COLOR },
+    ],
+  }),
+
+  // ============================================================
+  // Nature — "if something naturally exists within the Workshop world,
+  // it should also exist as a Builder asset" applies to the grounds
+  // around it just as much as to furniture
+  // ============================================================
+  piece({
+    id: "tree",
+    name: "Tree",
+    description: "A simple trunk and rounded canopy.",
+    parts: [
+      { id: "trunk", type: "cylinder", position: [0, 1.2, 0], rotationY: 0, scale: [0.18, 2.4, 0.18], color: BARK_COLOR, segments: 8 },
+      { id: "canopy", type: "sphere", position: [0, 3.0, 0], rotationY: 0, scale: [1.4, 1.3, 1.4], color: FOLIAGE_COLOR, segments: 10 },
+    ],
+  }),
+  piece({
+    id: "bush",
+    name: "Bush",
+    description: "A low, rounded shrub.",
+    parts: [{ id: "a", type: "sphere", position: [0, 0.35, 0], rotationY: 0, scale: [0.7, 0.6, 0.7], color: FOLIAGE_COLOR_LIGHT, segments: 8 }],
+  }),
+  piece({
+    id: "flower",
+    name: "Flower",
+    description: "A thin stem with a small bloom.",
+    parts: [
+      { id: "stem", type: "cylinder", position: [0, 0.15, 0], rotationY: 0, scale: [0.015, 0.3, 0.015], color: FOLIAGE_COLOR, segments: 6 },
+      { id: "bloom", type: "sphere", position: [0, 0.32, 0], rotationY: 0, scale: [0.08, 0.08, 0.08], color: "#d888a8", segments: 8 },
+    ],
+  }),
+  piece({
+    id: "rock",
+    name: "Rock",
+    description: "A weathered boulder — two overlapping forms for a less perfectly round silhouette.",
+    parts: [
+      { id: "a", type: "sphere", position: [0, 0.25, 0], rotationY: 0, scale: [0.6, 0.45, 0.5], color: STONE_COLOR, segments: 7 },
+      { id: "b", type: "sphere", position: [0.2, 0.18, 0.1], rotationY: 0.6, scale: [0.35, 0.3, 0.4], color: STONE_COLOR, segments: 7 },
+    ],
+  }),
+  piece({
+    id: "log",
+    name: "Log",
+    description: "A fallen log, resting on its side.",
+    parts: [{ id: "a", type: "cylinder", position: [0, 0.22, 0], rotationX: Math.PI / 2, rotationY: 0, rotationZ: 0, scale: [0.22, 1.8, 0.22], color: BARK_COLOR, segments: 10 }],
+  }),
+  piece({
+    id: "grassPatch",
+    name: "Grass Patch",
+    description: "A low, flat patch of ground cover.",
+    parts: [{ id: "a", type: "box", position: [0, 0.02, 0], rotationY: 0, scale: [2.0, 0.04, 2.0], color: FOLIAGE_COLOR_LIGHT }],
+  }),
+  piece({
+    id: "gardenBed",
+    name: "Garden Bed",
+    description: "A timber-edged bed of soil, ready for flowers.",
+    parts: [
+      { id: "edgeN", type: "box", position: [0, 0.1, 0.95], rotationY: 0, scale: [2.0, 0.2, 0.1], color: WOOD_COLOR },
+      { id: "edgeS", type: "box", position: [0, 0.1, -0.95], rotationY: 0, scale: [2.0, 0.2, 0.1], color: WOOD_COLOR },
+      { id: "edgeE", type: "box", position: [0.95, 0.1, 0], rotationY: 0, scale: [0.1, 0.2, 2.0], color: WOOD_COLOR },
+      { id: "edgeW", type: "box", position: [-0.95, 0.1, 0], rotationY: 0, scale: [0.1, 0.2, 2.0], color: WOOD_COLOR },
+      { id: "soil", type: "box", position: [0, 0.06, 0], rotationY: 0, scale: [1.8, 0.1, 1.8], color: SOIL_COLOR },
+    ],
+  }),
+
+  // ============================================================
+  // Paths — flat, walkable tiles in a few common materials
+  // ============================================================
+  piece({
+    id: "stonePath",
+    name: "Stone Path",
+    description: "A flat paving tile.",
+    parts: [{ id: "a", type: "box", position: [0, 0.03, 0], rotationY: 0, scale: [2.0, 0.06, 2.0], color: STONE_COLOR }],
+  }),
+  piece({
+    id: "gravelPath",
+    name: "Gravel Path",
+    description: "A flat gravel tile.",
+    parts: [{ id: "a", type: "box", position: [0, 0.03, 0], rotationY: 0, scale: [2.0, 0.06, 2.0], color: GRAVEL_COLOR }],
+  }),
+  piece({
+    id: "dirtPath",
+    name: "Dirt Path",
+    description: "A flat worn-earth tile.",
+    parts: [{ id: "a", type: "box", position: [0, 0.03, 0], rotationY: 0, scale: [2.0, 0.06, 2.0], color: DIRT_COLOR }],
+  }),
+  piece({
+    id: "timberPath",
+    name: "Timber Path",
+    description: "A boardwalk-style tile of three planks.",
+    parts: [
+      { id: "plankA", type: "box", position: [-0.67, 0.04, 0], rotationY: 0, scale: [0.6, 0.08, 2.0], color: WOOD_COLOR },
+      { id: "plankB", type: "box", position: [0, 0.04, 0], rotationY: 0, scale: [0.6, 0.08, 2.0], color: WOOD_COLOR },
+      { id: "plankC", type: "box", position: [0.67, 0.04, 0], rotationY: 0, scale: [0.6, 0.08, 2.0], color: WOOD_COLOR },
+    ],
+  }),
+  piece({
+    id: "concretePath",
+    name: "Concrete Path",
+    description: "A flat concrete tile.",
+    parts: [{ id: "a", type: "box", position: [0, 0.03, 0], rotationY: 0, scale: [2.0, 0.06, 2.0], color: CONCRETE_COLOR }],
+  }),
+
+  // ============================================================
+  // Lighting — every fixture carries the same Light Source behaviour
+  // the original ceiling Light does, just in a different shape and place
+  // ============================================================
+  piece({
+    id: "gardenLight",
+    name: "Garden Light",
+    description: "A short bollard light for a path or bed.",
+    parts: [
+      { id: "post", type: "cylinder", position: [0, 0.3, 0], rotationY: 0, scale: [0.05, 0.6, 0.05], color: RAW_MATERIAL_COLOR, segments: 8 },
+      { id: "head", type: "sphere", position: [0, 0.62, 0], rotationY: 0, scale: [0.09, 0.09, 0.09], color: LIGHT_FIXTURE_COLOR, segments: 8 },
+    ],
+    behaviours: [{ type: "lightSource", properties: { color: "#ffdca8", intensity: 0.5, distance: 3 } }],
+  }),
+  piece({
+    id: "streetLight",
+    name: "Street Light",
+    description: "A tall lamp post for paths and courtyards.",
+    parts: [
+      { id: "post", type: "cylinder", position: [0, 1.6, 0], rotationY: 0, scale: [0.06, 3.2, 0.06], color: "#2c2c2c", segments: 8 },
+      { id: "arm", type: "box", position: [0.25, 3.15, 0], rotationY: 0, scale: [0.5, 0.05, 0.05], color: "#2c2c2c" },
+      { id: "head", type: "sphere", position: [0.45, 3.1, 0], rotationY: 0, scale: [0.16, 0.14, 0.16], color: LIGHT_FIXTURE_COLOR, segments: 10 },
+    ],
+    behaviours: [{ type: "lightSource", properties: { color: "#ffe0b0", intensity: 0.9, distance: 6 } }],
+  }),
+  piece({
+    id: "lantern",
+    name: "Lantern",
+    description: "A small hanging lantern.",
+    parts: [
+      { id: "body", type: "box", position: [0, 0, 0], rotationY: 0, scale: [0.16, 0.22, 0.16], color: "#2c2c2c" },
+      { id: "glass", type: "box", position: [0, 0, 0], rotationY: 0, scale: [0.12, 0.16, 0.12], color: LIGHT_FIXTURE_COLOR },
+    ],
+    behaviours: [{ type: "lightSource", properties: { color: "#ffcc80", intensity: 0.55, distance: 3.5 } }],
+  }),
+  piece({
+    id: "floodlight",
+    name: "Floodlight",
+    description: "An angled fixture on a short stand, aimed outward.",
+    parts: [
+      { id: "stand", type: "cylinder", position: [0, 0.25, 0], rotationY: 0, scale: [0.05, 0.5, 0.05], color: "#2c2c2c", segments: 8 },
+      { id: "head", type: "box", position: [0, 0.55, 0.08], rotationX: -0.5, rotationY: 0, rotationZ: 0, scale: [0.3, 0.18, 0.1], color: "#2c2c2c" },
+    ],
+    behaviours: [{ type: "lightSource", properties: { color: "#f0f4ff", intensity: 1.1, distance: 7 } }],
+  }),
+  piece({
+    id: "campfire",
+    name: "Campfire",
+    description: "A ring of logs around a low flame.",
+    parts: [
+      { id: "logA", type: "cylinder", position: [0.22, 0.08, 0], rotationX: Math.PI / 2, rotationY: 0.3, rotationZ: 0, scale: [0.08, 0.5, 0.08], color: BARK_COLOR, segments: 8 },
+      { id: "logB", type: "cylinder", position: [-0.22, 0.08, 0], rotationX: Math.PI / 2, rotationY: -0.3, rotationZ: 0, scale: [0.08, 0.5, 0.08], color: BARK_COLOR, segments: 8 },
+      { id: "logC", type: "cylinder", position: [0, 0.08, 0.22], rotationX: Math.PI / 2, rotationY: 1.2, rotationZ: 0, scale: [0.08, 0.5, 0.08], color: BARK_COLOR, segments: 8 },
+      { id: "flame", type: "cone", position: [0, 0.18, 0], rotationY: 0, scale: [0.16, 0.3, 0.16], color: FLAME_COLOR, segments: 8 },
+    ],
+    behaviours: [{ type: "lightSource", properties: { color: "#ff9040", intensity: 0.7, distance: 4 } }],
+  }),
+
+  // ============================================================
+  // Utilities — completing the list (Fences, Gates, Signposts already
+  // existed above as "fence"/"gate"/"sign")
+  // ============================================================
+  piece({
+    id: "mailbox",
+    name: "Mailbox",
+    description: "A small box on a post, beside a path or gate.",
+    parts: [
+      { id: "post", type: "cylinder", position: [0, 0.5, 0], rotationY: 0, scale: [0.04, 1.0, 0.04], color: WOOD_COLOR, segments: 6 },
+      { id: "box", type: "box", position: [0, 1.05, 0], rotationY: 0, scale: [0.3, 0.2, 0.18], color: "#4a5a6a" },
+    ],
+  }),
 ];
 
 export function getConstructionPiece(id) {
   return CONSTRUCTION_PIECES.find((p) => p.id === id) ?? null;
+}
+
+/** "Please continue organising Builder assets into clear categories as
+ *  the library expands." A compact id → group lookup, kept separate from
+ *  each piece's own definition rather than adding a `group` field to
+ *  every one of them individually — this is the one place that mapping
+ *  lives, and `BuilderPhoneUI.js`'s own library screen is the only thing
+ *  that reads it. Ungrouped ids (there shouldn't be any, but a future
+ *  addition that forgets to update this) fall back to "Other" rather
+ *  than silently vanishing from the library. */
+export const CONSTRUCTION_GROUPS = {
+  cube: "Structural", plane: "Structural", wall: "Structural", halfWall: "Structural", cornerWall: "Structural",
+  floor: "Structural", ceiling: "Structural", roof: "Structural", roofCorner: "Structural", pillar: "Structural",
+  beam: "Structural", stairs: "Structural", ladder: "Structural", foundation: "Structural", railing: "Structural",
+  doorway: "Openings", door: "Openings", doubleDoor: "Openings", window: "Openings", largeWindow: "Openings", archway: "Openings",
+  table: "Workshop", bench: "Workshop", shelf: "Workshop", cabinet: "Workshop", storageCrate: "Workshop",
+  light: "Utilities", switch: "Utilities", sign: "Utilities", fence: "Utilities", gate: "Utilities", ramp: "Utilities", mailbox: "Utilities",
+  tree: "Nature", bush: "Nature", flower: "Nature", rock: "Nature", log: "Nature", grassPatch: "Nature", gardenBed: "Nature",
+  stonePath: "Paths", gravelPath: "Paths", dirtPath: "Paths", timberPath: "Paths", concretePath: "Paths",
+  gardenLight: "Lighting", streetLight: "Lighting", lantern: "Lighting", floodlight: "Lighting", campfire: "Lighting",
+};
+
+export const CONSTRUCTION_GROUP_ORDER = ["Structural", "Openings", "Structures", "Nature", "Paths", "Lighting", "Utilities", "Workshop", "Other"];
+
+export function getConstructionGroup(id) {
+  return CONSTRUCTION_GROUPS[id] ?? "Other";
 }

@@ -13,6 +13,8 @@ import { makeTransparent, restoreMaterials, disposeGhostMaterials, defaultGhostP
 
 const ROTATE_STEP = Math.PI / 4; // 45° per press — coarse enough to feel deliberate, fine enough to square something up
 const WHEEL_ROTATE_STEP = Math.PI / 36; // 5° per tick — fine, continuous control matching common 3D editing workflows, not the button's own coarse step
+const GRID_SNAP_SIZE = 0.5; // metres — fine enough for ordinary furniture spacing, coarse enough to actually feel like a grid
+const ROTATION_SNAP_STEP = Math.PI / 4; // 45° increments — matches ROTATE_STEP, so "snap rotation" and "the rotate button" always agree
 
 /**
  * BuildModeSystem
@@ -62,12 +64,19 @@ const WHEEL_ROTATE_STEP = Math.PI / 36; // 5° per tick — fine, continuous con
  * that.
  */
 export class BuildModeSystem {
-  constructor({ objectLibraryStore, worldObjectsStore, modelLibrary, modelLoader }) {
+  constructor({ objectLibraryStore, worldObjectsStore, modelLibrary, modelLoader, blueprintStore }) {
     this.objectLibraryStore = objectLibraryStore;
     this.worldObjectsStore = worldObjectsStore;
     this.modelLibrary = modelLibrary;
     this.modelLoader = modelLoader;
+    this.blueprintStore = blueprintStore;
     this.active = false;
+    // "Please investigate introducing optional snapping systems... snapping
+    // should remain optional." Both default off — building without any
+    // restriction is the default Workshop feel; a player who wants either
+    // kind of precision turns it on deliberately.
+    this.snapToGrid = false;
+    this.snapRotation = false;
 
     /** { kind: "furniture"|"worldObject", id } | null — a *confirmed*, non-editing selection */
     this.selection = null;
@@ -107,6 +116,11 @@ export class BuildModeSystem {
       onTransformChange: (patch) => this._applyDirectTransformEdit(patch),
       onColorOverrideChange: (color) => this._updateSelectedColor(color),
       onDuplicate: () => this._duplicateSelected(),
+      onSaveAsBlueprint: () => this._promptSaveAsBlueprint(),
+      getSnapToGrid: () => this.snapToGrid,
+      getSnapRotation: () => this.snapRotation,
+      onToggleSnapToGrid: () => this.toggleSnapToGrid(),
+      onToggleSnapRotation: () => this.toggleSnapRotation(),
       onDelete: () => this._deleteSelected(),
       onResetFurniturePosition: () => this._resetSelectedFurniture(),
       onDeselect: () => this._select(null),
@@ -160,23 +174,29 @@ export class BuildModeSystem {
   }
 
   _renderLibrary() {
-    this.ui.renderLibrary(CONSTRUCTION_PIECES, this.objectLibraryStore.all(), this.modelLibrary?.all() ?? []);
+    this.ui.renderLibrary(CONSTRUCTION_PIECES, this.objectLibraryStore.all(), this.modelLibrary?.all() ?? [], this.blueprintStore?.all() ?? []);
   }
 
   _resolveDefinition(definitionId, source) {
     if (source === "construction") return getConstructionPiece(definitionId);
     if (source === "importedModel") return this.modelLibrary?.get(definitionId) ?? null;
+    if (source === "blueprint") return this.blueprintStore?.get(definitionId) ?? null;
     return this.objectLibraryStore.get(definitionId);
   }
 
   // -----------------------------------------------------------------
-  // Beginning a ghost — the only three entry points
+  // Beginning a ghost — the only four entry points
   // -----------------------------------------------------------------
 
   _armDefinition(definitionId, source) {
     if (this._ghost) return; // already busy placing/moving something
     const definition = this._resolveDefinition(definitionId, source);
     if (!definition) return;
+
+    if (source === "blueprint") {
+      this._armBlueprint(definition);
+      return;
+    }
 
     // "The Builder should treat imported models similarly to any other
     // available shape." ObjectCompiler.compileDefinition() builds
@@ -215,6 +235,92 @@ export class BuildModeSystem {
 
     this._select(null);
     this.ui.showGhostScreen(definition, "Place");
+  }
+
+  /** Builds one group ghost containing every one of the blueprint's own
+   *  child objects, each positioned at its own saved relative offset —
+   *  the whole cluster moves and rotates together during placement,
+   *  exactly like a single object's own ghost, even though it's really
+   *  several. Each child's own real geometry (via `compileDefinition()`
+   *  or `ModelLoader`, whichever its own `definitionSource` calls for)
+   *  is used directly, not a placeholder — a blueprint's own preview
+   *  should look like what it actually is. */
+  _armBlueprint(blueprint) {
+    const group = new THREE.Group();
+    const childMeshes = [];
+    for (const obj of blueprint.objects) {
+      const childDefinition = this._resolveDefinition(obj.definitionId, obj.definitionSource);
+      if (!childDefinition) continue;
+      const mesh = obj.definitionSource === "importedModel" ? this.modelLoader?.buildPlaceholder() ?? compileDefinition({ parts: [] }) : compileDefinition(childDefinition, { colorOverride: obj.colorOverride });
+      mesh.position.set(...obj.offset);
+      mesh.rotation.y = obj.rotationY ?? 0;
+      mesh.scale.setScalar(obj.scale ?? 1);
+      group.add(mesh);
+      childMeshes.push({ mesh, obj });
+      if (obj.definitionSource === "importedModel" && this.modelLoader) {
+        this.modelLoader.load(obj.definitionId).then((model) => {
+          if (!model || !group.children.includes(mesh)) return;
+          model.position.copy(mesh.position);
+          model.rotation.copy(mesh.rotation);
+          model.scale.copy(mesh.scale);
+          group.remove(mesh);
+          group.add(model);
+        });
+      }
+    }
+
+    const point = this._raycastGhostSurfaces() ?? defaultGhostPoint(this.engine.camera);
+    group.position.copy(point);
+    this.engine.scene.add(group);
+
+    this._ghost = {
+      kind: "new",
+      object3D: group,
+      definition: blueprint,
+      source: "blueprint",
+      rotationY: 0,
+      materialSwap: makeTransparent(group),
+    };
+
+    this._select(null);
+    this.ui.showGhostScreen(blueprint, "Place");
+  }
+
+  /** "Save as Blueprint" — captures the currently selected World Object
+   *  plus every other one within `radius` of it, storing each one's own
+   *  position/rotation/scale as an offset relative to the selected
+   *  object's own position. See BlueprintStore.js's own comment on why
+   *  this radius-based capture, rather than a full multi-select
+   *  interface, is this phase's own deliberate scope. */
+  captureBlueprintNearSelection(name, radius = 3) {
+    if (!this.blueprintStore || this.selection?.kind !== "worldObject") return null;
+    const center = this.worldObjectsStore.get(this.selection.id);
+    if (!center) return null;
+    const [cx, cy, cz] = center.position;
+
+    const objects = [];
+    for (const instance of this.worldObjectsStore.all()) {
+      const [x, y, z] = instance.position;
+      const dist = Math.hypot(x - cx, y - cy, z - cz);
+      if (dist > radius) continue;
+      objects.push({
+        definitionId: instance.definitionId,
+        definitionSource: instance.definitionSource,
+        offset: [x - cx, y - cy, z - cz],
+        rotationY: instance.rotationY,
+        scale: instance.scale,
+        colorOverride: instance.colorOverride,
+      });
+    }
+    if (objects.length === 0) return null;
+    return this.blueprintStore.create(name, objects);
+  }
+
+  _promptSaveAsBlueprint() {
+    const name = window.prompt("Name this Blueprint (captures everything placed within 3m):", "New Blueprint");
+    if (!name) return;
+    const blueprint = this.captureBlueprintNearSelection(name);
+    if (!blueprint) window.alert("Nothing nearby to capture — select a placed object first.");
   }
 
   _startMoveSelected() {
@@ -258,25 +364,52 @@ export class BuildModeSystem {
   // While a ghost is active
   // -----------------------------------------------------------------
 
+  toggleSnapToGrid() {
+    this.snapToGrid = !this.snapToGrid;
+  }
+
+  toggleSnapRotation() {
+    this.snapRotation = !this.snapRotation;
+  }
+
   _rotateGhost() {
     if (!this._ghost) return;
     this._ghost.rotationY += ROTATE_STEP;
-    this._ghost.object3D.rotation.y = this._ghost.rotationY;
+    this._applyGhostRotation();
   }
 
-  /** "Once an object has been placed but is still being adjusted, the
-   *  mouse wheel should rotate the object naturally — matching common
-   *  3D editing workflows." Finer-grained than the button's own discrete
-   *  `ROTATE_STEP` — a continuous nudge per tick, in whichever direction
-   *  the wheel turns, rather than a fixed large step. Only ever active
-   *  while a ghost exists (placing or moving something); an ordinary
-   *  scroll does nothing here otherwise, and `preventDefault()` only
-   *  fires once there's actually a ghost to rotate, so page/document
-   *  scrolling elsewhere is never affected. */
+  /** "Please also expand rotation controls to allow for rotation on
+   *  multiple axis." Plain wheel still turns Y (yaw), matching the
+   *  original single-axis control exactly; Shift+wheel tilts around X,
+   *  Ctrl+wheel tilts around Z — modifier keys rather than new UI, so a
+   *  player who never needs anything but yaw sees no change at all.
+   *  `rotationX`/`rotationZ` default to 0 on every ghost and are only
+   *  ever set here — placing/moving an ordinary object never touches
+   *  them, so nothing needs to change for the common, Y-only case. */
   _handleWheel(event) {
     if (!this._ghost) return;
     event.preventDefault();
-    this._ghost.rotationY += Math.sign(event.deltaY) * WHEEL_ROTATE_STEP;
+    const step = Math.sign(event.deltaY) * WHEEL_ROTATE_STEP;
+    if (event.shiftKey) {
+      this._ghost.rotationX = (this._ghost.rotationX ?? 0) + step;
+      this._ghost.object3D.rotation.x = this._ghost.rotationX;
+    } else if (event.ctrlKey || event.metaKey) {
+      this._ghost.rotationZ = (this._ghost.rotationZ ?? 0) + step;
+      this._ghost.object3D.rotation.z = this._ghost.rotationZ;
+    } else {
+      this._ghost.rotationY += step;
+      this._applyGhostRotation();
+    }
+  }
+
+  /** Snaps to the nearest `ROTATION_SNAP_STEP` increment when enabled,
+   *  shared by both the button and the wheel so they never disagree
+   *  about what "snapped" means. Updates `ghost.rotationY` itself, not
+   *  just the visual `object3D.rotation.y` — `_confirmGhost()` persists
+   *  from `rotationY`, so snapping only the display would silently not
+   *  actually snap what gets placed. */
+  _applyGhostRotation() {
+    if (this.snapRotation) this._ghost.rotationY = Math.round(this._ghost.rotationY / ROTATION_SNAP_STEP) * ROTATION_SNAP_STEP;
     this._ghost.object3D.rotation.y = this._ghost.rotationY;
   }
 
@@ -289,12 +422,47 @@ export class BuildModeSystem {
       disposeGhostMaterials(ghost.object3D); // never touches geometry — see GhostPreview.js
       this.engine.scene.remove(ghost.object3D);
 
+      if (ghost.source === "blueprint") {
+        // Each child becomes its own, fully independent World Object —
+        // "players should still be able to modify them after placement"
+        // is true by construction, since nothing about this creates a
+        // combined or grouped instance, just several ordinary ones at
+        // once. Each one's own captured offset is rotated by however the
+        // whole cluster was rotated while it was being placed, then
+        // added to the final placement point.
+        const cos = Math.cos(ghost.rotationY);
+        const sin = Math.sin(ghost.rotationY);
+        let lastInstance = null;
+        for (const obj of ghost.definition.objects) {
+          const [ox, oy, oz] = obj.offset;
+          const rotatedX = ox * cos + oz * sin;
+          const rotatedZ = -ox * sin + oz * cos;
+          const instance = this.worldObjectsStore.create({
+            definitionId: obj.definitionId,
+            definitionSource: obj.definitionSource,
+            roomId: CURRENT_ROOM_ID,
+            position: [position.x + rotatedX, position.y + oy, position.z + rotatedZ],
+            rotationY: (obj.rotationY ?? 0) + ghost.rotationY,
+            scale: obj.scale ?? 1,
+            colorOverride: obj.colorOverride ?? null,
+          });
+          this._worldObjectsSystem?.spawnInstance(instance);
+          lastInstance = instance;
+        }
+        this.engine.events.emit("persistence:saveRequested");
+        this._ghost = null;
+        if (lastInstance) this._select({ kind: "worldObject", id: lastInstance.id });
+        return;
+      }
+
       const instance = this.worldObjectsStore.create({
         definitionId: ghost.definition.id,
         definitionSource: ghost.source,
         roomId: CURRENT_ROOM_ID,
         position: [position.x, position.y, position.z],
         rotationY: ghost.rotationY,
+        rotationX: ghost.rotationX ?? 0,
+        rotationZ: ghost.rotationZ ?? 0,
         scale: ghost.definition.defaultScale ?? 1,
       });
       this._worldObjectsSystem?.spawnInstance(instance);
@@ -356,7 +524,13 @@ export class BuildModeSystem {
     if (!this.active || !this._ghost) return;
     this._updatePointerNDC(event);
     const point = this._raycastGhostSurfaces();
-    if (point) this._ghost.object3D.position.copy(point);
+    if (point) {
+      if (this.snapToGrid) {
+        point.x = Math.round(point.x / GRID_SNAP_SIZE) * GRID_SNAP_SIZE;
+        point.z = Math.round(point.z / GRID_SNAP_SIZE) * GRID_SNAP_SIZE;
+      }
+      this._ghost.object3D.position.copy(point);
+    }
   }
 
   _handlePointerDown(event) {

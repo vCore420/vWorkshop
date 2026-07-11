@@ -12,6 +12,7 @@ import { AudioSystem } from "./systems/AudioSystem.js";
 import { CameraSystem } from "./systems/CameraSystem.js";
 import { LadderSystem } from "./systems/LadderSystem.js";
 import { InteriorSystem } from "./systems/InteriorSystem.js";
+import { BuildingDetectionSystem } from "./worldbuilder/BuildingDetectionSystem.js";
 import { EmoteWheelSystem } from "./systems/EmoteWheelSystem.js";
 import { CompassSystem } from "./systems/CompassSystem.js";
 import { InteractionSystem } from "./systems/InteractionSystem.js";
@@ -19,6 +20,7 @@ import { PersistenceSystem } from "./systems/PersistenceSystem.js";
 import { ComputerSystem } from "./computer/ComputerSystem.js";
 import { WorkbenchSystem } from "./workbench/WorkbenchSystem.js";
 import { ObjectLibraryStore } from "./worldbuilder/ObjectLibraryStore.js";
+import { BlueprintStore } from "./worldbuilder/BlueprintStore.js";
 import { WorldObjectsStore } from "./worldbuilder/WorldObjectsStore.js";
 import { WorldObjectsSystem } from "./worldbuilder/WorldObjectsSystem.js";
 import { BuildModeSystem } from "./worldbuilder/BuildModeSystem.js";
@@ -120,6 +122,7 @@ void furnitureSystem;
 const projectsStore = new ProjectsStore();
 const notesStore = new NotesStore();
 const objectLibraryStore = new ObjectLibraryStore();
+const blueprintStore = new BlueprintStore();
 const worldObjectsStore = new WorldObjectsStore();
 // Constructed here, ahead of WorldObjectsSystem/BuildModeSystem below —
 // "the Builder should treat imported models similarly to any other
@@ -221,6 +224,12 @@ const ladderSystem = engine.addSystem(new LadderSystem());
 void ladderSystem;
 const interiorSystem = engine.addSystem(new InteriorSystem());
 void interiorSystem;
+// "Whenever a player constructs an enclosed building, the Workshop
+// should naturally recognise it as an interior... players should never
+// need to manually mark a building as an interior." See
+// BuildingDetectionSystem.js's own comment for how.
+const buildingDetectionSystem = engine.addSystem(new BuildingDetectionSystem({ worldObjectsStore, worldObjectsSystem, interiorSystem }));
+void buildingDetectionSystem;
 // Registered as a system purely so DisplaySurfaceBehaviour.js (and any
 // future behaviour needing the same) can resolve it via
 // engine.getSystem() the same way every other cross-system reference in
@@ -353,7 +362,7 @@ const interactionSystem = engine.addSystem(new InteractionSystem());
 // WorldObjectsSystem at the moment it needs them, not at init() time, so it
 // has no strict ordering requirement beyond "after the systems it looks up
 // already exist in the list" (they do, above).
-const buildModeSystem = engine.addSystem(new BuildModeSystem({ objectLibraryStore, worldObjectsStore, modelLibrary, modelLoader }));
+const buildModeSystem = engine.addSystem(new BuildModeSystem({ objectLibraryStore, worldObjectsStore, modelLibrary, modelLoader, blueprintStore }));
 
 const persistenceSystem = engine.addSystem(new PersistenceSystem()); // last: loads after everyone has registered listeners
 
@@ -362,6 +371,7 @@ void interactionSystem;
 persistenceSystem.registerProvider("projects", projectsStore);
 persistenceSystem.registerProvider("notes", notesStore);
 persistenceSystem.registerProvider("objectLibrary", objectLibraryStore);
+persistenceSystem.registerProvider("blueprints", blueprintStore);
 persistenceSystem.registerProvider("worldObjects", worldObjectsStore);
 persistenceSystem.registerProvider("musicLibrary", musicLibraryStore);
 persistenceSystem.registerProvider("playlists", playlistStore);

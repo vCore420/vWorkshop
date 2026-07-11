@@ -192,6 +192,8 @@ export class WorldObjectsSystem {
     const object3D = this._buildObject3D(instance, definition);
     object3D.position.set(...instance.position);
     object3D.rotation.y = instance.rotationY ?? 0;
+    object3D.rotation.x = instance.rotationX ?? 0;
+    object3D.rotation.z = instance.rotationZ ?? 0;
     object3D.scale.setScalar(instance.scale ?? 1);
 
     const entity = new Entity(`worldObject-${instance.id}`).tag("worldObject");
