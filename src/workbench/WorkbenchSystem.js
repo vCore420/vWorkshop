@@ -1,6 +1,6 @@
 import { FurnitureSystem } from "../systems/FurnitureSystem.js";
 import { damp, clamp } from "../utils/MathUtils.js";
-import { makeTopDownRectCorners, projectRect } from "../utils/ScreenProjector.js";
+import { makeTopDownRectCorners, projectRect, comfortableRect } from "../utils/ScreenProjector.js";
 import { WorkbenchPanel } from "./WorkbenchPanel.js";
 import { assignSlots } from "./slots.js";
 import { buildPresenceItem } from "./presence/registry.js";
@@ -244,7 +244,7 @@ export class WorkbenchSystem {
     if (this._panelProgress > 0.001) {
       const rect = projectRect(this.clipboardMesh, this._clipboardCorners, this.engine.camera, window.innerWidth, window.innerHeight);
       const opacity = clamp((this._panelProgress - WB_REVEAL_START) / (1 - WB_REVEAL_START), 0, 1);
-      this.panel.updateRect(rect, opacity);
+      this.panel.updateRect(comfortableRect(rect, window.innerWidth, window.innerHeight), opacity);
     }
   }
 }

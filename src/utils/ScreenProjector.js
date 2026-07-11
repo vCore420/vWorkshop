@@ -71,3 +71,40 @@ export function projectRect(anchorMesh, localCorners, camera, viewportWidth, vie
 
   return { left: minX, top: minY, width: maxX - minX, height: maxY - minY };
 }
+
+const MIN_COMFORTABLE_WIDTH = 480; // below this, forms/tabs/buttons stop having room to breathe
+const MIN_COMFORTABLE_HEIGHT = 360;
+const NARROW_VIEWPORT_WIDTH = 700; // matches the breakpoint computer.css/buildmode.css already use elsewhere
+
+/**
+ * "Avoid shrinking interfaces until they become unusable. Instead, allow
+ * layouts to intelligently reorganise themselves." `projectRect()`'s own
+ * output has no floor — standing far from the monitor, or simply having
+ * a narrow viewport altogether, can project a rectangle far too small to
+ * hold a real interface. This is the shared floor under it: below either
+ * a comfortable minimum size or a narrow-viewport threshold, the
+ * projected rect (still used to decide *where*, so the panel still reads
+ * as belonging to the monitor/clipboard it's projected from, not just
+ * slapped onto the page) is widened/heightened back out to a comfortable
+ * size, centred on wherever the projection itself was centred, then
+ * clamped back on-screen. Both `ComputerSystem.js` and
+ * `WorkbenchSystem.js` share this one function rather than each
+ * reimplementing their own floor.
+ */
+export function comfortableRect(rect, viewportWidth, viewportHeight) {
+  const tooSmall = rect.width < MIN_COMFORTABLE_WIDTH || rect.height < MIN_COMFORTABLE_HEIGHT;
+  const narrowViewport = viewportWidth < NARROW_VIEWPORT_WIDTH;
+  if (!tooSmall && !narrowViewport) return rect;
+
+  const targetWidth = Math.min(viewportWidth * 0.94, Math.max(rect.width, MIN_COMFORTABLE_WIDTH));
+  const targetHeight = Math.min(viewportHeight * 0.88, Math.max(rect.height, MIN_COMFORTABLE_HEIGHT));
+  const centerX = rect.left + rect.width / 2;
+  const centerY = rect.top + rect.height / 2;
+
+  let left = centerX - targetWidth / 2;
+  let top = centerY - targetHeight / 2;
+  left = Math.max(4, Math.min(left, viewportWidth - targetWidth - 4));
+  top = Math.max(4, Math.min(top, viewportHeight - targetHeight - 4));
+
+  return { left, top, width: targetWidth, height: targetHeight };
+}
