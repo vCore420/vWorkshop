@@ -49,7 +49,7 @@ const KEY_TO_ACTION = {
   ShiftLeft: "run", ShiftRight: "run",
   KeyC: "crouch",
   Escape: "cancel",
-  KeyB: "buildMode",
+  KeyB: "phone",
   KeyV: "toggleView",
   KeyG: "emoteWheel",
   KeyM: "compass",

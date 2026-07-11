@@ -54,17 +54,22 @@ export class InteractionSystem {
     this.engine = engine;
     this._camera = engine.getSystem(CameraSystem); // resolved once — every system already exists by the time any init() runs, only initialized *state* is order-dependent, and this is just a reference
     engine.events.on("interaction:exitRequested", () => this.exitActive());
-    engine.events.on("buildmode:entered", () => {
+    // "The Phone is for using" — whichever app is currently open (not
+    // just Builder specifically any more) owns the mouse and the world's
+    // own interaction prompts while it's open. See PhoneSystem.js's own
+    // comment on why "phone:opened"/"phone:closed" replaced the old
+    // Build-Mode-specific pair here.
+    engine.events.on("phone:opened", () => {
       this._suspended = true;
       this.engine.events.emit("hud:prompt", { visible: false });
     });
-    engine.events.on("buildmode:exited", () => {
+    engine.events.on("phone:closed", () => {
       this._suspended = false;
     });
   }
 
   update(dt) {
-    if (this._suspended) return; // Build Mode owns input entirely while active
+    if (this._suspended) return; // The Phone owns input entirely while open
 
     if (this.active) {
       if (this.engine.input?.wasJustPressed("cancel")) this.exitActive();

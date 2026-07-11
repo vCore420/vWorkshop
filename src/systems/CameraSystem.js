@@ -112,6 +112,7 @@ export class CameraSystem {
     this.pitch = 0;
     this.mode = "walk";
     this.locked = false;
+    this._lookPaused = false; // see pauseLook()/resumeLook() — the Workshop Phone's own, less restrictive alternative to lock()
     this._preFocus = null;
     this._focusPose = null;
     this._focusT = 0;
@@ -204,6 +205,23 @@ export class CameraSystem {
 
   unlock() {
     this.locked = false;
+  }
+
+  /** "Using the phone should NOT freeze the player... the mouse should
+   *  temporarily stop controlling the camera. Keyboard movement should
+   *  continue functioning normally." Deliberately a separate, narrower
+   *  pair from `lock()`/`unlock()` — those stop *everything*, including
+   *  WASD movement, which is exactly right for Build Mode's own
+   *  "stand still while placing something" need but wrong for the phone.
+   *  `_updateWalk()`'s own mouse-look block checks this flag specifically;
+   *  every other line in that function (movement, running, jumping,
+   *  crouching, ladders) runs completely unaffected by it. */
+  pauseLook() {
+    this._lookPaused = true;
+  }
+
+  resumeLook() {
+    this._lookPaused = false;
   }
 
   /** Third person only ever applies in "walk" mode — see this class's own
@@ -353,7 +371,7 @@ export class CameraSystem {
     const input = this.engine.input;
     if (!input) return;
 
-    if (input.lookActive) {
+    if (input.lookActive && !this._lookPaused) {
       this.yaw -= input.lookDelta.x * LOOK_SENSITIVITY;
       this.pitch -= input.lookDelta.y * LOOK_SENSITIVITY;
       this.pitch = clamp(this.pitch, -MAX_PITCH, MAX_PITCH);

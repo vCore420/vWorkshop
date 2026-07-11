@@ -1,19 +1,20 @@
 /**
  * BuilderPhoneUI
  * ----------------
- * "A Workshop 'Builder Phone' should smoothly slide up from the
- * lower-right corner... the rest of the Workshop should remain visible
- * throughout." This is the DOM half of Build Mode — a single small panel,
- * never a full-screen takeover, replacing the old bottom-docked library
- * strip and side-docked property panel with one object that reads as a
- * physical device you've taken out, not a separate editing application.
+ * The Builder's own screens within the Workshop Phone — "the Computer is
+ * for creating, the Phone is for using... continue allowing world
+ * building while walking naturally through the environment." This class
+ * no longer owns a phone shell of its own (no header, no slide
+ * animation) — `PhoneSystem`/`PhoneUI.js` own that now, uniformly, for
+ * every app; this class only ever fills whatever container it's handed
+ * with one of its own three screens.
+ *
  * `BuildModeSystem` owns all the actual state (what's armed, what's
  * selected, what's mid-ghost); this class only ever renders whatever
  * state it's handed and reports interactions back via plain callbacks —
  * the same shape every overlay/app in this codebase already uses.
  *
- * Three screens, swapped in and out of the same phone shell rather than
- * three separate panels:
+ * Three screens, swapped in and out of the same container:
  *   - **Library** — tabs (Construction Library / Saved Objects) over a
  *     scrollable grid. The default screen; shown whenever nothing is
  *     armed or selected.
@@ -31,41 +32,13 @@ import { getConstructionGroup, CONSTRUCTION_GROUP_ORDER } from "./ConstructionLi
 
 export class BuilderPhoneUI {
   constructor(rootEl, callbacks) {
-    this.root = rootEl;
     this.callbacks = callbacks;
     this._libraryData = { constructionPieces: [], libraryDefinitions: [] };
     this._activeTab = "construction";
 
-    this.phone = document.createElement("div");
-    this.phone.className = "builder-phone";
-    this.root.appendChild(this.phone);
-
-    const header = document.createElement("div");
-    header.className = "builder-phone-header";
-    header.textContent = "Builder";
-    this.phone.appendChild(header);
-
-    this.screen = document.createElement("div");
-    this.screen.className = "builder-phone-screen";
-    this.phone.appendChild(this.screen);
-
-    this.root.classList.add("hidden");
-  }
-
-  show() {
-    this.root.classList.remove("hidden");
-    // Applying "open" a frame later, rather than immediately, is what
-    // makes the slide-up an actual transition rather than an instant
-    // jump — the phone needs to render off-screen for one frame first.
-    requestAnimationFrame(() => this.phone.classList.add("open"));
-  }
-
-  hide() {
-    this.phone.classList.remove("open");
-    // Wait for the slide-down transition to actually finish before pulling
-    // the root out of the layout entirely — matching how OverlayManager's
-    // own close does the same thing for its fade-out.
-    setTimeout(() => this.root.classList.add("hidden"), 350);
+    // The Phone's own content container, handed straight in — no shell
+    // of this class's own to build around it any more.
+    this.screen = rootEl;
   }
 
   // -----------------------------------------------------------------

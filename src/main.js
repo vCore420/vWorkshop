@@ -13,6 +13,8 @@ import { CameraSystem } from "./systems/CameraSystem.js";
 import { LadderSystem } from "./systems/LadderSystem.js";
 import { InteriorSystem } from "./systems/InteriorSystem.js";
 import { BuildingDetectionSystem } from "./worldbuilder/BuildingDetectionSystem.js";
+import { PhoneSystem } from "./phone/PhoneSystem.js";
+import { buildPhoneApps } from "./phone/apps/registry.js";
 import { EmoteWheelSystem } from "./systems/EmoteWheelSystem.js";
 import { CompassSystem } from "./systems/CompassSystem.js";
 import { InteractionSystem } from "./systems/InteractionSystem.js";
@@ -364,6 +366,35 @@ const interactionSystem = engine.addSystem(new InteractionSystem());
 // already exist in the list" (they do, above).
 const buildModeSystem = engine.addSystem(new BuildModeSystem({ objectLibraryStore, worldObjectsStore, modelLibrary, modelLoader, blueprintStore }));
 
+// "The Computer is for creating. The Phone is for using." Built after
+// every system/store an app might need already exists above — the exact
+// same "assemble the shared deps object once, hand it to every app
+// factory" shape ComputerSystem's own construction (below) already uses.
+const phoneApps = buildPhoneApps({
+  buildModeSystem,
+  beingLibrary,
+  beingInstanceStore,
+  beingSpawnerSystem,
+  beingController,
+  appearanceStore,
+  outfitStore,
+  pageRegistry,
+  browserStore,
+  residentProfileStore,
+  residentController,
+  residentConnection,
+  residentBehaviour,
+  environmentSystem,
+  timeOfDaySystem,
+  musicSystem,
+  lightingSystem,
+  cameraSystem,
+  emoteWheelSystem,
+  settingsStore,
+  engine,
+});
+const phoneSystem = engine.addSystem(new PhoneSystem(phoneApps));
+
 const persistenceSystem = engine.addSystem(new PersistenceSystem()); // last: loads after everyone has registered listeners
 
 void interactionSystem;
@@ -372,6 +403,7 @@ persistenceSystem.registerProvider("projects", projectsStore);
 persistenceSystem.registerProvider("notes", notesStore);
 persistenceSystem.registerProvider("objectLibrary", objectLibraryStore);
 persistenceSystem.registerProvider("blueprints", blueprintStore);
+persistenceSystem.registerProvider("phone", phoneSystem);
 persistenceSystem.registerProvider("worldObjects", worldObjectsStore);
 persistenceSystem.registerProvider("musicLibrary", musicLibraryStore);
 persistenceSystem.registerProvider("playlists", playlistStore);
@@ -433,8 +465,9 @@ entryButton.addEventListener("click", () => {
 });
 
 // Clicking the canvas re-acquires pointer lock (e.g. after Escape, or after
-// closing an overlay) whenever nothing else is open — including Build Mode,
-// which needs the free cursor for its own clicks (see BuildModeSystem).
+// closing an overlay) whenever nothing else is open — including the Phone,
+// which needs the free cursor for its own clicks regardless of which app
+// is currently open within it (see PhoneSystem).
 canvas.addEventListener("click", () => {
-  if (!interactionSystem.active && !buildModeSystem.active) engine.input.requestPointerLock();
+  if (!interactionSystem.active && !phoneSystem.isOpen) engine.input.requestPointerLock();
 });

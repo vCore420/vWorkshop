@@ -76,7 +76,7 @@ export class SettingsSystem {
     // handful of older/non-Chromium-family browsers don't support `zoom`;
     // on those, this setting simply has no effect rather than breaking
     // anything, since an unsupported CSS property is just ignored.
-    for (const id of ["hud-root", "overlay-root", "computer-root", "workbench-root", "buildmode-root", "touch-controls"]) {
+    for (const id of ["hud-root", "overlay-root", "computer-root", "workbench-root", "workshop-phone-root", "touch-controls"]) {
       const el = document.getElementById(id);
       if (el) el.style.zoom = String(scale);
     }

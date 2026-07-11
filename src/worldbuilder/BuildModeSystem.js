@@ -108,7 +108,36 @@ export class BuildModeSystem {
     this._worldObjectsSystem = engine.getSystem(WorldObjectsSystem);
     this._cameraSystem = engine.getSystem(CameraSystem);
 
-    this.ui = new BuilderPhoneUI(document.getElementById("buildmode-root"), {
+    this._onPointerMove = (e) => this._handlePointerMove(e);
+    this._onPointerDown = (e) => this._handlePointerDown(e);
+    this._onWheel = (e) => this._handleWheel(e);
+    engine.canvas.addEventListener("pointermove", this._onPointerMove);
+    engine.canvas.addEventListener("pointerdown", this._onPointerDown);
+    engine.canvas.addEventListener("wheel", this._onWheel, { passive: false });
+
+    engine.events.on("library:changed", () => {
+      if (this.active) this._renderLibrary();
+    });
+
+    engine.events.on("persistence:save", (bag) => {
+      bag.buildMode = {}; // nothing session-specific worth persisting — see docs/WORLDBUILDER.md
+    });
+  }
+
+  /** Called by BuilderPhoneApp.js's own mount() — deliberately no longer
+   *  touches the mouse, the camera, or any phone shell of its own; all
+   *  of that is `PhoneSystem.js`'s job now, uniformly, for every app.
+   *  "Continue allowing world building while walking naturally through
+   *  the environment" is true by construction once this system stops
+   *  freezing movement itself — `PhoneSystem`'s own `pauseLook()` (not
+   *  `lock()`) already leaves walk/run/jump/crouch untouched. */
+  /** Called by BuilderPhoneApp.js's own mount() — creates a fresh UI
+   *  targeting whichever container the Phone currently hands it (its own
+   *  content area gets cleared between every app switch, so this can't
+   *  be a one-time, `init()`-time construction the way it used to be
+   *  against a permanent `#buildmode-root` element). */
+  mountUI(container) {
+    this.ui = new BuilderPhoneUI(container, {
       onArmDefinition: (id, source) => this._armDefinition(id, source),
       onRotateGhost: () => this._rotateGhost(),
       onCancelGhost: () => this._cancelGhost(),
@@ -125,38 +154,43 @@ export class BuildModeSystem {
       onResetFurniturePosition: () => this._resetSelectedFurniture(),
       onDeselect: () => this._select(null),
     });
-
-    this._onPointerMove = (e) => this._handlePointerMove(e);
-    this._onPointerDown = (e) => this._handlePointerDown(e);
-    this._onWheel = (e) => this._handleWheel(e);
-    engine.canvas.addEventListener("pointermove", this._onPointerMove);
-    engine.canvas.addEventListener("pointerdown", this._onPointerDown);
-    engine.canvas.addEventListener("wheel", this._onWheel, { passive: false });
-
-    engine.events.on("buildmode:toggleRequested", () => this.toggle());
-    engine.events.on("library:changed", () => {
-      if (this.active) this._renderLibrary();
-    });
-
-    engine.events.on("persistence:save", (bag) => {
-      bag.buildMode = {}; // nothing session-specific worth persisting — see docs/WORLDBUILDER.md
-    });
+    this.enter();
   }
 
-  toggle() {
-    if (this.active) this.exit();
-    else this.enter();
+  /** Called by BuilderPhoneApp.js's own unmount (the disposer its mount()
+   *  returns) — the reverse of mountUI(). */
+  unmountUI() {
+    this.exit();
+    this.ui = null;
   }
 
+  /** Called by BuilderPhoneApp.js's own onCancel() — true if there was
+   *  something to cancel/deselect (in which case PhoneSystem.js should
+   *  *not* also go home in the same keystroke), false if there was
+   *  nothing left, in which case the phone's own back gesture is what
+   *  should happen instead. */
+  handleCancelKey() {
+    if (this._ghost) {
+      this._cancelGhost();
+      return true;
+    }
+    if (this.selection) {
+      this._select(null);
+      return true;
+    }
+    return false;
+  }
+
+  /** Called by mountUI() — deliberately no longer touches the mouse, the
+   *  camera, or any phone shell of its own; all of that is
+   *  `PhoneSystem.js`'s job now, uniformly, for every app. "Continue
+   *  allowing world building while walking naturally through the
+   *  environment" is true by construction once this system stops
+   *  freezing movement itself — `PhoneSystem`'s own `pauseLook()` (not
+   *  `lock()`) already leaves walk/run/jump/crouch untouched. */
   enter() {
     if (this.active) return;
-    const interactionSystem = this.engine.getSystem(InteractionSystem);
-    if (interactionSystem?.active) return; // can't build while sitting at the computer, etc.
-
     this.active = true;
-    this._cameraSystem?.lock();
-    this.engine.input?.exitPointerLock();
-    this.ui.show();
     this._renderLibrary();
     this.ui.showLibraryScreen();
     this.engine.events.emit("buildmode:entered");
@@ -167,9 +201,6 @@ export class BuildModeSystem {
     this._cancelGhost();
     this._select(null);
     this.active = false;
-    this._cameraSystem?.unlock();
-    this.engine.input?.requestPointerLock();
-    this.ui.hide();
     this.engine.events.emit("buildmode:exited");
   }
 
@@ -698,15 +729,17 @@ export class BuildModeSystem {
   }
 
   update(_dt) {
-    if (this.engine.input?.wasJustPressed("buildMode")) {
-      this.toggle();
-      return;
-    }
     if (!this.active) return;
     if (this.engine.input?.wasJustPressed("cancel")) {
       if (this._ghost) this._cancelGhost();
       else if (this.selection) this._select(null);
-      else this.exit();
+      // Deliberately no "else exit()" branch — with nothing left to
+      // cancel/deselect, this same Escape press is handled by
+      // PhoneSystem.js's own onCancel()/goHome() instead (see
+      // BuilderPhoneApp.js's own onCancel hook), not duplicated here.
+      // Both reacting to the identical key press would either cancel a
+      // ghost *and* leave the app in the same stroke, or leave the app
+      // when the player only meant to back out of a ghost.
     }
   }
 

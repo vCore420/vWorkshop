@@ -61,8 +61,8 @@ export class HUD {
     });
     const buildModeBtn = document.createElement("button");
     buildModeBtn.type = "button";
-    buildModeBtn.textContent = "Build Mode (B)";
-    buildModeBtn.addEventListener("click", () => engine.events.emit("buildmode:toggleRequested"));
+    buildModeBtn.textContent = "Phone (B)";
+    buildModeBtn.addEventListener("click", () => engine.events.emit("phone:toggleRequested"));
     const viewModeBtn = document.createElement("button");
     viewModeBtn.type = "button";
     viewModeBtn.textContent = "View (V)";
@@ -89,8 +89,8 @@ export class HUD {
     engine.events.on("computer:deactivate", () => this._setModal(false));
     engine.events.on("workbench:activate", () => this._setModal(true));
     engine.events.on("workbench:deactivate", () => this._setModal(false));
-    engine.events.on("buildmode:entered", () => this._setModal(true));
-    engine.events.on("buildmode:exited", () => this._setModal(false));
+    engine.events.on("phone:opened", () => this._setModal(true));
+    engine.events.on("phone:closed", () => this._setModal(false));
     engine.events.on("persistence:saved", () => this._flashSaved());
 
     this._saveFadeTimer = null;
