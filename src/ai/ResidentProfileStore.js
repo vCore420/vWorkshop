@@ -1,7 +1,9 @@
 import { EventBus } from "../core/EventBus.js";
-import { defaultMemoryConfig, normalizeMemoryConfig } from "./MemoryConfiguration.js";
+import { defaultMemoryConfig, normalizeMemoryConfig, normalizeMemoryCategories } from "./MemoryConfiguration.js";
 import { defaultEmbodimentConfig, normalizeEmbodimentConfig } from "./EmbodimentConfiguration.js";
 import { defaultTraitConfig, normalizeTraitConfig } from "./TraitConfiguration.js";
+import { defaultDialsConfig, normalizeDialsConfig } from "./BehaviourDialsConfiguration.js";
+import { DEFAULT_PROVIDER_ID, normalizeProviderId } from "./ProviderRegistry.js";
 
 const DEFAULT_BEHAVIOUR_CONFIG = {
   temperature: 0.7,
@@ -9,6 +11,7 @@ const DEFAULT_BEHAVIOUR_CONFIG = {
   maxResponseLength: 512,
   creativity: 0.5,
   determinism: 0.5,
+  dials: defaultDialsConfig(),
 };
 
 const DEFAULT_IDENTITY = {
@@ -67,6 +70,7 @@ export class ResidentProfileStore {
       id,
       name: name?.trim() || "Untitled Resident",
       model: null,
+      provider: DEFAULT_PROVIDER_ID,
       identity: { ...DEFAULT_IDENTITY },
       behaviourConfig: { ...DEFAULT_BEHAVIOUR_CONFIG },
       traits: defaultTraitConfig(),
@@ -90,10 +94,11 @@ export class ResidentProfileStore {
     if (!source) return null;
     const copy = this._buildProfile(`${source.name} (copy)`);
     copy.model = source.model;
+    copy.provider = source.provider;
     copy.identity = { ...source.identity };
-    copy.behaviourConfig = { ...source.behaviourConfig };
+    copy.behaviourConfig = { ...source.behaviourConfig, dials: { ...source.behaviourConfig.dials } };
     copy.traits = { ...source.traits, selected: [...source.traits.selected] };
-    copy.memory = { ...source.memory };
+    copy.memory = { ...source.memory, categories: { ...source.memory.categories } };
     copy.embodiment = { ...source.embodiment };
     this.profiles[copy.id] = copy;
     this.activeProfileId = copy.id;
@@ -139,21 +144,30 @@ export class ResidentProfileStore {
   /** A single, narrow entry point for every field this store owns —
    *  `AIApp.js` calls this the same way regardless of whether it's
    *  updating the resident's name, one identity field, the model, a
-   *  behaviour number, a trait selection, or a memory/embodiment setting,
-   *  rather than this store exposing a different bespoke setter per
-   *  field. `patch` is a shallow merge at the top level, and a *nested*
-   *  merge for `identity`/`behaviourConfig`/`traits`/`memory`/`embodiment`
+   *  behaviour number, one behaviour dial, a trait selection, the
+   *  provider, or a memory/embodiment setting, rather than this store
+   *  exposing a different bespoke setter per field. `patch` is a shallow
+   *  merge at the top level, and a *nested* merge for
+   *  `identity`/`behaviourConfig`/`traits`/`memory`/`embodiment`
    *  specifically — updating just `identity.purpose` never clobbers the
-   *  profile's other identity fields it didn't mention. */
+   *  profile's other identity fields it didn't mention.
+   *  `behaviourConfig.dials` gets its own second level of nested merge
+   *  for the identical reason — changing one dial (say, Curiosity) must
+   *  never silently reset the other six back to their defaults. */
   update(id, patch) {
     const profile = this.get(id);
     if (!profile || !patch) return;
     for (const [key, value] of Object.entries(patch)) {
       if (key === "identity") profile.identity = { ...profile.identity, ...value };
-      else if (key === "behaviourConfig") profile.behaviourConfig = { ...profile.behaviourConfig, ...value };
-      else if (key === "traits") profile.traits = normalizeTraitConfig({ ...profile.traits, ...value });
-      else if (key === "memory") profile.memory = normalizeMemoryConfig({ ...profile.memory, ...value });
-      else if (key === "embodiment") profile.embodiment = normalizeEmbodimentConfig({ ...profile.embodiment, ...value });
+      else if (key === "behaviourConfig") {
+        const mergedDials = normalizeDialsConfig({ ...profile.behaviourConfig.dials, ...(value.dials ?? {}) });
+        profile.behaviourConfig = { ...profile.behaviourConfig, ...value, dials: mergedDials };
+      } else if (key === "traits") profile.traits = normalizeTraitConfig({ ...profile.traits, ...value });
+      else if (key === "memory") {
+        const mergedCategories = normalizeMemoryCategories({ ...profile.memory.categories, ...(value.categories ?? {}) });
+        profile.memory = normalizeMemoryConfig({ ...profile.memory, ...value, categories: mergedCategories });
+      } else if (key === "embodiment") profile.embodiment = normalizeEmbodimentConfig({ ...profile.embodiment, ...value });
+      else if (key === "provider") profile.provider = normalizeProviderId(value);
       else profile[key] = value;
     }
     profile.updatedAt = new Date().toISOString();
@@ -173,16 +187,17 @@ export class ResidentProfileStore {
   load(data) {
     if (!data?.profiles || Object.keys(data.profiles).length === 0) return;
     this.profiles = data.profiles;
-    // Normalising memory/embodiment/traits on load, not just on update(),
-    // covers a profile saved by an older version of this store before a
-    // new field existed — it always ends up with every current field's
-    // own sensible default rather than `undefined`.
+    // Normalising memory/embodiment/traits/provider/dials on load, not
+    // just on update(), covers a profile saved by an older version of
+    // this store before a new field existed — it always ends up with
+    // every current field's own sensible default rather than `undefined`.
     for (const profile of Object.values(this.profiles)) {
       profile.memory = normalizeMemoryConfig(profile.memory);
       profile.embodiment = normalizeEmbodimentConfig(profile.embodiment);
       profile.traits = normalizeTraitConfig(profile.traits);
+      profile.provider = normalizeProviderId(profile.provider);
       profile.identity = { ...DEFAULT_IDENTITY, ...profile.identity };
-      profile.behaviourConfig = { ...DEFAULT_BEHAVIOUR_CONFIG, ...profile.behaviourConfig };
+      profile.behaviourConfig = { ...DEFAULT_BEHAVIOUR_CONFIG, ...profile.behaviourConfig, dials: normalizeDialsConfig(profile.behaviourConfig?.dials) };
     }
     this.activeProfileId = data.activeProfileId && this.profiles[data.activeProfileId] ? data.activeProfileId : Object.keys(this.profiles)[0];
     this.events.emit("residents:changed");

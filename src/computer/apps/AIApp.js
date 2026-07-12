@@ -1,7 +1,11 @@
-import { MEMORY_MODES, MEMORY_SIZE_OPTIONS, CONTEXT_BUDGET_OPTIONS } from "../../ai/MemoryConfiguration.js";
+import { MEMORY_MODES, MEMORY_SIZE_OPTIONS, CONTEXT_BUDGET_OPTIONS, MEMORY_CATEGORIES, CATEGORY_LIFETIMES, MEMORY_LIFETIMES } from "../../ai/MemoryConfiguration.js";
 import { EMBODIMENT_TYPES, IDLE_BEHAVIOUR_OPTIONS } from "../../ai/EmbodimentConfiguration.js";
 import { PERSONALITY_TRAITS, MAX_SELECTED_TRAITS } from "../../ai/TraitConfiguration.js";
+import { BEHAVIOUR_DIALS } from "../../ai/BehaviourDialsConfiguration.js";
+import { AI_PROVIDERS, getProvider } from "../../ai/ProviderRegistry.js";
 import { composeSystemPrompt } from "../../ai/PromptComposer.js";
+import { buildConversationContext } from "../../resident/ResidentContext.js";
+import { getIdleLocation } from "../../resident/ResidentMovement.js";
 
 const STATUS_LABELS = {
   connected: "Connected",
@@ -12,23 +16,40 @@ const STATUS_LABELS = {
 /**
  * createAIApp — AI Mission Control
  * -----------------------------------
- * "This is NOT the AI itself... think of this as Mission Control for
- * future Workshop residents." Every section here edits a
- * `ResidentProfileStore` profile (identity, behaviour tuning, memory and
- * embodiment preparation) or reads from `AIConnectionManager`/
- * `ModelRegistry` — this file coordinates the three (calling
- * `checkConnection()` on refresh and handing the raw result to
- * `ModelRegistry.setModels()`), but owns none of their actual state
- * itself, the same "app renders a store, doesn't duplicate it" shape
- * every other Workshop app already follows.
+ * "Mission Control should no longer feel like a configuration utility.
+ * Instead, it should become the place where Workshop residents are
+ * understood, configured and nurtured." Every section here edits a
+ * `ResidentProfileStore` profile (identity, intelligence, behaviour,
+ * memory, embodiment) or reads from the systems that make the resident
+ * this profile describes actually real in the room —
+ * `AIConnectionManager`/`ModelRegistry` for the connection itself,
+ * `residentBehaviour`/`residentState`/`conversationMemory` for what
+ * Bubble is *currently* doing. This file coordinates all of them but
+ * owns none of their actual state itself, the same "app renders a store,
+ * doesn't duplicate it" shape every other Workshop app already follows.
  *
  * "Avoid making this feel like configuring software. Instead, make it
- * feel like preparing another presence." Section order follows the
- * brief's own — connection, model, identity, behaviour, memory,
- * embodiment, profiles, test — deliberately putting *who this resident
- * is* before the numeric tuning knobs, not after.
+ * feel like preparing another presence." Section order: status, health,
+ * connection, model, profiles, identity, traits, intelligence,
+ * behaviour, memory, embodiment, sandbox, advanced, connection test —
+ * *who this resident is* and *how it's doing right now* both come before
+ * the numeric tuning knobs, not after.
  */
-export function createAIApp({ aiConnectionManager, modelRegistry, residentProfileStore }) {
+export function createAIApp({
+  aiConnectionManager,
+  modelRegistry,
+  residentProfileStore,
+  residentBehaviour = null,
+  residentConnection = null,
+  residentState = null,
+  residentPreferences = null,
+  playerPatternMemory = null,
+  residentCuriosity = null,
+  conversationMemory = null,
+  worldObjectsStore = null,
+  environmentSystem = null,
+  timeOfDaySystem = null,
+}) {
   return {
     id: "ai",
     label: "AI Control",
@@ -38,7 +59,7 @@ export function createAIApp({ aiConnectionManager, modelRegistry, residentProfil
       heading.textContent = "AI Mission Control";
       const subtitle = document.createElement("p");
       subtitle.className = "app-subtitle";
-      subtitle.textContent = "Preparing a future resident for the Workshop — not a chat, not yet.";
+      subtitle.textContent = "Where Bubble is understood, configured, and gently nurtured.";
       container.append(heading, subtitle);
 
       const form = document.createElement("div");
@@ -46,6 +67,13 @@ export function createAIApp({ aiConnectionManager, modelRegistry, residentProfil
 
       let testState = { status: "idle", response: "", error: "" }; // "idle" | "sending" | "done" | "error"
       let advancedOpen = false;
+      // "A safe place to experiment with resident configuration before
+      // applying changes" — entirely separate from the real conversation
+      // in `ResidentConversation.js`: its own history, never touching
+      // `residentBehaviour`/`ConversationMemory`'s own writes, so nothing
+      // typed here ever reaches Bubble in the room. See buildSandboxSection().
+      let sandboxHistory = [];
+      let sandboxThinking = false;
 
       function activeProfile() {
         return residentProfileStore.getActive();
@@ -83,6 +111,7 @@ export function createAIApp({ aiConnectionManager, modelRegistry, residentProfil
       function render() {
         form.innerHTML = "";
         form.appendChild(buildStatusCard());
+        form.appendChild(buildHealthSection());
         form.appendChild(buildConnectionSection());
         form.appendChild(buildModelSection());
         form.appendChild(buildProfilesSection());
@@ -90,9 +119,11 @@ export function createAIApp({ aiConnectionManager, modelRegistry, residentProfil
         if (profile) {
           form.appendChild(buildIdentitySection(profile));
           form.appendChild(buildTraitsSection(profile));
-          form.appendChild(buildBehaviourSection(profile));
+          form.appendChild(buildIntelligenceSection(profile));
+          form.appendChild(buildBehaviourDialsSection(profile));
           form.appendChild(buildMemorySection(profile));
           form.appendChild(buildEmbodimentSection(profile));
+          form.appendChild(buildSandboxSection(profile));
           form.appendChild(buildAdvancedSection(profile));
           form.appendChild(buildTestSection(profile));
         }
@@ -122,16 +153,89 @@ export function createAIApp({ aiConnectionManager, modelRegistry, residentProfil
         return section;
       }
 
+      /** "Resident Health... calm and informative. Avoid making it feel
+       *  like a developer debugging tool." A plain, read-only grid — no
+       *  raw numbers without a unit, no field that isn't something a
+       *  person would actually want to know about how Bubble is doing,
+       *  nothing here is editable (that's every section below it). */
+      function buildHealthSection() {
+        const profile = activeProfile();
+        const section = document.createElement("div");
+        section.className = "builder-section";
+        section.appendChild(sectionHeading("Resident Health"));
+
+        const rows = [
+          ["Resident status", STATUS_LABELS[aiConnectionManager.status]],
+          ["Connected model", profile?.model || "No model selected yet"],
+          ["Provider", getProvider(profile?.provider).label],
+          ["Latency", aiConnectionManager.lastLatencyMs != null ? `${aiConnectionManager.lastLatencyMs} ms` : "\u2014"],
+          ["Current activity", describeActivity()],
+          ["Current mood", residentState ? capitalize(residentState.mood) : "\u2014"],
+          ["Memory status", describeMemoryStatus(profile)],
+          ["Current location", residentState?.idleLocationId ? getIdleLocation(residentState.idleLocationId).label : "\u2014"],
+        ];
+        const grid = document.createElement("div");
+        grid.className = "ai-health-grid";
+        for (const [label, value] of rows) {
+          const row = document.createElement("div");
+          row.className = "ai-health-row";
+          const labelEl = document.createElement("span");
+          labelEl.className = "ai-health-label";
+          labelEl.textContent = label;
+          const valueEl = document.createElement("span");
+          valueEl.className = "ai-health-value";
+          valueEl.textContent = value;
+          row.append(labelEl, valueEl);
+          grid.appendChild(row);
+        }
+        section.appendChild(grid);
+        return section;
+      }
+
+      function describeActivity() {
+        if (!residentBehaviour) return "\u2014";
+        if (aiConnectionManager.status !== "connected") return "Waiting quietly";
+        return residentBehaviour.mode === "conversing" ? "In conversation" : "Going about its day";
+      }
+
+      function describeMemoryStatus(profile) {
+        if (!profile) return "\u2014";
+        if (profile.memory.mode === "disabled") return "Disabled";
+        const count = conversationMemory?.notes.length ?? 0;
+        const modeLabel = MEMORY_MODES.find((m) => m.id === profile.memory.mode)?.label ?? profile.memory.mode;
+        return `${modeLabel} \u2014 ${count} thing${count === 1 ? "" : "s"} remembered`;
+      }
+
+      /** "Please begin preparing Mission Control for additional
+       *  providers... only Ollama needs to be fully functional during
+       *  this phase." The provider selector is real (it's a genuine field
+       *  on the profile), but choosing anything besides Ollama honestly
+       *  says so rather than pretending to connect — see
+       *  `src/ai/ProviderRegistry.js`'s own comment on why a convincing
+       *  fake would be worse than this. */
       function buildConnectionSection() {
+        const profile = activeProfile();
         const section = document.createElement("div");
         section.className = "builder-section";
         section.appendChild(sectionHeading("Connection"));
+
+        section.appendChild(selectRow("Provider", profile?.provider ?? "ollama", AI_PROVIDERS, (v) => updateActive({ provider: v })));
+        const provider = getProvider(profile?.provider);
+
+        if (!provider.implemented) {
+          const notice = document.createElement("p");
+          notice.className = "app-subtitle";
+          notice.textContent = `${provider.label} isn't functional yet \u2014 ${provider.description} This provider is supported architecturally so a future phase can activate it without reshaping anything here.`;
+          section.appendChild(notice);
+          return section;
+        }
+
         section.appendChild(
           textRow("Ollama server", aiConnectionManager.baseUrl, (v) => aiConnectionManager.setBaseUrl(v), "http://localhost:11434")
         );
         const hint = document.createElement("p");
         hint.className = "app-subtitle";
-        hint.textContent = "Checked automatically every few seconds \u2014 nothing needs to be started in a particular order.";
+        hint.textContent = "Checked automatically every few seconds \u2014 nothing needs to be started in a particular order. If the connection drops, the Workshop keeps quietly retrying on its own; nothing here needs to be manually reconnected.";
         section.appendChild(hint);
         return section;
       }
@@ -141,6 +245,15 @@ export function createAIApp({ aiConnectionManager, modelRegistry, residentProfil
         section.className = "builder-section";
         section.appendChild(sectionHeading("Model"));
         const profile = activeProfile();
+
+        const provider = getProvider(profile?.provider);
+        if (!provider.implemented) {
+          const notice = document.createElement("p");
+          notice.className = "app-subtitle";
+          notice.textContent = `Model discovery isn't available for ${provider.label} yet \u2014 switch back to Ollama in Connection above to choose a model.`;
+          section.appendChild(notice);
+          return section;
+        }
 
         const models = modelRegistry.all();
         const row = document.createElement("div");
@@ -219,16 +332,44 @@ export function createAIApp({ aiConnectionManager, modelRegistry, residentProfil
         return section;
       }
 
+      /** "Review the overall application layout and ensure it feels
+       *  cohesive, welcoming." A one-line, at-a-glance summary under each
+       *  profile's name \u2014 traits and embodiment, the two things that
+       *  most make a resident feel like *someone* rather than a row in a
+       *  list. Returns `null` (rendering nothing) for a profile with
+       *  neither set, rather than a summary line that would just say
+       *  "Floating Orb" on its own for every untouched profile. */
+      function profileSummary(profile) {
+        const bits = [];
+        if (profile.traits.selected.length) {
+          bits.push(profile.traits.selected.map((id) => PERSONALITY_TRAITS.find((t) => t.id === id)?.label ?? id).join(", "));
+        }
+        const embodimentType = EMBODIMENT_TYPES.find((t) => t.id === profile.embodiment.type);
+        if (embodimentType && embodimentType.id !== "floatingOrb") bits.push(embodimentType.label);
+        return bits.length ? bits.join(" \u00b7 ") : null;
+      }
+
       function buildProfileRow(profile) {
         const li = document.createElement("li");
         if (profile.id === residentProfileStore.activeProfileId) li.classList.add("selected");
 
+        const info = document.createElement("div");
+        info.className = "ai-profile-info";
         const meta = document.createElement("span");
         meta.className = "builder-library-meta";
         meta.textContent = profile.name;
         meta.style.cursor = "pointer";
         meta.addEventListener("click", () => residentProfileStore.setActive(profile.id));
-        li.appendChild(meta);
+        info.appendChild(meta);
+
+        const summaryText = profileSummary(profile);
+        if (summaryText) {
+          const summary = document.createElement("span");
+          summary.className = "ai-profile-summary";
+          summary.textContent = summaryText;
+          info.appendChild(summary);
+        }
+        li.appendChild(info);
 
         const actions = document.createElement("div");
         actions.className = "builder-inline-row";
@@ -314,10 +455,24 @@ export function createAIApp({ aiConnectionManager, modelRegistry, residentProfil
         return section;
       }
 
-      function buildBehaviourSection(profile) {
+      /** "Continue expanding resident intelligence settings... Identity,
+       *  Purpose, Personality, Behaviour, Conversation style, Temperature,
+       *  Context length... these settings should now genuinely influence
+       *  Bubble's behaviour." The free-text identity fields above already
+       *  reach the system prompt (`PromptComposer.composeSystemPrompt()`);
+       *  the numeric settings below already reach real conversation turns
+       *  (`ResidentConnection.sendMessage()`, unchanged this phase) — this
+       *  section is named to match the brief's own "Intelligence"
+       *  grouping rather than reusing "Behaviour," which now names
+       *  something distinct (see `buildBehaviourDialsSection()` below). */
+      function buildIntelligenceSection(profile) {
         const section = document.createElement("div");
         section.className = "builder-section";
-        section.appendChild(sectionHeading("Behaviour"));
+        section.appendChild(sectionHeading("Intelligence"));
+        const hint = document.createElement("p");
+        hint.className = "app-subtitle";
+        hint.textContent = "How this resident actually generates a reply \u2014 applied to every real conversation turn, not just stored.";
+        section.appendChild(hint);
         const c = profile.behaviourConfig;
         section.appendChild(sliderRow("Temperature", c.temperature, 0, 1.5, 0.05, (v) => updateActive({ behaviourConfig: { temperature: v } }), (v) => v.toFixed(2)));
         section.appendChild(sliderRow("Creativity", c.creativity, 0, 1, 0.05, (v) => updateActive({ behaviourConfig: { creativity: v } }), (v) => v.toFixed(2)));
@@ -327,13 +482,40 @@ export function createAIApp({ aiConnectionManager, modelRegistry, residentProfil
         return section;
       }
 
+      /** "Curiosity, Talkativeness, Playfulness, Energy, Independence,
+       *  Reflection, Calmness... these should influence movement,
+       *  conversations and general behaviour. Please favour subtle
+       *  changes over dramatic differences." Seven continuous dials,
+       *  distinct from the discrete Resident Traits above — see
+       *  `src/ai/BehaviourDialsConfiguration.js`'s own comment on how the
+       *  two are meant to complement rather than duplicate each other.
+       *  Each slider's own low/high labels (e.g. "Reserved \u2194
+       *  Talkative") replace a bare 0-1 number with something a person
+       *  actually reads as a temperament, not a config value. */
+      function buildBehaviourDialsSection(profile) {
+        const section = document.createElement("div");
+        section.className = "builder-section";
+        section.appendChild(sectionHeading("Behaviour"));
+        const hint = document.createElement("p");
+        hint.className = "app-subtitle";
+        hint.textContent = "Fine, continuous dials on top of the traits above \u2014 genuinely subtle, never a dramatic shift in who Bubble is.";
+        section.appendChild(hint);
+        const dials = profile.behaviourConfig.dials;
+        for (const dial of BEHAVIOUR_DIALS) {
+          section.appendChild(
+            dialRow(dial, dials[dial.id], (v) => updateActive({ behaviourConfig: { dials: { [dial.id]: v } } }))
+          );
+        }
+        return section;
+      }
+
       function buildMemorySection(profile) {
         const section = document.createElement("div");
         section.className = "builder-section";
         section.appendChild(sectionHeading("Memory"));
         const badge = document.createElement("span");
         badge.className = "ai-future-badge";
-        badge.textContent = "Mode is active \u2014 size, summaries and context budget remain architecture only";
+        badge.textContent = "Mode and categories are active \u2014 size, summaries and context budget remain architecture only";
         section.appendChild(badge);
 
         section.appendChild(
@@ -359,7 +541,44 @@ export function createAIApp({ aiConnectionManager, modelRegistry, residentProfil
         checkbox.disabled = true;
         checkboxRow.append(checkboxLabel, checkbox);
         section.appendChild(checkboxRow);
+
+        section.appendChild(buildMemoryCategoriesSubsection(profile));
         return section;
+      }
+
+      /** "Allow the player to configure what Bubble remembers... please
+       *  also introduce configurable memory lifetimes where appropriate."
+       *  One toggle per category (`ConversationMemory.js` genuinely checks
+       *  each of these — see its own comment), with the lifetime tier its
+       *  category defaults to shown alongside as an honest, informative
+       *  label rather than a slider for every category (see
+       *  `MemoryConfiguration.js`'s own `CATEGORY_LIFETIMES` comment for
+       *  why that stays fixed-per-category this phase). */
+      function buildMemoryCategoriesSubsection(profile) {
+        const wrap = document.createElement("div");
+        wrap.className = "ai-memory-categories";
+        const heading = document.createElement("h4");
+        heading.textContent = "What Bubble Remembers";
+        wrap.appendChild(heading);
+
+        const categories = profile.memory.categories;
+        for (const category of MEMORY_CATEGORIES) {
+          const row = document.createElement("label");
+          row.className = "panel-row ai-trait-row";
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.checked = categories[category.id];
+          checkbox.addEventListener("change", () => {
+            updateActive({ memory: { categories: { [category.id]: checkbox.checked } } });
+          });
+          const text = document.createElement("span");
+          const lifetimeId = CATEGORY_LIFETIMES[category.id];
+          const lifetimeLabel = lifetimeId ? ` (${MEMORY_LIFETIMES.find((l) => l.id === lifetimeId)?.label})` : "";
+          text.textContent = `${category.label}${lifetimeLabel} \u2014 ${category.description}`;
+          row.append(checkbox, text);
+          wrap.appendChild(row);
+        }
+        return wrap;
       }
 
       function buildEmbodimentSection(profile) {
@@ -377,6 +596,137 @@ export function createAIApp({ aiConnectionManager, modelRegistry, residentProfil
         section.appendChild(sliderRow("Glow", e.glow, 0, 1, 0.05, (v) => updateActive({ embodiment: { glow: v } }), (v) => v.toFixed(2)));
         section.appendChild(sliderRow("Scale", e.scale, 0.3, 2, 0.05, (v) => updateActive({ embodiment: { scale: v } }), (v) => v.toFixed(2)));
         section.appendChild(selectRow("Idle Behaviour", e.idleBehaviour, IDLE_BEHAVIOUR_OPTIONS, (v) => updateActive({ embodiment: { idleBehaviour: v } })));
+        return section;
+      }
+
+      /** "A dedicated testing environment inside Mission Control... allow
+       *  the player to interact with Bubble without interrupting Bubble
+       *  inside the Workshop... a safe place to experiment with resident
+       *  configuration before applying changes." Genuinely isolated: its
+       *  own `sandboxHistory` (never `ResidentConversation.js`'s own),
+       *  never calls `residentBehaviour.triggerEmotion()`/`setThinking()`
+       *  (so Bubble's actual presence in the room never reacts), and never
+       *  writes to `ConversationMemory` (`buildConversationContext()` is
+       *  called with `mutateCuriosity: false` for the same reason — a test
+       *  message must never consume the real "something new was built"
+       *  note before the player gets to it for real). The system prompt
+       *  is built exactly the way a real conversation's would be, so a
+       *  test here is an honest preview of how a setting change actually
+       *  reads, not an approximation of one. */
+      function buildSandboxSection(profile) {
+        const section = document.createElement("div");
+        section.className = "builder-section";
+        section.appendChild(sectionHeading("Resident Sandbox"));
+        const hint = document.createElement("p");
+        hint.className = "app-subtitle";
+        hint.textContent = "Test prompts and settings here without interrupting Bubble in the Workshop \u2014 nothing typed below reaches the real conversation or its memory.";
+        section.appendChild(hint);
+
+        if (!residentConnection) {
+          const note = document.createElement("p");
+          note.className = "app-subtitle";
+          note.textContent = "The sandbox isn't available in this session.";
+          section.appendChild(note);
+          return section;
+        }
+
+        const memoryPreview = document.createElement("div");
+        memoryPreview.className = "ai-sandbox-memory";
+        const memoryHeading = document.createElement("h4");
+        memoryHeading.textContent = "Memory Inspection";
+        memoryPreview.appendChild(memoryHeading);
+        const notes = conversationMemory?.mostRelevant(8) ?? [];
+        if (notes.length === 0) {
+          const empty = document.createElement("p");
+          empty.className = "app-subtitle";
+          empty.textContent = "Nothing remembered yet.";
+          memoryPreview.appendChild(empty);
+        } else {
+          const list = document.createElement("ul");
+          list.className = "ai-sandbox-memory-list";
+          for (const note of notes) {
+            const li = document.createElement("li");
+            li.textContent = note;
+            list.appendChild(li);
+          }
+          memoryPreview.appendChild(list);
+        }
+        section.appendChild(memoryPreview);
+
+        const messageList = document.createElement("div");
+        messageList.className = "resident-conversation-messages ai-sandbox-messages";
+        if (sandboxHistory.length === 0) {
+          const empty = document.createElement("p");
+          empty.className = "app-subtitle";
+          empty.textContent = profile.model ? "Try a message to see how this configuration actually responds." : "Choose a model above first.";
+          messageList.appendChild(empty);
+        }
+        for (const message of sandboxHistory) {
+          const bubble = document.createElement("div");
+          bubble.className = message.role === "user" ? "resident-message resident-message-player" : "resident-message resident-message-resident";
+          bubble.textContent = message.content;
+          messageList.appendChild(bubble);
+        }
+        if (sandboxThinking) {
+          const thinkingBubble = document.createElement("div");
+          thinkingBubble.className = "resident-message resident-message-resident resident-message-thinking";
+          for (let i = 0; i < 3; i++) thinkingBubble.appendChild(document.createElement("span"));
+          messageList.appendChild(thinkingBubble);
+        }
+        section.appendChild(messageList);
+
+        const inputRow = document.createElement("div");
+        inputRow.className = "resident-conversation-input-row";
+        const input = document.createElement("input");
+        input.type = "text";
+        input.placeholder = "Try a test prompt\u2026";
+        input.disabled = !profile.model || sandboxThinking;
+        const sendBtn = document.createElement("button");
+        sendBtn.type = "button";
+        sendBtn.textContent = sandboxThinking ? "Sending\u2026" : "Send";
+        sendBtn.disabled = !profile.model || sandboxThinking;
+        inputRow.append(input, sendBtn);
+        section.appendChild(inputRow);
+
+        async function sendSandboxMessage() {
+          const text = input.value.trim();
+          if (!text || sandboxThinking) return;
+          input.value = "";
+          sandboxHistory.push({ role: "user", content: text });
+          sandboxThinking = true;
+          render();
+          try {
+            const context = buildConversationContext(
+              profile,
+              { residentCuriosity, residentPreferences, playerPatternMemory, conversationMemory, worldObjectsStore, environmentSystem, timeOfDaySystem },
+              { mutateCuriosity: false }
+            );
+            const systemPrompt = composeSystemPrompt(profile, context);
+            const reply = await residentConnection.sendMessage(profile, sandboxHistory, systemPrompt);
+            sandboxHistory.push({ role: "assistant", content: reply || "\u2026" });
+          } catch {
+            sandboxHistory.push({ role: "assistant", content: "(couldn't reach the model just now \u2014 try again in a moment)" });
+          }
+          sandboxThinking = false;
+          render();
+        }
+
+        sendBtn.addEventListener("click", sendSandboxMessage);
+        input.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") sendSandboxMessage();
+        });
+
+        if (sandboxHistory.length > 0) {
+          const clearBtn = document.createElement("button");
+          clearBtn.type = "button";
+          clearBtn.className = "builder-small-button";
+          clearBtn.textContent = "Clear Sandbox Conversation";
+          clearBtn.addEventListener("click", () => {
+            sandboxHistory = [];
+            render();
+          });
+          section.appendChild(clearBtn);
+        }
         return section;
       }
 
@@ -497,6 +847,37 @@ export function createAIApp({ aiConnectionManager, modelRegistry, residentProfil
         return row;
       }
 
+      /** Like `sliderRow()`, but for a 0-1 dial with its own low/high
+       *  labels instead of a bare formatted number \u2014 "Reserved" and
+       *  "Talkative" either side of the handle read as a temperament, a
+       *  raw 0.62 never would. */
+      function dialRow(dial, value, onChange) {
+        const wrap = document.createElement("div");
+        wrap.className = "ai-dial-row";
+        const labelEl = document.createElement("label");
+        labelEl.textContent = dial.label;
+        wrap.appendChild(labelEl);
+
+        const sliderWrap = document.createElement("div");
+        sliderWrap.className = "ai-dial-slider-wrap";
+        const lowEl = document.createElement("span");
+        lowEl.className = "ai-dial-endpoint";
+        lowEl.textContent = dial.low;
+        const input = document.createElement("input");
+        input.type = "range";
+        input.min = "0";
+        input.max = "1";
+        input.step = "0.05";
+        input.value = String(value);
+        const highEl = document.createElement("span");
+        highEl.className = "ai-dial-endpoint";
+        highEl.textContent = dial.high;
+        input.addEventListener("input", () => onChange(parseFloat(input.value)));
+        sliderWrap.append(lowEl, input, highEl);
+        wrap.appendChild(sliderWrap);
+        return wrap;
+      }
+
       function selectRow(label, value, options, onChange, disabled = false) {
         const row = document.createElement("div");
         row.className = "panel-row";
@@ -532,12 +913,26 @@ export function createAIApp({ aiConnectionManager, modelRegistry, residentProfil
       const offConnection = aiConnectionManager.events.on("connection:changed", render);
       const offModels = modelRegistry.events.on("models:changed", render);
       const offResidents = residentProfileStore.events.on("residents:changed", render);
+      // "Resident Health" fields (current activity, mood, location) don't
+      // have their own change events to listen for \u2014 they drift
+      // continuously as Bubble goes about its day, not in discrete steps
+      // worth an EventBus emission of their own. A calm 10-second refresh
+      // (the same cadence `AIConnectionManager`'s own poll already uses)
+      // keeps them honestly current \u2014 skipped entirely whenever a
+      // field in the form currently has focus, so a full re-render never
+      // interrupts someone mid-sentence in the Sandbox or an identity
+      // field.
+      const healthTimer = setInterval(() => {
+        if (form.contains(document.activeElement)) return;
+        render();
+      }, 10000);
       render();
 
       return () => {
         offConnection();
         offModels();
         offResidents();
+        clearInterval(healthTimer);
       };
     },
   };
@@ -547,6 +942,11 @@ function formatBytes(bytes) {
   if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
   if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(0)} MB`;
   return `${bytes} B`;
+}
+
+function capitalize(text) {
+  const value = String(text ?? "");
+  return value ? value[0].toUpperCase() + value.slice(1) : "\u2014";
 }
 
 function escapeHtml(text) {

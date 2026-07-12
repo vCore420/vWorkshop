@@ -47,6 +47,7 @@ export class AIConnectionManager {
     this.events = new EventBus();
     this.baseUrl = DEFAULT_BASE_URL;
     this.status = "connecting"; // "connecting" | "connected" | "disconnected"
+    this.lastLatencyMs = null; // "Resident Health" (AI Intelligence phase) — round-trip time of the most recent successful connection check, or null before the first one / after a failure
     this._pollTimer = null;
     this._disposed = false;
   }
@@ -90,16 +91,23 @@ export class AIConnectionManager {
    *  `ModelRegistry.js` for turning that into something the UI actually
    *  wants). Returns `null` on any failure at all, having already quietly
    *  updated `status` — callers never need their own try/catch around
-   *  this to stay calm. */
+   *  this to stay calm. Also updates `lastLatencyMs` — "Resident Health"
+   *  (`AIApp.js`) shows this as a calm, informative number, not a
+   *  debugging metric; a poll's own round trip is a perfectly honest
+   *  stand-in for "how responsive is the connection right now," without
+   *  this file needing any dedicated ping mechanism of its own. */
   async checkConnection() {
     if (this.status === "disconnected") this._setStatus("connecting");
+    const startedAt = performance.now();
     try {
       const response = await fetch(`${this.baseUrl}/api/tags`, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
       if (!response.ok) throw new Error(`Ollama responded with ${response.status}`);
       const data = await response.json();
+      this.lastLatencyMs = Math.round(performance.now() - startedAt);
       this._setStatus("connected");
       return data.models ?? [];
     } catch {
+      this.lastLatencyMs = null;
       this._setStatus("disconnected");
       return null;
     }
