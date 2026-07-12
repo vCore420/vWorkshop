@@ -1,4 +1,5 @@
 import { wrapPage } from "../../browser/PageShell.js";
+import { isInternalUrl } from "../../browser/PageRegistry.js";
 
 /**
  * createBrowserApp
@@ -15,13 +16,18 @@ import { wrapPage } from "../../browser/PageShell.js";
  * enough not to reload an iframe that hasn't actually navigated anywhere.
  *
  * **Two kinds of page, one display mechanism.** An ordinary `http(s)://`
- * URL becomes `iframe.src`; a `workshop://` URL resolves through
- * `PageRegistry` (see that file's own comment) and becomes
+ * URL becomes `iframe.src`; an internal-scheme URL (`workshop://`,
+ * `host://`, `plugin://` — see `PageRegistry.isInternalUrl()`) resolves
+ * through `PageRegistry` (see that file's own comment) and becomes
  * `iframe.srcdoc`. `BrowserApp` itself has no idea what `workshop://docs`
- * or `workshop://projects` actually contain — it only ever asks the
- * registry "what's the page for this path" and renders whatever comes
- * back, exactly as "the Browser should not contain hardcoded knowledge
- * about Workshop systems" asks for.
+ * or `host://services` actually contain — it only ever asks the registry
+ * "what's the page for this URL" and renders whatever comes back, exactly
+ * as "the Browser should not contain hardcoded knowledge about Workshop
+ * systems" asks for. The Browser Ecosystem phase is what generalised this
+ * from a single hardcoded `workshop://` check into the scheme-agnostic
+ * `isInternalUrl()` — the Browser now treats `host://` and `plugin://`
+ * exactly the same way it always treated `workshop://`, with no special
+ * cases per scheme anywhere in this file.
  *
  * **A real, honest limitation, not hidden:** most modern sites (GitHub
  * included) send `X-Frame-Options`/CSP headers that block being embedded
@@ -64,8 +70,16 @@ export function createBrowserApp({ browserStore, pageRegistry }) {
       addressBar.type = "text";
       addressBar.className = "browser-address-input";
       addressBar.spellcheck = false;
-      addressBar.placeholder = "Search or enter a workshop:// or web address";
+      addressBar.placeholder = "Search or enter a workshop://, host://, or web address";
       toolbar.appendChild(addressBar);
+
+      // "Bookmarks... continue improving the browsing experience" — a
+      // one-click star for whatever's currently showing, sharing the
+      // exact same `BrowserStore.bookmarks` list the Phone's own Browser
+      // app already reads and writes, so a bookmark added from either
+      // place shows up in both.
+      const bookmarkBtn = toolbarButton("\u2606", "Bookmark this page");
+      toolbar.appendChild(bookmarkBtn);
 
       const openExternalBtn = toolbarButton("\u2197", "Open in a new browser tab");
       toolbar.appendChild(openExternalBtn);
@@ -125,10 +139,9 @@ export function createBrowserApp({ browserStore, pageRegistry }) {
         // for same-origin content in the first place).
         newFrame.addEventListener("load", () => onFrameLoad(tabId, newFrame));
 
-        if (url.startsWith("workshop://")) {
-          const path = url.slice("workshop://".length);
+        if (isInternalUrl(url)) {
           pageRegistry
-            .resolve(path)
+            .resolve(url)
             .then((page) => {
               if (disposed || frames.get(tabId) !== newFrame) return; // superseded by a newer navigation before this resolved
               if (page) {
@@ -156,7 +169,7 @@ export function createBrowserApp({ browserStore, pageRegistry }) {
       function onFrameLoad(tabId, frame) {
         if (disposed || frames.get(tabId) !== frame) return; // a stale frame's own late load event, already replaced
         const url = frame.dataset.currentUrl ?? "";
-        if (url.startsWith("workshop://")) {
+        if (isInternalUrl(url)) {
           try {
             const tab = browserStore.getTab(tabId);
             frame.contentWindow?.scrollTo(0, tab?.scrollY ?? 0);
@@ -244,7 +257,11 @@ export function createBrowserApp({ browserStore, pageRegistry }) {
         forwardBtn.disabled = !browserStore.canGoForward(tabId);
         const url = browserStore.getCurrentUrl(tabId);
         if (document.activeElement !== addressBar) addressBar.value = url;
-        openExternalBtn.style.visibility = url.startsWith("workshop://") ? "hidden" : "visible";
+        openExternalBtn.style.visibility = isInternalUrl(url) ? "hidden" : "visible";
+        const isBookmarked = browserStore.bookmarks.some((b) => b.url === url);
+        bookmarkBtn.textContent = isBookmarked ? "\u2605" : "\u2606";
+        bookmarkBtn.title = isBookmarked ? "Remove bookmark" : "Bookmark this page";
+        bookmarkBtn.classList.toggle("browser-toolbar-button-active", isBookmarked);
       }
 
       function renderChrome() {
@@ -268,7 +285,14 @@ export function createBrowserApp({ browserStore, pageRegistry }) {
       });
       openExternalBtn.addEventListener("click", () => {
         const url = browserStore.getCurrentUrl(activeTabId());
-        if (!url.startsWith("workshop://")) window.open(url, "_blank", "noopener");
+        if (!isInternalUrl(url)) window.open(url, "_blank", "noopener");
+      });
+      bookmarkBtn.addEventListener("click", () => {
+        const tabId = activeTabId();
+        const url = browserStore.getCurrentUrl(tabId);
+        const isBookmarked = browserStore.bookmarks.some((b) => b.url === url);
+        if (isBookmarked) browserStore.removeBookmark(url);
+        else browserStore.addBookmark(url, browserStore.getTab(tabId)?.title || url);
       });
       newTabBtn.addEventListener("click", () => browserStore.newTab());
       addressBar.addEventListener("keydown", (event) => {
@@ -278,13 +302,22 @@ export function createBrowserApp({ browserStore, pageRegistry }) {
         addressBar.blur();
       });
 
-      // ---- workshop:// page interactivity (link clicks, Settings' "clear data") ----
+      // ---- workshop:// page interactivity (link clicks, Settings' "clear data", Bookmarks' "remove") ----
       const onMessage = (event) => {
         if (event.data?.type === "workshop-browser-navigate" && event.data.url) {
           browserStore.navigate(activeTabId(), event.data.url);
         } else if (event.data?.type === "workshop-browser-clear-data") {
           for (const tab of browserStore.all().slice()) browserStore.closeTab(tab.id);
           browserStore.navigate(activeTabId(), "workshop://");
+        } else if (event.data?.type === "workshop-browser-remove-bookmark" && typeof event.data.index === "number") {
+          const bookmark = browserStore.bookmarks[event.data.index];
+          if (bookmark) browserStore.removeBookmark(bookmark.url);
+          // The bookmarks list is baked into the page's own srcdoc at
+          // render time, not re-fetched live — reloading the same URL is
+          // what actually reflects the removal, the same mechanism the
+          // toolbar's own Refresh button already uses.
+          const tabId = activeTabId();
+          if (frames.has(tabId)) loadIntoFrame(tabId, browserStore.getCurrentUrl(tabId));
         }
       };
       window.addEventListener("message", onMessage);
@@ -315,15 +348,20 @@ function toolbarButton(glyph, title) {
 /** Bare domain/IP/localhost gets an inferred scheme rather than being
  *  treated as a search query — "please treat these simply as browser
  *  pages," and the brief's own examples (github.com, localhost:3000,
- *  127.0.0.1) are all addresses, not queries. No search-engine
- *  integration was asked for, so none was added. */
+ *  127.0.0.1) are all addresses, not queries. Anything else that doesn't
+ *  look like an address (contains a space, or simply doesn't match a
+ *  domain-like shape) is treated as a Unified Search query instead of
+ *  guessing at `https://` for it — "please introduce the foundations for
+ *  unified searching... integrate wherever practical," concretely, right
+ *  here in the one place every typed address already passes through. */
 function normalizeUrl(input) {
   const trimmed = input.trim();
   if (!trimmed) return null;
-  if (/^workshop:\/\//i.test(trimmed)) return trimmed.toLowerCase();
+  if (/^(workshop|host|plugin):\/\//i.test(trimmed)) return trimmed.toLowerCase();
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   if (/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\d{1,3}(\.\d{1,3}){3})(:\d+)?(\/.*)?$/i.test(trimmed)) return `http://${trimmed}`;
-  return `https://${trimmed}`;
+  if (/^[\w-]+(\.[\w-]+)+(:\d+)?(\/.*)?$/i.test(trimmed) && !trimmed.includes(" ")) return `https://${trimmed}`;
+  return `workshop://search?q=${encodeURIComponent(trimmed)}`;
 }
 
 function hostnameOf(url) {
