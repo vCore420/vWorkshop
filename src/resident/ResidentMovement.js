@@ -129,6 +129,11 @@ export class ResidentMovement {
     // `ResidentTraits.getTraitModifiers()`. 1 (the default, an
     // unconfigured resident) reproduces the exact original range.
     this._restDurationMultiplier = 1;
+    // Both new this phase (Behaviour Dials' own Energy/Calmness) — same
+    // "1 reproduces the exact original behaviour" contract as
+    // `_restDurationMultiplier` above.
+    this._movementSpeedMultiplier = 1;
+    this._motionDamping = 1;
   }
 
   /** Called by `ResidentController.js` whenever the active profile's
@@ -138,6 +143,24 @@ export class ResidentMovement {
    *  `_randomRestDuration()` below. */
   setRestDurationMultiplier(multiplier) {
     this._restDurationMultiplier = typeof multiplier === "number" && multiplier > 0 ? multiplier : 1;
+  }
+
+  /** The Energy dial's own travel-pace effect — scales both idle-location
+   *  travel (see `update()`'s own easing) and `stepToward()`'s own speed.
+   *  Applied continuously (not just "at the next journey"), since a
+   *  change to Energy naturally reads as Bubble picking up or slowing its
+   *  pace mid-stride, not waiting for its next destination first. */
+  setMovementSpeedMultiplier(multiplier) {
+    this._movementSpeedMultiplier = typeof multiplier === "number" && multiplier > 0 ? multiplier : 1;
+  }
+
+  /** The Calmness dial's own effect on idle bob/sway/rotation amplitude —
+   *  distinct from `idleBehaviour`'s own "Still and Attentive" damping
+   *  (see `update()`): that's a discrete embodiment choice, this is a
+   *  continuous one, and the two multiply together rather than either
+   *  overriding the other. */
+  setMotionDamping(damping) {
+    this._motionDamping = typeof damping === "number" && damping > 0 ? damping : 1;
   }
 
   /** Called every frame while Bubble is being dragged — directly sets
@@ -178,7 +201,7 @@ export class ResidentMovement {
     const dist = toTarget.length();
     if (dist < 0.05) return;
     toTarget.normalize();
-    this.currentPosition.addScaledVector(toTarget, Math.min(dist, speed * dt));
+    this.currentPosition.addScaledVector(toTarget, Math.min(dist, speed * this._movementSpeedMultiplier * dt));
   }
 
   get isTravelling() {
@@ -237,14 +260,14 @@ export class ResidentMovement {
    *  renderer-agnostic. */
   update(dt, { thinking = false, idleBehaviour = "gentleFloat" } = {}) {
     if (this._travelT < 1) {
-      this._travelT = Math.min(1, this._travelT + dt / TRAVEL_DURATION);
+      this._travelT = Math.min(1, this._travelT + (dt * this._movementSpeedMultiplier) / TRAVEL_DURATION);
       const eased = easeInOutCubic(this._travelT);
       this.currentPosition.lerpVectors(this._fromPosition, this._toPosition, eased);
       this.currentLookAt.lerpVectors(this._fromLookAt, this._toLookAt, eased);
     }
 
     this._bobPhase += dt;
-    const motionScale = idleBehaviour === "stillAndAttentive" ? 0.2 : 1;
+    const motionScale = (idleBehaviour === "stillAndAttentive" ? 0.2 : 1) * this._motionDamping;
     const bobOffset = Math.sin(this._bobPhase * 0.6) * 0.045 * motionScale; // slow, small — comfortable, not bouncy
     const swayOffset = Math.sin(this._bobPhase * 0.37) * 0.02 * motionScale;
     let rotationY = Math.sin(this._bobPhase * 0.22) * 0.12 * motionScale; // a slight, slow rotation, never a spin

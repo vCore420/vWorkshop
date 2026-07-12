@@ -5,7 +5,7 @@ import { TimeOfDaySystem } from "../systems/TimeOfDaySystem.js";
 import { ResidentMovement, IDLE_LOCATIONS, MIN_REST_SECONDS } from "./ResidentMovement.js";
 import { ResidentRenderer } from "./ResidentRenderer.js";
 import { createResidentEntity } from "./ResidentEntity.js";
-import { getTraitModifiers } from "./ResidentTraits.js";
+import { getPersonalityModifiers } from "./ResidentContext.js";
 import { isRainingNow, isGoldenHourNow, currentTimeBucket, currentWeatherId } from "./ResidentWorldSignals.js";
 
 const EXPRESSION_CHECK_INTERVAL = 0.5; // seconds — expression/awake checks don't need to run every single frame
@@ -89,7 +89,7 @@ export class ResidentController {
     this._expressionTimer = 0;
     this._patternTimer = PATTERN_SAMPLE_INTERVAL;
     this._moodTimer = MOOD_DRIFT_MIN_SECONDS + Math.random() * (MOOD_DRIFT_MAX_SECONDS - MOOD_DRIFT_MIN_SECONDS);
-    this._traitModifiers = { restDurationMultiplier: 1, awarenessRadiusMultiplier: 1, locationWeights: {}, expressionBias: {} };
+    this._traitModifiers = { restDurationMultiplier: 1, awarenessRadiusMultiplier: 1, locationWeights: {}, expressionBias: {}, movementSpeedMultiplier: 1, motionDamping: 1, favouriteLocationPullMultiplier: 1, conversationStyleLine: null };
     this._playerPos = new THREE.Vector3();
     this._dragging = false;
     this._dragTarget = new THREE.Vector3();
@@ -138,15 +138,22 @@ export class ResidentController {
   }
 
   /** Refreshes everything that depends on *which* profile is currently
-   *  active, and on that profile's own traits/embodiment — called once at
-   *  startup and again every time `ResidentProfileStore` reports a
-   *  change (a new active profile, or an edit to the current one's traits
-   *  or embodiment in Mission Control). */
+   *  active, and on that profile's own traits/dials/embodiment — called
+   *  once at startup and again every time `ResidentProfileStore` reports
+   *  a change (a new active profile, or an edit to the current one's
+   *  traits, behaviour dials, or embodiment in Mission Control).
+   *  `getPersonalityModifiers()` (see `ResidentContext.js`) combines both
+   *  personality sources — discrete traits and the continuous behaviour
+   *  dials added this phase — into the one modifier object every method
+   *  below reads from; neither this file nor `ResidentMovement.js` needs
+   *  to know which source produced which number. */
   _onProfileChanged() {
     const profile = this.residentProfileStore.getActive();
     if (!profile) return;
-    this._traitModifiers = getTraitModifiers(profile.traits);
+    this._traitModifiers = getPersonalityModifiers(profile);
     this.movement?.setRestDurationMultiplier(this._traitModifiers.restDurationMultiplier);
+    this.movement?.setMovementSpeedMultiplier(this._traitModifiers.movementSpeedMultiplier);
+    this.movement?.setMotionDamping(this._traitModifiers.motionDamping);
     this.renderer?.setEmbodiment(profile.embodiment);
   }
 
@@ -182,14 +189,17 @@ export class ResidentController {
    *  quiet habit" section) grew into this phase's general-purpose
    *  location-weighting: window-watching during interesting weather is
    *  now one contributor among several rather than the only one —
-   *  selected personality traits (`ResidentTraits.getTraitModifiers()`'s
-   *  own `locationWeights`), an accumulated favourite place
-   *  (`ResidentPreferences.favourite("locations")`), and the music cabinet
-   *  while something's actually playing all combine the same way,
-   *  multiplicatively, into one weights object `ResidentMovement.
-   *  maybePickNewLocation()` already knew how to accept. Still never
-   *  guaranteed, never scripted — an ordinary weighted pick among idle
-   *  locations that already exist either way. */
+   *  selected personality traits and behaviour dials (combined by
+   *  `ResidentContext.getPersonalityModifiers()`'s own `locationWeights`),
+   *  an accumulated favourite place (`ResidentPreferences.
+   *  favourite("locations")`, itself scaled by the Independence dial's
+   *  own `favouriteLocationPullMultiplier` — a more independent resident
+   *  is pulled toward its favourite spot a little less insistently), and
+   *  the music cabinet while something's actually playing all combine the
+   *  same way, multiplicatively, into one weights object
+   *  `ResidentMovement.maybePickNewLocation()` already knew how to
+   *  accept. Still never guaranteed, never scripted — an ordinary
+   *  weighted pick among idle locations that already exist either way. */
   _windowWatchWeights() {
     const weights = {};
     const merge = (extra) => {
@@ -204,7 +214,7 @@ export class ResidentController {
     merge(this._traitModifiers.locationWeights);
 
     const favouriteLocation = this.residentPreferences?.favourite("locations");
-    if (favouriteLocation) merge({ [favouriteLocation]: 1.8 });
+    if (favouriteLocation) merge({ [favouriteLocation]: 1.8 * (this._traitModifiers.favouriteLocationPullMultiplier ?? 1) });
 
     if (this.musicSystem?.isPlaying) merge({ byMusicPlayer: 1.6 });
 

@@ -73,11 +73,27 @@ const TRAIT_MODIFIERS = {
  *  that's both "curious" and "quiet" plausibly favours both the window
  *  and the bookshelf, more than either trait alone would. No selection
  *  at all returns every multiplier at a neutral 1 and no bias — an
- *  unconfigured resident behaves exactly as it always has. */
+ *  unconfigured resident behaves exactly as it always has.
+ *
+ *  `movementSpeedMultiplier`/`motionDamping`/`favouriteLocationPullMultiplier`/
+ *  `conversationStyleLine` are new fields (Mission Control's own
+ *  Behaviour Dials phase) that discrete traits don't currently touch —
+ *  present here at their neutral defaults purely so `mergeModifiers()`
+ *  below never has to special-case "this modifier came from traits, that
+ *  one came from dials." */
 export function getTraitModifiers(traitsConfig) {
   const selected = traitsConfig?.selected ?? [];
   if (selected.length === 0) {
-    return { restDurationMultiplier: 1, awarenessRadiusMultiplier: 1, locationWeights: {}, expressionBias: {} };
+    return {
+      restDurationMultiplier: 1,
+      awarenessRadiusMultiplier: 1,
+      locationWeights: {},
+      expressionBias: {},
+      movementSpeedMultiplier: 1,
+      motionDamping: 1,
+      favouriteLocationPullMultiplier: 1,
+      conversationStyleLine: null,
+    };
   }
 
   let restSum = 0;
@@ -103,6 +119,43 @@ export function getTraitModifiers(traitsConfig) {
     awarenessRadiusMultiplier: awarenessSum / selected.length,
     locationWeights,
     expressionBias,
+    movementSpeedMultiplier: 1,
+    motionDamping: 1,
+    favouriteLocationPullMultiplier: 1,
+    conversationStyleLine: null,
+  };
+}
+
+/** Combines any number of modifier objects (traits, dials, and whatever
+ *  a future source produces) into one final modifier `ResidentController`
+ *  actually applies — multipliers average, weights/biases multiply
+ *  together, and `conversationStyleLine`s concatenate (skipping any
+ *  source that didn't have one to say). Order doesn't matter; every
+ *  input is treated identically regardless of which system produced it,
+ *  which is what lets a future third source (a Being's own temperament,
+ *  say) join without this function changing at all. */
+export function mergeModifiers(...modifiers) {
+  const sources = modifiers.filter(Boolean);
+  if (sources.length === 0) {
+    return { restDurationMultiplier: 1, awarenessRadiusMultiplier: 1, locationWeights: {}, expressionBias: {}, movementSpeedMultiplier: 1, motionDamping: 1, favouriteLocationPullMultiplier: 1, conversationStyleLine: null };
+  }
+  const avg = (key) => sources.reduce((sum, m) => sum + (m[key] ?? 1), 0) / sources.length;
+  const locationWeights = {};
+  const expressionBias = {};
+  for (const source of sources) {
+    for (const [locId, weight] of Object.entries(source.locationWeights ?? {})) locationWeights[locId] = (locationWeights[locId] ?? 1) * weight;
+    for (const [expr, weight] of Object.entries(source.expressionBias ?? {})) expressionBias[expr] = (expressionBias[expr] ?? 1) * weight;
+  }
+  const styleLines = sources.map((m) => m.conversationStyleLine).filter(Boolean);
+  return {
+    restDurationMultiplier: avg("restDurationMultiplier"),
+    awarenessRadiusMultiplier: avg("awarenessRadiusMultiplier"),
+    locationWeights,
+    expressionBias,
+    movementSpeedMultiplier: avg("movementSpeedMultiplier"),
+    motionDamping: avg("motionDamping"),
+    favouriteLocationPullMultiplier: avg("favouriteLocationPullMultiplier"),
+    conversationStyleLine: styleLines.length ? styleLines.join(" ") : null,
   };
 }
 

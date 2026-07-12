@@ -33,26 +33,34 @@ export class ResidentCuriosity {
   /** Returns an array of short, plain-English observation strings — never
    *  more than a handful, since "a resident that notices five things at
    *  once" reads as anxious, not attentive. Updates `lastSeenObjectCount`
-   *  every call, so the same new object is only ever mentioned as "new"
-   *  once. */
-  gatherNotes({ worldObjectsStore, environmentSystem, timeOfDaySystem, residentPreferences, playerPatternMemory }) {
+   *  every call by default, so the same new object is only ever mentioned
+   *  as "new" once — pass `mutate: false` to preview the current notes
+   *  without consuming them, which is exactly what the Resident Sandbox
+   *  (`AIApp.js`) needs: "a safe place to experiment... without
+   *  interrupting Bubble inside the Workshop" means a sandbox test must
+   *  never cause the *real* next conversation to lose a "something new
+   *  was built" note it would otherwise have gotten. */
+  gatherNotes({ worldObjectsStore, environmentSystem, timeOfDaySystem, residentPreferences, playerPatternMemory, mutate = true }) {
     const notes = [];
 
     const currentCount = worldObjectsStore?.all().length ?? 0;
+    const baseline = this._initialized ? this.lastSeenObjectCount : currentCount;
     if (!this._initialized) {
       // The very first time this ever runs (a brand new resident, or an
       // existing one that's simply never had a conversation yet) just
       // establishes the baseline — nothing "since we last talked" is true
       // yet, so there's nothing honest to report.
-      this._initialized = true;
-      this.lastSeenObjectCount = currentCount;
-    } else if (currentCount > this.lastSeenObjectCount) {
+      if (mutate) {
+        this._initialized = true;
+        this.lastSeenObjectCount = currentCount;
+      }
+    } else if (currentCount > baseline) {
       notes.push("Something new has been built in the Workshop since you last talked.");
-      this.lastSeenObjectCount = currentCount;
-    } else if (currentCount < this.lastSeenObjectCount) {
+      if (mutate) this.lastSeenObjectCount = currentCount;
+    } else if (currentCount < baseline) {
       // Something was removed rather than added — still worth an honest
       // baseline update, just not a "new object" note.
-      this.lastSeenObjectCount = currentCount;
+      if (mutate) this.lastSeenObjectCount = currentCount;
     }
 
     if (isRainingNow(environmentSystem)) {
