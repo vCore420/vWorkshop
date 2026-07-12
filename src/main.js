@@ -45,8 +45,12 @@ import { ImageAssetStore } from "./systems/ImageAssetStore.js";
 import { PageRegistry } from "./browser/PageRegistry.js";
 import { BrowserStore } from "./browser/BrowserStore.js";
 import { registerWorkshopPages } from "./browser/WorkshopPages.js";
+import { registerAssetPages } from "./browser/AssetPages.js";
+import { SearchIndex } from "./browser/SearchIndex.js";
 import { HostManager } from "./host/HostManager.js";
 import { registerHostPages } from "./host/HostPages.js";
+import { examplePagePlugin } from "./plugins/examples/examplePagePlugin.js";
+import { calculatorPlugin } from "./plugins/examples/calculatorPlugin.js";
 import { AIConnectionManager } from "./ai/AIConnectionManager.js";
 import { ModelRegistry } from "./ai/ModelRegistry.js";
 import { ResidentProfileStore } from "./ai/ResidentProfileStore.js";
@@ -151,16 +155,26 @@ const musicLibraryStore = new MusicLibraryStore();
 const playlistStore = new PlaylistStore();
 const browserStore = new BrowserStore();
 const pageRegistry = new PageRegistry();
+// "Please introduce the foundations for unified searching" — one small,
+// shared index, populated alongside each system's own page registration
+// (see WorkshopPages.js/AssetPages.js/HostPages.js's own searchIndex.
+// addEntry() calls) rather than derived from PageRegistry itself, which
+// would mean invoking every page's own provider function just to learn
+// its title. See SearchIndex.js's own comment for the full reasoning.
+const searchIndex = new SearchIndex();
 // "The Host should be treated as a lightweight companion service" — see
 // HostManager.js's own comment. Constructed here, right alongside
 // pageRegistry, since PluginRegistry (owned by HostManager) needs the
 // real registry to register future plugin pages against directly.
 const hostManager = new HostManager(pageRegistry);
-// "Workshop systems should simply expose pages that the Browser can
-// display" — see WorkshopPages.js/PageRegistry.js's own comments. Called
-// here, once every store it needs already exists, not from inside
-// BrowserApp.js itself, which only ever talks to pageRegistry.resolve().
-registerWorkshopPages(pageRegistry, { projectsStore, browserStore, hostProjectsService: hostManager.services.get("projects") });
+// Workshop/Host/Asset page registration itself now happens much later in
+// this file (see the "Browser Ecosystem" block near the end) — moved
+// there once the new pages needed stores (residentProfileStore,
+// animationLibraryStore, the engine itself, persistenceSystem...) that
+// don't exist yet at this point in main.js. Registering a page is just
+// handing the registry a function to call later, so nothing about
+// ordering here affects when pages actually become navigable; it only
+// affects how early their own dependencies need to exist.
 
 // "This is NOT the AI itself... preparing another presence." See
 // src/ai/AIConnectionManager.js's own comment for why polling starts
@@ -171,12 +185,10 @@ const modelRegistry = new ModelRegistry();
 const residentProfileStore = new ResidentProfileStore();
 aiConnectionManager.init();
 // "workshop://models... live from the same connection AI Mission Control
-// uses" — registered here, once modelRegistry exists, rather than inside
-// registerWorkshopPages() above alongside the docs/projects/settings
-// pages, since HostPages.js is specifically the Host's own contribution
-// to the Browser, kept in its own file for the same "systems expose
-// pages, the Browser doesn't know or care which system" separation.
-registerHostPages(pageRegistry, { hostManager, modelRegistry });
+// uses" — HostPages.js itself is registered later now (see the "Browser
+// Ecosystem" block near the end of this file), alongside every other
+// page registration, once modelRegistry and everything else it needs
+// already exist.
 
 // "This is not an AI assistant. It is the Workshop's first resident." —
 // ResidentConnection is a thin adapter over aiConnectionManager (see its
@@ -503,6 +515,39 @@ new HUD(document.getElementById("hud-root"), engine);
 
 // --- Example plugin (see /src/plugins/examples/dustMotesPlugin.js + docs/PLUGIN_GUIDE.md) ---
 engine.plugins.register(dustMotesPlugin());
+
+// --- Browser Ecosystem: Workshop pages, Host pages, Asset pages, Unified
+// Search, and plugin pages (see docs/BROWSER.md) — registered here,
+// after every store any of them needs already exists, not from inside
+// BrowserApp.js itself, which only ever talks to pageRegistry.resolve().
+registerWorkshopPages(pageRegistry, searchIndex, {
+  projectsStore,
+  browserStore,
+  hostProjectsService: hostManager.services.get("projects"),
+  residentProfileStore,
+  residentState,
+  residentBehaviour,
+  conversationMemory,
+  aiConnectionManager,
+  engine,
+  persistenceSystem,
+  hostManager,
+  pageRegistry,
+  searchIndex,
+});
+registerHostPages(pageRegistry, searchIndex, { hostManager, modelRegistry });
+registerAssetPages(pageRegistry, searchIndex, { objectLibraryStore, blueprintStore, animationLibraryStore, modelLibrary, imageLibraryStore, musicLibraryStore, worldObjectsStore });
+
+// "Plugins should be capable of registering Browser pages... naturally
+// integrate into Browser navigation without requiring hardcoded
+// support." Two real, working examples — see each plugin's own file for
+// why these two specifically (a reference contract demo, and a
+// genuinely functional calculator) rather than the brief's other example
+// names (plugin://weather, plugin://inventory), which would need either
+// a fabricated live data source or a backing store with no natural owner
+// yet.
+hostManager.pluginRegistry.registerPlugin(examplePagePlugin());
+hostManager.pluginRegistry.registerPlugin(calculatorPlugin());
 
 // --- Boot ---
 await engine.init();
