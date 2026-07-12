@@ -1,4 +1,13 @@
 import { composeSystemPrompt } from "../ai/PromptComposer.js";
+import { traitPersonalityLine } from "./ResidentTraits.js";
+import { getIdleLocation } from "./ResidentMovement.js";
+import { WEATHER_STATES } from "../systems/EnvironmentSystem.js";
+
+const ACTIVITY_LABELS = {
+  listeningToMusic: "listening to music",
+  watchingRain: "watching the rain",
+  watchingTheSky: "watching the sky",
+};
 
 /**
  * createResidentConversationOverlay
@@ -20,11 +29,69 @@ import { composeSystemPrompt } from "../ai/PromptComposer.js";
  * closure rather than any persisted store — re-opening mid-session picks
  * up where it left off, but a page reload starts fresh, matching
  * "conversation history (future memory system)" being explicitly a later
- * phase's concern, not something to half-implement ahead of a real memory
- * system existing to use it.
+ * phase's concern (see `MemoryConfiguration.js`'s own "architecture, not
+ * implementation" framing), not something to half-implement ahead of a
+ * real memory system existing to use it.
+ *
+ * **Version 2**: `_buildContext()` gathers everything
+ * `PromptComposer.composeSystemPrompt()`'s own optional `context` argument
+ * accepts — the resident's selected traits (a short prose line, via
+ * `ResidentTraits.traitPersonalityLine()`), its accumulated preferences
+ * (`ResidentPreferences.favourite()` across each dimension), a handful of
+ * curiosity notes (`ResidentCuriosity.gatherNotes()`, called exactly once
+ * per conversation open — "these observations should occur naturally
+ * within conversation rather than becoming notifications"), and a few
+ * remembered things about the player (`ConversationMemory.mostRelevant()`,
+ * only when the active profile's `memory.mode !== "disabled"`). None of
+ * this is shown to the player directly; it's context for the model to
+ * draw on however it naturally would, never a script.
  */
-export function createResidentConversationOverlay({ residentConnection, residentProfileStore, residentBehaviour }) {
+export function createResidentConversationOverlay({
+  residentConnection,
+  residentProfileStore,
+  residentBehaviour,
+  projectsStore = null,
+  residentPreferences = null,
+  playerPatternMemory = null,
+  residentCuriosity = null,
+  conversationMemory = null,
+  worldObjectsStore = null,
+  environmentSystem = null,
+  timeOfDaySystem = null,
+}) {
   const history = []; // [{role: "user"|"assistant", content}] — this session only
+
+  function buildPreferenceLine(profile) {
+    if (!residentPreferences) return null;
+    const bits = [];
+    const locationId = residentPreferences.favourite("locations");
+    if (locationId) bits.push(`spending time ${getIdleLocation(locationId).label}`);
+    const weatherId = residentPreferences.favourite("weather");
+    if (weatherId) bits.push(`${(WEATHER_STATES[weatherId]?.label ?? weatherId).toLowerCase()} weather`);
+    const timeOfDay = residentPreferences.favourite("timeOfDay");
+    if (timeOfDay) bits.push(`the ${timeOfDay}`);
+    const activity = residentPreferences.favourite("activities");
+    if (activity) bits.push(ACTIVITY_LABELS[activity] ?? activity);
+    if (bits.length === 0) return null;
+    void profile;
+    return `Over time, you've noticed you especially enjoy ${bits.join(", ")}.`;
+  }
+
+  /** Gathered exactly once, right as the conversation opens — never
+   *  re-gathered per message, which is what keeps "noticed since you last
+   *  talked" honest rather than re-triggering mid-conversation. */
+  function buildContext(profile) {
+    const curiosityNotes = residentCuriosity
+      ? residentCuriosity.gatherNotes({ worldObjectsStore, environmentSystem, timeOfDaySystem, residentPreferences, playerPatternMemory })
+      : [];
+    const memoryEnabled = profile?.memory?.mode !== "disabled";
+    return {
+      personalityLine: traitPersonalityLine(profile?.traits),
+      preferenceLine: buildPreferenceLine(profile),
+      curiosityNotes,
+      memoryNotes: memoryEnabled ? conversationMemory?.mostRelevant() ?? [] : [],
+    };
+  }
 
   return {
     materialClass: "panel",
@@ -32,6 +99,13 @@ export function createResidentConversationOverlay({ residentConnection, resident
       residentBehaviour.startConversation();
 
       const profile = residentProfileStore.getActive();
+      const context = buildContext(profile);
+      // "A resident that just noticed something interesting briefly shows
+      // that over its own steadier mood" — see ResidentBehaviour.js's own
+      // triggerEmotion() comment. A short, honest greeting-adjacent blip,
+      // never persisted, gone again in a handful of seconds either way.
+      residentBehaviour.triggerEmotion(context.curiosityNotes.length ? "curious" : "happy", 6);
+
       const heading = document.createElement("h2");
       heading.textContent = profile?.name || "Workshop Resident";
       panelEl.appendChild(heading);
@@ -118,6 +192,7 @@ export function createResidentConversationOverlay({ residentConnection, resident
         if (!text || sendBtn.disabled) return;
         input.value = "";
         history.push({ role: "user", content: text });
+        if (profile?.memory?.mode !== "disabled") conversationMemory?.extractFromMessage(text, { projectsStore });
         renderMessages();
 
         sendBtn.disabled = true;
@@ -130,7 +205,7 @@ export function createResidentConversationOverlay({ residentConnection, resident
           renderMessages();
         }, 8000);
         try {
-          const systemPrompt = composeSystemPrompt(profile);
+          const systemPrompt = composeSystemPrompt(profile, context);
           const reply = await residentConnection.sendMessage(profile, history, systemPrompt);
           history.push({ role: "assistant", content: reply || "\u2026" });
         } catch {

@@ -96,7 +96,7 @@ export class RoomLayoutSystem {
       windowEntity.addComponent(
         new InteractableComponent({
           prompt: "Look outside",
-          radius: 1.3, // deliberately tighter than the standard "small object" 2.0m tier; see docs/REFINEMENT.md
+          radius: 0.9, // deliberately tighter than the standard "small object" 2.0m tier; see docs/REFINEMENT.md
           opensOverlay: true,
           onInteract: () =>
             engine.events.emit("interaction:trigger", {

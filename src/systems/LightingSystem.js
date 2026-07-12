@@ -136,9 +136,9 @@ export class LightingSystem {
     const lampSocket = workbench?.entity?.object3D?.userData?.lampSocket;
     if (lampSocket) {
       const worldPos = workbench.entity.object3D.localToWorld(lampSocket.clone());
-      const lampLight = new THREE.PointLight("#ffe9c2", 0.7, 3, 2);
+      const lampLight = new THREE.PointLight("#ffe9c2", 0.9, 3, 2);
       lampLight.position.copy(worldPos);
-      lampLight.userData.baseIntensity = 0.7;
+      lampLight.userData.baseIntensity = 0.9;
       lampLight.userData.isLampLight = true; // see setLightingQuality — the one practical light "low" skips
       this.engine.scene.add(lampLight);
       this.practicalLights.push(lampLight);
@@ -158,12 +158,12 @@ export class LightingSystem {
     // wall. z nudged to 2.845 — closer still to the wall's actual
     // interior face (~2.85) than before, sitting flush against it rather
     // than with a small, noticeable gap, while still avoiding z-fighting.
-    plate.position.set(1.8, 1.3, 2.845);
+    plate.position.set(1.5, 1.3, 2.935);
     switchEntity.addComponent(new MeshComponent(plate, this.engine.scene));
     switchEntity.addComponent(
       new InteractableComponent({
         prompt: "Flip the light switch",
-        radius: 1.3, // deliberately tighter than the standard "small object" 2.0m tier; see docs/REFINEMENT.md
+        radius: 0.9, // deliberately tighter than the standard "small object" 2.0m tier; see docs/REFINEMENT.md
         onInteract: () => this.setLightsOn(!this.lightsOn),
       })
     );

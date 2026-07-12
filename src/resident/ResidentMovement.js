@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { clamp } from "../utils/MathUtils.js";
 
 /**
  * ResidentMovement
@@ -122,6 +123,21 @@ export class ResidentMovement {
     }
     this._restTimer = this._randomRestDuration();
     this._bobPhase = Math.random() * Math.PI * 2; // desynchronised, not every resident bobbing in lockstep if this ever supports more than one
+    // "Movement... should be influenced [by identity] without replacing
+    // it" — a plain multiplier on the same rest-duration range that
+    // already existed, set by `ResidentController.js` from
+    // `ResidentTraits.getTraitModifiers()`. 1 (the default, an
+    // unconfigured resident) reproduces the exact original range.
+    this._restDurationMultiplier = 1;
+  }
+
+  /** Called by `ResidentController.js` whenever the active profile's
+   *  selected traits change (or once, at startup) — never mid-rest, so a
+   *  change never visibly interrupts however long the current rest was
+   *  already going to be; it only affects the *next* one, computed by
+   *  `_randomRestDuration()` below. */
+  setRestDurationMultiplier(multiplier) {
+    this._restDurationMultiplier = typeof multiplier === "number" && multiplier > 0 ? multiplier : 1;
   }
 
   /** Called every frame while Bubble is being dragged — directly sets
@@ -170,7 +186,11 @@ export class ResidentMovement {
   }
 
   _randomRestDuration() {
-    return MIN_REST_SECONDS + Math.random() * (MAX_REST_SECONDS - MIN_REST_SECONDS);
+    // Clamped so no combination of traits ever makes the resident either
+    // genuinely twitchy (well under a minute) or statue-still (many
+    // minutes) — "subtle behaviour changes," not a different creature.
+    const multiplier = clamp(this._restDurationMultiplier, 0.6, 1.6);
+    return MIN_REST_SECONDS * multiplier + Math.random() * (MAX_REST_SECONDS - MIN_REST_SECONDS) * multiplier;
   }
 
   /** Begins a slow ease toward a new idle location. Interrupts any travel
@@ -203,11 +223,19 @@ export class ResidentMovement {
   }
 
   /** Advances travel easing and procedural idle motion. `thinking` (0-1)
-   *  drives the tiny squash/stretch pulse; `dt` in seconds. Returns the
-   *  resident's current position/lookAt/scale for `ResidentRenderer.js`
-   *  to apply — this class never touches a `THREE.Object3D` directly,
-   *  keeping the motion math testable and renderer-agnostic. */
-  update(dt, { thinking = false } = {}) {
+   *  drives the tiny squash/stretch pulse; `idleBehaviour` (one of
+   *  `EmbodimentConfiguration.js`'s own `IDLE_BEHAVIOUR_OPTIONS` ids)
+   *  scales how much of that procedural motion actually shows — "Still
+   *  and Attentive" damps bob/sway/rotation to a bare minimum rather than
+   *  removing them outright (never *fully* frozen — see
+   *  `docs/RESIDENT.md`'s own "never looks frozen even at rest"
+   *  standard), "Slow Rotate" layers a genuine continuous turn on top of
+   *  the existing gentle oscillation instead of replacing it; `dt` in
+   *  seconds. Returns the resident's current position/lookAt/scale for
+   *  `ResidentRenderer.js` to apply — this class never touches a
+   *  `THREE.Object3D` directly, keeping the motion math testable and
+   *  renderer-agnostic. */
+  update(dt, { thinking = false, idleBehaviour = "gentleFloat" } = {}) {
     if (this._travelT < 1) {
       this._travelT = Math.min(1, this._travelT + dt / TRAVEL_DURATION);
       const eased = easeInOutCubic(this._travelT);
@@ -216,9 +244,14 @@ export class ResidentMovement {
     }
 
     this._bobPhase += dt;
-    const bobOffset = Math.sin(this._bobPhase * 0.6) * 0.045; // slow, small — comfortable, not bouncy
-    const swayOffset = Math.sin(this._bobPhase * 0.37) * 0.02;
-    const rotationY = Math.sin(this._bobPhase * 0.22) * 0.12; // a slight, slow rotation, never a spin
+    const motionScale = idleBehaviour === "stillAndAttentive" ? 0.2 : 1;
+    const bobOffset = Math.sin(this._bobPhase * 0.6) * 0.045 * motionScale; // slow, small — comfortable, not bouncy
+    const swayOffset = Math.sin(this._bobPhase * 0.37) * 0.02 * motionScale;
+    let rotationY = Math.sin(this._bobPhase * 0.22) * 0.12 * motionScale; // a slight, slow rotation, never a spin
+    if (idleBehaviour === "slowRotate") {
+      this._spinPhase = (this._spinPhase ?? 0) + dt * 0.15; // a genuine, continuous turn — layered on top of, not instead of, the oscillation above
+      rotationY += this._spinPhase;
+    }
 
     let scaleX = 1;
     let scaleY = 1;

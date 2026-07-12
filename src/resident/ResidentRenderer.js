@@ -1,8 +1,11 @@
 import * as THREE from "three";
 import { configureFlatTexture } from "../utils/TextureUtils.js";
+import { defaultEmbodimentConfig, normalizeEmbodimentConfig } from "../ai/EmbodimentConfiguration.js";
 
-const RADIUS = 0.13; // "increase Bubble's size very slightly. It should still feel like a companion rather than the focal point of the room." Nudged up again (0.16 → 0.11 → 0.13) — still small, just a touch less easy to lose track of.
+const RADIUS = 0.13; // "increase Bubble's size very slightly. It should still feel like a companion rather than the focal point of the room." Nudged up again (0.16 → 0.11 → 0.13) — still small, just a touch less easy to lose track of. Every embodiment shape below is built at roughly this same scale, so switching type never makes the resident suddenly loom or vanish.
 const FACE_TEXTURE_SIZE = 128;
+const BASE_GLOW_OPACITY = 0.8; // reproduced exactly when embodiment.glow is at its default (0.5) — see _applyGlow()
+const BASE_LIGHT_INTENSITY = 0.35;
 
 const MOOD_COLORS = {
   sleeping: "#4a6a72",
@@ -17,48 +20,129 @@ const MOOD_COLORS = {
  * ------------------
  * "Semi-transparent bubble, soft internal glow, gentle sparkle effects,
  * subtle internal movement, slight refraction, soft ambient lighting,
- * tiny floating particles... feel digital rather than magical." Three
- * layers, one root group:
+ * tiny floating particles... feel digital rather than magical." Four
+ * layers, one root group, unchanged in spirit from the very first phase
+ * this existed — only the outer layer's own *geometry* now varies:
  *
- *   - An outer sphere (`MeshPhysicalMaterial`, real `transmission` for
- *     glass-like refraction rather than faked transparency) — the bubble
- *     itself.
+ *   - An outer mesh (`MeshPhysicalMaterial`, real `transmission` for
+ *     glass-like refraction rather than faked transparency) — the body
+ *     itself. Its *shape* now comes from `embodiment.type` (see
+ *     `_buildOuterGeometry()`); its *material* — transmission, clearcoat,
+ *     opacity — stays identical across every shape, which is what keeps
+ *     a cube-bodied or prism-bodied resident still unmistakably the same
+ *     kind of thing as the original floating orb, just a different
+ *     silhouette.
  *   - A smaller inner sphere, fully emissive, no transparency — the
  *     "soft internal glow," colour driven by mood/expression
  *     (`MOOD_COLORS`) so the bubble's own light genuinely shifts with how
- *     it's feeling, not just its face.
- *   - A handful of `THREE.Points` drifting slowly inside the bubble's own
- *     radius — "tiny floating particles" — never leaving it, never
+ *     it's feeling, not just its face. Deliberately always a sphere
+ *     regardless of outer shape — an inner light source reads the same
+ *     way inside a cube as inside an orb; there's no "soft internal glow"
+ *     worth giving a cube's own inner glow sharp corners.
+ *   - A handful of `THREE.Points` drifting slowly inside the body's own
+ *     rough radius — "tiny floating particles" — never leaving it, never
  *     moving quickly.
+ *
+ * **Embodiment, finally real** (`docs/AI.md`/`docs/RESIDENT.md`'s own
+ * "Embodiment Preparation: not active this phase" retired) —
+ * `setEmbodiment(config)` reads every field `EmbodimentConfiguration.js`
+ * defines:
+ *   - `type` picks the outer geometry (`_buildOuterGeometry()`).
+ *   - `color` becomes the outer material's own base colour — the "glass"
+ *     itself is now genuinely tinted per resident, distinct from the
+ *     mood-driven emissive glow layered on top of it.
+ *   - `glow` scales the inner glow's opacity and the point light's
+ *     intensity around their original fixed values (see
+ *     `BASE_GLOW_OPACITY`/`BASE_LIGHT_INTENSITY`) — the default (0.5)
+ *     reproduces the exact original look.
+ *   - `scale` applies once, at the root-group level, so it composes
+ *     cleanly with the per-frame squash/stretch `ResidentMovement.js`
+ *     already applies at the mesh level rather than fighting it.
+ *   - `idleBehaviour` isn't read here at all — it changes how much
+ *     `ResidentMovement.js`'s own procedural motion moves, not anything
+ *     about how the resident is drawn; see that file's own `update()`.
  *
  * **The face is a small canvas texture, redrawn only when the expression
  * actually changes** (not every frame — a static drawing operation
  * repeated 60 times a second for a face that changes maybe once a minute
  * would be wasted work), applied to a thin plane that sits just in front
- * of the bubble's centre and rotates to face wherever the bubble is
- * currently "looking" — its idle look-at target, or the player, blended
- * by `ResidentBehaviour.awarenessBlend`. "The expressions should remain
- * subtle. Avoid exaggerated cartoon animation" — every expression in
- * `drawFace()` is a handful of simple curves, not a sprite sheet.
+ * of the body's centre and rotates to face wherever the resident is
+ * currently "looking." "The expressions should remain subtle. Avoid
+ * exaggerated cartoon animation" — every expression in `drawFace()` is a
+ * handful of simple curves, not a sprite sheet. "Thinking" and "curious"
+ * were, honestly, too close to each other at this texture size — both a
+ * single raised eye plus a small open mouth — so this phase gave
+ * "thinking" its own distinct read (both eyes lifted and drawn slightly
+ * together, a flat, settled mouth — a look turned inward) rather than
+ * reusing "curious"'s asymmetric, outward-looking one.
  */
 export class ResidentRenderer {
-  constructor() {
+  constructor(embodiment = null) {
     this.root = new THREE.Group();
     this.root.name = "resident";
+    this._embodiment = normalizeEmbodimentConfig(embodiment ?? defaultEmbodimentConfig());
+    this._outerType = null; // forces the very first _applyEmbodiment() to build geometry rather than skipping it as "unchanged"
 
     this._buildBubble();
     this._buildInnerGlow();
     this._buildFace();
     this._buildSparkles();
     this._buildLight();
+    this._applyEmbodiment(this._embodiment);
 
     this._lastExpression = null;
     this._sparklePulsePhase = Math.random() * Math.PI * 2;
     this._localLookTarget = new THREE.Vector3();
   }
 
+  /** One geometry per `EmbodimentConfiguration.EMBODIMENT_TYPES` entry,
+   *  each sized to roughly the same overall footprint as the original
+   *  sphere (`RADIUS`) so switching type never looms or shrinks
+   *  drastically — a deliberately plain Three.js primitive per shape,
+   *  matching "digital, not magical" (and this project's own placeholder-
+   *  geometry convention, see `docs/ARCHITECTURE.md`'s "Placeholder-first
+   *  assets") rather than an imported model for any of them. `custom`
+   *  (reserved for a future phase that isn't a simple primitive at all)
+   *  falls back to the same sphere `floatingOrb` uses, honestly, rather
+   *  than pretending to have a shape for it yet. */
+  _buildOuterGeometry(type) {
+    switch (type) {
+      case "cube": {
+        const side = RADIUS * 1.55;
+        return new THREE.BoxGeometry(side, side, side, 2, 2, 2);
+      }
+      case "prism": {
+        // radialSegments: 3 — a genuine triangular prism, not a cylinder;
+        // reads as a small glass prism, which the material's own real
+        // `transmission` already suits.
+        const geometry = new THREE.CylinderGeometry(RADIUS * 0.95, RADIUS * 0.95, RADIUS * 1.7, 3);
+        geometry.rotateY(Math.PI / 6); // one flat face toward the front rather than an edge
+        return geometry;
+      }
+      case "lantern": {
+        // radialSegments: 8 — a faceted, lantern-like column rather than
+        // a perfectly smooth cylinder, closer to how the Workshop's own
+        // Construction Library pieces stay simple-but-faceted.
+        return new THREE.CylinderGeometry(RADIUS * 0.85, RADIUS * 0.85, RADIUS * 1.9, 8);
+      }
+      case "wisp": {
+        // A sphere, permanently stretched along Y by scaling the
+        // geometry itself (not `mesh.scale`, which stays free for the
+        // per-frame squash/stretch and the embodiment's own uniform
+        // `scale` at the root level) — an elongated, teardrop-ish
+        // silhouette rather than a perfect orb.
+        const geometry = new THREE.SphereGeometry(RADIUS * 0.85, 20, 16);
+        geometry.scale(0.75, 1.55, 0.75);
+        return geometry;
+      }
+      case "floatingOrb":
+      case "custom":
+      default:
+        return new THREE.SphereGeometry(RADIUS, 24, 18);
+    }
+  }
+
   _buildBubble() {
-    const geometry = new THREE.SphereGeometry(RADIUS, 24, 18);
     this.material = new THREE.MeshPhysicalMaterial({
       color: "#dff5f0",
       transparent: true,
@@ -73,15 +157,16 @@ export class ResidentRenderer {
       clearcoat: 0.4,
       clearcoatRoughness: 0.3,
     });
-    this.mesh = new THREE.Mesh(geometry, this.material);
+    this.mesh = new THREE.Mesh(this._buildOuterGeometry("floatingOrb"), this.material);
     this.mesh.castShadow = false; // a small translucent glow has no business casting a hard shadow
     this.mesh.receiveShadow = false;
     this.root.add(this.mesh);
   }
 
   _buildInnerGlow() {
+    // Always a sphere regardless of outer shape — see the class comment.
     const geometry = new THREE.SphereGeometry(RADIUS * 0.45, 12, 10);
-    this.glowMaterial = new THREE.MeshBasicMaterial({ color: MOOD_COLORS.content, transparent: true, opacity: 0.8 });
+    this.glowMaterial = new THREE.MeshBasicMaterial({ color: MOOD_COLORS.content, transparent: true, opacity: BASE_GLOW_OPACITY });
     this.glowMesh = new THREE.Mesh(geometry, this.glowMaterial);
     this.root.add(this.glowMesh);
   }
@@ -127,9 +212,43 @@ export class ResidentRenderer {
     // "Soft ambient lighting" of its own — a very small point light so the
     // bubble genuinely casts a little warmth onto whatever it's near,
     // rather than only ever looking lit from outside itself.
-    this.light = new THREE.PointLight(MOOD_COLORS.content, 0.35, 1.4, 2);
+    this.light = new THREE.PointLight(MOOD_COLORS.content, BASE_LIGHT_INTENSITY, 1.4, 2);
     this.light.position.set(0, 0, 0);
     this.root.add(this.light);
+  }
+
+  /** Applies every embodiment field — called once at construction and
+   *  again whenever `ResidentController.js` notices the active profile's
+   *  own embodiment has changed (see its own `residents:changed`
+   *  listener). Geometry is only rebuilt when `type` actually differs
+   *  from what's already there, since disposing/rebuilding on every call
+   *  (colour and glow change far more often than type does) would be
+   *  wasted work. */
+  setEmbodiment(config) {
+    this._applyEmbodiment(normalizeEmbodimentConfig(config));
+  }
+
+  _applyEmbodiment(embodiment) {
+    this._embodiment = embodiment;
+    if (embodiment.type !== this._outerType) {
+      this._outerType = embodiment.type;
+      const oldGeometry = this.mesh.geometry;
+      this.mesh.geometry = this._buildOuterGeometry(embodiment.type);
+      oldGeometry.dispose();
+    }
+    this.material.color.set(embodiment.color);
+    this._applyGlow(embodiment.glow);
+    this.root.scale.setScalar(embodiment.scale);
+  }
+
+  /** `glow` (0-1, default 0.5) scales the inner glow's opacity and the
+   *  point light's intensity around their original fixed values, so the
+   *  default reproduces the exact look this resident always had before
+   *  embodiment settings did anything. */
+  _applyGlow(glow) {
+    const factor = glow / 0.5;
+    this.glowMaterial.opacity = Math.min(1, BASE_GLOW_OPACITY * factor);
+    this.light.intensity = BASE_LIGHT_INTENSITY * factor;
   }
 
   /** Redraws the face only when the expression actually changed. */
@@ -162,10 +281,18 @@ export class ResidentRenderer {
     }
 
     if (expression === "thinking") {
-      dot(ctx, s / 2 - eyeDX, eyeY - s * 0.02, s * 0.05);
-      dot(ctx, s / 2 + eyeDX, eyeY - s * 0.05, s * 0.05);
+      // Deliberately distinct from "curious" below (both eyes lifted and
+      // drawn a little closer together, a flat, settled mouth) — the two
+      // used to share almost the same asymmetric-raised-eye silhouette,
+      // easy to mistake for one another at this texture size. This one
+      // reads as turned inward; "curious" stays turned outward.
+      const liftedY = eyeY - s * 0.035;
+      const innerDX = eyeDX * 0.75;
+      dot(ctx, s / 2 - innerDX, liftedY, s * 0.05);
+      dot(ctx, s / 2 + innerDX, liftedY, s * 0.05);
       ctx.beginPath();
-      ctx.arc(s / 2, s * 0.62, s * 0.045, 0, Math.PI * 2);
+      ctx.moveTo(s / 2 - s * 0.05, s * 0.62);
+      ctx.lineTo(s / 2 + s * 0.05, s * 0.62);
       ctx.stroke();
       return;
     }
@@ -244,12 +371,16 @@ export class ResidentRenderer {
   /** "Glow becomes softer... idle movement slows" while offline —
    *  ResidentController.js calls this whenever `isAwake` changes, rather
    *  than every frame, since it's a state transition, not continuous
-   *  motion. */
+   *  motion. Scales relative to whatever the embodiment's own glow is
+   *  currently set to, rather than a second fixed pair of numbers, so a
+   *  resident configured with a brighter glow still reads as dimmer while
+   *  asleep than it does while awake. */
   setAwake(isAwake) {
+    const glowFactor = this._embodiment.glow / 0.5;
     this.material.opacity = isAwake ? 0.55 : 0.4;
     this.material.emissiveIntensity = isAwake ? 0.18 : 0.08;
-    this.glowMaterial.opacity = isAwake ? 0.8 : 0.45;
-    this.light.intensity = isAwake ? 0.35 : 0.15;
+    this.glowMaterial.opacity = isAwake ? Math.min(1, BASE_GLOW_OPACITY * glowFactor) : Math.min(1, BASE_GLOW_OPACITY * glowFactor * 0.56);
+    this.light.intensity = isAwake ? BASE_LIGHT_INTENSITY * glowFactor : BASE_LIGHT_INTENSITY * glowFactor * 0.43;
   }
 
   dispose() {

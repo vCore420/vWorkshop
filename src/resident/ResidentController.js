@@ -5,12 +5,18 @@ import { TimeOfDaySystem } from "../systems/TimeOfDaySystem.js";
 import { ResidentMovement, IDLE_LOCATIONS, MIN_REST_SECONDS } from "./ResidentMovement.js";
 import { ResidentRenderer } from "./ResidentRenderer.js";
 import { createResidentEntity } from "./ResidentEntity.js";
+import { getTraitModifiers } from "./ResidentTraits.js";
+import { isRainingNow, isGoldenHourNow, currentTimeBucket, currentWeatherId } from "./ResidentWorldSignals.js";
 
 const EXPRESSION_CHECK_INTERVAL = 0.5; // seconds — expression/awake checks don't need to run every single frame
 const FOLLOW_DISTANCE = 1.3; // metres — "Follow Me" stops closing the gap once this near, hovering companionably rather than stepping right up to the player's own eye position
 const DRAG_LOOK_COS_THRESHOLD = Math.cos((10 * Math.PI) / 180); // ~10° cone — a little more forgiving than the interaction one, since grabbing hold of something is a coarser gesture than a precise "talk to this" click
 const DRAG_REACH = 3; // metres — how far away Bubble can be and still be grabbed
 const DRAG_DISTANCE = 1.4; // metres in front of the camera Bubble is held at while dragged
+const PATTERN_SAMPLE_INTERVAL = 25; // seconds — how often player-position/preference affinity samples are taken; deliberately infrequent, this is about long-run patterns, not a live tracker
+const MOOD_DRIFT_MIN_SECONDS = 120; // "medium-term emotional state" — mood reconsiders itself every couple of minutes, not every frame
+const MOOD_DRIFT_MAX_SECONDS = 300;
+const MOOD_CANDIDATES = ["content", "curious", "happy"]; // "sleeping"/"thinking" are always situational, never a resting mood; see ResidentBehaviour.computeExpression's own priority order
 
 /**
  * ResidentController
@@ -24,6 +30,25 @@ const DRAG_DISTANCE = 1.4; // metres in front of the camera Bubble is held at wh
  * target `ResidentRenderer.update()` receives, `ResidentConnection.isAwake`
  * into both `ResidentBehaviour.computeExpression()` and
  * `ResidentRenderer.setAwake()`.
+ *
+ * **Version 2 additions** follow the exact same "read one thing, feed it
+ * onward" shape rather than growing this file into a second behaviour
+ * system of its own:
+ *   - **Personality traits** (`ResidentTraits.getTraitModifiers()`) are
+ *     read once per profile change (`_onProfileChanged()`, below), cached,
+ *     and simply handed to `ResidentMovement`/blended into player
+ *     distance — this file doesn't know what "curious" means, only that
+ *     some profile produced a rest-duration multiplier and an awareness
+ *     multiplier.
+ *   - **Preferences and behaviour memory** (`ResidentPreferences`,
+ *     `PlayerPatternMemory`) are sampled on a slow timer
+ *     (`_maybeSamplePatterns()`) — a plain bump on each, no interpretation
+ *     happening here either.
+ *   - **Mood** (`_maybeDriftMood()`) is a slow, weighted reconsideration of
+ *     `ResidentState.mood` — medium-term, distinct from the momentary
+ *     "emotion" `ResidentBehaviour.triggerEmotion()` handles (that's
+ *     called from `ResidentConversation.js`, at the one moment — opening
+ *     a conversation — where a short-term reaction actually makes sense).
  *
  * "The resident should exist inside the Workshop at all times... when
  * the player enters the Workshop the resident should already be
@@ -52,13 +77,19 @@ const DRAG_DISTANCE = 1.4; // metres in front of the camera Bubble is held at wh
  * current position exactly like any other time.
  */
 export class ResidentController {
-  constructor({ residentState, residentBehaviour, residentConnection, residentProfileStore }) {
+  constructor({ residentState, residentBehaviour, residentConnection, residentProfileStore, residentPreferences = null, playerPatternMemory = null, musicSystem = null }) {
     this.residentState = residentState;
     this.residentBehaviour = residentBehaviour;
     this.residentConnection = residentConnection;
     this.residentProfileStore = residentProfileStore;
+    this.residentPreferences = residentPreferences;
+    this.playerPatternMemory = playerPatternMemory;
+    this.musicSystem = musicSystem;
     this._wasAwake = null; // null so the very first frame always applies the correct awake/asleep visual, rather than assuming
     this._expressionTimer = 0;
+    this._patternTimer = PATTERN_SAMPLE_INTERVAL;
+    this._moodTimer = MOOD_DRIFT_MIN_SECONDS + Math.random() * (MOOD_DRIFT_MAX_SECONDS - MOOD_DRIFT_MIN_SECONDS);
+    this._traitModifiers = { restDurationMultiplier: 1, awarenessRadiusMultiplier: 1, locationWeights: {}, expressionBias: {} };
     this._playerPos = new THREE.Vector3();
     this._dragging = false;
     this._dragTarget = new THREE.Vector3();
@@ -85,7 +116,7 @@ export class ResidentController {
     // than snapping to idleLocationId's own fixed point; see
     // ResidentMovement.js's own constructor comment.
     this.movement = new ResidentMovement(this.residentState.idleLocationId, this.residentState.currentPosition);
-    this.renderer = new ResidentRenderer();
+    this.renderer = new ResidentRenderer(this.residentProfileStore.getActive()?.embodiment);
     createResidentEntity({ engine, root: this.renderer.root });
 
     this._onPointerDown = (e) => this._handlePointerDown(e);
@@ -93,11 +124,30 @@ export class ResidentController {
     engine.canvas.addEventListener("pointerdown", this._onPointerDown);
     window.addEventListener("pointerup", this._onPointerUp);
 
+    // "Behaviour settings should now genuinely influence Bubble" — traits
+    // and embodiment both live on the active profile, so both need
+    // refreshing whenever it changes, not just once at startup.
+    this._offResidentsChanged = this.residentProfileStore.events.on("residents:changed", () => this._onProfileChanged());
+    this._onProfileChanged();
+
     // "Bubble should begin feeling like an independent resident...
     // continue moving between favourite locations... arrive at a
     // believable location when the Workshop loads." See
     // _applyContinuity()'s own comment for the actual reasoning.
     engine.events.on("world:continuity", (continuity) => this._applyContinuity(continuity));
+  }
+
+  /** Refreshes everything that depends on *which* profile is currently
+   *  active, and on that profile's own traits/embodiment — called once at
+   *  startup and again every time `ResidentProfileStore` reports a
+   *  change (a new active profile, or an edit to the current one's traits
+   *  or embodiment in Mission Control). */
+  _onProfileChanged() {
+    const profile = this.residentProfileStore.getActive();
+    if (!profile) return;
+    this._traitModifiers = getTraitModifiers(profile.traits);
+    this.movement?.setRestDurationMultiplier(this._traitModifiers.restDurationMultiplier);
+    this.renderer?.setEmbodiment(profile.embodiment);
   }
 
   /** "What should I have been doing while the player was away?" — not a
@@ -114,6 +164,10 @@ export class ResidentController {
    *  since whatever journey led there happened while nobody was watching;
    *  only the destination needs to be believable, not the route. */
   _applyContinuity({ cappedElapsedSeconds, isFirstSession }) {
+    // A brand-new resident's own light starting preference bias (see
+    // ResidentPreferences.seedFromTraits' own comment) — harmless to call
+    // every first session; the store itself no-ops after the first time.
+    if (isFirstSession) this.residentPreferences?.seedFromTraits(this.residentProfileStore.getActive()?.traits);
     if (isFirstSession || cappedElapsedSeconds < MIN_REST_SECONDS) return;
 
     const currentId = this.residentState.idleLocationId;
@@ -124,25 +178,93 @@ export class ResidentController {
     this.movement.setDraggedLookAt(next.lookAt ?? next.position);
   }
 
-  /** Phase 31C's own one small contribution — see docs/RESIDENT.md's
-   *  "A quiet habit" section for the full reasoning behind it, and the
-   *  README's own "One contribution" note for why this one, specifically.
-   *  In short: Bubble is a little more likely to wander to the window
-   *  while it's raining, or during a warm sunrise/sunset sky, than at any
-   *  other idle pick — the exact same golden-hour window
-   *  `TimeOfDaySystem._computeState()` already uses for the sun's own
-   *  colour shift, and `EnvironmentSystem.getEffectivePrecipitation()`,
-   *  not a new concept invented for this. Never guaranteed, never a
-   *  scripted event — still an ordinary weighted pick among the same
-   *  idle locations that already exist, just one a patient, observant
-   *  player might eventually notice forms a pattern of its own. */
+  /** Phase 31C's own one small contribution (see docs/RESIDENT.md's "A
+   *  quiet habit" section) grew into this phase's general-purpose
+   *  location-weighting: window-watching during interesting weather is
+   *  now one contributor among several rather than the only one —
+   *  selected personality traits (`ResidentTraits.getTraitModifiers()`'s
+   *  own `locationWeights`), an accumulated favourite place
+   *  (`ResidentPreferences.favourite("locations")`), and the music cabinet
+   *  while something's actually playing all combine the same way,
+   *  multiplicatively, into one weights object `ResidentMovement.
+   *  maybePickNewLocation()` already knew how to accept. Still never
+   *  guaranteed, never scripted — an ordinary weighted pick among idle
+   *  locations that already exist either way. */
   _windowWatchWeights() {
-    if (!this._environmentSystem || !this._timeOfDaySystem) return null;
-    const isRaining = this._environmentSystem.getEffectivePrecipitation() > 0;
-    const hour = this._timeOfDaySystem.currentTime;
-    const isGoldenHour = (hour > 5 && hour < 8) || (hour > 16 && hour < 19);
-    if (!isRaining && !isGoldenHour) return null;
-    return { lookingOutWindow: 4 };
+    const weights = {};
+    const merge = (extra) => {
+      for (const [locId, weight] of Object.entries(extra)) weights[locId] = (weights[locId] ?? 1) * weight;
+    };
+
+    if (this._environmentSystem && this._timeOfDaySystem) {
+      const worthWatching = isRainingNow(this._environmentSystem) || isGoldenHourNow(this._timeOfDaySystem);
+      if (worthWatching) merge({ lookingOutWindow: 4 });
+    }
+
+    merge(this._traitModifiers.locationWeights);
+
+    const favouriteLocation = this.residentPreferences?.favourite("locations");
+    if (favouriteLocation) merge({ [favouriteLocation]: 1.8 });
+
+    if (this.musicSystem?.isPlaying) merge({ byMusicPlayer: 1.6 });
+
+    return Object.keys(weights).length ? weights : null;
+  }
+
+  /** "The player often builds near the workbench... usually visits in the
+   *  evening... Bubble should begin developing gentle daily habits."
+   *  A slow, shared timer (see `PATTERN_SAMPLE_INTERVAL`) bumps the
+   *  player's own position/time-of-day pattern and Bubble's own
+   *  weather/time/activity affinities together — deliberately skipped
+   *  while a conversation is open, since the player is necessarily
+   *  standing right next to Bubble at that moment, which would otherwise
+   *  skew "where the player usually is" toward wherever Bubble happens to
+   *  be idling. */
+  _maybeSamplePatterns(dt) {
+    this._patternTimer -= dt;
+    if (this._patternTimer > 0) return;
+    this._patternTimer = PATTERN_SAMPLE_INTERVAL;
+    if (this.residentBehaviour.mode === "conversing") return;
+
+    const bucket = currentTimeBucket(this._timeOfDaySystem);
+    if (this._cameraSystem) this.playerPatternMemory?.sample(this._cameraSystem.position, bucket);
+
+    const weatherId = currentWeatherId(this._environmentSystem);
+    this.residentPreferences?.bump("weather", weatherId);
+    this.residentPreferences?.bump("timeOfDay", bucket);
+    if (this.musicSystem?.isPlaying) this.residentPreferences?.bump("activities", "listeningToMusic");
+    if (this.residentState.idleLocationId === "lookingOutWindow") {
+      if (isRainingNow(this._environmentSystem)) this.residentPreferences?.bump("activities", "watchingRain");
+      else if (isGoldenHourNow(this._timeOfDaySystem)) this.residentPreferences?.bump("activities", "watchingTheSky");
+    }
+  }
+
+  /** "Mood — medium-term emotional state... subtle behaviour changes are
+   *  preferable to obvious state changes." A slow, weighted reconsider —
+   *  never every frame, never instant — biased toward staying whatever it
+   *  already is (see `weights[currentMood] *= ...` below), nudged by
+   *  selected traits' own `expressionBias`, and by whether the resident's
+   *  own accumulated favourite weather/time-of-day happens to match right
+   *  now (a resident actually getting to enjoy a preference it's formed
+   *  reads as content, not neutral). */
+  _maybeDriftMood(dt) {
+    this._moodTimer -= dt;
+    if (this._moodTimer > 0) return;
+    this._moodTimer = MOOD_DRIFT_MIN_SECONDS + Math.random() * (MOOD_DRIFT_MAX_SECONDS - MOOD_DRIFT_MIN_SECONDS);
+
+    const weights = { content: 2, curious: 1, happy: 1 };
+    for (const [expr, bias] of Object.entries(this._traitModifiers.expressionBias)) {
+      if (weights[expr] !== undefined) weights[expr] *= bias;
+    }
+    if (isGoldenHourNow(this._timeOfDaySystem)) weights.curious *= 1.3;
+    const favouriteWeather = this.residentPreferences?.favourite("weather");
+    if (favouriteWeather && favouriteWeather === currentWeatherId(this._environmentSystem)) weights.happy *= 1.5;
+    const favouriteTime = this.residentPreferences?.favourite("timeOfDay");
+    if (favouriteTime && favouriteTime === currentTimeBucket(this._timeOfDaySystem)) weights.happy *= 1.3;
+    weights[this.residentState.mood] = (weights[this.residentState.mood] ?? 1) * 2.5; // stability — mood shouldn't flicker every reconsideration
+
+    const picked = weightedPick(weights);
+    if (picked !== this.residentState.mood) this.residentState.setMood(picked);
   }
 
   _handlePointerDown(event) {
@@ -211,26 +333,40 @@ export class ResidentController {
       this.renderer.setAwake(isAwake);
     }
 
+    this._maybeSamplePatterns(dt);
+    this._maybeDriftMood(dt);
+
     if (this._dragging) {
       this._updateDragging(dt);
       return;
     }
 
-    const playerDistance = this._computePlayerDistance();
+    const rawPlayerDistance = this._computePlayerDistance();
+    // A trait-driven awareness-radius multiplier is applied here, on the
+    // distance itself, rather than inside `ResidentBehaviour` — dividing
+    // by a multiplier greater than 1 makes the player read as closer than
+    // they actually are (so a "cheerful" resident notices them sooner),
+    // which needed no change at all to `ResidentBehaviour`'s own fixed
+    // radii.
+    const playerDistance = rawPlayerDistance !== null ? rawPlayerDistance / (this._traitModifiers.awarenessRadiusMultiplier || 1) : null;
     const isConversing = this.residentBehaviour.mode === "conversing";
-    if (this.playerCommand === "follow" && playerDistance !== null && playerDistance > FOLLOW_DISTANCE) {
+    if (this.playerCommand === "follow" && rawPlayerDistance !== null && rawPlayerDistance > FOLLOW_DISTANCE) {
       this.movement.stepToward(this._playerPos, dt);
     } else if (!isConversing && this.playerCommand !== "stay") {
       const currentId = this.residentState.idleLocationId;
       const newId = this.movement.maybePickNewLocation(dt, currentId, this._windowWatchWeights());
-      if (newId) this.residentState.setIdleLocation(newId);
+      if (newId) {
+        this.residentState.setIdleLocation(newId);
+        this.residentPreferences?.bump("locations", newId);
+      }
     }
 
     this.residentBehaviour.update(dt, playerDistance);
 
-    const motion = this.movement.update(dt, { thinking: this.residentBehaviour.isThinking });
+    const activeProfile = this.residentProfileStore.getActive();
+    const motion = this.movement.update(dt, { thinking: this.residentBehaviour.isThinking, idleBehaviour: activeProfile?.embodiment?.idleBehaviour });
     const lookTarget = motion.lookAt.clone();
-    if (playerDistance !== null) lookTarget.lerp(this._playerPos, this.residentBehaviour.awarenessBlend);
+    if (rawPlayerDistance !== null) lookTarget.lerp(this._playerPos, this.residentBehaviour.awarenessBlend);
 
     this._syncPersistedState();
     this.renderer.update(dt, { position: motion.position, idleRotationY: motion.idleRotationY, scale: motion.scale, lookTarget });
@@ -290,5 +426,24 @@ export class ResidentController {
   dispose() {
     this.engine.canvas.removeEventListener("pointerdown", this._onPointerDown);
     window.removeEventListener("pointerup", this._onPointerUp);
+    this._offResidentsChanged?.();
   }
+}
+
+/** A plain `{key: weight}` weighted pick — `ResidentMovement.js`'s own
+ *  `randomIdleLocationId()` already has one shaped around location ids
+ *  specifically; this is the same idea, generic, for `_maybeDriftMood()`'s
+ *  small, fixed candidate set. Kept local rather than promoted to a
+ *  shared utility since nothing else in this file's own neighbourhood
+ *  needs a generic weighted pick yet — see this project's own
+ *  "extend before you generalise" habit. */
+function weightedPick(weights) {
+  const entries = Object.entries(weights).filter(([key]) => MOOD_CANDIDATES.includes(key));
+  const total = entries.reduce((sum, [, w]) => sum + w, 0);
+  let roll = Math.random() * total;
+  for (const [key, w] of entries) {
+    roll -= w;
+    if (roll <= 0) return key;
+  }
+  return entries[entries.length - 1]?.[0] ?? "content";
 }
