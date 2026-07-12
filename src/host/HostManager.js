@@ -5,6 +5,8 @@ import { FilesService } from "./FilesService.js";
 import { PluginRegistry } from "./PluginRegistry.js";
 import { AutomationService } from "./AutomationService.js";
 import { HardwareService } from "./HardwareService.js";
+import { DocumentsService } from "./DocumentsService.js";
+import { DownloadsService } from "./DownloadsService.js";
 
 const HOST_VERSION = "0.1.0-preview";
 
@@ -15,10 +17,11 @@ const HOST_VERSION = "0.1.0-preview";
  * not another user-facing application." Concretely: there is no
  * `createHostApp()` anywhere in `src/computer/apps/` — the Host has no
  * computer-app entry of its own, no rail icon, no window. Everything it
- * offers is reached exclusively through `workshop://host` and its
- * sibling pages (`HostPages.js`), which the Browser already knows how to
- * display without any special-casing — "the Host should never create
- * separate windows or interfaces."
+ * offers is reached exclusively through `host://services` (the
+ * Dashboard, renamed from `workshop://host` in the Browser Ecosystem
+ * phase — see `HostPages.js`'s own comment) and its sibling pages, which
+ * the Browser already knows how to display without any special-casing —
+ * "the Host should never create separate windows or interfaces."
  *
  * ```
  * Browser
@@ -32,10 +35,11 @@ const HOST_VERSION = "0.1.0-preview";
  * the Host provides services, and the Browser never directly performs a
  * local-machine operation itself. Today, every one of those services
  * (`ProgramsService`, `ProjectsService`, `FilesService`,
- * `AutomationService`, `HardwareService`) is honestly unimplemented —
- * there is no actual bridge to a local machine from inside a browser
- * tab, and this phase doesn't invent one. What exists is the *shape*
- * every one of those will eventually fill: register with
+ * `AutomationService`, `HardwareService`, and — new in the Browser
+ * Ecosystem phase — `DocumentsService`, `DownloadsService`) is honestly
+ * unimplemented — there is no actual bridge to a local machine from
+ * inside a browser tab, and this phase doesn't invent one. What exists
+ * is the *shape* every one of those will eventually fill: register with
  * `ServiceRegistry` under a name, expose `getStatus()`, and the Host
  * Dashboard already knows how to list it, with zero changes required
  * when a service becomes real.
@@ -51,6 +55,8 @@ export class HostManager {
     this.services.register("files", new FilesService());
     this.services.register("automation", new AutomationService());
     this.services.register("hardware", new HardwareService());
+    this.services.register("documents", new DocumentsService());
+    this.services.register("downloads", new DownloadsService());
     // Deliberately not registered as a ServiceRegistry entry — see
     // PluginRegistry.js's own comment on why it's a related but distinct
     // concern (which workshop:// pages a plugin contributes, not a

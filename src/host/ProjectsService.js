@@ -10,11 +10,15 @@
  * projects, real folders on the player's actual computer, a genuinely
  * different concept that happens to share a name.
  *
- * `workshop://projects` (see `HostPages.js`) shows both side by side
- * rather than this service claiming the URL for itself — the Workshop's
- * own projects are real today; duplicating or replacing that page with
- * an empty "local projects" placeholder would be a regression, not
- * progress.
+ * `workshop://projects` (see `WorkshopPages.js`) shows the Workshop's own
+ * real projects and points to this service's own dedicated
+ * `host://projects` page (see `HostPages.js`) for local ones — two pages,
+ * not one page pretending to cover both.
+ *
+ * `previewItems()` — same reconciliation as `ProgramsService.js`/
+ * `DocumentsService.js`: `this.recent` stays honestly empty, a separate,
+ * clearly-labelled illustrative list exists purely so `host://projects`
+ * has something to demonstrate its own layout with.
  */
 export class ProjectsService {
   constructor() {
@@ -23,6 +27,13 @@ export class ProjectsService {
 
   getStatus() {
     return { available: false, summary: "Opening local projects isn't implemented yet — this is prepared architecture, not a working feature." };
+  }
+
+  previewItems() {
+    return [
+      { name: "workshop-companion-app", kind: "Node project", modified: "1 day ago", isExample: true },
+      { name: "reference-renders", kind: "Folder", modified: "6 days ago", isExample: true },
+    ];
   }
 
   openProject(_path) {

@@ -4,12 +4,15 @@
  * "Introduce a lightweight browser companion... quick access to Workshop
  * documentation, GitHub, Bookmarks, Saved Workshop pages. The full
  * browser experience should remain available on the Workshop computer."
- * `workshop://` links render inline (an iframe with the exact
+ * Internal-scheme links (`workshop://`, `host://`, `plugin://` — see
+ * `PageRegistry.isInternalUrl()`) render inline (an iframe with the exact
  * `{title, html}` shape `PageRegistry.resolve()` already produces for the
  * full computer Browser — the same content, not a re-fetched copy);
  * ordinary `https://` links (GitHub, say) open in a real new browser tab
  * instead of trying to embed a site this Workshop doesn't control.
  */
+import { isInternalUrl } from "../../browser/PageRegistry.js";
+
 export function createBrowserPhoneApp({ pageRegistry, browserStore }) {
   return {
     id: "browser",
@@ -33,8 +36,8 @@ export function createBrowserPhoneApp({ pageRegistry, browserStore }) {
       backRow.appendChild(backBtn);
       pageView.append(backRow, iframe);
 
-      async function openWorkshopPage(path, title) {
-        const page = await pageRegistry.resolve(path);
+      async function openInternalPage(url, title) {
+        const page = await pageRegistry.resolve(url);
         iframe.srcdoc = page?.html ?? `<p>${title} isn't available.</p>`;
         listView.style.display = "none";
         pageView.style.display = "flex";
@@ -56,7 +59,8 @@ export function createBrowserPhoneApp({ pageRegistry, browserStore }) {
         const quickHeading = document.createElement("h3");
         quickHeading.textContent = "Quick Links";
         quickSection.appendChild(quickHeading);
-        quickSection.appendChild(buildLinkRow("Workshop Documentation", () => openWorkshopPage("docs", "Documentation")));
+        quickSection.appendChild(buildLinkRow("Workshop Documentation", () => openInternalPage("workshop://documentation", "Documentation")));
+        quickSection.appendChild(buildLinkRow("Search the Workshop", () => openInternalPage("workshop://search", "Search")));
         quickSection.appendChild(buildLinkRow("GitHub", () => window.open("https://github.com", "_blank", "noopener")));
         listView.appendChild(quickSection);
 
@@ -82,7 +86,7 @@ export function createBrowserPhoneApp({ pageRegistry, browserStore }) {
           openBtn.className = "workshop-phone-small-button";
           openBtn.textContent = "Open";
           openBtn.addEventListener("click", () => {
-            if (bookmark.url.startsWith("workshop://")) openWorkshopPage(bookmark.url.replace("workshop://", ""), bookmark.title);
+            if (isInternalUrl(bookmark.url)) openInternalPage(bookmark.url, bookmark.title);
             else window.open(bookmark.url, "_blank", "noopener");
           });
           const removeBtn = document.createElement("button");
@@ -98,7 +102,7 @@ export function createBrowserPhoneApp({ pageRegistry, browserStore }) {
         addRow.className = "workshop-phone-button-row";
         const urlInput = document.createElement("input");
         urlInput.type = "text";
-        urlInput.placeholder = "workshop://docs or https://\u2026";
+        urlInput.placeholder = "workshop://docs, host://services, or https://\u2026";
         const addBtn = document.createElement("button");
         addBtn.type = "button";
         addBtn.className = "workshop-phone-small-button";
