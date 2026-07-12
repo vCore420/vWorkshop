@@ -1880,6 +1880,54 @@ rather than guessing at `https://`.
 Browser's own toolbar (previously only the Phone's Browser app had
 bookmarks), backed by the same shared `BrowserStore.bookmarks` list.
 
+## Version 2 — Phase 4 — Workshop Platform (v2.0.4)
+
+**Goal:** "Version 1 introduced the Workshop Host as a proof of concept.
+Version 2 is about completing it... the Host should become the
+Workshop's operating system. The Browser remains where the player
+interacts with the Workshop. The Host becomes the engine quietly working
+beneath it." See docs/HOST.md for the full write-up; docs/BROWSER.md for
+the three new protocols.
+
+**Nine named services, all now real** — Application (`ProgramsService`,
+now also registered as `"applications"`), File, Project, Automation,
+Hardware (all expanded), plus four genuinely new: **Asset Service**
+(a real, live view over every existing asset library — Objects,
+Blueprints, Animations, Models, Images, Music — registered dynamically,
+not hardcoded), **Resident Service** and **Diagnostics Service** (real
+Host-level views over the resident system and Workshop-wide health,
+formalising what a Browser page already computed ad hoc), and **Plugin
+Service** (a unified directory across both of the Workshop's plugin
+contracts).
+
+**A real Workshop Host Companion** — "some capabilities requested during
+this phase cannot reasonably exist inside a browser environment alone...
+please feel free to think beyond JavaScript running in the browser."
+`host-companion/workshop-host-companion.js`: a genuine, zero-dependency,
+optional local Node.js server, deliberately scoped to two safe,
+read-only endpoints (a status check and a sandboxed, metadata-only
+directory listing) rather than anything that could meaningfully harm
+someone if a stray request ever reached it. `HostConnectionManager.js`
+polls it the identical calm way `AIConnectionManager` polls Ollama;
+`FilesService.listFiles()` is genuinely real once it's running.
+
+**A real permissions architecture** — five categories, all off by
+default, persisted; Filesystem is the one category with real teeth
+today, gating `FilesService`'s own Companion-backed capability even when
+the Companion is reachable. `host://permissions` is genuinely
+interactive.
+
+**Real, if narrow, additions elsewhere** — pinned local projects
+(`ProjectsService`, genuinely persisted, independent of any filesystem
+bridge), Automation's own task descriptors (real data, nothing executes
+them yet — "avoid implementing large automation systems" honoured
+directly), Hardware's own named device categories.
+
+**Three new Local Protocols** — `asset://`, `resident://`, `project://`,
+each the new canonical scheme for something that already existed under
+`workshop://` (all kept resolving as aliases) — `BrowserApp.js` needed
+zero changes for any of them.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

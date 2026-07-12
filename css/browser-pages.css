@@ -244,3 +244,22 @@ body {
   margin-bottom: 20px;
 }
 .workshop-page-actions { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; }
+
+.workshop-permission-row {
+  border: 1px solid var(--paper-dark);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+}
+.workshop-permission-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+}
+.workshop-permission-label input[type="checkbox"] {
+  margin-top: 4px;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}

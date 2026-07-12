@@ -50,7 +50,8 @@ applied to pages instead of behaviours or apps.
 `PageRegistry` implicitly only ever meant `workshop://` — the scheme was
 stripped before resolution, and `BrowserApp.js` checked
 `url.startsWith("workshop://")` in three separate places. Both are gone
-now: `INTERNAL_SCHEMES` (`workshop`, `host`, `plugin`) is the one place
+now: `INTERNAL_SCHEMES` (`workshop`, `host`, `plugin`, and — new in the
+Workshop Platform phase — `asset`, `resident`, `project`) is the one place
 that list lives, `isInternalUrl()`/`schemeOf()` are the only checks
 anything needs, and the registry stores keys as the full `scheme://path`
 rather than a bare path. `BrowserApp.js` needed exactly one change per
@@ -310,6 +311,32 @@ neither `BrowserApp.js` nor `PageRegistry.js` needed a single change for
 either to exist — the entire point being demonstrated. `host://plugins`
 lists every contributing plugin and which pages each one declared
 (`plugin.pages`, an optional manifest field, purely for display).
+
+## Local Protocols (Workshop Platform phase)
+
+"Continue expanding Workshop protocols... `asset://`, `resident://`,
+`project://`... ensure future services can naturally expose functionality
+through these protocols." Three new schemes, registered in
+`PageRegistry.INTERNAL_SCHEMES` alongside the three that already
+existed — `BrowserApp.js` needed zero further changes, since it never
+checks a specific scheme by name, only `isInternalUrl()`.
+
+- **`asset://`** is the new canonical scheme for the Shared Asset
+  Library (`asset://` itself is the overview, `asset://object/42` a
+  detail page) — `workshop://assets`/`workshop://asset/<category>/<id>`
+  keep resolving as aliases. See "File Pages" above.
+- **`resident://`** is the new canonical scheme for Residents —
+  `workshop://residents` keeps resolving as an alias.
+- **`project://`** is the new canonical scheme for the Workshop's own
+  *internal* Projects — deliberately distinct from `host://projects`,
+  the separate local-filesystem one (see `docs/HOST.md`'s own "Project
+  Service" section). `workshop://projects` keeps resolving as an alias.
+
+Each new scheme's own page is registered from the same file that already
+owned the underlying content (`asset://` in `AssetPages.js`;
+`resident://`/`project://` in `WorkshopPages.js`) — introducing a new
+protocol never means a new file, only a new `pageRegistry.register()`
+call alongside the existing one.
 
 ## Known simplifications (by design, for this phase)
 

@@ -715,5 +715,18 @@ plugin-page mechanism end-to-end, the foundations of Unified Search, and
 bookmarks reaching the full Browser's own toolbar. See `docs/BROWSER.md`
 and `docs/HOST.md` for the full account.
 
+**Version 2, Phase 4 — Workshop Platform (v2.0.4)** — the Workshop Host
+completed its own nine-service architecture (Application, File, Project,
+Plugin, Asset, Resident, Automation, Hardware, Diagnostics), four of them
+— Asset, Resident, Diagnostics, Plugin — genuinely real Host-level views
+over systems that already existed. A real, optional, zero-dependency
+local companion server (`host-companion/`) and a matching
+`HostConnectionManager` bring one genuine local-machine capability
+(sandboxed, read-only folder listing) to life, gated by a real, persisted
+Permissions architecture. Three new Local Protocols (`asset://`,
+`resident://`, `project://`) joined `workshop://`/`host://`/`plugin://`,
+each a new canonical scheme for something that already existed. See
+`docs/HOST.md` and `docs/BROWSER.md` for the full account.
+
 </details>
 
