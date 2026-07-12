@@ -31,10 +31,10 @@ export function registerHostPages(pageRegistry, searchIndex, { hostManager, mode
   pageRegistry.register("host://services", () => hostDashboardPage(hostManager));
   pageRegistry.register("workshop://host", () => hostDashboardPage(hostManager)); // alias — see this file's own comment
 
-  pageRegistry.register("host://applications", () => servicePreviewPage("Applications", hostManager.services.get("programs"), "name", "kind"));
-  pageRegistry.register("workshop://programs", () => servicePreviewPage("Applications", hostManager.services.get("programs"), "name", "kind")); // alias
+  pageRegistry.register("host://applications", () => servicePreviewPage("Applications", hostManager.services.get("applications"), "name", "kind"));
+  pageRegistry.register("workshop://programs", () => servicePreviewPage("Applications", hostManager.services.get("applications"), "name", "kind")); // alias
 
-  pageRegistry.register("host://projects", () => servicePreviewPage("Local Projects", hostManager.services.get("projects"), "name", "kind", "modified"));
+  pageRegistry.register("host://projects", () => hostProjectsPage(hostManager.services.get("projects")));
 
   pageRegistry.register("host://documents", () => servicePreviewPage("Documents", hostManager.services.get("documents"), "name", "kind", "modified"));
   pageRegistry.register("host://downloads", () => servicePreviewPage("Downloads", hostManager.services.get("downloads"), "name", "kind", "modified"));
@@ -50,8 +50,10 @@ export function registerHostPages(pageRegistry, searchIndex, { hostManager, mode
   pageRegistry.register("host://models", () => modelsPage(modelRegistry));
   pageRegistry.register("workshop://models", () => modelsPage(modelRegistry)); // alias
 
-  pageRegistry.register("host://plugins", () => pluginsPage(hostManager.pluginRegistry));
-  pageRegistry.register("workshop://plugins", () => pluginsPage(hostManager.pluginRegistry)); // alias
+  pageRegistry.register("host://plugins", () => pluginsPage(hostManager));
+  pageRegistry.register("workshop://plugins", () => pluginsPage(hostManager)); // alias
+
+  pageRegistry.register("host://permissions", () => permissionsPage(hostManager.permissions));
 
   searchIndex.addEntries([
     { url: "host://services", title: "Host Services", category: "Host", keywords: ["dashboard", "status"] },
@@ -64,6 +66,7 @@ export function registerHostPages(pageRegistry, searchIndex, { hostManager, mode
     { url: "host://hardware", title: "Hardware", category: "Host", keywords: ["usb", "controllers", "devices"] },
     { url: "host://models", title: "Models", category: "Host", keywords: ["ollama", "ai"] },
     { url: "host://plugins", title: "Plugins", category: "Host", keywords: ["extensions", "contributors"] },
+    { url: "host://permissions", title: "Permissions", category: "Host", keywords: ["filesystem", "hardware", "network", "grant", "companion"] },
   ]);
 }
 
@@ -78,7 +81,7 @@ function hostDashboardPage(hostManager) {
   const html = `
     <span class="workshop-page-badge">Workshop Host</span>
     <h1>Workshop Host</h1>
-    <p class="workshop-page-subtitle">The Workshop's bridge to your local machine \u2014 currently a lightweight, prepared companion, not yet connected to anything on your actual computer.</p>
+    <p class="workshop-page-subtitle">The Workshop's bridge to your local machine \u2014 most of it still a lightweight, prepared companion, but genuinely real wherever the <a href="host://files">Workshop Host Companion</a> is running and connected (see <code>host-companion/README.md</code>).</p>
 
     <div class="workshop-home-section">
       <h2>Status</h2>
@@ -107,6 +110,10 @@ function hostDashboardPage(hostManager) {
         ${tile("host://plugins", "Plugins")}
         ${tile("host://automation", "Automation")}
         ${tile("host://hardware", "Hardware")}
+        ${tile("host://permissions", "Permissions")}
+        ${tile("asset://", "Assets")}
+        ${tile("resident://", "Residents")}
+        ${tile("project://", "Workshop Projects")}
       </div>
     </div>
   `;
@@ -167,6 +174,72 @@ function servicePreviewPage(title, service, ...fields) {
   return { title, html: wrapPage(title, html) };
 }
 
+/** "Pinned projects" — genuinely real (see `ProjectsService.js`'s own
+ *  comment), shown above the illustrative preview rows and clearly
+ *  visually distinct from them (no "Example" badge, a real remove
+ *  button) since pinning itself needs no local-machine bridge at all.
+ *  Adding a path posts `workshop-browser-pin-project`, the same
+ *  `postMessage` shape every other interactive Workshop page already
+ *  uses. */
+function hostProjectsPage(projectsService) {
+  const status = projectsService?.getStatus?.() ?? { available: false, summary: "Not available." };
+  const pinned = projectsService?.pinnedProjects() ?? [];
+  const pinnedRows = pinned.length
+    ? pinned
+        .map(
+          (path) => `
+            <div class="workshop-home-tile" style="cursor:default">
+              <span class="workshop-home-tile-title">${escapeHtml(path)}</span>
+              <button type="button" class="builder-icon-button" data-unpin="${escapeHtml(path)}">\u2715</button>
+            </div>
+          `
+        )
+        .join("")
+    : `<p class="workshop-page-empty">No pinned projects yet \u2014 add a path below.</p>`;
+
+  const preview = projectsService?.previewItems?.() ?? [];
+  const previewRows = preview
+    .map(
+      (item) =>
+        `<div class="workshop-home-tile workshop-example-row" style="cursor:default"><span class="workshop-home-tile-title">${escapeHtml(item.name)}<span class="workshop-example-badge">Example</span></span><span class="workshop-home-tile-meta">${escapeHtml([item.kind, item.modified].filter(Boolean).join(" \u00b7 "))}</span></div>`
+    )
+    .join("");
+
+  const html = `
+    <span class="workshop-page-badge">Workshop Host</span>
+    <h1>Local Projects</h1>
+    <p class="workshop-page-subtitle">${status.available ? "Available" : "Not yet available"}</p>
+    <p>${escapeHtml(status.summary)}</p>
+
+    <h2>Pinned</h2>
+    <p class="workshop-page-subtitle" style="margin-bottom:12px;">A real, saved list of paths you care about \u2014 works today, independent of everything else on this page.</p>
+    <div class="workshop-home-grid">${pinnedRows}</div>
+    <div class="resident-conversation-input-row" style="margin:10px 0 24px;">
+      <input type="text" id="pin-path-input" placeholder="A project path or name to remember">
+      <button type="button" id="pin-path-button">Pin</button>
+    </div>
+
+    <h2>What browsing real local projects will look like</h2>
+    <p class="workshop-page-subtitle" style="margin-bottom:12px;">The rows below are illustrative examples, not real data \u2014 there's no local-machine bridge to read from yet.</p>
+    <div class="workshop-home-grid">${previewRows}</div>
+
+    <p style="margin-top:20px;"><a href="host://services">Back to the Host Dashboard</a></p>
+    <script>
+      document.getElementById("pin-path-button").addEventListener("click", () => {
+        const input = document.getElementById("pin-path-input");
+        if (!input.value.trim()) return;
+        window.parent.postMessage({ type: "workshop-browser-pin-project", path: input.value.trim() }, "*");
+      });
+      document.querySelectorAll("[data-unpin]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          window.parent.postMessage({ type: "workshop-browser-unpin-project", path: btn.dataset.unpin }, "*");
+        });
+      });
+    </script>
+  `;
+  return { title: "Local Projects", html: wrapPage("Local Projects", html) };
+}
+
 function modelsPage(modelRegistry) {
   const models = modelRegistry?.all() ?? [];
   const rows = models.length
@@ -187,33 +260,79 @@ function modelsPage(modelRegistry) {
   return { title: "Models", html: wrapPage("Models", html) };
 }
 
-/** "plugin:// pages should naturally integrate into Browser navigation
- *  without requiring hardcoded support." Lists every plugin that's
- *  contributed pages, and — new this phase — which pages each one
- *  declared (`plugin.pages`, see `PluginRegistry.js`'s own comment),
- *  rendered as real, clickable links rather than plain text. */
-function pluginsPage(pluginRegistry) {
-  const contributors = pluginRegistry?.contributors() ?? [];
-  const rows = contributors.length
-    ? contributors
+/** "The Host should become responsible for managing Workshop plugins."
+ *  Reads `PluginService` (registered under `"plugins"` once `main.js`'s
+ *  own Workshop Platform wiring constructs it — see `HostManager.js`'s
+ *  own comment on why that happens later than most services) rather
+ *  than `pluginRegistry.contributors()` directly, so this page shows
+ *  *every* currently-loaded plugin — both the general lifecycle contract
+ *  (`engine.plugins`) and the Browser-page contract
+ *  (`hostManager.pluginRegistry`) — not only the ones that happen to
+ *  register a page. */
+function pluginsPage(hostManager) {
+  const pluginService = hostManager.services.get("plugins");
+  const plugins = pluginService?.listAll() ?? [];
+  const rows = plugins.length
+    ? plugins
         .map(
-          (c) => `
+          (p) => `
             <div class="workshop-home-tile" style="cursor:default">
-              <span class="workshop-home-tile-title">${escapeHtml(c.name)}</span>
-              <span class="workshop-home-tile-meta">${c.pages.length ? c.pages.map((p) => `<a href="${escapeHtml(p)}">${escapeHtml(p)}</a>`).join(", ") : "No pages declared"}</span>
+              <span class="workshop-home-tile-title">${escapeHtml(p.name)}</span>
+              <span class="workshop-home-tile-meta">${p.contracts.map((c) => (c === "pages" ? "registers pages" : "engine lifecycle")).join(" \u00b7 ")}</span>
+              <span class="workshop-home-tile-meta">${p.pages.length ? p.pages.map((page) => `<a href="${escapeHtml(page)}">${escapeHtml(page)}</a>`).join(", ") : "No pages declared"}</span>
             </div>
           `
         )
         .join("")
-    : `<p class="workshop-page-empty">No plugins have registered any Workshop pages yet.</p>`;
+    : `<p class="workshop-page-empty">No plugins are currently loaded.</p>`;
   const html = `
     <span class="workshop-page-badge">Workshop Host</span>
     <h1>Plugins</h1>
-    <p class="workshop-page-subtitle">A plugin can extend the Browser by registering its own <code>plugin://</code> pages \u2014 see <code>docs/PLUGIN_GUIDE.md</code> and the two working examples below.</p>
+    <p class="workshop-page-subtitle">Every plugin currently loaded, from either contract a plugin can implement: general engine lifecycle (<code>engine.plugins</code>) or Browser pages (<code>hostManager.pluginRegistry</code>). See <code>docs/PLUGIN_GUIDE.md</code> and the two working page-registering examples below.</p>
     <div class="workshop-home-grid">${rows}</div>
     <p><a href="host://services">Back to the Host Dashboard</a></p>
   `;
   return { title: "Plugins", html: wrapPage("Plugins", html) };
+}
+
+/** "Please begin introducing a permissions architecture." Genuinely
+ *  interactive — each category's own checkbox posts a
+ *  `workshop-browser-set-permission` message the same way
+ *  `workshop://bookmarks`' own "Remove" button already posts
+ *  `workshop-browser-navigate`; `BrowserApp.js` is the one place that
+ *  actually calls `grant()`/`revoke()` on the real `PermissionsService`,
+ *  then reloads this page so the checkbox state reflects what actually
+ *  happened rather than what the click merely asked for. */
+function permissionsPage(permissionsService) {
+  const rows = permissionsService.categories().map((category) => {
+    const granted = permissionsService.isGranted(category.id);
+    return `
+      <div class="workshop-permission-row">
+        <label class="workshop-permission-label">
+          <input type="checkbox" data-permission="${escapeHtml(category.id)}" ${granted ? "checked" : ""}>
+          <span>
+            <strong>${escapeHtml(category.label)}</strong>
+            <span class="workshop-page-subtitle" style="margin:2px 0 0;">${escapeHtml(category.description)}</span>
+          </span>
+        </label>
+      </div>
+    `;
+  });
+  const html = `
+    <span class="workshop-page-badge">Workshop Host</span>
+    <h1>Permissions</h1>
+    <p class="workshop-page-subtitle">What the Workshop Host is allowed to do on your own computer, all off by default. Granting Filesystem here is what lets <a href="host://files">Files</a> genuinely browse a folder once the Workshop Host Companion is running (see <code>host-companion/README.md</code>).</p>
+    ${rows.join("")}
+    <p><a href="host://services">Back to the Host Dashboard</a></p>
+    <script>
+      document.querySelectorAll("input[data-permission]").forEach((checkbox) => {
+        checkbox.addEventListener("change", () => {
+          window.parent.postMessage({ type: "workshop-browser-set-permission", id: checkbox.dataset.permission, granted: checkbox.checked }, "*");
+        });
+      });
+    </script>
+  `;
+  return { title: "Permissions", html: wrapPage("Permissions", html) };
 }
 
 function tile(url, title) {

@@ -20,17 +20,28 @@
  * reasoning spelled out in full; `host://applications` renders these with
  * a visible "Example" badge, never silently mixed into real results.
  *
- * `launchApplication(id)` already exists as the real future entry point
- * — a future Host, once it can actually talk to the local machine, only
- * needs to give this a real implementation; nothing that already calls
- * it (a future `host://applications` "Launch" button, say) needs to
- * change.
+ * `launchApplication(id, args)` already exists as the real future entry
+ * point — a future Host, once it can actually talk to the local machine,
+ * only needs to give this a real implementation; nothing that already
+ * calls it (a future `host://applications` "Launch" button, say) needs
+ * to change. `args` (launch arguments, named explicitly in this phase's
+ * own brief) is accepted today even though it goes nowhere yet, so a
+ * future caller passing them doesn't need its own call site updated
+ * later.
+ *
+ * `runningApplications()` is genuinely real, in the same narrow sense
+ * `AutomationService.js`'s own task descriptors are — an actual, live
+ * in-memory list, just one nothing can currently add anything to (there's
+ * no real `launchApplication()` to populate it from). The shape is ready;
+ * only the bridge that would fill it is missing.
  */
 export class ProgramsService {
   constructor() {
     this.installed = [];
     this.favourites = [];
     this.recent = [];
+    /** @type {Array<{id:string, name:string, startedAt:string}>} */
+    this._running = [];
   }
 
   getStatus() {
@@ -47,10 +58,14 @@ export class ProgramsService {
     ];
   }
 
+  runningApplications() {
+    return [...this._running];
+  }
+
   /** Not yet implemented — throws honestly rather than silently doing
    *  nothing, so a future caller finds out immediately rather than
    *  wondering why nothing happened. */
-  launchApplication(_id) {
+  launchApplication(_id, _args = []) {
     throw new Error("ProgramsService.launchApplication() isn't implemented yet — the Workshop Host doesn't have a bridge to the local machine.");
   }
 }
