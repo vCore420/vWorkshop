@@ -48,6 +48,10 @@ import { registerWorkshopPages } from "./browser/WorkshopPages.js";
 import { registerAssetPages } from "./browser/AssetPages.js";
 import { SearchIndex } from "./browser/SearchIndex.js";
 import { HostManager } from "./host/HostManager.js";
+import { HostConnectionManager } from "./host/HostConnectionManager.js";
+import { PluginService } from "./host/PluginService.js";
+import { ResidentService } from "./host/ResidentService.js";
+import { DiagnosticsService } from "./host/DiagnosticsService.js";
 import { registerHostPages } from "./host/HostPages.js";
 import { examplePagePlugin } from "./plugins/examples/examplePagePlugin.js";
 import { calculatorPlugin } from "./plugins/examples/calculatorPlugin.js";
@@ -162,11 +166,17 @@ const pageRegistry = new PageRegistry();
 // would mean invoking every page's own provider function just to learn
 // its title. See SearchIndex.js's own comment for the full reasoning.
 const searchIndex = new SearchIndex();
+// "The Workshop Host Companion" — a real, optional local server (see
+// host-companion/README.md), polled the identical calm way
+// AIConnectionManager already polls Ollama. Constructed here, alongside
+// pageRegistry/hostManager, since FilesService (owned by HostManager)
+// needs the real connection manager to check `.status` against.
+const hostConnectionManager = new HostConnectionManager();
 // "The Host should be treated as a lightweight companion service" — see
 // HostManager.js's own comment. Constructed here, right alongside
 // pageRegistry, since PluginRegistry (owned by HostManager) needs the
 // real registry to register future plugin pages against directly.
-const hostManager = new HostManager(pageRegistry);
+const hostManager = new HostManager(pageRegistry, hostConnectionManager);
 // Workshop/Host/Asset page registration itself now happens much later in
 // this file (see the "Browser Ecosystem" block near the end) — moved
 // there once the new pages needed stores (residentProfileStore,
@@ -184,6 +194,7 @@ const aiConnectionManager = new AIConnectionManager();
 const modelRegistry = new ModelRegistry();
 const residentProfileStore = new ResidentProfileStore();
 aiConnectionManager.init();
+hostConnectionManager.init();
 // "workshop://models... live from the same connection AI Mission Control
 // uses" — HostPages.js itself is registered later now (see the "Browser
 // Ecosystem" block near the end of this file), alongside every other
@@ -480,6 +491,8 @@ persistenceSystem.registerProvider("beingLibrary", beingLibrary);
 persistenceSystem.registerProvider("beingInstances", beingInstanceStore);
 persistenceSystem.registerProvider("animationLibrary", animationLibraryStore);
 persistenceSystem.registerProvider("plugins", engine.plugins);
+persistenceSystem.registerProvider("hostPermissions", hostManager.permissions);
+persistenceSystem.registerProvider("hostProjects", hostManager.services.get("projects"));
 
 // --- Overlays: one registration per physical object that opens a panel ---
 // (The computer and the workbench no longer work this way — see
@@ -515,6 +528,33 @@ new HUD(document.getElementById("hud-root"), engine);
 
 // --- Example plugin (see /src/plugins/examples/dustMotesPlugin.js + docs/PLUGIN_GUIDE.md) ---
 engine.plugins.register(dustMotesPlugin());
+
+// --- Workshop Platform: completing the Workshop Host (see docs/HOST.md)
+// --- three services that need stores/engine access HostManager didn't
+// have at its own construction time (see HostManager.js's own comment),
+// plus dynamic asset-kind registration for AssetService.
+hostManager.services.register("plugins", new PluginService({ engine, pluginRegistry: hostManager.pluginRegistry }));
+hostManager.services.register(
+  "residents",
+  new ResidentService({ residentProfileStore, residentState, residentBehaviour, conversationMemory })
+);
+hostManager.services.register(
+  "diagnostics",
+  new DiagnosticsService({ engine, persistenceSystem, aiConnectionManager, hostConnectionManager, hostManager, pageRegistry, browserStore, searchIndex })
+);
+// "The Host should understand assets independently of the Builder or
+// Browser... assets should be capable of registering themselves with the
+// Host" — one registerKind() call per real backing store, each just
+// handing over the two functions (`all`/`get`) it already has, rather
+// than AssetService importing any of these stores itself. See
+// AssetService.js's own comment.
+const assetService = hostManager.services.get("assets");
+assetService.registerKind("objects", { label: "Objects", all: () => objectLibraryStore.all(), get: (id) => objectLibraryStore.get(Number(id)) ?? objectLibraryStore.get(id) });
+assetService.registerKind("blueprints", { label: "Blueprints", all: () => blueprintStore.all(), get: (id) => blueprintStore.get(id) });
+assetService.registerKind("animations", { label: "Animations", all: () => animationLibraryStore.all(), get: (id) => animationLibraryStore.get(id) });
+assetService.registerKind("models", { label: "Models", all: () => modelLibrary.all(), get: (id) => modelLibrary.get(id) });
+assetService.registerKind("images", { label: "Images", all: () => imageLibraryStore.all(), get: (id) => imageLibraryStore.get(id) });
+assetService.registerKind("music", { label: "Music", all: () => musicLibraryStore.allSongs(), get: (id) => musicLibraryStore.getSong(id) });
 
 // --- Browser Ecosystem: Workshop pages, Host pages, Asset pages, Unified
 // Search, and plugin pages (see docs/BROWSER.md) — registered here,
