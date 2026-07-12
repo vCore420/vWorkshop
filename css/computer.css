@@ -582,6 +582,94 @@
 .ai-test-success { background: rgba(127, 216, 160, 0.12); border: 1px solid rgba(127, 216, 160, 0.35); color: #bdeccf; }
 .ai-test-failure { background: rgba(184, 92, 74, 0.12); border: 1px solid rgba(184, 92, 74, 0.35); color: #f0b3a4; }
 
+/* ---- Resident Health (AI Intelligence phase) ---- */
+.ai-health-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 20px;
+}
+.ai-health-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.82rem;
+}
+.ai-health-label { color: var(--paper-dark); }
+.ai-health-value { color: var(--paper); font-family: var(--font-mono); text-align: right; }
+@media (max-width: 700px) {
+  .ai-health-grid { grid-template-columns: 1fr; }
+}
+
+/* ---- Behaviour Dials (AI Intelligence phase) ---- */
+.ai-dial-row {
+  margin-bottom: 12px;
+}
+.ai-dial-row label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--paper-dark);
+  margin-bottom: 3px;
+}
+.ai-dial-slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ai-dial-slider-wrap input[type="range"] { flex: 1; }
+.ai-dial-endpoint {
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  color: var(--paper-dark);
+  white-space: nowrap;
+  min-width: 62px;
+}
+.ai-dial-endpoint:last-child { text-align: right; }
+
+/* ---- Memory categories (AI Intelligence phase) ---- */
+.ai-memory-categories {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.ai-memory-categories h4 {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  color: var(--paper);
+}
+
+/* ---- Profile list summaries (AI Intelligence phase) ---- */
+.ai-profile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ai-profile-summary {
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  color: var(--paper-dark);
+}
+
+/* ---- Resident Sandbox (AI Intelligence phase) ---- */
+.ai-sandbox-memory {
+  margin-bottom: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.ai-sandbox-memory h4 { margin: 0 0 6px; font-size: 0.8rem; color: var(--paper); }
+.ai-sandbox-memory-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.78rem;
+  color: var(--paper-dark);
+}
+.ai-sandbox-memory-list li { margin-bottom: 3px; }
+.ai-sandbox-messages {
+  max-height: 220px;
+}
+
 @media (max-width: 700px) {
   .workstation-rail { width: 48px; }
   .workstation-rail button .rail-glyph { font-size: 15px; }

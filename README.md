@@ -680,5 +680,16 @@ glow, scale, and idle-behaviour settings in place of what were previously
 inert Mission Control fields. See `docs/RESIDENT.md` and `docs/AI.md` for
 the full account.
 
+**Version 2, Phase 2 — AI Intelligence (v2.0.2)** — Mission Control
+deepened further: architecture for additional AI providers (LM Studio,
+OpenAI, Anthropic, a Custom Endpoint — Ollama remains the only functional
+one, every other choice says so honestly), seven continuous Behaviour
+Dials complementing the previous phase's discrete Personality Traits,
+Memory Configuration's categories and lifetimes both genuinely activated
+(what Bubble remembers, and for how long), a genuinely isolated Resident
+Sandbox for testing configuration changes without touching Bubble in the
+room, and a calm Resident Health status display. See `docs/AI.md` and
+`docs/RESIDENT.md` for the full account.
+
 </details>
 

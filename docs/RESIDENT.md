@@ -30,7 +30,7 @@ someone quietly lived here already?" Three decisions carry that:
    glass-like inner glow, and restrained, geometric particle drift —
    see "Embodiment" below.
 
-## Architecture: eight small, separated files — plus four more this phase
+## Architecture: eight small, separated files — plus six more across two phases
 
 `src/resident/`, following the same "separate responsibilities" instinct
 `src/ai/` already established:
@@ -68,7 +68,17 @@ the same way everything above already is:
 
 - **`ResidentTraits.js`** — pure functions turning a profile's selected
   personality traits (`src/ai/TraitConfiguration.js`'s own shape) into
-  concrete movement/awareness/expression modifiers.
+  concrete movement/awareness/expression modifiers, plus (AI Intelligence
+  phase) `mergeModifiers()`, the shared function combining traits with
+  the new Behaviour Dials below into one final modifier object.
+- **`ResidentDials.js`** *(AI Intelligence phase)* — the identical idea
+  for the seven continuous Behaviour Dials (`src/ai/
+  BehaviourDialsConfiguration.js`'s own shape) instead of discrete traits.
+- **`ResidentContext.js`** *(AI Intelligence phase)* — the shared
+  context-building logic (personality line, preference line, curiosity
+  notes, remembered things) both the real conversation and Mission
+  Control's own Resident Sandbox call identically; see "Mission Control
+  Integration" below.
 - **`ResidentPreferences.js`** — Bubble's own emergent, weighted
   preferences (places, weather, time of day, activities).
 - **`PlayerPatternMemory.js`** — "behaviour memory": lightweight,
@@ -320,6 +330,54 @@ curious and playful," appended to the system prompt by
 `ResidentConversation.js` — so the model's own responses lean the same
 way its movement already does, without either copying the other's logic.
 
+## Behaviour Dials (AI Intelligence phase)
+
+"Curiosity, Talkativeness, Playfulness, Energy, Independence, Reflection,
+Calmness... these should influence movement, conversations and general
+behaviour. Please favour subtle changes over dramatic differences."
+`src/ai/BehaviourDialsConfiguration.js` defines seven continuous 0-1
+dials, each neutral at 0.5 — the continuous counterpart to the discrete
+traits above, deliberately complementary rather than overlapping: traits
+are "which flavour" (a small, named archetype), dials are "how strongly."
+A resident can be "Curious" *and* lean high on the Energy dial, each
+contributing its own share to the same final modifier.
+
+`ResidentDials.getDialModifiers(dials)` only ever reacts to a dial's
+*deviation* from neutral (`d = value - 0.5`) — every effect stays small
+(roughly ±30-40% at the extremes, clamped), matching "subtle... not
+dramatic" as a hard constraint rather than a suggestion:
+
+- **Curiosity** biases toward the window and the `curious` expression.
+- **Playfulness** biases toward `happy`/`curious` and slightly shorter
+  rests.
+- **Reflection** biases toward `thinking` and the bookshelf, and lingers
+  a little longer wherever it is.
+- **Energy** and **Calmness** both feed rest duration (in the same
+  direction — high energy and low calmness both shorten it) and,
+  new fields this phase, `movementSpeedMultiplier` (Energy — a genuinely
+  faster or slower travel pace, read by `ResidentMovement.js`'s own idle
+  travel easing and `stepToward()`) and `motionDamping` (Calmness — how
+  much the idle bob/sway/rotation amplitude settles down, distinct from
+  Idle Behaviour's own discrete "Still and Attentive" damping; the two
+  multiply together rather than either overriding the other).
+- **Independence** reduces how insistently a favourite location pulls
+  (`favouriteLocationPullMultiplier`, read by `ResidentController.
+  _windowWatchWeights()`) and narrows the effective awareness radius —
+  self-possessed, not aloof.
+- **Talkativeness** widens the effective awareness radius slightly (a
+  talkative resident notices someone nearby a little sooner) and
+  contributes a short conversational-style line when it leans far enough
+  from neutral to be worth saying ("You tend to be talkative, offering
+  fuller answers rather than short ones.").
+
+`ResidentContext.getPersonalityModifiers(profile)` is where a profile's
+traits and dials actually combine — `ResidentTraits.mergeModifiers()`
+averages every multiplier across both sources and multiplies weight/bias
+objects together, so `ResidentController.js` never needs to know which
+source produced which number. The same function's own `conversationStyleLine`
+concatenates whatever style hints traits and dials each had to say,
+appended to the system prompt alongside the traits' own personality line.
+
 ## Mood, Emotion, and Personality — three timescales
 
 "Please distinguish between emotion, mood, and personality... these
@@ -461,7 +519,8 @@ it comes up again, oldest evicted once full.
 
 `extractFromMessage()` runs after every user message (only when the
 active profile's `memory.mode !== "disabled"` — see "Mission Control
-Integration" below) and is three cheap, independent checks: does the
+Integration" below) and is three cheap, independent checks, each gated by
+its own category toggle (AI Intelligence phase — see below): does the
 message name a real project (scanned against `ProjectsStore.all()`), does
 it read as a stated preference ("I love...", "my favourite X is..."), does
 it read as a stated goal ("I want to...", "I'm going to..."). No second
@@ -469,17 +528,47 @@ model call, no summarisation — "this does not require advanced AI. Simple
 continuity is sufficient" (`docs/PERSISTENCE.md`'s own standard for
 Bubble's movement) applies just as well here.
 
+**Categories** (AI Intelligence phase) — "allow the player to configure
+what Bubble remembers." `MemoryConfiguration.MEMORY_CATEGORIES` defines
+seven; `extractFromMessage()`/`watchProjects()` both check `categories`
+(the active profile's own `memory.categories`) before populating anything
+of a given kind at all — turning off "Player Preferences" means the
+preference regex above simply never runs, not that its results are hidden
+after the fact. "Conversations" is the one parent switch: it gates
+whether ordinary message text is scanned at all, with Projects/
+Preferences/Goals individually toggled underneath it. "Favourite
+Places"/"Favourite Activities" don't gate anything in this file at all —
+they gate `ResidentContext.js`'s own live `preferenceLine` instead (see
+its own comment), since those are sourced from `ResidentPreferences`
+rather than message text.
+
+**Lifetimes** (AI Intelligence phase) — "configurable memory lifetimes...
+temporary, medium-term, permanent." Every note is stamped with the
+lifetime tier its own category defaults to (`MemoryConfiguration.
+CATEGORY_LIFETIMES`) — Projects/Goals/Workshop-History default to
+Permanent, Preferences to Medium-Term — and `_purgeExpired()` (called
+from both `extractFromMessage()` and `mostRelevant()`) removes anything
+whose tier has a real `ttlMs` and hasn't been reinforced within it. This
+is a genuine, working mechanic, not just a label: "remember meaningful
+experiences without becoming overwhelmed by insignificant details" is
+this purge, concretely.
+
 **Milestones** are the one category populated from the Workshop itself
 rather than message text — `watchProjects()` diffs `ProjectsStore` against
 its own last-known "done" set, correctly treating every project already
 finished before it started listening as the honest baseline rather than a
 fresh milestone the moment the Workshop next loads (the same
 `_initialized`-baseline pattern `ResidentCuriosity.js` uses for its own
-object count).
+object count). Also gated by the "Workshop History" category, checked
+fresh each time a project finishes (via a `getCategories` function passed
+in at wiring time, not a static snapshot), since the active profile — and
+its own toggle — can change over the life of a session.
 
-`mostRelevant(n)` returns the most recently reinforced few, fed into
-`composeSystemPrompt()`'s own `context.memoryNotes` — "a few things you
-remember," never a transcript.
+`mostRelevant(n)` returns the most recently reinforced few (after purging
+anything expired), fed into `composeSystemPrompt()`'s own
+`context.memoryNotes` — "a few things you remember," never a transcript.
+Also read, read-only, by Mission Control's own Resident Sandbox for
+"Memory Inspection" — see docs/AI.md.
 
 **Deliberately never registered with `PersistenceSystem`.** This is what
 makes Mission Control's own "Session Only" memory mode true by
@@ -557,6 +646,29 @@ wired, since the pieces are spread across several files above:
   were — real fields, real defaults, no storage limit or summarisation
   behind any of them yet.
 
+### AI Intelligence phase addendum
+
+"Please ensure every major Mission Control setting now has a meaningful
+effect within Bubble. Avoid placeholder configuration where possible."
+Continuing the account above:
+
+- **Provider** (new) — genuinely read; only Ollama is functional, every
+  other choice honestly says so rather than pretending to connect. See
+  `src/ai/ProviderRegistry.js` and docs/AI.md's own "Additional Providers"
+  section.
+- **Behaviour Dials** (new) — genuinely active; combined with traits by
+  `ResidentContext.getPersonalityModifiers()` into movement, awareness,
+  idle-location weighting, and a system-prompt style line. See "Behaviour
+  Dials" above.
+- **Memory categories and lifetimes** (new) — both genuinely read by
+  `ConversationMemory.js`; see "Conversation Memory" above.
+- **Resident Sandbox / Resident Health** (new, in `AIApp.js` itself, not
+  a profile field) — the two places this phase adds for *seeing* that
+  everything above is genuinely connected, sharing the exact same
+  `ResidentContext.buildConversationContext()`/`composeSystemPrompt()`
+  path the real conversation uses, rather than an approximation of it.
+  See docs/AI.md's own "Resident Sandbox" and "Resident Health" sections.
+
 ## Known simplifications (by design, for this phase)
 
 - **One resident, not several** — `ResidentController` assumes a single
@@ -583,6 +695,18 @@ wired, since the pieces are spread across several files above:
   not a real model of the player or the resident — exactly as
   `docs/PERSISTENCE.md`'s own "simple continuity is sufficient" standard
   already holds Bubble's movement to.
+- **Only Ollama is a functional provider** — LM Studio/OpenAI/Anthropic/
+  Custom Endpoint are real, selectable options that honestly say they
+  aren't functional yet rather than pretending to connect. See
+  docs/AI.md's own "Additional Providers" section.
+- **Memory lifetimes are fixed per category, not independently
+  configurable** — "where appropriate" licenses this; the seam
+  (`CATEGORY_LIFETIMES`, a plain map keyed by category id) is ready for a
+  future per-category selector regardless.
+- **Behaviour dials only ever produce a system-prompt style line when
+  they lean far enough from neutral** — a dial sitting close to 0.5 says
+  nothing at all, on purpose; a resident with every dial left at default
+  should read exactly as it did before dials existed.
 
 ## Future extension points
 
@@ -615,6 +739,14 @@ wired, since the pieces are spread across several files above:
   `ConversationMemory.extractFromMessage()`'s own regex heuristics with an
   actual summarisation call, once `MemoryConfiguration.memorySummaries`
   has a real implementation to attach to.
+- **Real additional providers** — `ProviderRegistry.js`'s own list is
+  ready; LM Studio and Custom Endpoint (typically OpenAI-compatible
+  local/self-hosted APIs) are the more tractable next step, since OpenAI/
+  Anthropic would additionally need real credential handling.
+- **Per-category memory lifetimes** — `CATEGORY_LIFETIMES` is a plain map
+  keyed by category id; a future per-category selector in Mission Control
+  wouldn't need to change anything about how `ConversationMemory.js`
+  itself reads it.
 - **Multiple Buildings / Additional Residents** — `PlayerPatternMemory`'s
   own named zones and `ResidentPreferences`' own affinity bags are
   written against plain data, not anything Workshop-singular; a second

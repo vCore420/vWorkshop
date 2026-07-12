@@ -1767,6 +1767,56 @@ one another — "thinking" now lifts both eyes evenly with a flat, settled
 mouth (turned inward), distinct from "curious"'s original asymmetric,
 outward-looking look.
 
+## Version 2 — Phase 2 — AI Intelligence (v2.0.2)
+
+**Goal:** "Version 1 established the architecture for local AI... this
+phase is about bringing those foundations to life... this is NOT about
+making AI more powerful. It is about making residents feel more
+personal." Mission Control itself is the surface this phase deepens —
+see docs/AI.md for the full write-up; docs/RESIDENT.md for what each
+setting actually does inside the room.
+
+**Additional Providers**, architecturally — Ollama remains the only
+functional one; LM Studio, OpenAI, Anthropic, and a Custom Endpoint are
+now real, selectable options in Mission Control's own Provider section,
+each honestly marked as reserved for a future phase rather than
+pretending to connect (`src/ai/ProviderRegistry.js`).
+
+**Behaviour Dials**, seven continuous 0-1 sliders (Curiosity,
+Talkativeness, Playfulness, Energy, Independence, Reflection, Calmness),
+distinct from and complementary to the previous phase's own discrete
+Personality Traits — combined by `ResidentContext.
+getPersonalityModifiers()` into the one modifier set
+`ResidentController.js` applies to movement pace, motion damping,
+awareness, idle-location weighting, and a short conversational-style
+line, always staying subtle (roughly ±30-40% at the extremes).
+
+**Memory, genuinely configurable** — seven categories (what Bubble
+remembers: conversations, projects, preferences, favourite places,
+favourite activities, Workshop history, long-term goals) and three real
+lifetime tiers (temporary, medium-term, permanent, each with an actual
+expiry behind it), both now read by `ConversationMemory.js` rather than
+being architecture alone.
+
+**Resident Sandbox**, a genuinely isolated testing environment inside
+Mission Control — its own conversation history, its own read-only memory
+inspection, never touching `ResidentBehaviour`/`ConversationMemory`'s own
+real state, built from the exact same `ResidentContext.
+buildConversationContext()`/`PromptComposer.composeSystemPrompt()` path
+the real conversation uses, so a test here is an honest preview rather
+than an approximation.
+
+**Resident Health**, a calm, plain-language status grid — resident
+status, connected model, provider, real round-trip latency, current
+activity, current mood, memory status, current location — refreshed
+automatically but never while a field in the form has focus.
+
+**Mission Control's own information architecture reorganised** to match
+the brief's own grouping — "Behaviour" (the previous phase's generation
+parameters — temperature, context size) renamed to "Intelligence,"
+freeing "Behaviour" to name the new dials above; profile list rows gained
+a one-line at-a-glance summary (selected traits, non-default embodiment).
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space
