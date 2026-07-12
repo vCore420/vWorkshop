@@ -147,36 +147,56 @@ entirely, rather than emitting an empty "Personality: " line) — the
 produces, "for experienced users," without it being the primary way
 anyone edits who this resident is.
 
+**Resident Traits** (added in the Workshop Residents phase) sits directly
+below this section in `AIApp.js`, as a small, structured companion — up
+to `MAX_SELECTED_TRAITS` named long-term traits (Curious, Calm, Cheerful,
+Quiet, Thoughtful, Playful), distinct from the free-text "Personality"
+field above. The difference is deliberate: prose here is for the model to
+read; traits are a fixed enum other systems (movement, awareness,
+idle-location weighting) can actually branch on. See
+`src/ai/TraitConfiguration.js` and docs/RESIDENT.md's own "Personality
+Traits" section for how a selection actually becomes behaviour.
+
 ## Behaviour Configuration
 
 Temperature, Creativity, Determinism (0–1 sliders), Context Size and
 Maximum Response Length (token-count sliders) — ordinary Ollama generation
-parameters, stored on the profile (`behaviourConfig`) but not yet actually
-sent anywhere, since there's no real generation happening in this phase
-beyond the one-off Connection Test. A future AI Resident reads these the
-same way it reads everything else on the active profile.
+parameters, stored on the profile (`behaviourConfig`). Real conversation
+turns (`ResidentConnection.sendMessage()`, see docs/RESIDENT.md) apply
+temperature/context size/max response length already; the one-off
+Connection Test below still sends a fixed prompt with none of them
+applied, since there's little to tune about a single "Hello."
 
-## Memory Configuration: architecture, not implementation
+## Memory Configuration: mode is real, the rest is still architecture
 
 "These do not need to be fully implemented yet. The goal is to establish
-the architecture." `MemoryConfiguration.js` defines the entire shape —
-`mode` (Disabled / Session Only / Persistent, the one option with any
-real behaviour implied, and even that isn't wired to anything yet),
-`memorySize`, `memorySummaries`, `contextBudget` — with real defaults, not
-commented-out placeholders. Every field in the Memory section carries a
-small "Architecture only — not active yet" badge, an honest label rather
-than a feature that quietly does nothing without saying so.
+the architecture" was true of every field here when this section was
+first written. `mode` (Disabled / Session Only / Persistent) is now
+genuinely read — `src/resident/ConversationMemory.js` checks it before
+extracting or surfacing anything about the player, so "Disabled" really
+does mean Bubble remembers nothing between messages. "Session Only" and
+"Persistent" are currently treated identically (kept for the current
+runtime, never written to `localStorage`); true cross-session persistence
+for the latter is still honest future work. `memorySize`, `memorySummaries`,
+`contextBudget` remain exactly what they were — real defaults, no storage
+limit or summarisation behind any of them yet, still marked as not active
+in the Memory section's own UI.
 
-## Embodiment Preparation: not active this phase
+## Embodiment: genuinely active
 
 "These are not active during this phase. Instead they simply prepare for
-the next phase." `EmbodimentConfiguration.js` mirrors Memory's own
-shape-only approach — Embodiment Type (Floating Orb / Cube / Custom
-(future)), Colour, Glow, Scale, Idle Behaviour — all stored on the
-profile, none of it read by anything that actually spawns a presence in
-the room yet. The default colour (`#7fd8c4`) is deliberately the
-Workshop's own existing screen-glow teal, a natural starting point rather
-than an arbitrary one for whenever this does become real.
+the next phase" — that next phase has now arrived.
+`EmbodimentConfiguration.js`'s own shape is unchanged (Embodiment Type,
+Colour, Glow, Scale, Idle Behaviour), but every field is now read by
+`ResidentRenderer.js`/`ResidentMovement.js` to actually shape Bubble's own
+appearance and motion — five real shapes (Floating Orb, Cube, Prism,
+Lantern, Wisp), a genuinely tinted body, a glow that scales with the
+slider, a root-level scale, and idle motion that responds to the chosen
+idle behaviour. `custom` stays honestly reserved for a future phase that
+isn't a simple primitive at all. See docs/RESIDENT.md's own "Resident
+Embodiments" section for the full account. The default colour
+(`#7fd8c4`) is still the Workshop's own existing screen-glow teal, a
+natural starting point rather than an arbitrary one.
 
 ## Profiles
 
@@ -232,28 +252,45 @@ phase's own one-off test prompt.
   Models" is a deliberate manual action, matching the brief's own explicit
   UI list; connecting doesn't silently populate the model dropdown on its
   own.
-- **Behaviour Configuration values aren't sent anywhere yet** — Connection
-  Testing sends a fixed prompt with none of `behaviourConfig`'s own
-  settings applied. There's no real generation loop in this phase to
-  apply them to.
-- **Memory and Embodiment are genuinely inert** — see their own sections
-  above. Every field exists, persists, and does nothing yet, on purpose.
+- **Behaviour Configuration values aren't sent anywhere by Connection
+  Testing specifically** — it still sends a fixed prompt with none of
+  `behaviourConfig`'s own settings applied (there's no reason to tune a
+  one-off "Hello."). Real conversation turns, via
+  `ResidentConnection.sendMessage()`, do apply them — see docs/RESIDENT.md.
+- **Memory's `mode` is genuinely read; the rest still isn't** —
+  `memorySize`/`memorySummaries`/`contextBudget` remain exactly what they
+  always were, real fields with no storage limit or summarisation behind
+  them. `mode` itself gates `ConversationMemory` (see docs/RESIDENT.md's
+  own "Conversation Memory" and "Mission Control Integration" sections) —
+  "Session Only" and "Persistent" are currently treated identically
+  (runtime-only, never touching `localStorage`); true cross-session
+  persistence for "Persistent" is still future work.
+- **Embodiment is genuinely read** (as of the Workshop Residents phase) —
+  see docs/RESIDENT.md's "Resident Embodiments" section for what each
+  field now actually does. `custom` still falls back to the same sphere
+  `floatingOrb` uses, honestly, rather than pretending to have a shape for
+  it yet.
 
 ## Future extension points
 
 - **A real AI Resident system**, reading `ResidentProfileStore`/
-  `PromptComposer` exactly as described above — the two things this phase
-  exists to prepare.
-- **A real memory system**, implementing `MemoryConfiguration.js`'s
-  already-defined shape rather than inventing a new one.
-- **A real embodiment system**, spawning an actual presence in the room
-  from `EmbodimentConfiguration.js`'s own shape — likely reusing
-  `AnimationLibraryStore` clips for `idleBehaviour` rather than the small,
-  fixed enum this phase ships with.
+  `PromptComposer` exactly as described above — arrived this phase; see
+  docs/RESIDENT.md.
+- **Resident Traits** (`src/ai/TraitConfiguration.js`) — a small,
+  structured companion to the free-text Resident Identity fields above,
+  letting a person choose up to a couple of named long-term traits
+  (Curious, Calm, Cheerful, Quiet, Thoughtful, Playful) that other
+  systems — not just the system prompt — can actually branch on. See
+  docs/RESIDENT.md's own "Personality Traits" section.
+- **True cross-session memory**, implementing `MemoryConfiguration.js`'s
+  own "Persistent" mode for real rather than treating it the same as
+  "Session Only" — see docs/RESIDENT.md's own "Conversation Memory"
+  section for exactly what's already in place to build this on.
 - **Workshop Host integration** — a locally-hosted resident could
   eventually be launched or managed through `workshop://host`'s own future
   pages (see `docs/BROWSER.md`), with Mission Control remaining the place
   its personality and behaviour are configured either way.
-- **Sending Behaviour Configuration's own values** through to real
-  generation requests, once there's a real generation loop (the
-  Connection Test, or a future chat interface) to apply them to.
+- **Sending Behaviour Configuration's own values** through to the
+  Connection Test specifically — real conversation turns already apply
+  them (see docs/RESIDENT.md); the one-off test prompt still doesn't,
+  since there's little reason to tune a single fixed "Hello."

@@ -540,6 +540,25 @@
 }
 .ai-textarea-row textarea:focus { outline: none; border-color: var(--screen-glow); }
 
+.ai-trait-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ai-trait-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+.ai-trait-row:hover { background: rgba(255, 255, 255, 0.04); }
+.ai-trait-row input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; }
+.ai-trait-row span { font-size: 0.85rem; line-height: 1.4; }
+.ai-trait-row input:disabled { opacity: 0.4; }
+.ai-trait-row input:disabled ~ span { opacity: 0.5; }
+
 .ai-generated-prompt {
   margin-top: 10px;
   background: var(--wood-dark);

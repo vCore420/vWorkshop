@@ -1,6 +1,6 @@
 {
   "name": "the-workshop",
-  "version": "0.1.0",
+  "version": "2.0.1",
   "private": true,
   "description": "A living 3D creative workshop, built to be a place rather than an app.",
   "type": "module",

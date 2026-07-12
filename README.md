@@ -39,8 +39,10 @@ moves on, Bubble wanders, time keeps its own pace.
 - **The Workshop Phone** — a carried companion with its own modular app
   grid (Builder, Beings, Wardrobe, Bubble, Browser, Workshop, Emotes,
   Settings) that never freezes the player while it's open.
-- **A living resident (Bubble)** with its own routines, moods, and
-  continuity — it keeps existing whether or not the Workshop is open.
+- **A living resident (Bubble)** with its own personality traits, moods,
+  emergent preferences, and continuity — it keeps existing whether or not
+  the Workshop is open, and gradually becomes recognisable as itself
+  rather than a generic assistant.
 - **A persistent, continuing world** — weather, time, Bubble, and
   Beings all pick up naturally from wherever they'd plausibly be after
   however long you were away, not frozen exactly as left.
@@ -664,6 +666,19 @@ Emotes rebuilt as a real Phone app instead of an immediate wheel-trigger,
 and the dust motes proof of concept evolved into a permanent, two-window
 atmospheric effect. See `docs/ROADMAP.md`'s own Phase 31A entry for the
 complete account.
+
+**Version 2, Phase 1 — Workshop Residents (v2.0.1)** — a deepening pass,
+not a new system: Bubble gained long-term Personality Traits (a small,
+named set alongside the existing free-text identity fields), a genuine
+three-timescale Mood/Emotion/Personality distinction, emergent
+Preferences and Behaviour Memory (both gated on "is there actually a
+pattern here yet"), conversation-time Curiosity about what's changed in
+the Workshop, a real (if deliberately modest) Conversation Memory
+distinct from ordinary chat history, and five real Resident Embodiments
+(Floating Orb, Cube, Prism, Lantern, Wisp) with genuinely active colour,
+glow, scale, and idle-behaviour settings in place of what were previously
+inert Mission Control fields. See `docs/RESIDENT.md` and `docs/AI.md` for
+the full account.
 
 </details>
 

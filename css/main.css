@@ -67,6 +67,7 @@ html, body {
   background: var(--brass);
   border: none;
   border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
   padding: var(--space-2) var(--space-4);
   cursor: pointer;
   transition: background var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard);

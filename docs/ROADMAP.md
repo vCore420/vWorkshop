@@ -1706,6 +1706,67 @@ Roughly in priority order, each independently shippable:
   once there's a reason to want one — or, now, just a custom Builder
   object with a Decoration behaviour and a Storage one nearby.
 
+## Version 2 — Phase 1 — Workshop Residents (v2.0.1)
+
+**Goal:** not a new system — "Version 2 is different. It is no longer
+about introducing major systems. It is about deepening them... teach
+residents who they are." A deepening pass on the one resident that
+already exists, not a spec for a new one. See docs/RESIDENT.md for the
+full write-up; docs/AI.md for what this activated in Mission Control
+specifically.
+
+**Personality Traits**, a new small, structured layer alongside the
+existing free-text Resident Identity fields — up to two named long-term
+traits (Curious, Calm, Cheerful, Quiet, Thoughtful, Playful,
+`src/ai/TraitConfiguration.js`), turned into concrete movement/awareness/
+idle-location/expression modifiers by `ResidentTraits.getTraitModifiers()`
+— averaged across whatever's selected, always subtle (roughly ±25-35%),
+never a different creature depending on what's chosen.
+
+**Mood, Emotion, and Personality, genuinely distinguished by timescale**
+— personality is the traits above (fixed); mood
+(`ResidentController._maybeDriftMood()`) now actually drifts every few
+minutes, a weighted pick biased by traits and accumulated preferences,
+strongly biased toward staying whatever it already was; emotion
+(`ResidentBehaviour.triggerEmotion()`) is a brief, never-persisted overlay
+triggered once, at conversation start.
+
+**Preferences and Behaviour Memory**, two parallel affinity stores
+sharing one small utility (`src/utils/AffinityTracker.js`) — Bubble's own
+emergent favourite places/weather/time-of-day/activities
+(`ResidentPreferences.js`), and the player's own observed patterns of
+where and when they tend to be found (`PlayerPatternMemory.js`), both
+gated on a minimum sample count so a "favourite" only ever reports once
+there's an actual pattern behind it — "quiet familiarity rather than
+prediction."
+
+**Curiosity**, surfaced only as conversation context, never a
+notification — `ResidentCuriosity.gatherNotes()`, called once per
+conversation open, checking whether something new has been built, whether
+the current weather or time of day is worth mentioning, and whatever
+preferences/patterns have accumulated.
+
+**Conversation Memory, genuinely improved** — a bounded, reinforced list
+of *meaningful* things (project mentions, stated preferences, stated
+goals, finished-project milestones), distinct from the ordinary
+session-only message history, gated on Mission Control's own Memory
+`mode` (now genuinely read, rather than inert) and deliberately kept
+runtime-only rather than half-persisting a list with no real pruning plan
+yet.
+
+**Resident Embodiments, no longer inert** — five real shapes (Floating
+Orb, Cube, Prism, Lantern, Wisp), a genuinely tinted body, a glow that
+scales with its own slider, a configurable scale, and idle motion that
+responds to the chosen idle behaviour — all sharing identical material,
+inner glow, face, and sparkle logic, so switching shape never changes
+what kind of thing a resident visibly is.
+
+**Appearance clarity**: "thinking" and "curious" used to share almost the
+same asymmetric-raised-eye face at this texture size, easy to mistake for
+one another — "thinking" now lifts both eyes evenly with a flat, settled
+mouth (turned inward), distinct from "curious"'s original asymmetric,
+outward-looking look.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space
