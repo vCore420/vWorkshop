@@ -52,6 +52,7 @@ import { HostConnectionManager } from "./host/HostConnectionManager.js";
 import { PluginService } from "./host/PluginService.js";
 import { ResidentService } from "./host/ResidentService.js";
 import { DiagnosticsService } from "./host/DiagnosticsService.js";
+import { buildSwatchThumbnail } from "./host/WorkshopAssetSchema.js";
 import { registerHostPages } from "./host/HostPages.js";
 import { examplePagePlugin } from "./plugins/examples/examplePagePlugin.js";
 import { calculatorPlugin } from "./plugins/examples/calculatorPlugin.js";
@@ -493,6 +494,7 @@ persistenceSystem.registerProvider("animationLibrary", animationLibraryStore);
 persistenceSystem.registerProvider("plugins", engine.plugins);
 persistenceSystem.registerProvider("hostPermissions", hostManager.permissions);
 persistenceSystem.registerProvider("hostProjects", hostManager.services.get("projects"));
+persistenceSystem.registerProvider("assetLibrary", assetService);
 
 // --- Overlays: one registration per physical object that opens a panel ---
 // (The computer and the workbench no longer work this way — see
@@ -549,12 +551,82 @@ hostManager.services.register(
 // than AssetService importing any of these stores itself. See
 // AssetService.js's own comment.
 const assetService = hostManager.services.get("assets");
-assetService.registerKind("objects", { label: "Objects", all: () => objectLibraryStore.all(), get: (id) => objectLibraryStore.get(Number(id)) ?? objectLibraryStore.get(id) });
-assetService.registerKind("blueprints", { label: "Blueprints", all: () => blueprintStore.all(), get: (id) => blueprintStore.get(id) });
-assetService.registerKind("animations", { label: "Animations", all: () => animationLibraryStore.all(), get: (id) => animationLibraryStore.get(id) });
-assetService.registerKind("models", { label: "Models", all: () => modelLibrary.all(), get: (id) => modelLibrary.get(id) });
-assetService.registerKind("images", { label: "Images", all: () => imageLibraryStore.all(), get: (id) => imageLibraryStore.get(id) });
-assetService.registerKind("music", { label: "Music", all: () => musicLibraryStore.allSongs(), get: (id) => musicLibraryStore.getSong(id) });
+// "The Host should understand assets independently of the Builder or
+// Browser... assets should be capable of registering themselves with the
+// Host" — one registerKind() call per real backing store. Each kind now
+// also hands over `toDescriptor()` (mapping its own real item into the
+// shared Workshop Asset envelope — see WorkshopAssetSchema.js) and,
+// where a real relationship exists, `getDependencies()`. Kinds that
+// don't track anything worth calling a dependency (Animations, Models,
+// Images, Music) simply omit it — AssetService.js's own default is an
+// honestly empty array, not a fabricated one.
+assetService.registerKind("objects", {
+  label: "Objects",
+  all: () => objectLibraryStore.all(),
+  get: (id) => objectLibraryStore.get(Number(id)) ?? objectLibraryStore.get(id),
+  toDescriptor: (o) => ({
+    name: o.name,
+    description: o.description,
+    categories: o.category ? [o.category] : [],
+    tags: o.tags ?? [],
+    createdAt: o.createdAt,
+    updatedAt: o.updatedAt,
+    thumbnail: buildSwatchThumbnail((o.parts ?? []).map((p) => p.color)),
+  }),
+  validateItem: (o) => {
+    const issues = [];
+    if (!Number.isFinite(o.defaultScale) || o.defaultScale <= 0) issues.push("Invalid scale.");
+    if (!o.parts || o.parts.length === 0) issues.push("No parts defined.");
+    return issues;
+  },
+});
+assetService.registerKind("blueprints", {
+  label: "Blueprints",
+  all: () => blueprintStore.all(),
+  get: (id) => blueprintStore.get(id),
+  toDescriptor: (b) => ({
+    name: b.name,
+    categories: ["Workshop"],
+    createdAt: b.createdAt,
+    thumbnail: buildSwatchThumbnail(b.objects.map((o) => objectLibraryStore.get(o.definitionId)?.parts?.[0]?.color).filter(Boolean)),
+  }),
+  // "Blueprints using Models" (the brief's own example, using this
+  // Workshop's actual terms: a Blueprint is made of Object definitions)
+  // — the one dependency relationship that's genuinely real and
+  // computable today, straight from data every Blueprint already has.
+  getDependencies: (b) => [...new Set(b.objects.map((o) => `objects:${o.definitionId}`))],
+});
+assetService.registerKind("animations", {
+  label: "Animations",
+  all: () => animationLibraryStore.all(),
+  get: (id) => animationLibraryStore.get(id),
+  toDescriptor: (a) => ({
+    name: a.name,
+    description: a.description,
+    categories: a.category ? [a.category] : [],
+    createdAt: a.createdAt,
+    updatedAt: a.updatedAt,
+  }),
+  validateItem: (a) => ((a.frames ?? []).length === 0 ? ["No frames defined."] : []),
+});
+assetService.registerKind("models", {
+  label: "Models",
+  all: () => modelLibrary.all(),
+  get: (id) => modelLibrary.get(id),
+  toDescriptor: (m) => ({ name: m.name, categories: ["Workshop"], tags: [m.format], createdAt: new Date(m.addedAt).toISOString() }),
+});
+assetService.registerKind("images", {
+  label: "Images",
+  all: () => imageLibraryStore.all(),
+  get: (id) => imageLibraryStore.get(id),
+  toDescriptor: (i) => ({ name: i.name, categories: ["Workshop"], createdAt: new Date(i.addedAt).toISOString() }),
+});
+assetService.registerKind("music", {
+  label: "Music",
+  all: () => musicLibraryStore.allSongs(),
+  get: (id) => musicLibraryStore.getSong(id),
+  toDescriptor: (s) => ({ name: s.title, description: [s.artist, s.album].filter(Boolean).join(" \u2014 "), categories: ["Workshop"], tags: [s.artist, s.album].filter(Boolean) }),
+});
 
 // --- Browser Ecosystem: Workshop pages, Host pages, Asset pages, Unified
 // Search, and plugin pages (see docs/BROWSER.md) — registered here,
@@ -576,7 +648,7 @@ registerWorkshopPages(pageRegistry, searchIndex, {
   searchIndex,
 });
 registerHostPages(pageRegistry, searchIndex, { hostManager, modelRegistry });
-registerAssetPages(pageRegistry, searchIndex, { objectLibraryStore, blueprintStore, animationLibraryStore, modelLibrary, imageLibraryStore, musicLibraryStore, worldObjectsStore });
+registerAssetPages(pageRegistry, searchIndex, { objectLibraryStore, blueprintStore, animationLibraryStore, modelLibrary, imageLibraryStore, musicLibraryStore, worldObjectsStore, assetService });
 
 // "Plugins should be capable of registering Browser pages... naturally
 // integrate into Browser navigation without requiring hardcoded
