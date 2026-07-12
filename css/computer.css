@@ -263,6 +263,7 @@
 }
 .browser-toolbar-button:hover:not(:disabled) { border-color: var(--brass); color: var(--brass-bright); }
 .browser-toolbar-button:disabled { opacity: 0.35; cursor: default; }
+.browser-toolbar-button-active { color: var(--brass-bright); border-color: var(--brass); }
 
 .browser-address-input {
   flex: 1;

@@ -1817,6 +1817,69 @@ parameters — temperature, context size) renamed to "Intelligence,"
 freeing "Behaviour" to name the new dials above; profile list rows gained
 a one-line at-a-glance summary (selected traits, non-default embodiment).
 
+## Version 2 — Phase 3 — Browser Ecosystem (v2.0.3)
+
+**Goal:** "This phase is NOT about making a better web browser. It is
+about transforming the Browser into the Workshop's universal interface...
+by the end of this phase the Browser should begin feeling like the
+Workshop's operating system rather than simply another application." See
+docs/BROWSER.md for the full write-up; docs/HOST.md for the Host side of
+the same relationship.
+
+**A real multi-scheme `PageRegistry`** — `workshop://`, `host://`, and
+`plugin://` are now genuinely equal internal schemes (`INTERNAL_SCHEMES`,
+`isInternalUrl()`), replacing what used to be a single hardcoded
+`workshop://` check duplicated across three places in `BrowserApp.js`.
+`registerDynamic()` is new alongside it, for pages that can't be
+enumerated ahead of time — an individual asset's own detail page, one
+per definition, rather than one registration per item.
+
+**New Workshop pages** — `workshop://residents` (every resident profile,
+plus a live snapshot of the currently-embodied one), `workshop://assets`
+(a Shared Asset Library overview with live counts, see "File Pages"
+below), `workshop://diagnostics` (a calm Workshop-wide health check —
+engine systems, persistence, AI connection, Host, Browser ecosystem
+size), `workshop://mission-control` (a read-only bridge to Mission
+Control's own live state), `workshop://bookmarks`, and
+`workshop://search` — `workshop://documentation` is the new canonical
+name for what was `workshop://docs` (kept working as an alias).
+
+**File Pages** — `workshop://asset/<category>/<id>`, real per-item
+detail pages for Objects, Blueprints, and Animations (registered as one
+dynamic resolver each, not one registration per item), each with a
+genuine preview (part-colour swatches, built from the definition's own
+real data), real metadata, real cross-referenced relationships (how many
+times an object is currently placed; what pieces a blueprint is made of),
+and honest actions.
+
+**Host Pages migrated to a real `host://` scheme** — `host://services`
+(renamed from `workshop://host`), `host://applications`, `host://
+projects`, `host://documents` and `host://downloads` (two brand new
+Host services), `host://files`, `host://models`, `host://plugins`,
+`host://automation`, `host://hardware` — every old `workshop://` Host URL
+kept working as an alias. "Sensible placeholder data" (this phase's own
+brief) and "an honestly empty list, never a fabricated one" (earlier Host
+phases' own standard) both survive intact: real state stays genuinely
+empty, a new `previewItems()` returns clearly "Example"-badged
+illustrative rows, never mixed silently into real results.
+
+**Plugin Pages, genuinely exercised** — `plugin://example-plugin` (a
+reference implementation) and `plugin://calculator` (a real, working
+four-function calculator, entirely self-contained in its own page) are
+the first two plugins to ever call `PluginRegistry.registerPlugin()`,
+proving the mechanism end-to-end rather than leaving it proven only on
+paper.
+
+**Unified Search, foundations** — `SearchIndex.js`, a small flat index
+contributed to alongside each page registration; `workshop://search`
+filters it client-side as the person types; the address bar itself now
+routes anything that doesn't look like a URL straight to a search,
+rather than guessing at `https://`.
+
+**Browser Navigation** — a one-click bookmark star reached the full
+Browser's own toolbar (previously only the Phone's Browser app had
+bookmarks), backed by the same shared `BrowserStore.bookmarks` list.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

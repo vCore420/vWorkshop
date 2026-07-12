@@ -34,8 +34,10 @@ moves on, Bubble wanders, time keeps its own pace.
   mirror, a quiet sitting corner, real weather and day/night cycles.
 - **The Computer** — Builder (objects, buildings, Blueprints), Being
   Creator, Wardrobe, Animation Editor, AI Mission Control (a local
-  Ollama-backed resident), Settings, Diagnostics, and a lightweight
-  Browser.
+  Ollama-backed resident), Settings, Diagnostics, and a Browser that
+  doubles as the Workshop's own universal interface — the wider internet
+  alongside `workshop://`, `host://`, and `plugin://` pages for the
+  Workshop itself, the Workshop Host, and anything a plugin registers.
 - **The Workshop Phone** — a carried companion with its own modular app
   grid (Builder, Beings, Wardrobe, Bubble, Browser, Workshop, Emotes,
   Settings) that never freezes the player while it's open.
@@ -170,17 +172,26 @@ than disappearing. Standing up (Esc) reverses it exactly.
 
 The workstation panel itself is positioned every frame to match the
 monitor's actual position on your screen — it's not a full-screen overlay,
-it's meant to feel like it belongs to the object. Eight tabs live on it:
+it's meant to feel like it belongs to the object. Ten tabs live on it:
 
 - **Projects** — every project you've got, planning through done (the same
   data as the pinboard and workbench, just the full picture)
 - **Journal** — a page of notes, separate from the physical notebook
+- **Browser** — the Workshop's own connection to everything: the wider
+  internet, and (via `workshop://`/`host://`/`plugin://` pages) the
+  Workshop itself, the Workshop Host, and any plugin that registers a
+  page — see `docs/BROWSER.md`
+- **AI Control** — Mission Control for Bubble, the Workshop's own
+  resident: identity, personality traits and behaviour dials, memory,
+  embodiment, a live Resident Health readout, and a Resident Sandbox for
+  testing changes safely — see `docs/AI.md`
 - **Media** — reflects the real music library, wherever you last left it
 - **Builder** — design new objects for the world (see below)
 - **Wardrobe** — edit your own character's proportions, colours,
   materials, and textures, with a live preview — see "Player identity" below
+- **Animation Editor** — pose and choreograph custom animation clips
+- **Being Creator** — design a Workshop Being (see `docs/BEINGS.md`)
 - **Settings** — the Workshop's full configuration: room lights and clock mode, plus Graphics, Performance, Display, Controls, and Audio — see "Settings" below
-- **Browser** and **AI** — honestly labelled placeholders for later
 
 Whichever tab you had open is exactly where you'll land next time — see
 `docs/COMPUTER.md` for how that "waking from sleep" feeling works, and how
@@ -690,6 +701,19 @@ Memory Configuration's categories and lifetimes both genuinely activated
 Sandbox for testing configuration changes without touching Bubble in the
 room, and a calm Resident Health status display. See `docs/AI.md` and
 `docs/RESIDENT.md` for the full account.
+
+**Version 2, Phase 3 — Browser Ecosystem (v2.0.3)** — the Browser grew
+into the Workshop's universal interface: a real multi-scheme
+`PageRegistry` (`workshop://`, `host://`, `plugin://`, all treated
+identically), six new Workshop pages including a Shared Asset Library
+with genuine per-item file pages (real previews, metadata, and
+cross-referenced relationships for Objects, Blueprints, and Animations),
+every Host page migrated to its own `host://` scheme alongside two brand
+new services (Documents, Downloads), two real working example plugins
+(`plugin://example-plugin`, `plugin://calculator`) proving the
+plugin-page mechanism end-to-end, the foundations of Unified Search, and
+bookmarks reaching the full Browser's own toolbar. See `docs/BROWSER.md`
+and `docs/HOST.md` for the full account.
 
 </details>
 

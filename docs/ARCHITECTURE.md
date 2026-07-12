@@ -38,8 +38,8 @@ src/
     furniture/               one file per furniture definition + registry.js
     room/                    WorkshopRoom.js — floor/walls (real openings + exterior shell)/roof builder
   computer/                  the computer, as one self-contained object — see docs/COMPUTER.md
-  browser/                   PageRegistry.js, BrowserStore.js, WorkshopPages.js, PageShell.js — see docs/BROWSER.md
-  host/                      HostManager.js, ServiceRegistry.js, ProgramsService.js, ProjectsService.js, FilesService.js, PluginRegistry.js, AutomationService.js, HardwareService.js, HostPages.js — see docs/HOST.md
+  browser/                   PageRegistry.js, BrowserStore.js, WorkshopPages.js, AssetPages.js, SearchIndex.js, PageShell.js — see docs/BROWSER.md
+  host/                      HostManager.js, ServiceRegistry.js, ProgramsService.js, ProjectsService.js, FilesService.js, DocumentsService.js, DownloadsService.js, PluginRegistry.js, AutomationService.js, HardwareService.js, HostPages.js — see docs/HOST.md
   ai/                        AIConnectionManager.js, ModelRegistry.js, ResidentProfileStore.js, MemoryConfiguration.js, EmbodimentConfiguration.js, TraitConfiguration.js, BehaviourDialsConfiguration.js, ProviderRegistry.js, PromptComposer.js — see docs/AI.md
   resident/                  ResidentEntity.js, ResidentMovement.js, ResidentBehaviour.js, ResidentRenderer.js, ResidentConnection.js, ResidentConversation.js, ResidentState.js, ResidentController.js, ResidentTraits.js, ResidentDials.js, ResidentContext.js, ResidentPreferences.js, PlayerPatternMemory.js, ResidentCuriosity.js, ConversationMemory.js, ResidentWorldSignals.js — see docs/RESIDENT.md
   beings/                    ModelAssetStore.js, ModelLibrary.js, ModelLoader.js, BeingBehaviours.js, BeingLibrary.js, BeingInstanceStore.js, BeingMovementSystem.js, BeingController.js, BeingSpawnerSystem.js — see docs/BEINGS.md
@@ -54,7 +54,7 @@ src/
   data/                      plain state: layoutDefault.js, ProjectsStore.js, NotesStore.js
   ui/                        OverlayManager.js, HUD.js, overlays/*.js (one per physical panel)
   utils/                     PlaceholderFactory, ProceduralTexture, AudioSynth, InputManager, SimpleMarkdown, math, storage, ScreenProjector, AffinityTracker
-  plugins/examples/          reference plugin(s) — see PLUGIN_GUIDE.md
+  plugins/examples/          dustMotesPlugin.js (engine.plugins contract), examplePagePlugin.js + calculatorPlugin.js (Browser-page contract) — see PLUGIN_GUIDE.md
   main.js                    wiring only — construct, register, start. No behaviour here.
 docs/                        this file, COMPUTER.md, WORKBENCH.md, WORLDBUILDER.md, WORLD.md, POLISH.md, MUSIC.md, PERFORMANCE.md, PLAYER.md, BROWSER.md, AI.md, RESIDENT.md, HOST.md, BEINGS.md, PHONE.md, PERSISTENCE.md, RESPONSIVE.md, REFINEMENT.md, ROADMAP.md, PLUGIN_GUIDE.md
 assets/                      README explaining the "no shipped binary assets yet" decision

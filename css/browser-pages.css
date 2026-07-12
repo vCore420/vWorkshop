@@ -124,3 +124,123 @@ body {
   padding: 2px 10px;
   margin-bottom: 14px;
 }
+
+/* plugin://calculator */
+.calc-widget {
+  max-width: 280px;
+  background: var(--wood-dark);
+  border-radius: 14px;
+  padding: 16px;
+}
+.calc-display {
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 1.6rem;
+  text-align: right;
+  padding: 16px 14px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  overflow-wrap: break-word;
+}
+.calc-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.calc-btn {
+  font-family: var(--font-body);
+  font-size: 1.1rem;
+  padding: 14px 0;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--paper);
+  cursor: pointer;
+}
+.calc-btn:hover { background: rgba(255, 255, 255, 0.2); }
+.calc-btn-op { background: var(--brass); color: var(--wood-dark); font-weight: 600; }
+.calc-btn-op:hover { background: var(--brass-bright); }
+.calc-btn-clear { grid-column: span 4; background: rgba(184, 92, 74, 0.5); }
+.calc-btn-clear:hover { background: rgba(184, 92, 74, 0.7); }
+
+/* Illustrative / mock data, never mistaken for the real thing (see
+   DocumentsService.js / DownloadsService.js's own comment on why) */
+.workshop-example-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: rgba(107, 74, 52, 0.15);
+  color: var(--ink-soft);
+  border: 1px dashed var(--wood-light);
+  border-radius: 999px;
+  padding: 1px 8px;
+  margin-left: 8px;
+}
+.workshop-example-row {
+  border-style: dashed !important;
+  opacity: 0.85;
+}
+
+/* workshop://search */
+.workshop-search-box {
+  width: 100%;
+  font-size: 1rem;
+  font-family: var(--font-body);
+  padding: 12px 14px;
+  border: 1px solid var(--paper-dark);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--ink);
+  margin-bottom: 20px;
+}
+.workshop-search-box:focus { outline: none; border-color: var(--brass); }
+.workshop-search-results { display: flex; flex-direction: column; gap: 6px; }
+.workshop-search-empty { color: var(--ink-soft); font-style: italic; }
+
+/* workshop://diagnostics */
+.workshop-diagnostics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 6px 20px;
+  margin-bottom: 8px;
+}
+.workshop-diagnostics-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--paper-dark);
+  font-size: 0.88rem;
+}
+.workshop-diagnostics-label { color: var(--ink-soft); }
+.workshop-diagnostics-value { font-family: var(--font-mono); }
+
+/* asset detail pages */
+.workshop-asset-preview {
+  display: flex;
+  gap: 4px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid var(--paper-dark);
+  border-radius: 10px;
+  margin-bottom: 20px;
+  min-height: 48px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.workshop-asset-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+.workshop-asset-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 6px 20px;
+  margin-bottom: 20px;
+}
+.workshop-page-actions { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; }

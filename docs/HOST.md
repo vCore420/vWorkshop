@@ -28,7 +28,7 @@ interfaces." Every capability it will ever offer arrives as a
 `workshop://` page (`HostPages.js`), the same mechanism `docs/BROWSER.md`
 already established for Home, Docs, and Projects.
 
-## Architecture: eight small, separated files
+## Architecture: ten small, separated files
 
 `src/host/`, following the exact "separate responsibilities" instinct
 `src/ai/` and `src/resident/` already established:
@@ -40,14 +40,18 @@ already established for Home, Docs, and Projects.
   Dashboard's own overview status live from whatever's actually
   registered.
 - **`ProgramsService.js`**, **`ProjectsService.js`**, **`FilesService.js`**,
-  **`AutomationService.js`**, **`HardwareService.js`** — one file per
-  future capability, each honestly unimplemented (see "Known
-  simplifications" below) but with the *real* shape a future version
-  needs already in place.
+  **`AutomationService.js`**, **`HardwareService.js`**, and — new in the
+  Browser Ecosystem phase — **`DocumentsService.js`**,
+  **`DownloadsService.js`** — one file per future capability, each
+  honestly unimplemented (see "Service Registry and honest placeholders"
+  below) but with the *real* shape a future version needs already in
+  place.
 - **`PluginRegistry.js`** — distinct from `src/core/PluginManager.js`
   (which already exists, handling a plugin's general lifecycle); this is
-  narrower, specifically about which `workshop://` pages a plugin
-  contributes.
+  narrower, specifically about which pages a plugin contributes.
+- **`HostPages.js`** — registers every Host page under its own real
+  `host://` scheme (Browser Ecosystem phase; see "The Host Dashboard"
+  below for what changed).
 
 "Future services should be able to register themselves without requiring
 modifications to existing systems" is true today, not just planned — a
@@ -58,26 +62,28 @@ rather than a hardcoded array.
 
 ## The Host Dashboard
 
-`workshop://host` — Status (running, version, capability counts), a live
-list of every registered service and its own status message, and links
-to each service's own dedicated page
-(`workshop://programs`/`projects`/`files`/`models`/`plugins`/`automation`).
-Every number and every service row comes from
+`host://services` (renamed from `workshop://host` in the Browser
+Ecosystem phase — the old URL keeps resolving as an alias, see
+`docs/BROWSER.md`'s own "Host Pages" section for the full reasoning) —
+Status (running, version, capability counts), a live list of every
+registered service and its own status message, and links to each
+service's own dedicated page (`host://applications`/`projects`/
+`documents`/`downloads`/`files`/`models`/`plugins`/`automation`/
+`hardware`). Every number and every service row comes from
 `HostManager.getOverviewStatus()`, called fresh on each visit, not a
 snapshot frozen at registration.
 
-**`workshop://projects` shows two genuinely different things, on
-purpose, rather than colliding.** The Workshop's own internal projects
-(Notebook entries — real, working, already documented in
-`docs/BROWSER.md`) and the Host's own future *local filesystem* projects
-(folders on the player's actual computer) happen to share the word
-"projects" but aren't the same concept at all. Rather than the Host's own
-`ProjectsService` claiming the URL and regressing a page that already
-works, `WorkshopPages.js`'s own `projectsPage()` now shows both sections
-on the one page — Workshop Projects above, Local Projects (Host, not yet
-active) below.
+**`host://projects` shows the Host's own side of a two-page split,
+rather than colliding with the Workshop's own projects.** The Workshop's
+own internal projects (Notebook entries — real, working, already
+documented in `docs/BROWSER.md`) and the Host's own future *local
+filesystem* projects (folders on the player's actual computer) happen to
+share the word "projects" but aren't the same concept at all.
+`workshop://projects` shows the Workshop's own real projects and points
+to `host://projects` for the local ones — two pages, not one page
+awkwardly covering both.
 
-**`workshop://models` is a real, working page**, not a placeholder —
+**`host://models` is a real, working page**, not a placeholder —
 it reads `ModelRegistry` live, the exact same store AI Mission Control's
 own Model Selection section already populates. "Live from the same
 connection AI Mission Control uses" is the whole design: no separate copy
@@ -85,8 +91,7 @@ of the model list exists anywhere in `src/host/`.
 
 ## Service Registry and honest placeholders
 
-Every other service (Programs, Files, Automation, Hardware, and the
-*local-project* half of Projects) is genuinely unimplemented this phase —
+Every service is genuinely unimplemented this phase —
 "do not worry about exhaustive application discovery yet... do not
 overbuild this... simply establish a location within the architecture."
 Each one's own `getStatus()` returns `{available: false, summary: "..."}`
@@ -102,6 +107,31 @@ None of these fake their own functionality with browser-side shims
 `<input type="file">`, for instance) — a convincing fake would be more
 misleading than an honest "not yet," once a real Host exists to do these
 properly.
+
+**Browser Ecosystem phase: "sensible placeholder data," reconciled with
+"honestly empty."** This phase's own brief asks for something in real
+tension with the paragraph above: "where Host functionality has not yet
+been implemented, prepare the page architecture and use sensible
+placeholder data so the interface is ready for future integration."
+Rather than picking one instruction and quietly dropping the other, four
+services (`ProgramsService`, `ProjectsService`, `DocumentsService`,
+`DownloadsService` — the ones with something list-shaped worth
+previewing) implement both at once:
+
+- **Real state stays honestly empty.** `this.installed`, `this.recent`,
+  and so on are still `[]` — there is no bridge to a local machine, so
+  there is nothing real to list, and `getStatus()` still says so.
+- **`previewItems()` is new, and is never confused for real data.** It
+  returns a handful of clearly-labelled illustrative rows (`isExample:
+  true` on every one), rendered by `HostPages.js`'s own
+  `servicePreviewPage()` with a visible "Example" badge and a dashed
+  border (`.workshop-example-row`/`.workshop-example-badge`), never
+  mixed silently into a list that looks like real results.
+
+The distinction that actually matters isn't "empty vs. populated," it's
+"could a person mistake this for something real" — and with a visible,
+permanent "Example" badge on every illustrative row, the answer stays no,
+regardless of how many rows there are.
 
 ## Preparing the Ollama migration
 
@@ -123,18 +153,24 @@ local-machine access wouldn't be subject to a browser tab's own
 same-origin restrictions the way `fetch()` from inside the Workshop's own
 page currently is.
 
-## Plugin preparation
+## Plugin preparation, now genuinely exercised
 
 "The Browser should eventually discover additional Workshop pages
 through registered plugins." `PluginRegistry.registerPlugin(plugin)`
-already exists and already works end to end — a plugin shaped
+already existed and already worked end to end — a plugin shaped
 `{id, name, providePages(pageRegistry)}` gets its `providePages()`
 called once, immediately, with the real `PageRegistry` to register
-against directly, the exact same call any built-in system (Docs,
-Projects, the Host itself) already makes. `workshop://plugins` lists
-every plugin that's contributed pages this way; nothing currently calls
-`registerPlugin()`, since no plugin system exists yet to call it from,
-but the mechanism itself needed no more preparation than this.
+against directly, the exact same call any built-in system already makes.
+
+**Browser Ecosystem phase: two real plugins actually use it.**
+`plugin://example-plugin` and `plugin://calculator` (see
+`docs/BROWSER.md`'s own "Plugin Pages" section, and each plugin's own
+file in `src/plugins/examples/`) are registered with three lines in
+`main.js` — the mechanism is no longer only proven on paper.
+`plugin.pages` (an optional declared array of URLs, purely for
+`host://plugins`' own display) is the one small addition
+`PluginRegistry.js` gained to show what each contributor actually
+registered, not just that it exists.
 
 ## Browser Refinement: the page-refresh bug, fixed at its root
 
@@ -166,27 +202,32 @@ account.
   services will eventually fill, not the capabilities themselves.
 - **Ollama communication hasn't moved** — see "Preparing the Ollama
   migration" above; `AIConnectionManager` still talks to Ollama directly.
-- **No plugin actually calls `PluginRegistry.registerPlugin()` yet** —
-  the mechanism is real and complete; there's simply nothing using it
-  until a real plugin system exists.
 - **`HostManager.getOverviewStatus()`'s "Running" is always true** — the
   Host doesn't have a separate process to actually be running or not;
   it exists exactly as long as the Workshop's own page does.
+- **Preview data is illustrative, not configurable** — `previewItems()`
+  returns a fixed, small set of example rows; there's no way to add or
+  edit them, since they exist purely to demonstrate a page's own layout,
+  not as a genuine (if fake) dataset to manage.
 
 ## Future extension points
 
 - **A real bridge for each service** — Programs (application discovery
   and launching), Projects (opening local folders, external editors),
-  Files (native open/save dialogs) — each service's own honestly-thrown
-  errors are the exact seams a real implementation fills in, with no
-  architectural change needed anywhere that already calls them.
+  Files (native open/save dialogs), Documents, Downloads — each
+  service's own honestly-thrown errors are the exact seams a real
+  implementation fills in, with no architectural change needed anywhere
+  that already calls them. The moment any of them becomes real, its own
+  `previewItems()` illustrative rows are simply replaced by genuine ones
+  — `HostPages.js`'s own rendering needs no change at all.
 - **The Ollama migration itself** — see "Preparing the Ollama migration"
   above; `AIConnectionManager`'s own narrow, already-isolated shape is
   the reason this will eventually be a contained change, not a rewrite.
-- **A real plugin system**, calling `PluginRegistry.registerPlugin()` for
-  each plugin it loads — see `docs/PLUGIN_GUIDE.md`.
+- **More plugins**, calling `PluginRegistry.registerPlugin()` the same
+  way the two Browser Ecosystem phase examples do — see
+  `docs/PLUGIN_GUIDE.md`.
 - **Automation and Hardware**, once there's a concrete design worth
   building rather than a placeholder worth reserving space for.
 - **Workshop Phone, Development Tools** — both listed among future
   Workshop phases; both would most naturally arrive as more
-  `workshop://` pages this same registry already knows how to display.
+  `host://` pages this same registry already knows how to display.

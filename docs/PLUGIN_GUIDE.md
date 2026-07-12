@@ -3,7 +3,10 @@
 The workshop is meant to grow for a long time. Rather than editing core
 systems every time a new idea shows up, most ideas should arrive as
 **plugins**: self-contained objects registered with `engine.plugins`, with
-no other system needing to know they exist.
+no other system needing to know they exist. A second, narrower plugin
+contract exists specifically for contributing Browser pages — see
+"Adding your own Browser page" below — and the two are independent; a
+plugin can use either, both, or neither.
 
 A real, working example lives at
 `src/plugins/examples/dustMotesPlugin.js` — it adds a drifting dust-mote
@@ -194,6 +197,52 @@ into your plugin's factory function as an option (see how
 `createWindowOverlay({ weatherSystem, timeOfDaySystem })` receives its
 dependencies for the pattern to follow).
 
+## Adding your own Browser page
+
+"Plugins should be capable of registering Browser pages... naturally
+integrate into Browser navigation without requiring hardcoded support."
+Distinct from the `engine.plugins` contract above — this is
+`src/host/PluginRegistry.js`, narrower and specific to one thing: which
+pages a plugin contributes to the Browser (see `docs/BROWSER.md`'s own
+"Plugin Pages" section for the full architecture).
+
+```js
+export function myPagePlugin() {
+  return {
+    id: "my-page-plugin",           // required, must be unique
+    name: "My Page Plugin",         // shown in host://plugins
+    pages: ["plugin://my-thing"],   // optional — purely a declared manifest for host://plugins' own display
+
+    providePages(pageRegistry) {    // called once, immediately, with the real PageRegistry
+      pageRegistry.register("plugin://my-thing", () => ({
+        title: "My Thing",
+        html: `<h1>My Thing</h1><p>Ordinary HTML — see PageShell.js for what wraps this automatically.</p>`,
+      }));
+    },
+  };
+}
+```
+
+Register it in `main.js`, next to any built-in Host service:
+
+```js
+import { myPagePlugin } from "./plugins/examples/myPagePlugin.js";
+hostManager.pluginRegistry.registerPlugin(myPagePlugin());
+```
+
+That's the entire integration surface — `BrowserApp.js` and
+`PageRegistry.js` treat `plugin://` exactly the same way they treat
+`workshop://` and `host://`; neither needed a single change for a new
+plugin page to become navigable. Two real, working examples exist at
+`src/plugins/examples/examplePagePlugin.js` (a minimal reference
+implementation — read it alongside this section) and
+`src/plugins/examples/calculatorPlugin.js` (a genuinely interactive page,
+demonstrating that a plugin page can be a small application, not only a
+document). If your page needs real interactivity, an inline `<script>`
+tag inside the returned `html` works exactly the way `calculatorPlugin.js`
+already demonstrates — the page is rendered via `srcdoc`, so ordinary
+DOM APIs and event listeners work as they would anywhere else.
+
 ## Ideas this contract is designed to support later
 
 The brief's "future philosophy" list maps onto this system directly —
@@ -206,10 +255,11 @@ possibly a furniture definition + overlay):
 - **Local AI companion** — a plugin occupying the sitting area's `restNook`
   overlay (or its own furniture piece), talking to a locally-run model over
   `fetch`.
-- **Workshop calculators** — a small overlay or workstation-app plugin (unit
-  conversion, cut lists, whatever), most naturally opened from the computer
-  (a new app tab) or a new dedicated object, since the workbench's own
-  clipboard panel is dedicated to the current project.
+- **Workshop calculators** — no longer only an idea: `plugin://calculator`
+  (see "Adding your own Browser page" above) is a real, working example.
+  A workstation-app version (opened as its own computer tab rather than a
+  Browser page) would follow the identical "Adding your own workstation
+  app" pattern instead, if that ever reads as the better fit.
 - **Seasonal changes** — a plugin listening to `timeofday:changed` (which
   already exposes a normalized `dayFactor`) or a real calendar date, and
   adjusting decoration, window tint, or lighting color temperature.
