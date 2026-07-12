@@ -204,7 +204,7 @@ const conversationMemory = new ConversationMemory();
 // the Workshop itself rather than from message text; see its own
 // watchProjects() comment for how it avoids treating every
 // already-finished project as a fresh milestone on the very next load.
-conversationMemory.watchProjects(projectsStore);
+conversationMemory.watchProjects(projectsStore, () => residentProfileStore.getActive()?.memory?.categories);
 const settingsStore = new SettingsStore();
 const appearanceStore = new PlayerAppearanceStore();
 const outfitStore = new OutfitStore();
@@ -368,6 +368,12 @@ const computerSystem = engine.addSystem(
     modelRegistry,
     residentProfileStore,
     residentBehaviour,
+    residentConnection,
+    residentState,
+    residentPreferences,
+    playerPatternMemory,
+    residentCuriosity,
+    conversationMemory,
     cameraSystem,
     interiorSystem,
     hostManager,
