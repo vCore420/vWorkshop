@@ -335,6 +335,13 @@ export function createBrowserApp({ browserStore, pageRegistry, hostManager }) {
           hostManager?.services.get("projects")?.unpin(event.data.path);
           const tabId = activeTabId();
           if (frames.has(tabId)) loadIntoFrame(tabId, browserStore.getCurrentUrl(tabId));
+        } else if (event.data?.type === "workshop-browser-toggle-favourite" && event.data.assetId) {
+          // Every asset detail page's own star button — see
+          // AssetPages.js's own favouriteButton(). The real toggle always
+          // happens here, never inside the srcdoc page itself.
+          hostManager?.services.get("assets")?.toggleFavourite(event.data.assetId);
+          const tabId = activeTabId();
+          if (frames.has(tabId)) loadIntoFrame(tabId, browserStore.getCurrentUrl(tabId));
         }
       };
       window.addEventListener("message", onMessage);

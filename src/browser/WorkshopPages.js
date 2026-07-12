@@ -1,7 +1,6 @@
 import { wrapPage } from "./PageShell.js";
 import { renderMarkdown } from "../utils/SimpleMarkdown.js";
 import { HOME_URL } from "./BrowserStore.js";
-import { CURRENT_SAVE_VERSION } from "../systems/SaveMigrations.js";
 import { getIdleLocation } from "../resident/ResidentMovement.js";
 import { getProvider } from "../ai/ProviderRegistry.js";
 import { PERSONALITY_TRAITS } from "../ai/TraitConfiguration.js";
@@ -62,7 +61,7 @@ export function registerWorkshopPages(pageRegistry, searchIndex, deps) {
   pageRegistry.register("workshop://diagnostics", () => diagnosticsPage(deps));
   pageRegistry.register("workshop://mission-control", () => missionControlPage({ residentProfileStore, aiConnectionManager }));
   pageRegistry.register("workshop://bookmarks", () => bookmarksPage(browserStore));
-  pageRegistry.register("workshop://search", (url) => searchPage(url, searchIndex));
+  pageRegistry.register("workshop://search", (url) => searchPage(url, searchIndex, hostManager.services.get("assets")));
   pageRegistry.register("project://", () => projectsPage(projectsStore, hostProjectsService)); // new canonical scheme for the Workshop's own internal projects — see docs/BROWSER.md; host://projects remains the separate *local filesystem* one
 
   searchIndex.addEntries([
@@ -313,11 +312,15 @@ function missionControlPage({ residentProfileStore, aiConnectionManager }) {
  *  Mission Control's own Resident Health section already established
  *  (see docs/AI.md), rather than inventing a second look for the same
  *  kind of information. */
-function diagnosticsPage({ engine, persistenceSystem, aiConnectionManager, hostManager, pageRegistry, browserStore, searchIndex }) {
-  const systemNames = (engine?.systems ?? []).map((s) => s.constructor.name);
-  const hostStatus = hostManager?.getOverviewStatus();
-  const pluginCount = engine?.plugins?.plugins?.size ?? 0;
-  const pageContributors = hostManager?.pluginRegistry?.contributors().length ?? 0;
+/** "Workshop Diagnostics — Workshop status." Reads
+ *  `DiagnosticsService.getReport()` (registered under `"diagnostics"` —
+ *  see `main.js`'s own Workshop Platform wiring block) as its single
+ *  source of truth, rather than recomputing the same numbers here a
+ *  second time — this page and `host://services` both read the one real
+ *  report, so neither can quietly drift from the other. */
+function diagnosticsPage({ hostManager }) {
+  const report = hostManager?.services.get("diagnostics")?.getReport();
+  if (!report) return { title: "Workshop Diagnostics", html: wrapPage("Workshop Diagnostics", "<h1>Workshop Diagnostics</h1><p class=\"workshop-page-empty\">Diagnostics aren't available yet.</p>") };
 
   const html = `
     <h1>Workshop Diagnostics</h1>
@@ -326,46 +329,59 @@ function diagnosticsPage({ engine, persistenceSystem, aiConnectionManager, hostM
     <div class="workshop-home-section">
       <h2>Engine</h2>
       <div class="workshop-diagnostics-grid">
-        ${metaRow("Systems running", String(systemNames.length))}
-        ${metaRow("Engine plugins registered", String(pluginCount))}
+        ${metaRow("Systems running", String(report.engine.systemNames.length))}
+        ${metaRow("Engine plugins registered", String(report.engine.pluginCount))}
       </div>
-      <p class="workshop-page-subtitle" style="margin-top:8px;">${systemNames.map(escapeHtml).join(", ")}</p>
+      <p class="workshop-page-subtitle" style="margin-top:8px;">${report.engine.systemNames.map(escapeHtml).join(", ")}</p>
     </div>
 
     <div class="workshop-home-section">
       <h2>Persistence</h2>
       <div class="workshop-diagnostics-grid">
-        ${metaRow("Save format version", String(CURRENT_SAVE_VERSION))}
-        ${metaRow("Registered providers", String(persistenceSystem?.providers.size ?? 0))}
+        ${metaRow("Save format version", String(report.persistence.saveFormatVersion))}
+        ${metaRow("Registered providers", String(report.persistence.registeredProviders))}
       </div>
     </div>
 
     <div class="workshop-home-section">
       <h2>AI Connection</h2>
       <div class="workshop-diagnostics-grid">
-        ${metaRow("Status", aiConnectionManager?.status ?? "unknown")}
-        ${metaRow("Latency", aiConnectionManager?.lastLatencyMs != null ? `${aiConnectionManager.lastLatencyMs} ms` : "\u2014")}
+        ${metaRow("Status", report.aiConnection.status)}
+        ${metaRow("Latency", report.aiConnection.latencyMs != null ? `${report.aiConnection.latencyMs} ms` : "\u2014")}
       </div>
     </div>
 
     <div class="workshop-home-section">
       <h2>Workshop Host</h2>
       <div class="workshop-diagnostics-grid">
-        ${metaRow("Services registered", String(hostStatus?.services.length ?? 0))}
-        ${metaRow("Services available", String(hostStatus?.availableCapabilities.length ?? 0))}
-        ${metaRow("Plugins contributing pages", String(pageContributors))}
+        ${metaRow("Services registered", String(report.host.servicesRegistered))}
+        ${metaRow("Services available", String(report.host.servicesAvailable))}
+        ${metaRow("Plugins contributing pages", String(report.host.pagePlugins))}
+        ${metaRow("Workshop Host Companion", report.hostCompanion.status)}
+      </div>
+    </div>
+
+    <div class="workshop-home-section">
+      <h2>Shared Asset Library</h2>
+      <div class="workshop-diagnostics-grid">
+        ${metaRow("Asset kinds registered", String(report.assets.kindsRegistered))}
+        ${metaRow("Total assets", String(report.assets.totalAssets))}
+        ${metaRow("Favourited", String(report.assets.favourites))}
       </div>
     </div>
 
     <div class="workshop-home-section">
       <h2>Browser</h2>
       <div class="workshop-diagnostics-grid">
-        ${metaRow("Open tabs", String(browserStore?.all().length ?? 0))}
-        ${metaRow("Bookmarks", String(browserStore?.bookmarks.length ?? 0))}
-        ${metaRow("Registered workshop:// pages", String(pageRegistry?.listByScheme("workshop").length ?? 0))}
-        ${metaRow("Registered host:// pages", String(pageRegistry?.listByScheme("host").length ?? 0))}
-        ${metaRow("Registered plugin:// pages", String(pageRegistry?.listByScheme("plugin").length ?? 0))}
-        ${metaRow("Searchable entries", String(searchIndex?.all().length ?? 0))}
+        ${metaRow("Open tabs", String(report.browser.openTabs))}
+        ${metaRow("Bookmarks", String(report.browser.bookmarks))}
+        ${metaRow("Registered workshop:// pages", String(report.browser.workshopPages))}
+        ${metaRow("Registered host:// pages", String(report.browser.hostPages))}
+        ${metaRow("Registered plugin:// pages", String(report.browser.pluginPages))}
+        ${metaRow("Registered asset:// pages", String(report.browser.assetPages))}
+        ${metaRow("Registered resident:// pages", String(report.browser.residentPages))}
+        ${metaRow("Registered project:// pages", String(report.browser.projectPages))}
+        ${metaRow("Searchable entries", String(report.browser.searchableEntries))}
       </div>
     </div>
   `;
@@ -414,14 +430,33 @@ function bookmarksPage(browserStore) {
  *  client-side as the person types, the same "small, self-contained
  *  script" technique `plugin://calculator` uses for real interactivity
  *  inside a `srcdoc` page. */
-function searchPage(url, searchIndex) {
+// "A unified asset searching system... future systems should all search
+// the same asset library... the player should only need to learn one
+// search experience." Rather than a second, separate search box, this
+// is the one place `workshop://search` merges in live per-asset entries
+// alongside the static page entries every other system already
+// registers — computed fresh on every visit (see `searchPage()`'s own
+// comment), not a stale snapshot from whenever the Workshop first
+// loaded, so a definition built five minutes ago is searchable
+// immediately.
+const ASSET_KIND_URL_SEGMENT = { objects: "object", blueprints: "blueprint", animations: "animation" };
+
+function searchPage(url, searchIndex, assetService) {
   const queryMatch = /[?&]q=([^&]*)/.exec(url);
   const initialQuery = queryMatch ? decodeURIComponent(queryMatch[1]) : "";
-  const entries = searchIndex?.all() ?? [];
+  const assetEntries = Object.entries(ASSET_KIND_URL_SEGMENT).flatMap(([kindId, segment]) =>
+    (assetService?.allDescriptors(kindId) ?? []).map((d) => ({
+      url: `asset://${segment}/${d.assetId.slice(d.assetId.indexOf(":") + 1)}`,
+      title: d.name,
+      category: "Asset",
+      keywords: [...d.categories, ...d.tags],
+    }))
+  );
+  const entries = [...(searchIndex?.all() ?? []), ...assetEntries];
 
   const html = `
     <h1>Search</h1>
-    <p class="workshop-page-subtitle">Workshop pages, Host pages, and plugin pages, all in one place.</p>
+    <p class="workshop-page-subtitle">Workshop pages, Host pages, plugin pages, and every individual Workshop Asset \u2014 all in one place.</p>
     <input class="workshop-search-box" type="text" id="search-input" placeholder="Search everything\u2026" autocomplete="off" value="${escapeHtml(initialQuery)}">
     <div class="workshop-search-results" id="search-results"></div>
     <script>
