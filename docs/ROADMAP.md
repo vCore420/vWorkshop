@@ -1928,6 +1928,45 @@ each the new canonical scheme for something that already existed under
 `workshop://` (all kept resolving as aliases) — `BrowserApp.js` needed
 zero changes for any of them.
 
+## Version 2 — Phase 5 — Workshop Asset System (v2.0.5)
+
+**Goal:** "Each of these currently manages its own content. This phase is
+about giving them a shared language... the Workshop should no longer
+care where something came from. Only what it is." See docs/ASSETS.md for
+the full write-up; docs/HOST.md and docs/BROWSER.md for how it fits
+alongside the Host and the Browser.
+
+**A shared Workshop Asset envelope** (`WorkshopAssetSchema.js`) — name,
+type, a stable id (`"<kind>:<item id>"`, never a filename), description,
+author, dates, version, categories, tags, thumbnail, dependencies,
+validation status — computed on demand around every existing library's
+own real, unchanged internal shape, not a replacement for any of them.
+
+**`AssetService.js` substantially expanded** — `registerKind()` now
+accepts `toDescriptor`/`getDependencies`/`validateItem`, each optional
+with an honest default. Real, working: Favourites and Recently Viewed
+(both persisted), unified search across every individual asset (feeding
+`workshop://search` live), real Blueprint→Object dependencies and their
+reverse (used-by), real validation (missing dependencies, invalid scale,
+missing thumbnails, and more), and genuine swatch-built thumbnails for
+Objects and Blueprints. Honestly deferred: Materials/Textures/Particles/
+Sounds/Behaviours as dedicated kinds, real import/export, real
+optimisation (LOD, collision, mesh, compression) — each a named,
+throwing placeholder, not a fabrication.
+
+**Plugins can now register Workshop Assets**, not only pages —
+`PluginRegistry`'s own second method, `provideAssets(assetService)`,
+proven end-to-end by extending the reference example plugin with three
+small, genuinely real "sticker" assets that appear everywhere a native
+asset would (the Shared Asset Library, Unified Search) with zero changes
+to `AssetService.js`, `AssetPages.js`, or `PageRegistry.js`.
+
+**A real inconsistency caught and fixed along the way**: `workshop://
+diagnostics` had never actually been refactored onto `DiagnosticsService`
+despite the previous phase's own documentation claiming it was — fixed
+this phase, so the Browser page and the Host Dashboard now share one real
+report rather than two copies quietly able to drift apart.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

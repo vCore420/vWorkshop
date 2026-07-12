@@ -728,5 +728,18 @@ Permissions architecture. Three new Local Protocols (`asset://`,
 each a new canonical scheme for something that already existed. See
 `docs/HOST.md` and `docs/BROWSER.md` for the full account.
 
+**Version 2, Phase 5 — Workshop Asset System (v2.0.5)** — a shared
+language for everything the Workshop already creates: one common
+Workshop Asset envelope (name, stable id, author, dates, version,
+categories, tags, thumbnail, dependencies, validation status) computed
+around Objects, Blueprints, Animations, Models, Images, and Music's own
+real, unchanged internal shapes. Real, working: Favourites and Recently
+Viewed (both persisted), unified search across every individual asset,
+real Blueprint→Object dependencies and their reverse, real validation,
+and genuine swatch thumbnails. Plugins can now register their own
+Workshop Assets the same way they register pages — proven with three
+small, real "sticker" assets contributed by the reference example
+plugin. See `docs/ASSETS.md` for the full account.
+
 </details>
 

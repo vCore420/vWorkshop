@@ -211,12 +211,15 @@ address bar and pressing Enter is a real, working search today, not only
 a dedicated search page someone has to know to visit.
 
 **What's indexed today**: every built-in `workshop://` and `host://`
-page, by its own static title and a handful of keywords. **What's
-deliberately not indexed yet**: individual assets, individual residents,
-individual projects — "establish the architecture and integrate wherever
-practical" is honest about scope here; per-item indexing is a natural
-next step (see "Future extension points"), not something this phase
-claims to have finished.
+page, by its own static title and a handful of keywords, plus — as of the
+Workshop Asset System phase — every individual asset from any kind with
+a real detail page (Objects, Blueprints, Animations, and anything a
+plugin registers the same way), merged in live at render time from
+`AssetService.search()` rather than a static entry, so a definition built
+moments ago is searchable immediately. **What's still not indexed**:
+individual residents and individual projects — each is a natural next
+step (see "Future extension points"), not something this phase claims to
+have finished.
 
 ## Host Pages
 
@@ -255,33 +258,37 @@ of each individual service for the reasoning spelled out per-service.
 "Please begin introducing file-aware pages... whenever practical, opening
 a Workshop asset should display an informative page rather than simply
 downloading the file... preview, metadata, categories, creation date,
-actions, relationships." `src/browser/AssetPages.js`, new this phase:
+actions, relationships." `src/browser/AssetPages.js`:
 
-- **`workshop://assets`** — the overview. Every category the Workshop has
-  a library for (Objects, Blueprints, Animations, Models, Images, Music),
-  each a live count read straight from its own store.
-- **`workshop://asset/<category>/<id>`** — real per-item detail pages for
-  three of those six (Objects, Blueprints, Animations), registered as a
+- **`asset://`** — the overview. Favourites and Recently Viewed first
+  (both genuinely real — see docs/ASSETS.md's own "Asset Library"
+  section), then every kind the Workshop has a library for (Objects,
+  Blueprints, Animations, Models, Images, Music, plus anything a plugin
+  registers), each a live count read straight from `AssetService`.
+- **`asset://<category>/<id>`** — real per-item detail pages for three
+  of those kinds (Objects, Blueprints, Animations), registered as a
   single dynamic resolver rather than one exact registration per item
   (see "Architecture" above). Each shows a genuine preview (an object or
-  blueprint's own part colours, rendered as a small row of swatches —
-  there's no practical way to render an actual live 3D preview inside a
-  `srcdoc` iframe without embedding a second Three.js scene per page
-  view, out of proportion for this phase, so the swatches are a real,
-  if simplified, visual built from the definition's own actual data, not
-  a placeholder image), real metadata (category, tags, part/frame count,
-  creation and last-updated dates), real relationships (an object shows
-  how many times it's currently placed in the Workshop, cross-referenced
-  against `WorldObjectsStore`; a blueprint lists the real pieces it's
-  made of, cross-referenced against `ObjectLibraryStore`), and honest
-  actions — a pointer to where the real action happens (open the Builder
-  or Animation Editor from the Computer's rail), not a fabricated button
-  that would need a cross-app-switching bridge this phase doesn't build.
-- **Models, Images, and Music** get real counts on the overview page but
-  no deep per-item page yet — each already has its own dedicated computer
-  app for browsing in depth today, and a model/image/song's own detail
-  page is a reasonable, explicitly scoped future extension rather than
-  something this phase claims to cover exhaustively.
+  blueprint's own part colours, rendered as a small row of swatches, the
+  same real data `AssetService`'s own `buildSwatchThumbnail()` uses for
+  the portable thumbnail form — there's no practical way to render an
+  actual live 3D preview inside a `srcdoc` iframe without embedding a
+  second Three.js scene per page view, out of proportion for this
+  phase), the full common Workshop Asset envelope (author, version,
+  categories, tags, creation/update dates, real validation status), real
+  dependencies and used-by relationships (computed by `AssetService.js`
+  itself — see docs/ASSETS.md's own "Relationships & Dependencies"
+  section — not re-derived in this file), a genuine favourite toggle, and
+  honest actions — a pointer to where the real action happens (open the
+  Builder or Animation Editor from the Computer's rail), not a fabricated
+  button that would need a cross-app-switching bridge this phase doesn't
+  build.
+- **Models, Images, Music, and any kind without its own detail page**
+  (a plugin-registered one, say) get a real count and an honest note on
+  the overview instead of a grid of dead links — each already has its
+  own dedicated computer app for browsing in depth today, and a genuine
+  detail page for any of them is a reasonable, explicitly scoped future
+  extension rather than something this phase claims to cover exhaustively.
 
 ## Plugin Pages
 
@@ -359,9 +366,10 @@ call alongside the existing one.
 
 ## Future extension points
 
-- **Per-item search indexing** — individual object definitions,
-  residents, and projects, each searchable by their own real (often
-  player-given) name, the moment each has its own detail page worth
+- **Per-item search indexing for residents and projects** — object
+  definitions, blueprints, and animations are already searchable by name
+  (see "Unified Search" above); residents and projects are the remaining
+  natural next step, the moment each has its own detail page worth
   pointing a search result at.
 - **Model/image/song detail pages**, matching the shape
   `AssetPages.js`'s own object/blueprint/animation pages already

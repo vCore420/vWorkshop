@@ -243,6 +243,64 @@ tag inside the returned `html` works exactly the way `calculatorPlugin.js`
 already demonstrates — the page is rendered via `srcdoc`, so ordinary
 DOM APIs and event listeners work as they would anywhere else.
 
+## Adding your own Workshop Asset
+
+"Plugins should naturally register Workshop Assets. Plugins should not
+require special handling. Assets installed through plugins should appear
+inside the Workshop Asset Library exactly like native assets." The same
+`src/host/PluginRegistry.js` a plugin already uses for pages — an
+optional second method, `provideAssets(assetService)`, called once,
+immediately, with the real `AssetService` (see `docs/HOST.md`'s own
+"Asset Service" section and `src/host/WorkshopAssetSchema.js` for the
+full architecture).
+
+```js
+import { buildSwatchThumbnail } from "../../host/WorkshopAssetSchema.js";
+
+const MY_ITEMS = [{ id: "thing-1", name: "A Thing", color: "#7fae62" }];
+
+export function myAssetPlugin() {
+  return {
+    id: "my-asset-plugin",
+    name: "My Asset Plugin",
+    assetKinds: ["my-plugin-things"],  // optional — purely a declared manifest for host://plugins' own display
+
+    provideAssets(assetService) {      // called once, immediately, with the real AssetService
+      assetService.registerKind("my-plugin-things", {
+        label: "My Plugin Things",
+        all: () => MY_ITEMS,
+        get: (id) => MY_ITEMS.find((item) => item.id === id) ?? null,
+        toDescriptor: (item) => ({
+          name: item.name,
+          author: "My Asset Plugin",
+          categories: ["Effects"],       // see WorkshopAssetSchema.WORKSHOP_ASSET_CATEGORIES for the suggested vocabulary
+          tags: ["example"],
+          thumbnail: buildSwatchThumbnail([item.color]),
+        }),
+        // getDependencies(item) and validateItem(item) are both optional
+        // too — see AssetService.js's own comment for what each does.
+      });
+    },
+  };
+}
+```
+
+Register it in `main.js`, the identical line a page-registering plugin
+already uses:
+
+```js
+hostManager.pluginRegistry.registerPlugin(myAssetPlugin());
+```
+
+That's the entire integration surface — `AssetService.js`,
+`AssetPages.js`, and `workshop://search` all treat a plugin-registered
+kind exactly the same way they treat Objects, Blueprints, or any other
+built-in kind; none of them needed a single change. A real, working
+example exists at `src/plugins/examples/examplePagePlugin.js` — three
+small "sticker" assets, registered alongside that same plugin's own
+`plugin://example-plugin` page, demonstrating that a single plugin can
+implement both contracts at once.
+
 ## Ideas this contract is designed to support later
 
 The brief's "future philosophy" list maps onto this system directly —

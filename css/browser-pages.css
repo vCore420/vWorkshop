@@ -263,3 +263,22 @@ body {
   width: 18px;
   height: 18px;
 }
+
+.workshop-favourite-button {
+  display: inline-block;
+  margin: 6px 0 16px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--paper-dark);
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.workshop-favourite-button:hover { border-color: currentColor; }
+.workshop-favourite-active {
+  background: rgba(212, 175, 55, 0.15);
+  border-color: #d4af37;
+  color: #d4af37;
+}

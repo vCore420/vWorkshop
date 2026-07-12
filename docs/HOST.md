@@ -39,7 +39,7 @@ attention — granting a permission, running the Companion — is exactly
 the one thing this phase makes genuinely visible and interactive
 (`host://permissions`), not buried.
 
-## Architecture: seventeen small, separated files
+## Architecture: eighteen small, separated files
 
 `src/host/`, following the exact "separate responsibilities" instinct
 `src/ai/` and `src/resident/` already established. This phase's own
@@ -63,8 +63,12 @@ brief names nine services explicitly; all nine now exist.
   future version needs already in place; see "Service Registry and
   honest placeholders" below for which parts of each are genuinely real
   today.
-- **Asset Service** (`AssetService.js`, new this phase) — genuinely real,
-  not honestly-empty; see its own section below.
+- **Asset Service** (`AssetService.js`, new in the Workshop Platform
+  phase, substantially expanded in the Workshop Asset System phase) —
+  genuinely real, not honestly-empty; paired with **`WorkshopAssetSchema.js`**
+  (new in the Workshop Asset System phase — the shared descriptor shape
+  and category vocabulary, not a service itself). See docs/ASSETS.md for
+  the full account.
 - **Plugin Service** (`PluginService.js`, new this phase), **Resident
   Service** (`ResidentService.js`, new this phase), **Diagnostics
   Service** (`DiagnosticsService.js`, new this phase) — all three need
@@ -239,13 +243,24 @@ asset kind it knows about already has a real backing store — Objects,
 Blueprints, Animations, Models, Images, Music are all registered with one
 `registerKind()` call each, in `main.js`'s own late wiring block, each
 just handing over the real `all`/`get` functions its own store already
-exposes. Materials, Textures, Audio, and Particles (also named in this
-phase's own brief) have no dedicated store of their own yet — they're one
-more `registerKind()` call away from appearing everywhere this service is
-already consulted, the moment one exists, with zero changes to
-`AssetService.js` itself. See `docs/BROWSER.md`'s own "File Pages"
-section for the Browser-facing side of this (`asset://`, the new
-canonical scheme).
+exposes.
+
+**The Workshop Asset System phase (v2.0.5) took this considerably
+further** — a full shared metadata envelope, real favourites and
+recently-viewed, unified search across every individual asset, real
+Blueprint→Object dependencies and their reverse (used-by), real
+validation, and genuine (if simple) thumbnails for two kinds. See
+**`docs/ASSETS.md`** for the complete account — this section stays a
+short summary of where `AssetService` sits in the Host's own
+architecture specifically.
+
+Materials, Textures, Audio, and Particles (also named in the brief) have
+no dedicated store of their own yet — they're one more `registerKind()`
+call away from appearing everywhere this service is already consulted,
+with zero changes to `AssetService.js` itself. See `docs/BROWSER.md`'s
+own "File Pages" section for the Browser-facing side of this (`asset://`,
+the canonical scheme), and `docs/PLUGIN_GUIDE.md`'s own "Adding your own
+Workshop Asset" section for how a plugin joins in exactly the same way.
 
 ## Resident Service, Diagnostics Service
 
@@ -264,13 +279,16 @@ lifecycle, permissions, metadata, updates, dependencies. The Host should
 become responsible for managing Workshop plugins." The Workshop actually
 has two independent plugin contracts (see `docs/PLUGIN_GUIDE.md`):
 `engine.plugins` (general lifecycle) and `hostManager.pluginRegistry`
-(Browser pages). `PluginService.js` is the one place that can answer
-"what plugins currently exist, and which contract does each implement"
-without a caller needing to know both systems exist separately — a
-plugin implementing *both* shows up once, with both contracts listed, not
-twice. `host://plugins` reads this rather than `pluginRegistry.
-contributors()` directly now, showing every loaded plugin, not only the
-page-contributing ones.
+(Browser pages, and — new in the Workshop Asset System phase — Workshop
+Assets, via the same registry's own second method,
+`provideAssets(assetService)`). `PluginService.js` is the one place that
+can answer "what plugins currently exist, and which capability does each
+one contribute" without a caller needing to know every system exists
+separately — a plugin implementing more than one contract shows up once,
+every contract it implements listed, not duplicated. `host://plugins`
+reads this rather than `pluginRegistry.contributors()` directly, showing
+every loaded plugin and, where applicable, which asset kinds it
+registered.
 
 Discovery, metadata, dependencies, updates, and permissions (the rest of
 this phase's own list) stay honestly out of scope, for the identical
@@ -327,11 +345,13 @@ registering themselves with the Host." Concretely, as of this phase:
 - **Pages/protocols** — `PageRegistry.register()`/`registerDynamic()`,
   true since Version 1; `INTERNAL_SCHEMES` itself is one array literal to
   extend, not a set of hardcoded checks scattered through `BrowserApp.js`.
-- **Plugins** — `PluginRegistry.registerPlugin()` (Browser pages) and
-  `engine.plugins.register()` (lifecycle), both true since earlier
-  phases, both now visible together through `PluginService.listAll()`.
-- **Assets** — `AssetService.registerKind()`, new this phase — see its
-  own section above.
+- **Plugins** — `PluginRegistry.registerPlugin()` (Browser pages, and —
+  new in the Workshop Asset System phase — Workshop Assets, via the same
+  registry's own `provideAssets()`) and `engine.plugins.register()`
+  (lifecycle), all now visible together through `PluginService.listAll()`.
+- **Assets** — `AssetService.registerKind()` — real for both built-in
+  kinds (`main.js`'s own wiring) and plugin-provided ones (a plugin's own
+  `provideAssets()`); see docs/ASSETS.md for the full account.
 - **Residents** — not yet a registration-based system in the same
   sense; `ResidentService.js` reads a fixed set of stores today (see
   docs/RESIDENT.md's own "Future extension points" for what multi-
