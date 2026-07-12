@@ -278,8 +278,9 @@ function pluginsPage(hostManager) {
           (p) => `
             <div class="workshop-home-tile" style="cursor:default">
               <span class="workshop-home-tile-title">${escapeHtml(p.name)}</span>
-              <span class="workshop-home-tile-meta">${p.contracts.map((c) => (c === "pages" ? "registers pages" : "engine lifecycle")).join(" \u00b7 ")}</span>
+              <span class="workshop-home-tile-meta">${p.contracts.map(contractLabel).join(" \u00b7 ")}</span>
               <span class="workshop-home-tile-meta">${p.pages.length ? p.pages.map((page) => `<a href="${escapeHtml(page)}">${escapeHtml(page)}</a>`).join(", ") : "No pages declared"}</span>
+              ${p.assetKinds.length ? `<span class="workshop-home-tile-meta">Asset kinds: ${p.assetKinds.map(escapeHtml).join(", ")}</span>` : ""}
             </div>
           `
         )
@@ -288,11 +289,17 @@ function pluginsPage(hostManager) {
   const html = `
     <span class="workshop-page-badge">Workshop Host</span>
     <h1>Plugins</h1>
-    <p class="workshop-page-subtitle">Every plugin currently loaded, from either contract a plugin can implement: general engine lifecycle (<code>engine.plugins</code>) or Browser pages (<code>hostManager.pluginRegistry</code>). See <code>docs/PLUGIN_GUIDE.md</code> and the two working page-registering examples below.</p>
+    <p class="workshop-page-subtitle">Every plugin currently loaded, from any contract it implements: general engine lifecycle (<code>engine.plugins</code>), Browser pages, or Workshop Assets (both via <code>hostManager.pluginRegistry</code>). See <code>docs/PLUGIN_GUIDE.md</code> and the two working examples below.</p>
     <div class="workshop-home-grid">${rows}</div>
     <p><a href="host://services">Back to the Host Dashboard</a></p>
   `;
   return { title: "Plugins", html: wrapPage("Plugins", html) };
+}
+
+function contractLabel(contract) {
+  if (contract === "pages") return "registers pages";
+  if (contract === "assets") return "registers assets";
+  return "engine lifecycle";
 }
 
 /** "Please begin introducing a permissions architecture." Genuinely

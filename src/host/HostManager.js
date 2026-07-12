@@ -64,7 +64,12 @@ export class HostManager {
   constructor(pageRegistry, hostConnectionManager) {
     this.version = HOST_VERSION;
     this.services = new ServiceRegistry();
-    this.pluginRegistry = new PluginRegistry(pageRegistry);
+    const assetService = new AssetService();
+    this.services.register("assets", assetService);
+    // AssetService constructed just above so PluginRegistry can hand it
+    // to any plugin implementing `provideAssets()` — see
+    // PluginRegistry.js's own comment on the third plugin contract.
+    this.pluginRegistry = new PluginRegistry(pageRegistry, assetService);
     this.permissions = new PermissionsService();
 
     const programsService = new ProgramsService();
@@ -77,7 +82,6 @@ export class HostManager {
     this.services.register("hardware", new HardwareService());
     this.services.register("documents", new DocumentsService());
     this.services.register("downloads", new DownloadsService());
-    this.services.register("assets", new AssetService());
     this.services.register("permissions", this.permissions);
     // "plugins", "residents", and "diagnostics" are registered later, in
     // main.js's own "Workshop Platform" wiring block — see this class's

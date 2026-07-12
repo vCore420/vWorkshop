@@ -36,6 +36,8 @@ export class DiagnosticsService {
    *  nothing at all. */
   getReport() {
     const hostStatus = this._hostManager?.getOverviewStatus();
+    const assetService = this._hostManager?.services.get("assets");
+    const assetSummary = assetService?.summary() ?? [];
     return {
       engine: {
         systemNames: (this._engine?.systems ?? []).map((s) => s.constructor.name),
@@ -56,6 +58,11 @@ export class DiagnosticsService {
         servicesRegistered: hostStatus?.services.length ?? 0,
         servicesAvailable: hostStatus?.availableCapabilities.length ?? 0,
         pagePlugins: this._hostManager?.pluginRegistry?.contributors().length ?? 0,
+      },
+      assets: {
+        kindsRegistered: assetSummary.length,
+        totalAssets: assetSummary.reduce((sum, row) => sum + row.count, 0),
+        favourites: assetService?.favourites().length ?? 0,
       },
       browser: {
         openTabs: this._browserStore?.all().length ?? 0,

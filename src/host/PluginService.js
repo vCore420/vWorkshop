@@ -9,15 +9,16 @@
  * The Workshop actually has *two* independent plugin contracts (see
  * `docs/PLUGIN_GUIDE.md`): `engine.plugins` (`PluginManager.js` —
  * init/update/dispose/save/load, the general lifecycle) and
- * `hostManager.pluginRegistry` (`PluginRegistry.js` — `providePages()`,
- * contributing Browser pages). Neither needed to change, and this
- * service doesn't merge them into one mechanism — it's the one place
- * that can answer "what plugins currently exist, and which of the two
- * contracts does each one implement" without a caller needing to know
- * both systems exist separately. A plugin implementing *both* contracts
+ * `hostManager.pluginRegistry` (`PluginRegistry.js` — `providePages()`/
+ * `provideAssets()`, contributing Browser pages and, new in the Workshop
+ * Asset System phase, Workshop Assets). Neither needed to change, and
+ * this service doesn't merge them into one mechanism — it's the one
+ * place that can answer "what plugins currently exist, and which
+ * capability does each one contribute" without a caller needing to know
+ * every system exists separately. A plugin implementing more than one
  * (a real possibility — nothing stops a single plugin object from having
- * both `init()` and `providePages()`) shows up once, with both contracts
- * listed, not twice.
+ * `init()`, `providePages()`, *and* `provideAssets()` all at once) shows
+ * up once, with every contract it implements listed, not duplicated.
  *
  * **Discovery, metadata, dependencies, updates, permissions** — the rest
  * of this phase's own list — stay honestly out of scope for the same
@@ -35,25 +36,28 @@ export class PluginService {
     this._pluginRegistry = pluginRegistry;
   }
 
-  /** Every currently-loaded plugin, from either contract, merged by id —
-   *  `{id, name, contracts: ["lifecycle"|"pages", ...], pages: string[]}`. */
+  /** Every currently-loaded plugin, from any contract, merged by id —
+   *  `{id, name, contracts: ["lifecycle"|"pages"|"assets", ...], pages:
+   *  string[], assetKinds: string[]}`. */
   listAll() {
     const merged = new Map();
-    const upsert = (id, name, contract, pages) => {
+    const upsert = (id, name, contract, pages, assetKinds) => {
       const existing = merged.get(id);
       if (existing) {
         if (!existing.contracts.includes(contract)) existing.contracts.push(contract);
         for (const page of pages) if (!existing.pages.includes(page)) existing.pages.push(page);
+        for (const kind of assetKinds) if (!existing.assetKinds.includes(kind)) existing.assetKinds.push(kind);
       } else {
-        merged.set(id, { id, name, contracts: [contract], pages: [...pages] });
+        merged.set(id, { id, name, contracts: [contract], pages: [...pages], assetKinds: [...assetKinds] });
       }
     };
 
     for (const plugin of this._engine?.plugins?.plugins?.values() ?? []) {
-      upsert(plugin.id, plugin.name ?? plugin.id, "lifecycle", []);
+      upsert(plugin.id, plugin.name ?? plugin.id, "lifecycle", [], []);
     }
     for (const contributor of this._pluginRegistry?.contributors() ?? []) {
-      upsert(contributor.id, contributor.name, "pages", contributor.pages ?? []);
+      upsert(contributor.id, contributor.name, "pages", contributor.pages ?? [], []);
+      if (contributor.assetKinds?.length) upsert(contributor.id, contributor.name, "assets", [], contributor.assetKinds);
     }
     return [...merged.values()];
   }
