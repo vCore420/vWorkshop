@@ -55,6 +55,10 @@ import { ResidentBehaviour } from "./resident/ResidentBehaviour.js";
 import { ResidentConnection } from "./resident/ResidentConnection.js";
 import { ResidentController } from "./resident/ResidentController.js";
 import { createResidentConversationOverlay } from "./resident/ResidentConversation.js";
+import { ResidentPreferences } from "./resident/ResidentPreferences.js";
+import { PlayerPatternMemory } from "./resident/PlayerPatternMemory.js";
+import { ResidentCuriosity } from "./resident/ResidentCuriosity.js";
+import { ConversationMemory } from "./resident/ConversationMemory.js";
 import { ModelAssetStore } from "./beings/ModelAssetStore.js";
 import { ModelLibrary } from "./beings/ModelLibrary.js";
 import { ModelLoader } from "./beings/ModelLoader.js";
@@ -184,6 +188,23 @@ registerHostPages(pageRegistry, { hostManager, modelRegistry });
 const residentState = new ResidentState();
 const residentBehaviour = new ResidentBehaviour();
 const residentConnection = new ResidentConnection(aiConnectionManager);
+// "Residents should begin forming preferences... begin remembering
+// behavioural patterns rather than only conversations... occasionally
+// notice the Workshop around it... focus on remembering meaningful
+// things rather than everything." Four small, single-responsibility
+// pieces, the same "separate responsibilities" instinct src/resident/
+// already follows for everything else — see docs/RESIDENT.md.
+// `conversationMemory` is deliberately never registered with
+// PersistenceSystem below; see its own file comment for why.
+const residentPreferences = new ResidentPreferences();
+const playerPatternMemory = new PlayerPatternMemory();
+const residentCuriosity = new ResidentCuriosity();
+const conversationMemory = new ConversationMemory();
+// "Major milestones" — the one category ConversationMemory populates from
+// the Workshop itself rather than from message text; see its own
+// watchProjects() comment for how it avoids treating every
+// already-finished project as a fresh milestone on the very next load.
+conversationMemory.watchProjects(projectsStore);
 const settingsStore = new SettingsStore();
 const appearanceStore = new PlayerAppearanceStore();
 const outfitStore = new OutfitStore();
@@ -250,7 +271,9 @@ const emoteWheelSystem = engine.addSystem(new EmoteWheelSystem({ animationLibrar
 void emoteWheelSystem;
 const compassSystem = engine.addSystem(new CompassSystem());
 void compassSystem;
-const residentController = engine.addSystem(new ResidentController({ residentState, residentBehaviour, residentConnection, residentProfileStore }));
+const residentController = engine.addSystem(
+  new ResidentController({ residentState, residentBehaviour, residentConnection, residentProfileStore, residentPreferences, playerPatternMemory, musicSystem })
+);
 void residentController;
 
 // "Beings should also become Workshop assets" — the same three-way split
@@ -431,6 +454,9 @@ persistenceSystem.registerProvider("browser", browserStore);
 persistenceSystem.registerProvider("aiConnection", aiConnectionManager);
 persistenceSystem.registerProvider("aiResidents", residentProfileStore);
 persistenceSystem.registerProvider("residentState", residentState);
+persistenceSystem.registerProvider("residentPreferences", residentPreferences);
+persistenceSystem.registerProvider("playerPatternMemory", playerPatternMemory);
+persistenceSystem.registerProvider("residentCuriosity", residentCuriosity);
 persistenceSystem.registerProvider("modelLibrary", modelLibrary);
 persistenceSystem.registerProvider("beingLibrary", beingLibrary);
 persistenceSystem.registerProvider("beingInstances", beingInstanceStore);
@@ -447,7 +473,22 @@ overlayManager.register("notebook", createNotebookOverlay({ notesStore }));
 overlayManager.register("music", createMusicOverlay({ musicSystem, libraryStore: musicLibraryStore, playlistStore }));
 overlayManager.register("archive", createArchiveOverlay({ projectsStore }));
 overlayManager.register("toolStorage", createToolStorageOverlay());
-overlayManager.register("residentConversation", createResidentConversationOverlay({ residentConnection, residentProfileStore, residentBehaviour }));
+overlayManager.register(
+  "residentConversation",
+  createResidentConversationOverlay({
+    residentConnection,
+    residentProfileStore,
+    residentBehaviour,
+    projectsStore,
+    residentPreferences,
+    playerPatternMemory,
+    residentCuriosity,
+    conversationMemory,
+    worldObjectsStore,
+    environmentSystem,
+    timeOfDaySystem,
+  })
+);
 overlayManager.register("window", createWindowOverlay({ environmentSystem, timeOfDaySystem }));
 overlayManager.register("restNook", createRestNookOverlay());
 overlayManager.register("wardrobe", createWardrobeOverlay({ appearanceStore, outfitStore, textureStore }));
