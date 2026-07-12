@@ -1,5 +1,6 @@
 import { MEMORY_MODES, MEMORY_SIZE_OPTIONS, CONTEXT_BUDGET_OPTIONS } from "../../ai/MemoryConfiguration.js";
 import { EMBODIMENT_TYPES, IDLE_BEHAVIOUR_OPTIONS } from "../../ai/EmbodimentConfiguration.js";
+import { PERSONALITY_TRAITS, MAX_SELECTED_TRAITS } from "../../ai/TraitConfiguration.js";
 import { composeSystemPrompt } from "../../ai/PromptComposer.js";
 
 const STATUS_LABELS = {
@@ -30,7 +31,7 @@ const STATUS_LABELS = {
 export function createAIApp({ aiConnectionManager, modelRegistry, residentProfileStore }) {
   return {
     id: "ai",
-    label: "Mission Control",
+    label: "AI Control",
     glyph: "\u2726",
     mount(container) {
       const heading = document.createElement("h2");
@@ -88,6 +89,7 @@ export function createAIApp({ aiConnectionManager, modelRegistry, residentProfil
         const profile = activeProfile();
         if (profile) {
           form.appendChild(buildIdentitySection(profile));
+          form.appendChild(buildTraitsSection(profile));
           form.appendChild(buildBehaviourSection(profile));
           form.appendChild(buildMemorySection(profile));
           form.appendChild(buildEmbodimentSection(profile));
@@ -114,7 +116,7 @@ export function createAIApp({ aiConnectionManager, modelRegistry, residentProfil
         followUp.style.margin = "4px 0 0";
         followUp.textContent =
           aiConnectionManager.status === "connected"
-            ? "Awaiting embodiment \u2014 this resident doesn't have a presence in the room yet."
+            ? "Embodied as Bubble, the Workshop's own resident \u2014 its appearance and traits above are already reflected there."
             : "The Workshop will keep waiting quietly \u2014 nothing here blocks anything else you're doing.";
         section.appendChild(followUp);
         return section;
@@ -280,6 +282,38 @@ export function createAIApp({ aiConnectionManager, modelRegistry, residentProfil
         return section;
       }
 
+      function buildTraitsSection(profile) {
+        const section = document.createElement("div");
+        section.className = "builder-section";
+        section.appendChild(sectionHeading("Resident Traits"));
+        const hint = document.createElement("p");
+        hint.className = "app-subtitle";
+        hint.textContent = `A long-term temperament, not a mood \u2014 choose up to ${MAX_SELECTED_TRAITS}. These quietly shape movement, awareness, idle habits, and conversation, without replacing anything above.`;
+        section.appendChild(hint);
+
+        const selected = profile.traits.selected;
+        const list = document.createElement("div");
+        list.className = "ai-trait-list";
+        for (const trait of PERSONALITY_TRAITS) {
+          const row = document.createElement("label");
+          row.className = "panel-row ai-trait-row";
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.checked = selected.includes(trait.id);
+          checkbox.disabled = !checkbox.checked && selected.length >= MAX_SELECTED_TRAITS;
+          checkbox.addEventListener("change", () => {
+            const next = checkbox.checked ? [...selected, trait.id] : selected.filter((id) => id !== trait.id);
+            updateActive({ traits: { selected: next } });
+          });
+          const text = document.createElement("span");
+          text.textContent = `${trait.label} \u2014 ${trait.description}`;
+          row.append(checkbox, text);
+          list.appendChild(row);
+        }
+        section.appendChild(list);
+        return section;
+      }
+
       function buildBehaviourSection(profile) {
         const section = document.createElement("div");
         section.className = "builder-section";
@@ -299,7 +333,7 @@ export function createAIApp({ aiConnectionManager, modelRegistry, residentProfil
         section.appendChild(sectionHeading("Memory"));
         const badge = document.createElement("span");
         badge.className = "ai-future-badge";
-        badge.textContent = "Architecture only \u2014 not active yet";
+        badge.textContent = "Mode is active \u2014 size, summaries and context budget remain architecture only";
         section.appendChild(badge);
 
         section.appendChild(
@@ -334,7 +368,7 @@ export function createAIApp({ aiConnectionManager, modelRegistry, residentProfil
         section.appendChild(sectionHeading("Embodiment"));
         const badge = document.createElement("span");
         badge.className = "ai-future-badge";
-        badge.textContent = "Preparing for a future phase \u2014 not active yet";
+        badge.textContent = "Now shaping Bubble's actual appearance in the room";
         section.appendChild(badge);
 
         const e = profile.embodiment;

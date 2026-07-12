@@ -1,6 +1,7 @@
 import { EventBus } from "../core/EventBus.js";
 import { defaultMemoryConfig, normalizeMemoryConfig } from "./MemoryConfiguration.js";
 import { defaultEmbodimentConfig, normalizeEmbodimentConfig } from "./EmbodimentConfiguration.js";
+import { defaultTraitConfig, normalizeTraitConfig } from "./TraitConfiguration.js";
 
 const DEFAULT_BEHAVIOUR_CONFIG = {
   temperature: 0.7,
@@ -24,11 +25,12 @@ const DEFAULT_IDENTITY = {
  * "This allows multiple AI personalities to be configured... Profiles
  * should persist between Workshop sessions." Each profile is the *entire*
  * description of one possible future resident — identity, which model it
- * uses, behaviour tuning, and its (currently inert) memory/embodiment
- * settings — all in one place, so switching the active profile is
- * switching everything about who's being prepared at once, the same way
- * switching outfits in the Wardrobe switches everything about how the
- * player looks at once.
+ * uses, behaviour tuning, its long-term personality traits, and its
+ * memory/embodiment settings (increasingly real, no longer purely inert —
+ * see docs/RESIDENT.md) — all in one place, so switching the active
+ * profile is switching everything about who's being prepared at once, the
+ * same way switching outfits in the Wardrobe switches everything about
+ * how the player looks at once.
  *
  * "The future AI Resident should simply consume these configurations
  * rather than implementing its own copies" — this store, plus
@@ -67,6 +69,7 @@ export class ResidentProfileStore {
       model: null,
       identity: { ...DEFAULT_IDENTITY },
       behaviourConfig: { ...DEFAULT_BEHAVIOUR_CONFIG },
+      traits: defaultTraitConfig(),
       memory: defaultMemoryConfig(),
       embodiment: defaultEmbodimentConfig(),
       createdAt: now,
@@ -89,6 +92,7 @@ export class ResidentProfileStore {
     copy.model = source.model;
     copy.identity = { ...source.identity };
     copy.behaviourConfig = { ...source.behaviourConfig };
+    copy.traits = { ...source.traits, selected: [...source.traits.selected] };
     copy.memory = { ...source.memory };
     copy.embodiment = { ...source.embodiment };
     this.profiles[copy.id] = copy;
@@ -135,18 +139,19 @@ export class ResidentProfileStore {
   /** A single, narrow entry point for every field this store owns —
    *  `AIApp.js` calls this the same way regardless of whether it's
    *  updating the resident's name, one identity field, the model, a
-   *  behaviour number, or a memory/embodiment setting, rather than this
-   *  store exposing a different bespoke setter per field. `patch` is a
-   *  shallow merge at the top level, and a *nested* merge for
-   *  `identity`/`behaviourConfig`/`memory`/`embodiment` specifically —
-   *  updating just `identity.purpose` never clobbers the profile's other
-   *  identity fields it didn't mention. */
+   *  behaviour number, a trait selection, or a memory/embodiment setting,
+   *  rather than this store exposing a different bespoke setter per
+   *  field. `patch` is a shallow merge at the top level, and a *nested*
+   *  merge for `identity`/`behaviourConfig`/`traits`/`memory`/`embodiment`
+   *  specifically — updating just `identity.purpose` never clobbers the
+   *  profile's other identity fields it didn't mention. */
   update(id, patch) {
     const profile = this.get(id);
     if (!profile || !patch) return;
     for (const [key, value] of Object.entries(patch)) {
       if (key === "identity") profile.identity = { ...profile.identity, ...value };
       else if (key === "behaviourConfig") profile.behaviourConfig = { ...profile.behaviourConfig, ...value };
+      else if (key === "traits") profile.traits = normalizeTraitConfig({ ...profile.traits, ...value });
       else if (key === "memory") profile.memory = normalizeMemoryConfig({ ...profile.memory, ...value });
       else if (key === "embodiment") profile.embodiment = normalizeEmbodimentConfig({ ...profile.embodiment, ...value });
       else profile[key] = value;
@@ -168,13 +173,14 @@ export class ResidentProfileStore {
   load(data) {
     if (!data?.profiles || Object.keys(data.profiles).length === 0) return;
     this.profiles = data.profiles;
-    // Normalising memory/embodiment on load, not just on update(), covers
-    // a profile saved by an older version of this store before a new
-    // field existed — it always ends up with every current field's own
-    // sensible default rather than `undefined`.
+    // Normalising memory/embodiment/traits on load, not just on update(),
+    // covers a profile saved by an older version of this store before a
+    // new field existed — it always ends up with every current field's
+    // own sensible default rather than `undefined`.
     for (const profile of Object.values(this.profiles)) {
       profile.memory = normalizeMemoryConfig(profile.memory);
       profile.embodiment = normalizeEmbodimentConfig(profile.embodiment);
+      profile.traits = normalizeTraitConfig(profile.traits);
       profile.identity = { ...DEFAULT_IDENTITY, ...profile.identity };
       profile.behaviourConfig = { ...DEFAULT_BEHAVIOUR_CONFIG, ...profile.behaviourConfig };
     }
