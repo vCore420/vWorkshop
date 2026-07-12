@@ -164,7 +164,7 @@ export const MusicCabinetDefinition = {
     const leanX = -speakerOffsetX + 0.16;
     for (let i = 0; i < 4; i++) {
       const sleeve = box(0.315, 0.315, 0.008, Materials.matte(recordColors[i % recordColors.length]));
-      sleeve.position.set(leanX + i * 0.012, 0.16, 0.16 + i * 0.012);
+      sleeve.position.set(leanX + i * 0.012, 0.16, 0.26 + i * 0.012);
       sleeve.rotation.x = -0.32;
       g.add(sleeve);
     }

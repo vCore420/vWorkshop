@@ -51,7 +51,7 @@ export const ComputerDeskDefinition = {
     standNeck.position.set(0, surfaceY + 0.1, -0.15);
     g.add(standNeck);
     const screen = box(0.6, 0.36, 0.03, Materials.emissive("#7fd8c4", 0.05));
-    screen.position.set(0, surfaceY + 0.32, -0.16);
+    screen.position.set(0, surfaceY + 0.32, -0.12);
     g.add(screen);
     g.userData.screenGlowMesh = screen;
 
@@ -68,15 +68,15 @@ export const ComputerDeskDefinition = {
     // switch (ComputerSystem.js), turning on and off right alongside
     // every other practical light in the room.
     const lampBase = cylinder(0.05, 0.06, 0.015, Materials.metal("#3a3a3a"));
-    lampBase.position.set(0.52, topY + 0.01, -0.22);
+    lampBase.position.set(0.52, topY + 0.04, -0.22);
     g.add(lampBase);
     const lampArm = cylinder(0.012, 0.012, 0.28, Materials.metal("#3a3a3a"));
     lampArm.position.set(0.5, topY + 0.15, -0.24);
-    lampArm.rotation.z = -0.25;
     g.add(lampArm);
     const lampShade = cylinder(0.03, 0.07, 0.1, Materials.matte("#e0ab5c"));
-    lampShade.position.set(0.46, topY + 0.27, -0.26);
-    lampShade.rotation.x = 0.5;
+    lampShade.position.set(0.52, topY + 0.27, -0.22);
+    lampShade.rotation.z = 0.5;
+    lampShade.rotation.x = -0.5;
     g.add(lampShade);
     g.userData.deskLampSocket = new THREE.Vector3(0.46, topY + 0.24, -0.26);
 
@@ -99,23 +99,11 @@ export const ComputerDeskDefinition = {
 
   interaction: {
     prompt: "Sit down at the computer",
-    radius: 2.4, // large furniture — see docs/WORLD.md's interaction-distance pass
+    radius: 2.6, // large furniture — see docs/WORLD.md's interaction-distance pass
     // Focus pose is in the entity's local space; FurnitureSystem converts
     // it to world space once placed, so this definition stays reusable
     // even if the desk is later moved to a different spot in the room.
     focusPoseLocal: {
-      // "The monitor sits slightly too high... the top of the interface
-      // approaches the edge of the viewport." Raised (1.22 → 1.27) and
-      // moved closer (0.25 → 0.19), so the monitor comfortably occupies
-      // more of the view rather than sitting small and high in the frame
-      // — "the Workshop computer should feel comfortable for long
-      // creative sessions."
-      // "The computer screen framing is now much improved. However the
-      // player's seated viewpoint still sits slightly too low." Raised
-      // again (1.27 → 1.32); lookAt nudged up to match (1.07 → 1.10) so
-      // the downward viewing angle stays proportionally the same, not
-      // just shifting the whole view upward without adjusting where it
-      // actually looks.
       position: [0, 1.32, 0.19],
       lookAt: [0, 1.1, -0.16],
     },
