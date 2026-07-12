@@ -1,5 +1,5 @@
 import { wrapPage } from "../../browser/PageShell.js";
-import { isInternalUrl } from "../../browser/PageRegistry.js";
+import { isInternalUrl, INTERNAL_SCHEMES } from "../../browser/PageRegistry.js";
 
 /**
  * createBrowserApp
@@ -42,7 +42,7 @@ import { isInternalUrl } from "../../browser/PageRegistry.js";
  * hatch for exactly this case, not an error message that only appears
  * some of the time.
  */
-export function createBrowserApp({ browserStore, pageRegistry }) {
+export function createBrowserApp({ browserStore, pageRegistry, hostManager }) {
   return {
     id: "browser",
     label: "Browser",
@@ -302,7 +302,7 @@ export function createBrowserApp({ browserStore, pageRegistry }) {
         addressBar.blur();
       });
 
-      // ---- workshop:// page interactivity (link clicks, Settings' "clear data", Bookmarks' "remove") ----
+      // ---- workshop:// page interactivity (link clicks, Settings' "clear data", Bookmarks' "remove", Permissions' checkboxes) ----
       const onMessage = (event) => {
         if (event.data?.type === "workshop-browser-navigate" && event.data.url) {
           browserStore.navigate(activeTabId(), event.data.url);
@@ -316,6 +316,23 @@ export function createBrowserApp({ browserStore, pageRegistry }) {
           // render time, not re-fetched live — reloading the same URL is
           // what actually reflects the removal, the same mechanism the
           // toolbar's own Refresh button already uses.
+          const tabId = activeTabId();
+          if (frames.has(tabId)) loadIntoFrame(tabId, browserStore.getCurrentUrl(tabId));
+        } else if (event.data?.type === "workshop-browser-set-permission" && event.data.id) {
+          // host://permissions' own checkboxes — see HostPages.js's own
+          // permissionsPage() comment. The real grant/revoke call always
+          // happens here, in the one place with an actual reference to
+          // PermissionsService, never inside the page itself.
+          if (event.data.granted) hostManager?.permissions.grant(event.data.id);
+          else hostManager?.permissions.revoke(event.data.id);
+          const tabId = activeTabId();
+          if (frames.has(tabId)) loadIntoFrame(tabId, browserStore.getCurrentUrl(tabId));
+        } else if (event.data?.type === "workshop-browser-pin-project" && event.data.path) {
+          hostManager?.services.get("projects")?.pin(event.data.path);
+          const tabId = activeTabId();
+          if (frames.has(tabId)) loadIntoFrame(tabId, browserStore.getCurrentUrl(tabId));
+        } else if (event.data?.type === "workshop-browser-unpin-project" && event.data.path) {
+          hostManager?.services.get("projects")?.unpin(event.data.path);
           const tabId = activeTabId();
           if (frames.has(tabId)) loadIntoFrame(tabId, browserStore.getCurrentUrl(tabId));
         }
@@ -357,7 +374,8 @@ function toolbarButton(glyph, title) {
 function normalizeUrl(input) {
   const trimmed = input.trim();
   if (!trimmed) return null;
-  if (/^(workshop|host|plugin):\/\//i.test(trimmed)) return trimmed.toLowerCase();
+  const internalSchemePattern = new RegExp(`^(${INTERNAL_SCHEMES.join("|")}):\\/\\/`, "i");
+  if (internalSchemePattern.test(trimmed)) return trimmed.toLowerCase();
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   if (/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\d{1,3}(\.\d{1,3}){3})(:\d+)?(\/.*)?$/i.test(trimmed)) return `http://${trimmed}`;
   if (/^[\w-]+(\.[\w-]+)+(:\d+)?(\/.*)?$/i.test(trimmed) && !trimmed.includes(" ")) return `https://${trimmed}`;

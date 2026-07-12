@@ -1,6 +1,7 @@
 import { wrapPage } from "./PageShell.js";
 
 const DETAIL_URL_PATTERN = /^workshop:\/\/asset\/(object|blueprint|animation)\/(.+)$/;
+const ASSET_SCHEME_DETAIL_PATTERN = /^asset:\/\/(object|blueprint|animation)\/(.+)$/;
 
 /**
  * AssetPages
@@ -10,9 +11,11 @@ const DETAIL_URL_PATTERN = /^workshop:\/\/asset\/(object|blueprint|animation)\/(
  * than simply downloading the file... preview, metadata, categories,
  * creation date, actions, relationships."
  *
- * `workshop://assets` is the overview — one page, every asset category
- * the Workshop actually has a library for (Objects, Blueprints,
- * Animations, Models, Images, Music), each a live count read straight
+ * `asset://` is the canonical scheme as of the Workshop Platform phase
+ * (`workshop://assets`/`workshop://asset/<category>/<id>` keep resolving
+ * as aliases — see `registerAssetPages()`'s own comment). `asset://` is
+ * the overview — one page, every asset category the Workshop actually
+ * has a library for (Objects, Blueprints, Animations, Models, Images, Music), each a live count read straight
  * from its own store. Three of those six (Objects, Blueprints,
  * Animations) get real per-item detail pages this phase, registered as a
  * single dynamic resolver (`workshop://asset/<category>/<id>`) rather
@@ -35,6 +38,13 @@ const DETAIL_URL_PATTERN = /^workshop:\/\/asset\/(object|blueprint|animation)\/(
  */
 export function registerAssetPages(pageRegistry, searchIndex, deps) {
   pageRegistry.register("workshop://assets", () => assetsOverviewPage(deps));
+  // "Local Protocols... asset://... ensure future services can naturally
+  // expose functionality through these protocols" (Workshop Platform
+  // phase) — `asset://` is the new canonical scheme for this whole
+  // category; `workshop://assets`/`workshop://asset/...` are kept
+  // resolving as aliases, the same pattern `host://` established for
+  // what used to be `workshop://host` and friends.
+  pageRegistry.register("asset://", () => assetsOverviewPage(deps));
   searchIndex.addEntry({
     url: "workshop://assets",
     title: "Shared Asset Library",
@@ -46,6 +56,18 @@ export function registerAssetPages(pageRegistry, searchIndex, deps) {
     (url) => DETAIL_URL_PATTERN.test(url),
     (url) => assetDetailPage(url, deps)
   );
+  pageRegistry.registerDynamic(
+    (url) => ASSET_SCHEME_DETAIL_PATTERN.test(url),
+    (url) => assetDetailPage(rewriteAssetSchemeUrl(url), deps)
+  );
+}
+
+/** `asset://object/42` is the same page as `workshop://asset/object/42`,
+ *  just spelled under the new canonical scheme — rewritten to the
+ *  `workshop://asset/...` form internally so `assetDetailPage()` only
+ *  ever needs to understand one URL shape. */
+function rewriteAssetSchemeUrl(url) {
+  return url.replace(/^asset:\/\//, "workshop://asset/");
 }
 
 function assetsOverviewPage({ objectLibraryStore, blueprintStore, animationLibraryStore, modelLibrary, imageLibraryStore, musicLibraryStore }) {
@@ -63,17 +85,17 @@ function assetsOverviewPage({ objectLibraryStore, blueprintStore, animationLibra
 
     <div class="workshop-home-section">
       <h2>Objects <span class="workshop-page-badge">${objects.length}</span></h2>
-      ${objects.length ? assetGrid(objects.map((o) => ({ url: `workshop://asset/object/${o.id}`, title: o.name, meta: o.category }))) : emptyNote("No objects designed yet \u2014 start one in the Builder.")}
+      ${objects.length ? assetGrid(objects.map((o) => ({ url: `asset://object/${o.id}`, title: o.name, meta: o.category }))) : emptyNote("No objects designed yet \u2014 start one in the Builder.")}
     </div>
 
     <div class="workshop-home-section">
       <h2>Blueprints <span class="workshop-page-badge">${blueprints.length}</span></h2>
-      ${blueprints.length ? assetGrid(blueprints.map((b) => ({ url: `workshop://asset/blueprint/${b.id}`, title: b.name, meta: `${b.objects.length} piece${b.objects.length === 1 ? "" : "s"}` }))) : emptyNote("No blueprints saved yet \u2014 capture one from Build Mode.")}
+      ${blueprints.length ? assetGrid(blueprints.map((b) => ({ url: `asset://blueprint/${b.id}`, title: b.name, meta: `${b.objects.length} piece${b.objects.length === 1 ? "" : "s"}` }))) : emptyNote("No blueprints saved yet \u2014 capture one from Build Mode.")}
     </div>
 
     <div class="workshop-home-section">
       <h2>Animations <span class="workshop-page-badge">${animations.length}</span></h2>
-      ${animations.length ? assetGrid(animations.map((a) => ({ url: `workshop://asset/animation/${a.id}`, title: a.name, meta: a.category }))) : emptyNote("No custom animations yet \u2014 create one in the Animation Editor.")}
+      ${animations.length ? assetGrid(animations.map((a) => ({ url: `asset://animation/${a.id}`, title: a.name, meta: a.category }))) : emptyNote("No custom animations yet \u2014 create one in the Animation Editor.")}
     </div>
 
     <div class="workshop-home-section">
@@ -136,7 +158,7 @@ function objectDetailPage(id, objectLibraryStore, worldObjectsStore) {
       <p>Open the Builder from the Computer's rail to edit this object \u2014 editing it there updates every placed instance automatically.</p>
     </div>
 
-    <p><a href="workshop://assets">\u2190 Back to the Asset Library</a></p>
+    <p><a href="asset://">\u2190 Back to the Asset Library</a></p>
   `;
   return { title: def.name, html: wrapPage(def.name, html) };
 }
@@ -169,7 +191,7 @@ function blueprintDetailPage(id, blueprintStore, objectLibraryStore) {
       <p>Place this blueprint from the Builder's own Blueprints tab \u2014 every piece places as its own independent, separately-editable object.</p>
     </div>
 
-    <p><a href="workshop://assets">\u2190 Back to the Asset Library</a></p>
+    <p><a href="asset://">\u2190 Back to the Asset Library</a></p>
   `;
   return { title: blueprint.name, html: wrapPage(blueprint.name, html) };
 }
@@ -199,7 +221,7 @@ function animationDetailPage(id, animationLibraryStore) {
       <p>Open the Animation Editor from the Computer's rail to preview or edit this clip.</p>
     </div>
 
-    <p><a href="workshop://assets">\u2190 Back to the Asset Library</a></p>
+    <p><a href="asset://">\u2190 Back to the Asset Library</a></p>
   `;
   return { title: clip.name, html: wrapPage(clip.name, html) };
 }
@@ -217,7 +239,7 @@ function emptyNote(text) {
 }
 
 function notFoundPage(url) {
-  const html = `<h1>Asset not found</h1><p>Nothing is registered for <code>${escapeHtml(url)}</code> \u2014 it may have been deleted.</p><p><a href="workshop://assets">\u2190 Back to the Asset Library</a></p>`;
+  const html = `<h1>Asset not found</h1><p>Nothing is registered for <code>${escapeHtml(url)}</code> \u2014 it may have been deleted.</p><p><a href="asset://">\u2190 Back to the Asset Library</a></p>`;
   return { title: "Asset not found", html: wrapPage("Asset not found", html) };
 }
 

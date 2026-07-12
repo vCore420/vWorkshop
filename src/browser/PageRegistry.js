@@ -28,8 +28,9 @@
  * **Browser Ecosystem phase**: this file grew from a single implicit
  * `workshop://` namespace into genuine multi-scheme support —
  * `INTERNAL_SCHEMES` names every scheme the Browser treats as "one of
- * ours" (`workshop`, `host`, `plugin`) rather than an ordinary external
- * `http(s)://` address. Exact-path registration (`register()`) is
+ * ours" (`workshop`, `host`, `plugin`, and — new in the Workshop Platform
+ * phase — `asset`, `resident`, `project`) rather than an ordinary
+ * external `http(s)://` address. Exact-path registration (`register()`) is
  * unchanged in spirit; `registerDynamic()` is new, for the handful of
  * pages that can't be enumerated ahead of time (an individual asset's own
  * detail page, one per definition in `ObjectLibraryStore`, say) — a
@@ -47,7 +48,7 @@
  * `pageRegistry.register()` from its own file instead (see
  * `src/host/PluginRegistry.js`), whenever that's the more natural fit.
  */
-export const INTERNAL_SCHEMES = ["workshop", "host", "plugin"];
+export const INTERNAL_SCHEMES = ["workshop", "host", "plugin", "asset", "resident", "project"];
 
 const SCHEME_PATTERN = new RegExp(`^(${INTERNAL_SCHEMES.join("|")}):\\/\\/`, "i");
 

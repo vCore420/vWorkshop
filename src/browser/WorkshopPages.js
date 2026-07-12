@@ -32,12 +32,20 @@ import { EMBODIMENT_TYPES } from "../ai/EmbodimentConfiguration.js";
  * canonical name (matching the brief's own naming); `workshop://docs`
  * keeps working as an alias — both registered against the identical
  * provider — so existing bookmarks and history entries from earlier
- * phases still resolve correctly. Five new pages arrived this phase —
+ * phases still resolve correctly. Five new pages arrived that phase —
  * `workshop://residents`, `workshop://assets` (see its own
  * `AssetPages.js`), `workshop://diagnostics`, `workshop://mission-control`,
  * `workshop://bookmarks`, `workshop://search` — each registered here (or,
  * for assets, in its own file) alongside a matching `searchIndex.addEntry()`
  * call, so Unified Search knows about it too.
+ *
+ * **Workshop Platform phase**: `resident://` and `project://` are the
+ * new canonical schemes for Residents and the Workshop's own internal
+ * Projects respectively (`workshop://residents`/`workshop://projects`
+ * kept resolving as aliases) — see `docs/BROWSER.md`'s own "Local
+ * Protocols" section for why. `project://` is deliberately distinct from
+ * `host://projects`, which is the separate *local filesystem* projects
+ * page (see `docs/HOST.md`).
  */
 export function registerWorkshopPages(pageRegistry, searchIndex, deps) {
   const { projectsStore, browserStore, hostProjectsService, residentProfileStore, residentState, residentBehaviour, conversationMemory, aiConnectionManager, engine, hostManager } = deps;
@@ -50,19 +58,21 @@ export function registerWorkshopPages(pageRegistry, searchIndex, deps) {
   pageRegistry.register("workshop://projects", () => projectsPage(projectsStore, hostProjectsService));
   pageRegistry.register("workshop://settings", () => settingsPage());
   pageRegistry.register("workshop://residents", () => residentsPage({ residentProfileStore, residentState, residentBehaviour, conversationMemory, aiConnectionManager }));
+  pageRegistry.register("resident://", () => residentsPage({ residentProfileStore, residentState, residentBehaviour, conversationMemory, aiConnectionManager })); // new canonical scheme — Workshop Platform phase, see docs/BROWSER.md's own "Local Protocols" section
   pageRegistry.register("workshop://diagnostics", () => diagnosticsPage(deps));
   pageRegistry.register("workshop://mission-control", () => missionControlPage({ residentProfileStore, aiConnectionManager }));
   pageRegistry.register("workshop://bookmarks", () => bookmarksPage(browserStore));
   pageRegistry.register("workshop://search", (url) => searchPage(url, searchIndex));
+  pageRegistry.register("project://", () => projectsPage(projectsStore, hostProjectsService)); // new canonical scheme for the Workshop's own internal projects — see docs/BROWSER.md; host://projects remains the separate *local filesystem* one
 
   searchIndex.addEntries([
     { url: "workshop://", title: "Workshop Home", category: "Workshop", keywords: ["home", "start"] },
     { url: "workshop://documentation", title: "Workshop Documentation", category: "Documentation", keywords: ["docs", "readme", "help"] },
     { url: "workshop://builder", title: "Builder Documentation", category: "Documentation", keywords: ["builder", "construction", "objects"] },
     { url: "workshop://animation", title: "Player & Animation Documentation", category: "Documentation", keywords: ["animation", "player", "movement"] },
-    { url: "workshop://projects", title: "Workshop Projects", category: "Workshop", keywords: ["notebook", "pinboard", "workbench"] },
+    { url: "project://", title: "Workshop Projects", category: "Workshop", keywords: ["notebook", "pinboard", "workbench"] },
     { url: "workshop://settings", title: "Browser Settings", category: "Workshop", keywords: ["preferences", "clear data"] },
-    { url: "workshop://residents", title: "Residents", category: "Workshop", keywords: ["bubble", "resident", "ai", "mission control"] },
+    { url: "resident://", title: "Residents", category: "Workshop", keywords: ["bubble", "resident", "ai", "mission control"] },
     { url: "workshop://diagnostics", title: "Workshop Diagnostics", category: "Workshop", keywords: ["status", "health", "systems", "debug"] },
     { url: "workshop://mission-control", title: "Mission Control", category: "Workshop", keywords: ["ai", "resident", "bubble"] },
     { url: "workshop://bookmarks", title: "Bookmarks", category: "Workshop", keywords: ["saved", "favourites"] },
@@ -106,9 +116,9 @@ function homePage({ browserStore, hostManager, residentProfileStore }) {
     <div class="workshop-home-section">
       <h2>Workshop</h2>
       <div class="workshop-home-grid">
-        ${tile("workshop://residents", "Residents", activeResident ? `${activeResident.name} and friends` : "No residents yet")}
-        ${tile("workshop://assets", "Shared Asset Library", "Objects, blueprints, animations, and more")}
-        ${tile("workshop://projects", "Workshop Projects", "Everything you're building")}
+        ${tile("resident://", "Residents", activeResident ? `${activeResident.name} and friends` : "No residents yet")}
+        ${tile("asset://", "Shared Asset Library", "Objects, blueprints, animations, and more")}
+        ${tile("project://", "Workshop Projects", "Everything you're building")}
         ${tile("workshop://mission-control", "Mission Control", "AI resident status snapshot")}
         ${tile("workshop://diagnostics", "Diagnostics", "Workshop status and system health")}
         ${tile("workshop://documentation", "Workshop Documentation", "How the Workshop is built")}
@@ -290,7 +300,7 @@ function missionControlPage({ residentProfileStore, aiConnectionManager }) {
         ${metaRow("Purpose", profile.identity.purpose || "Not set")}
         ${metaRow("Personality", profile.identity.personality || "Not set")}
       </div>
-      <p style="margin-top:20px;">See <a href="workshop://residents">workshop://residents</a> for every profile, or <code>docs/AI.md</code> for the full account of what Mission Control does.</p>
+      <p style="margin-top:20px;">See <a href="resident://">resident://</a> for every profile, or <code>docs/AI.md</code> for the full account of what Mission Control does.</p>
     `
     : `<h1>Mission Control</h1><p class="workshop-page-empty">No resident profile exists yet.</p>`;
   return { title: "Mission Control", html: wrapPage("Mission Control", html) };
