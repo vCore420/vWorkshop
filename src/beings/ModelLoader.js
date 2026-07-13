@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { clone as cloneWithSkeleton } from "three/addons/utils/SkeletonUtils.js";
 
 /**
  * ModelLoader
@@ -16,13 +17,30 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
  * non-trivial work, and "reused by Beings, Builder, Player, future
  * systems" means the same model is very likely to be requested more than
  * once in a session. Every caller gets back a *clone* of the cached
- * scene graph (plain `.clone(true)`, not `SkeletonUtils.clone` — correct
- * for simple, unanimated Beings, the common case for a first pass; a
- * skinned/animated rig sharing its skeleton across clones is a real
- * limitation worth knowing about rather than silently getting wrong —
- * see this file's own "Known limitations" note in docs/BEINGS.md), so
- * placing the same model twice never means one instance secretly moving
- * the other's own mesh around.
+ * scene graph.
+ *
+ * **`SkeletonUtils.clone()`, not plain `.clone(true)` (fixed in the
+ * Advanced Animation phase).** This used to be a documented, honest
+ * limitation — "correct for simple, unanimated Beings... a skinned,
+ * animated rig cloned this way shares its skeleton across every clone"
+ * (see `docs/BEINGS.md`'s own former "Known, honest limitation"
+ * paragraph). It stopped being a theoretical concern the moment
+ * `BeingController.js` started genuinely retargeting animations onto a
+ * Being's own model: a plain `Object3D.clone(true)` deep-clones the
+ * parent/child hierarchy correctly, but a `SkinnedMesh`'s own
+ * `.skeleton.bones` array is a *separate* flat reference list that plain
+ * clone doesn't know to re-point at the newly-cloned bones — every clone
+ * would keep deforming according to whichever bones the *original*,
+ * cached scene graph's own skeleton pointed to, regardless of which
+ * clone's own bones `WorkshopSkeleton.autoMapSkeleton()` actually found
+ * and rotated. Two Beings sharing the same animated model would have
+ * shown identical, shared, or simply broken animation instead of moving
+ * independently. `SkeletonUtils.clone()` is the standard Three.js answer
+ * to exactly this — it correctly rebuilds `.skeleton.bones` (and
+ * `.bindMatrix`) to reference the new clone's own bone hierarchy — and
+ * works identically to plain clone for a model with no skeleton at all,
+ * so this is a safe, unconditional replacement, not a special case for
+ * "animated models only."
  */
 export class ModelLoader {
   constructor(modelLibrary, modelAssetStore) {
@@ -41,7 +59,7 @@ export class ModelLoader {
     if (!this._cache.has(modelId)) this._cache.set(modelId, this._parse(modelId));
     try {
       const original = await this._cache.get(modelId);
-      return original ? original.clone(true) : null;
+      return original ? cloneWithSkeleton(original) : null;
     } catch {
       this._cache.delete(modelId); // don't let one failed parse permanently poison the cache — a re-import under the same id should get a fresh attempt
       return null;

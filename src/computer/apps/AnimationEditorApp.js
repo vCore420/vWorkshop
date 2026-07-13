@@ -2,6 +2,8 @@ import { PreviewRenderer } from "./builder/PreviewRenderer.js";
 import { buildCharacter, disposeCharacter, applyPose } from "../../player/PlayerCharacter.js";
 import { resolveTextureImages } from "../../player/PlayerCharacterSystem.js";
 import { StorageUtils } from "../../utils/StorageUtils.js";
+import { autoMapSkeleton, isSkeletonMapUsable } from "../../player/WorkshopSkeleton.js";
+import { applyPoseToMappedSkeleton } from "../../player/AnimationRetargeting.js";
 
 const ANIMATION_FILE_FORMAT = "workshop-animation";
 const ANIMATION_FILE_VERSION = 1;
@@ -52,7 +54,7 @@ const DEG = 180 / Math.PI;
  * so posing it for editing never has any effect on what's actually
  * happening in the Workshop right now.
  */
-export function createAnimationEditorApp({ appearanceStore, textureStore, animationLibraryStore, beingLibrary, modelLibrary, modelLoader }) {
+export function createAnimationEditorApp({ appearanceStore, textureStore, animationLibraryStore, beingLibrary, modelLibrary, modelLoader, poseLibraryStore }) {
   return {
     id: "animationEditor",
     label: "Animation Editor",
@@ -92,18 +94,22 @@ export function createAnimationEditorApp({ appearanceStore, textureStore, animat
       container.appendChild(workspace);
 
       // --- Model Selection — "Player models, Saved Being models,
-      // Imported Workshop models." A plain select, grouped by source;
-      // "modelSource" is {type: "player"} | {type: "being", id} |
-      // {type: "model", id}. Only the Player rig has the named pivots
-      // (upperLegLeft/torso/etc) this pose-based animation system
-      // actually understands — a Being or imported model previews
-      // correctly (proving out what an animation will look like against
-      // that model's own proportions/scale), but the keyframe pose
-      // controls below only ever move the Player rig's own pivots, since
-      // an arbitrary imported mesh has no reason to share those same
-      // named parts. The honest note below says so plainly rather than
-      // silently doing nothing.
+      // Imported Workshop models... the preview should become
+      // independent of any single character." A plain select, grouped by
+      // source; "modelSource" is {type: "player"} | {type: "being", id} |
+      // {type: "model", id}. As of the Advanced Animation phase, this is
+      // genuine retargeted preview, not only a proportions check — the
+      // moment a Being/Model's own skeleton maps onto the shared Workshop
+      // vocabulary well enough (`WorkshopSkeleton.isSkeletonMapUsable()`),
+      // the current pose/playback applies through
+      // `AnimationRetargeting.applyPoseToMappedSkeleton()` exactly the
+      // same way `BeingController.js` already does for a placed Being.
+      // The keyframe *editing* controls below still only ever move the
+      // Player rig's own pivots regardless of which model is being
+      // previewed — editing a clip is authored once, against the shared
+      // vocabulary, not against any one specific rig's own bone names.
       let modelSource = { type: "player" };
+      let previewSkeleton = null; // {map, rest} once a non-Player preview's own skeleton maps usably; null for the Player rig itself (see applyPreviewPose() below) or an unmappable model
       const modelSelectRow = document.createElement("div");
       modelSelectRow.className = "panel-row";
       const modelSelectLabel = document.createElement("label");
@@ -148,10 +154,6 @@ export function createAnimationEditorApp({ appearanceStore, textureStore, animat
       modelSelect.addEventListener("change", () => {
         const [type, id] = modelSelect.value.split(":");
         modelSource = type === "player" ? { type: "player" } : { type, id };
-        modelNote.textContent =
-          modelSource.type === "player"
-            ? ""
-            : "Previewing this model's own proportions \u2014 the pose controls below still only move the Player rig's own named parts, since this model doesn't share them.";
         rebuildPreviewRig();
       });
       populateModelSelect();
@@ -172,14 +174,36 @@ export function createAnimationEditorApp({ appearanceStore, textureStore, animat
           const object3D = (modelId && (await modelLoader?.load(modelId))) ?? modelLoader?.buildPlaceholder();
           if (disposed || modelSource.type === "player") return; // selection changed again while this resolved
           preview.setObject(object3D);
+          previewSkeleton = null;
+          if (modelId) {
+            const { map, rest } = autoMapSkeleton(object3D);
+            previewSkeleton = isSkeletonMapUsable(map) ? { map, rest } : null;
+          }
+          modelNote.textContent = previewSkeleton
+            ? "Retargeted preview \u2014 this model's own skeleton mapped onto the shared Workshop vocabulary well enough to play this clip directly. Editing still moves the Player rig's own named parts."
+            : "This model's skeleton couldn't be mapped confidently enough to preview retargeted playback \u2014 showing its own proportions only. Editing still moves the Player rig's own named parts.";
+          applyCurrentFramePose();
           return;
         }
         const textureImages = await resolveTextureImages(appearanceStore.appearance, textureStore);
         if (disposed || modelSource.type !== "player") return;
         if (rig) disposeCharacter(rig);
         rig = buildCharacter(appearanceStore.appearance, appearanceStore.bodyModelId, textureImages);
+        previewSkeleton = null;
+        modelNote.textContent = "";
         preview.setObject(rig.root);
         applyCurrentFramePose();
+      }
+
+      /** The one place a pose actually gets applied to whichever preview
+       *  is currently showing — the Player rig directly
+       *  (`PlayerCharacter.applyPose()`, unchanged), or a retargeted
+       *  skeleton (`AnimationRetargeting.applyPoseToMappedSkeleton()`) if
+       *  one's active. Every other call site (frame selection, playback)
+       *  calls this instead of choosing between the two itself. */
+      function applyPreviewPose(pose) {
+        if (rig) applyPose(rig.pivots, pose);
+        else if (previewSkeleton) applyPoseToMappedSkeleton(pose, previewSkeleton.map, previewSkeleton.rest);
       }
 
       // --- Editor state ---
@@ -223,9 +247,9 @@ export function createAnimationEditorApp({ appearanceStore, textureStore, animat
       }
 
       function applyCurrentFramePose() {
-        if (!rig || !draft) return;
+        if (!draft || (!rig && !previewSkeleton)) return;
         const frame = draft.frames[selectedFrameIndex];
-        if (frame) applyPose(rig.pivots, frame.pose);
+        if (frame) applyPreviewPose(frame.pose);
       }
 
       // --- Playback (this editor's own — separate from PlayerAnimationSystem, since this is a preview scene, not the live player) ---
@@ -283,7 +307,7 @@ export function createAnimationEditorApp({ appearanceStore, textureStore, animat
           const nextFrame = draft.frames[(playbackFrameIndex + 1) % draft.frames.length];
           const t = Math.min(1, playbackT / Math.max(currentFrame.duration, 0.001));
           const blended = blendPoses(currentFrame.pose, nextFrame.pose, t);
-          if (rig) applyPose(rig.pivots, blended);
+          applyPreviewPose(blended);
         }
         rafHandle = requestAnimationFrame(tick);
       }
@@ -601,17 +625,38 @@ export function createAnimationEditorApp({ appearanceStore, textureStore, animat
         heading.textContent = "Frames";
         section.appendChild(heading);
 
+        const actions = document.createElement("div");
+        actions.className = "builder-library-controls";
         if (isEditable()) {
-          const actions = document.createElement("div");
-          actions.className = "builder-library-controls";
           const addBtn = document.createElement("button");
           addBtn.type = "button";
           addBtn.className = "builder-primary";
           addBtn.textContent = "Add Frame";
           addBtn.addEventListener("click", addFrame);
           actions.appendChild(addBtn);
-          section.appendChild(actions);
         }
+        // "Please introduce the foundations for a shared pose library...
+        // these should become reusable Workshop Assets." Saving a pose
+        // is a read-only operation on the currently-selected frame's own
+        // data (a copy, not a reference) — available even when viewing a
+        // read-only default clip, since extracting "just this one pose"
+        // from Walk or Wave is exactly the kind of reuse a shared library
+        // is for.
+        if (poseLibraryStore) {
+          const savePoseBtn = document.createElement("button");
+          savePoseBtn.type = "button";
+          savePoseBtn.className = "builder-small-button";
+          savePoseBtn.textContent = "Save Frame as Pose";
+          savePoseBtn.addEventListener("click", () => {
+            const frame = draft?.frames[selectedFrameIndex];
+            if (!frame) return;
+            const name = window.prompt("Name this pose:", `${draft.name} \u2014 frame ${selectedFrameIndex + 1}`);
+            if (name === null) return; // cancelled
+            poseLibraryStore.create({ name, category: draft.category, pose: JSON.parse(JSON.stringify(frame.pose)) });
+          });
+          actions.appendChild(savePoseBtn);
+        }
+        if (actions.children.length) section.appendChild(actions);
 
         const list = document.createElement("ul");
         list.className = "builder-library-list";

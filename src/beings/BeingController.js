@@ -6,6 +6,9 @@ import { Entity } from "../core/Entity.js";
 import { MeshComponent } from "../core/components/MeshComponent.js";
 import { InteractableComponent } from "../core/components/InteractableComponent.js";
 import { pickWanderTarget, buildPatrolRoute, avoidObstacles, randomRestDuration, idleMotionOffset } from "./BeingMovementSystem.js";
+import { autoMapSkeleton, isSkeletonMapUsable } from "../player/WorkshopSkeleton.js";
+import { applyPoseToMappedSkeleton } from "../player/AnimationRetargeting.js";
+import { ClipPlayer } from "../player/AnimationPlayback.js";
 
 const SAVE_SYNC_INTERVAL = 2; // seconds — how often a moving Being's live position is written back to BeingInstanceStore, not every frame (see this file's own comment)
 const MIN_CONTINUITY_SECONDS = 30; // a Being reasonably notices and moves on within this short a gap; below it, nothing visibly changes on reload, matching "nothing should feel scripted"
@@ -32,13 +35,33 @@ const AWARENESS_FULL_RADIUS = 1.8;
  * Workshop reloads; `BeingInstanceStore.js`'s own comment covers what
  * *is* persisted and why position/rotation sync back only periodically
  * rather than every frame.
+ *
+ * **Animation playback, new in the Advanced Animation phase.** "Beings
+ * should simply reference Workshop animation assets" was already true of
+ * the *data* (`idleAnimationClipId`/`walkAnimationClipId` on a Being's
+ * own definition); this phase makes it true of *playback* too. The
+ * moment a model finishes loading, its skeleton is mapped onto the
+ * shared Workshop vocabulary (`WorkshopSkeleton.autoMapSkeleton()`,
+ * cached on `ModelLibrary` so it only runs once per model, not once per
+ * spawned instance) — if the mapping is usable
+ * (`isSkeletonMapUsable()`), a `ClipPlayer` (see `AnimationPlayback.js`)
+ * picks `walkAnimationClipId`/`idleAnimationClipId` based on
+ * `instance.currentState` (already tracked for movement purposes) and
+ * applies the result through `AnimationRetargeting.
+ * applyPoseToMappedSkeleton()` every frame. A Being with an unmapped
+ * model (or no model at all — the honest placeholder capsule) simply
+ * doesn't animate, exactly as before this phase — nothing about a
+ * model's own appearance is required to change for the rest of this
+ * class to keep working.
  */
 export class BeingController {
-  constructor({ beingLibrary, beingInstanceStore, modelLoader }) {
+  constructor({ beingLibrary, beingInstanceStore, modelLoader, modelLibrary, animationLibraryStore }) {
     this.beingLibrary = beingLibrary;
     this.beingInstanceStore = beingInstanceStore;
     this.modelLoader = modelLoader;
-    this._runtime = new Map(); // instanceId -> { root, entity, wanderTarget, patrolRoute, patrolIndex, restTimer, bobPhase, awarenessBlend, syncTimer, modelMesh }
+    this.modelLibrary = modelLibrary;
+    this.animationLibraryStore = animationLibraryStore;
+    this._runtime = new Map(); // instanceId -> { root, entity, wanderTarget, patrolRoute, patrolIndex, restTimer, bobPhase, awarenessBlend, syncTimer, modelMesh, skeleton: {map, rest} | null, clipPlayer, activeClipId }
     this._playerPos = new THREE.Vector3();
   }
 
@@ -135,6 +158,9 @@ export class BeingController {
       bobPhase: Math.random() * Math.PI * 2,
       awarenessBlend: 0,
       syncTimer: Math.random() * SAVE_SYNC_INTERVAL, // desynchronised so many Beings don't all write-back on the same frame
+      skeleton: null, // {map: {jointId: THREE.Object3D}, rest: {jointId: THREE.Quaternion}} once a usable mapping exists — see this file's own "Animation playback" comment
+      clipPlayer: new ClipPlayer(),
+      activeClipId: null,
     };
     this._runtime.set(instance.id, runtime);
 
@@ -144,8 +170,47 @@ export class BeingController {
         root.remove(runtime.modelMesh);
         root.add(model);
         runtime.modelMesh = model;
+        runtime.skeleton = this._resolveSkeleton(definition.modelId, model);
       });
     }
+  }
+
+  /** Resolves (or, the first time, computes and caches) `modelId`'s own
+   *  skeleton mapping against `model` — the *live* clone actually in the
+   *  scene right now, since bone objects themselves are never stable
+   *  across separate `ModelLoader.load()` calls (see `ModelLibrary.js`'s
+   *  own comment on why only bone *names* are cached, not object
+   *  references). Rest quaternions are always captured fresh here, from
+   *  this specific clone's own current bind pose, never reused from a
+   *  previous spawn. Returns `null` if no usable mapping exists — a
+   *  model with fewer than half the Workshop skeleton's own joints
+   *  recognised (see `WorkshopSkeleton.isSkeletonMapUsable()`) simply
+   *  isn't animated, honestly, rather than animating a handful of limbs
+   *  while the rest of the rig sits frozen. */
+  _resolveSkeleton(modelId, model) {
+    const cached = this.modelLibrary?.get(modelId)?.skeletonMap;
+    if (cached) {
+      const map = {};
+      const rest = {};
+      model.traverse((node) => {
+        for (const [jointId, boneName] of Object.entries(cached)) {
+          if (node.name === boneName && !map[jointId]) {
+            map[jointId] = node;
+            rest[jointId] = node.quaternion.clone();
+          }
+        }
+      });
+      return isSkeletonMapUsable(map) ? { map, rest } : null;
+    }
+
+    const { map, rest } = autoMapSkeleton(model);
+    if (!isSkeletonMapUsable(map)) return null; // honestly not animated — see this method's own comment
+    // Cache bone *names* (not the live objects above) so the next spawn
+    // of this same model resolves them straight away instead of
+    // re-running the heuristic matcher on every single clone.
+    const nameMap = Object.fromEntries(Object.entries(map).map(([jointId, bone]) => [jointId, bone.name]));
+    this.modelLibrary?.setSkeletonMap(modelId, nameMap);
+    return { map, rest };
   }
 
   /** "Replace Template" (Being Manager) — swaps which definition an
@@ -234,6 +299,22 @@ export class BeingController {
       instance.position = [runtime.root.position.x, instance.position[1], runtime.root.position.z];
       instance.rotationY = runtime.root.rotation.y;
     }
+
+    // --- Animation playback (see this class's own "Animation playback" comment) ---
+    if (runtime.skeleton) this._updateAnimation(dt, instance, definition, runtime);
+  }
+
+  _updateAnimation(dt, instance, definition, runtime) {
+    const clipId = instance.currentState === "moving" ? definition.walkAnimationClipId : definition.idleAnimationClipId;
+    const clip = clipId ? this.animationLibraryStore?.getClip(clipId) : null;
+    if (runtime.activeClipId !== clipId) {
+      runtime.clipPlayer.setClip(clip);
+      runtime.activeClipId = clipId;
+    }
+    if (!clip) return; // no clip assigned for this state — the model simply holds its bind pose, honestly, rather than animating toward nothing
+    const { pose, events } = runtime.clipPlayer.advance(dt);
+    for (const event of events) this.engine?.events.emit("animation:event", { source: "being", instanceId: instance.id, clipId: clip.id, ...event });
+    applyPoseToMappedSkeleton(pose, runtime.skeleton.map, runtime.skeleton.rest);
   }
 
   _updateWander(dt, instance, definition, runtime, home, colliders) {
