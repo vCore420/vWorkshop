@@ -621,7 +621,16 @@ assetService.registerKind("blueprints", {
 assetService.registerKind("animations", {
   label: "Animations",
   all: () => animationLibraryStore.all(),
-  get: (id) => animationLibraryStore.get(id),
+  // A real bug, found and fixed here: AnimationLibraryStore.get(id)
+  // deliberately only searches *user* clips (see its own comment) —
+  // getClip(id) is the one that resolves either kind. Using the wrong
+  // one here meant AssetService.describe()/exists() silently failed for
+  // any of the eight seeded default clips (Walk, Wave, Jump, and so on)
+  // — not just a broken detail page (see AssetPages.js's own matching
+  // fix), but a false "missing dependency" validation warning on any
+  // Being or Blueprint that referenced one, and a favourited default
+  // clip quietly vanishing from its own Favourites list.
+  get: (id) => animationLibraryStore.getClip(id),
   toDescriptor: (a) => ({
     name: a.name,
     description: a.description,
@@ -660,6 +669,47 @@ assetService.registerKind("poses", {
   get: (id) => poseLibraryStore.get(id),
   toDescriptor: (p) => ({ name: p.name, categories: p.category ? [p.category] : [], createdAt: p.createdAt, updatedAt: p.updatedAt }),
 });
+// "Being Creator should now fully integrate with the Workshop Asset
+// System... completed beings should become Workshop Assets." A Being
+// genuinely depends on the two other kinds it can reference — the model
+// it's built from (if `bodySource === "model"`) and whichever animation
+// clips it's assigned — computed the same real way Blueprints depending
+// on Objects already is (Phase 5's own flagship example), not fabricated.
+// A small, honest mapping onto WorkshopAssetSchema's own suggested
+// vocabulary (WORKSHOP_ASSET_CATEGORIES) — BeingBehaviours.BEING_TYPES
+// has its own, different set of ids (organisational labels, not asset
+// categories), so this is a deliberate translation, not a duplication of
+// either list.
+const BEING_TYPE_CATEGORY = { resident: "Characters", person: "Characters", animal: "Nature", robot: "Characters", creature: "Nature", decoration: "Workshop", custom: "Characters" };
+assetService.registerKind("beings", {
+  label: "Beings",
+  all: () => beingLibrary.all(),
+  get: (id) => beingLibrary.get(id),
+  toDescriptor: (b) => ({
+    name: b.name,
+    description: b.description,
+    author: "You",
+    categories: [BEING_TYPE_CATEGORY[b.beingType] ?? "Characters"],
+    tags: b.tags,
+    createdAt: b.createdAt,
+    updatedAt: b.updatedAt,
+    thumbnail: b.bodySource === "primitives" ? buildSwatchThumbnail(b.bodyParts.map((p) => p.color)) : null,
+  }),
+  getDependencies: (b) => {
+    const deps = [];
+    if (b.bodySource === "model" && b.modelId) deps.push(`models:${b.modelId}`);
+    if (b.idleAnimationClipId) deps.push(`animations:${b.idleAnimationClipId}`);
+    if (b.walkAnimationClipId) deps.push(`animations:${b.walkAnimationClipId}`);
+    return deps;
+  },
+  validateItem: (b) => {
+    const issues = [];
+    if (b.bodySource === "primitives" && b.bodyParts.length === 0) issues.push("No body parts \u2014 this Being has no visible shape yet.");
+    if (b.bodySource === "model" && !b.modelId) issues.push("No model chosen \u2014 this Being will appear as a placeholder shape.");
+    if (b.bodySource === "primitives" && !b.bodyParts.some((p) => p.jointName)) issues.push("No Rig Joints assigned \u2014 this Being can't play Workshop animations yet.");
+    return issues;
+  },
+});
 
 // --- Browser Ecosystem: Workshop pages, Host pages, Asset pages, Unified
 // Search, and plugin pages (see docs/BROWSER.md) — registered here,
@@ -681,7 +731,7 @@ registerWorkshopPages(pageRegistry, searchIndex, {
   searchIndex,
 });
 registerHostPages(pageRegistry, searchIndex, { hostManager, modelRegistry });
-registerAssetPages(pageRegistry, searchIndex, { objectLibraryStore, blueprintStore, animationLibraryStore, modelLibrary, imageLibraryStore, musicLibraryStore, worldObjectsStore, assetService });
+registerAssetPages(pageRegistry, searchIndex, { objectLibraryStore, blueprintStore, animationLibraryStore, modelLibrary, imageLibraryStore, musicLibraryStore, worldObjectsStore, assetService, beingLibrary });
 
 // "Plugins should be capable of registering Browser pages... naturally
 // integrate into Browser navigation without requiring hardcoded
