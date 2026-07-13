@@ -9,6 +9,7 @@ import { pickWanderTarget, buildPatrolRoute, avoidObstacles, randomRestDuration,
 import { autoMapSkeleton, isSkeletonMapUsable } from "../player/WorkshopSkeleton.js";
 import { applyPoseToMappedSkeleton } from "../player/AnimationRetargeting.js";
 import { ClipPlayer } from "../player/AnimationPlayback.js";
+import { compileBody } from "./BodyCompiler.js";
 
 const SAVE_SYNC_INTERVAL = 2; // seconds — how often a moving Being's live position is written back to BeingInstanceStore, not every frame (see this file's own comment)
 const MIN_CONTINUITY_SECONDS = 30; // a Being reasonably notices and moves on within this short a gap; below it, nothing visibly changes on reload, matching "nothing should feel scripted"
@@ -36,23 +37,30 @@ const AWARENESS_FULL_RADIUS = 1.8;
  * *is* persisted and why position/rotation sync back only periodically
  * rather than every frame.
  *
- * **Animation playback, new in the Advanced Animation phase.** "Beings
+ * **Animation playback, real since the Advanced Animation phase; two
+ * ways to get a rigged body, since the Being Creator phase.** "Beings
  * should simply reference Workshop animation assets" was already true of
  * the *data* (`idleAnimationClipId`/`walkAnimationClipId` on a Being's
- * own definition); this phase makes it true of *playback* too. The
- * moment a model finishes loading, its skeleton is mapped onto the
- * shared Workshop vocabulary (`WorkshopSkeleton.autoMapSkeleton()`,
- * cached on `ModelLibrary` so it only runs once per model, not once per
- * spawned instance) — if the mapping is usable
- * (`isSkeletonMapUsable()`), a `ClipPlayer` (see `AnimationPlayback.js`)
- * picks `walkAnimationClipId`/`idleAnimationClipId` based on
- * `instance.currentState` (already tracked for movement purposes) and
- * applies the result through `AnimationRetargeting.
- * applyPoseToMappedSkeleton()` every frame. A Being with an unmapped
- * model (or no model at all — the honest placeholder capsule) simply
- * doesn't animate, exactly as before this phase — nothing about a
- * model's own appearance is required to change for the rest of this
- * class to keep working.
+ * own definition); the Advanced Animation phase made it true of
+ * *playback* for imported models — the moment a model finishes loading,
+ * its skeleton is mapped onto the shared Workshop vocabulary
+ * (`WorkshopSkeleton.autoMapSkeleton()`, cached on `ModelLibrary` so it
+ * only runs once per model, not once per spawned instance). The Being
+ * Creator phase added a second, simpler path: a primitive-built body
+ * (`definition.bodySource === "primitives"`) is compiled directly via
+ * `BodyCompiler.compileBody()`, which derives an *exact* skeleton map
+ * from the creator's own explicit joint assignments — no heuristic
+ * bone-name matching needed at all. Either way, once a usable mapping
+ * exists (`isSkeletonMapUsable()`, for the imported path — a primitive
+ * body's own map is trusted outright, since it was never a guess), the
+ * same `ClipPlayer` (see `AnimationPlayback.js`) picks
+ * `walkAnimationClipId`/`idleAnimationClipId` based on
+ * `instance.currentState` and applies the result through
+ * `AnimationRetargeting.applyPoseToMappedSkeleton()` every frame — one
+ * animation system, genuinely shared, regardless of how a Being's own
+ * body came to exist. A Being with an unmapped model, no model at all, or
+ * an empty primitive body simply doesn't animate, honestly, rather than
+ * animating nothing convincingly.
  */
 export class BeingController {
   constructor({ beingLibrary, beingInstanceStore, modelLoader, modelLibrary, animationLibraryStore }) {
@@ -164,7 +172,21 @@ export class BeingController {
     };
     this._runtime.set(instance.id, runtime);
 
-    if (definition.modelId) {
+    if (definition.bodySource === "primitives" && definition.bodyParts?.length) {
+      // "The Workshop should treat imported beings exactly the same as
+      // internally created beings" — the *result* (a real Object3D plus
+      // a skeleton this same class already knows how to animate) is
+      // identical either way; only how it's obtained differs. A
+      // primitive body is built synchronously, directly from data
+      // already in memory — no `.then()` needed, and no heuristic
+      // skeleton detection either, since every joint was explicitly
+      // assigned by the creator (see `BodyCompiler.js`'s own comment).
+      root.remove(runtime.modelMesh);
+      const { root: bodyRoot, skeletonMap, skeletonRest } = compileBody(definition.bodyParts);
+      root.add(bodyRoot);
+      runtime.modelMesh = bodyRoot;
+      runtime.skeleton = Object.keys(skeletonMap).length > 0 ? { map: skeletonMap, rest: skeletonRest } : null;
+    } else if (definition.modelId) {
       this.modelLoader.load(definition.modelId).then((model) => {
         if (!model || this._runtime.get(instance.id) !== runtime) return; // superseded (despawned, or a Replace Template already swapped it) before this resolved
         root.remove(runtime.modelMesh);

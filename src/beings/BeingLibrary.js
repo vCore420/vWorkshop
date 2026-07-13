@@ -22,6 +22,21 @@ const DEFINITION_VERSION = 1; // bumped if the shape below ever changes in a way
  * concept of "the world" at all; nothing here ever touches a scene,
  * position, or instance. `BeingSpawnerSystem.js` is the only place that
  * turns a definition into something actually standing in the Workshop.
+ *
+ * **`bodySource`/`bodyParts`, new in the Being Creator phase.** "The
+ * Workshop should allow creators to build life from nothing. Not just
+ * import it." A Being's own body now comes from one of two genuinely
+ * different places — `bodySource: "model"` (an imported `.glb`/`.gltf`,
+ * `modelId` pointing into `ModelLibrary`, unchanged from earlier phases)
+ * or `bodySource: "primitives"` (`bodyParts`, a flat array of primitive
+ * shapes with their own parent-child relationships — see
+ * `BodyCompiler.js` for how that becomes a real, riggable
+ * `THREE.Object3D`). Both are equally real Workshop Assets; neither is a
+ * fallback for the other. `bodyParts` is plain, portable JSON — unlike
+ * `modelId`, which points at binary data local to this Workshop's own
+ * `ModelAssetStore`, a primitive-built Being's own body genuinely
+ * survives `exportDefinition()`/`importDefinition()` intact, carried over
+ * exactly like every other plain field.
  */
 export class BeingLibrary {
   constructor() {
@@ -40,6 +55,8 @@ export class BeingLibrary {
       beingType: "custom",
       tags: [],
       modelId: null,
+      bodySource: "model", // "model" | "primitives" — see this class's own comment
+      bodyParts: [], // populated only when bodySource === "primitives" — see BodyCompiler.js
       scale: 1,
       movementStyle: "static",
       idleBehaviour: "stand",
@@ -141,6 +158,11 @@ export class BeingLibrary {
       awarenessMode: normalizeAwarenessMode(portable.awarenessMode),
       interactionBehaviour: normalizeInteractionBehaviour(portable.interactionBehaviour),
       tags: Array.isArray(portable.tags) ? portable.tags : [],
+      // "Not just import it" — a primitive-built body is plain, portable
+      // JSON with no dependency on this Workshop's own local files, so it
+      // survives import/export intact, unlike modelId below.
+      bodySource: portable.bodySource === "primitives" ? "primitives" : "model",
+      bodyParts: Array.isArray(portable.bodyParts) ? portable.bodyParts : [],
       // modelId deliberately NOT carried over — the model it references
       // lives in this Workshop's own ModelLibrary/ModelAssetStore, which
       // an imported JSON file has no access to at all. Left null rather
@@ -167,6 +189,10 @@ export class BeingLibrary {
   load(data) {
     if (!data) return;
     this.beings = data.beings ?? {};
+    for (const being of Object.values(this.beings)) {
+      if (being.bodySource !== "primitives") being.bodySource = "model"; // a Being saved before this phase existed
+      if (!Array.isArray(being.bodyParts)) being.bodyParts = [];
+    }
     this.events.emit("beings:changed");
   }
 }

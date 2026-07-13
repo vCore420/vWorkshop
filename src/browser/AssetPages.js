@@ -1,15 +1,16 @@
 import { wrapPage } from "./PageShell.js";
+import { WORKSHOP_JOINTS } from "../player/WorkshopSkeleton.js";
 
-const DETAIL_URL_PATTERN = /^workshop:\/\/asset\/(object|blueprint|animation)\/(.+)$/;
-const ASSET_SCHEME_DETAIL_PATTERN = /^asset:\/\/(object|blueprint|animation)\/(.+)$/;
+const DETAIL_URL_PATTERN = /^workshop:\/\/asset\/(object|blueprint|animation|being)\/(.+)$/;
+const ASSET_SCHEME_DETAIL_PATTERN = /^asset:\/\/(object|blueprint|animation|being)\/(.+)$/;
 // The Browser's own URL segment ("object") vs. AssetService's own kind id
 // ("objects") differ by design — the kind id matches the natural-language
 // label ("Objects") used everywhere else (tiles, the Dashboard), while the
 // URL segment predates AssetService and stays singular for readability
 // (`asset://object/42`, not `asset://objects/42`). This is the one map
 // between the two.
-const URL_SEGMENT_TO_KIND = { object: "objects", blueprint: "blueprints", animation: "animations" };
-const KIND_TO_URL_SEGMENT = { objects: "object", blueprints: "blueprint", animations: "animation" };
+const URL_SEGMENT_TO_KIND = { object: "objects", blueprint: "blueprints", animation: "animations", being: "beings" };
+const KIND_TO_URL_SEGMENT = { objects: "object", blueprints: "blueprint", animations: "animation", beings: "being" };
 
 /**
  * AssetPages
@@ -150,6 +151,7 @@ function assetDetailPage(url, deps) {
   if (kindId === "objects") return objectDetailPage(descriptor, deps);
   if (kindId === "blueprints") return blueprintDetailPage(descriptor, deps);
   if (kindId === "animations") return animationDetailPage(descriptor, deps);
+  if (kindId === "beings") return beingDetailPage(descriptor, deps);
   return notFoundPage(url);
 }
 
@@ -261,9 +263,18 @@ function blueprintDetailPage(descriptor, { assetService }) {
   return { title: descriptor.name, html: wrapPage(descriptor.name, html) };
 }
 
+/** A real bug, found and fixed here: `AnimationLibraryStore.get(id)`
+ *  deliberately only searches *user* clips (see its own comment) —
+ *  `getClip(id)` is the one that resolves either kind. Using the wrong
+ *  one meant clicking through to any of the eight seeded default clips
+ *  (Walk, Wave, Jump, and so on) from the Shared Asset Library incorrectly
+ *  showed "Asset not found," even though `AssetService`'s own overview
+ *  correctly listed them (via `AnimationLibraryStore.all()`, which does
+ *  include defaults) — the list and the page it linked to had quietly
+ *  disagreed about what existed. */
 function animationDetailPage(descriptor, { animationLibraryStore, assetService }) {
   const id = descriptor.assetId.slice(descriptor.assetId.indexOf(":") + 1);
-  const clip = animationLibraryStore?.get(id);
+  const clip = animationLibraryStore?.getClip(id);
   if (!clip) return notFoundPage(`asset://animation/${id}`);
   const totalDuration = (clip.frames ?? []).reduce((sum, f) => sum + (f.duration ?? 0), 0);
 
@@ -286,6 +297,55 @@ function animationDetailPage(descriptor, { animationLibraryStore, assetService }
     <h2>Actions</h2>
     <div class="workshop-page-actions">
       <p>Open the Animation Editor from the Computer's rail to preview or edit this clip.</p>
+    </div>
+
+    <p><a href="asset://">\u2190 Back to the Asset Library</a></p>
+  `;
+  return { title: descriptor.name, html: wrapPage(descriptor.name, html) };
+}
+
+/** "Being Creator should now fully integrate with the Workshop Asset
+ *  System... completed beings should become Workshop Assets." Shows a
+ *  real swatch preview for a primitive-built body (the same real part
+ *  colours `AssetService`'s own `toDescriptor()` already built the
+ *  descriptor's own thumbnail from), or an honest note for an
+ *  imported-model one — there's no live 3D preview inside a `srcdoc`
+ *  page for either, the identical "genuine but simplified" standard
+ *  Objects/Blueprints already hold to (see this file's own module
+ *  comment). */
+function beingDetailPage(descriptor, { beingLibrary, assetService }) {
+  const id = descriptor.assetId.slice(descriptor.assetId.indexOf(":") + 1);
+  const being = beingLibrary?.get(id);
+  if (!being) return notFoundPage(`asset://being/${id}`);
+
+  const rigJointCount = being.bodyParts.filter((p) => p.jointName).length;
+  const preview =
+    being.bodySource === "primitives"
+      ? `<div class="workshop-asset-preview">${being.bodyParts.map((p) => `<div class="workshop-asset-swatch" style="background:${escapeHtml(p.color)}" title="${escapeHtml(p.name)}"></div>`).join("") || '<span class="workshop-page-empty">No parts</span>'}</div>`
+      : `<p class="workshop-page-subtitle">Built from an imported model \u2014 preview it from the Being Creator.</p>`;
+
+  const html = `
+    <span class="workshop-page-badge">Being</span>
+    <h1>${escapeHtml(descriptor.name)}</h1>
+    <p class="workshop-page-subtitle">${escapeHtml(descriptor.description || "No description given.")}</p>
+    ${favouriteButton(descriptor.assetId, descriptor.isFavourite)}
+
+    ${preview}
+
+    ${commonAssetSections(descriptor, assetService)}
+
+    <h2>Body</h2>
+    <div class="workshop-asset-meta-grid">
+      ${metaRow("Source", being.bodySource === "primitives" ? "Built from Primitives" : "Imported Model")}
+      ${being.bodySource === "primitives" ? metaRow("Body Parts", String(being.bodyParts.length)) : ""}
+      ${being.bodySource === "primitives" ? metaRow("Rig Joints Assigned", `${rigJointCount} of ${WORKSHOP_JOINTS.length}`) : ""}
+      ${metaRow("Movement Style", being.movementStyle)}
+      ${metaRow("Idle Behaviour", being.idleBehaviour)}
+    </div>
+
+    <h2>Actions</h2>
+    <div class="workshop-page-actions">
+      <p>Open the Being Creator from the Computer's rail to keep building this Being, or the Being Spawner to place it in the Workshop.</p>
     </div>
 
     <p><a href="asset://">\u2190 Back to the Asset Library</a></p>

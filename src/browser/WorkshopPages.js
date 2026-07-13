@@ -439,7 +439,7 @@ function bookmarksPage(browserStore) {
 // comment), not a stale snapshot from whenever the Workshop first
 // loaded, so a definition built five minutes ago is searchable
 // immediately.
-const ASSET_KIND_URL_SEGMENT = { objects: "object", blueprints: "blueprint", animations: "animation" };
+const ASSET_KIND_URL_SEGMENT = { objects: "object", blueprints: "blueprint", animations: "animation", beings: "being" };
 
 function searchPage(url, searchIndex, assetService) {
   const queryMatch = /[?&]q=([^&]*)/.exec(url);
