@@ -2027,6 +2027,65 @@ Pose" button now living in the Animation Editor.
 current pose/clip on that model's own real skeleton, not only its static
 proportions.
 
+## Version 2 — Phase 7 — Being Creator (v2.0.7)
+
+**Goal:** "The Workshop should allow creators to build life from
+nothing. Not just import it... just as the Builder creates buildings,
+the Being Creator should create creatures... this phase is intended to
+take the Being Creator to a genuinely usable state." See docs/BEINGS.md
+for the full write-up.
+
+**A complete, working body-construction workflow, not only architecture**
+— `BodyCompiler.js`: four primitive shapes (Cube, Sphere, Cylinder,
+Capsule), a genuine parent-child hierarchy (not the flat, single-root
+shape `ObjectCompiler.js`'s own Builder parts already use), full
+three-axis rotation per part. A fresh Being starts with one sensible part
+already in place rather than an empty form.
+
+**Rig Creation, deliberately simple**: "please optimise for clarity
+rather than complexity." Rather than a second, parallel bones system, any
+body part can be tagged with a Workshop skeleton joint name directly —
+`BodyCompiler.compileBody()` derives an *exact* skeleton straight from
+those tags, no heuristic detection needed at all, complementary to (not a
+replacement for) the Advanced Animation phase's own `autoMapSkeleton()`
+for imported rigs.
+
+**A real hierarchy editor** — an indented, always-in-tree-order part
+list doubling as selection (with the identical live-preview highlight
+`BuilderApp.js`'s own part selection already uses), Add/Duplicate/
+Delete/re-parent (via a cycle-safe "Parent" dropdown), and a genuinely
+useful Mirror tool — reflects an entire selected sub-tree, not just one
+part, swapping Left↔Right in names and joint assignments, reattached as
+a sibling of the original.
+
+**Beings genuinely play Workshop animations inside the Creator itself**
+— a real Preview button next to the Idle Animation picker, using the
+identical `ClipPlayer`/retargeting pairing `BeingController.js` uses for
+a placed Being, working for both primitive and imported bodies (the
+latter now gets the identical `autoMapSkeleton()` check the Creator's own
+preview previously skipped).
+
+**Full Asset System integration** — `"beings"` is a real, registered
+kind: real metadata/categories/tags, real swatch thumbnails for
+primitive bodies, real dependencies (on a Being's own model and/or
+animation clips — computed the honest way, not fabricated), real
+validation (no body parts, no rig joints, or no model chosen, each
+flagged specifically), real search, and a real `asset://being/<id>`
+Browser detail page.
+
+**A real, unrelated bug found and fixed**: building this phase's own
+dependency-checking surfaced that `AnimationLibraryStore.get(id)` (user
+clips only) had been used where `getClip(id)` (resolves defaults too)
+was needed, since the Workshop Asset System phase — silently breaking
+`AssetService.describe()`/`exists()` for any of the eight seeded default
+animation clips. Fixed at the root, in both the "animations" kind's own
+registration and the matching Browser detail page.
+
+**Honest, deliberate scope boundaries** — no click-to-select in the 3D
+preview, no drag-and-drop re-parenting, and no hybrid editing of an
+imported model's own hierarchy; all documented plainly as real future
+extension points rather than silently absent.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

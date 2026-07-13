@@ -207,6 +207,30 @@
   padding: 2px;
 }
 
+/* Being Creator — three-axis sliders (position/rotation/scale) for a
+   single body part, one row per vector field. */
+.being-vector-axes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+.being-vector-axis {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.being-vector-axis span:first-child {
+  width: 14px;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--paper-dark);
+  text-align: center;
+}
+.being-vector-axis input[type="range"] { flex: 1; min-width: 0; }
+.being-vector-axis .settings-range-value { flex-shrink: 0; width: 52px; text-align: right; }
+
 .builder-toolbar {
   display: flex;
   gap: var(--space-2);

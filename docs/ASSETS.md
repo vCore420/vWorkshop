@@ -105,9 +105,9 @@ should remain on creative discovery rather than directory navigation."
 `workshop://assets` keeps resolving as an alias) is the library itself —
 Favourites and Recently Viewed at the top (both genuinely real, see
 below), then one section per registered kind, each a live grid of tiles
-built straight from `AssetService`'s own descriptors. Three kinds
-(Objects, Blueprints, Animations) get real per-item detail pages;
-kinds without one (Models, Images, Music, and any future or
+built straight from `AssetService`'s own descriptors. Four kinds
+(Objects, Blueprints, Animations, Beings) get real per-item detail pages;
+kinds without one (Models, Images, Music, Poses, and any future or
 plugin-registered kind) get an honest note instead of a grid of dead
 links — see `docs/BROWSER.md`'s own "File Pages" section for the
 Browser-facing account.
@@ -305,16 +305,17 @@ page." The four functions a kind can provide
 
 ## Known simplifications (by design, for this phase)
 
-- **Only three kinds (Objects, Blueprints, Animations) have real detail
-  pages** — Models, Images, Music, and any plugin-registered kind are
-  fully described, searchable, and favouritable, but don't have their
-  own dedicated Browser page yet.
-- **Only one real dependency relationship exists** — Blueprints
-  depending on Objects. Every other kind's `getDependencies()` is
-  honestly unimplemented, not fabricated.
+- **Only four kinds (Objects, Blueprints, Animations, Beings) have real
+  detail pages** — Models, Images, Music, Poses, and any plugin-registered
+  kind are fully described, searchable, and favouritable, but don't have
+  their own dedicated Browser page yet.
+- **Two real dependency relationships exist** — Blueprints depending on
+  Objects, and Beings depending on the Model and/or Animation clips they
+  reference. Every other kind's `getDependencies()` is honestly
+  unimplemented, not fabricated.
 - **Version numbers never change** — every asset reports version `1`;
   nothing increments it on edit yet.
-- **Thumbnails are real for two kinds, `null` for the rest** — see
+- **Thumbnails are real for three kinds, `null` for the rest** — see
   "Thumbnails" above.
 - **No real import/export/optimisation** — all three throw honest,
   named errors; see their own sections above for exactly what a future

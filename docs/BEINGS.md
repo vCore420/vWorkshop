@@ -33,7 +33,7 @@ Workshop already uses:
 what a Being is — "reused by Beings, Builder, Player, future systems" is
 true today: nothing in this trio has a single Being-specific line in it.
 
-## Architecture: nine small, separated files
+## Architecture: ten small, separated files
 
 `src/beings/`, following the exact "separate responsibilities" instinct
 `src/ai/`, `src/resident/`, and `src/host/` already established:
@@ -41,11 +41,17 @@ true today: nothing in this trio has a single Being-specific line in it.
 - **`ModelAssetStore.js`** — raw `.glb`/`.gltf` file bytes in IndexedDB,
   mirroring `ImageAssetStore.js`'s own "real binary data doesn't belong in
   `localStorage`" split.
-- **`ModelLibrary.js`** — the metadata index (name, format) for imported
-  models, ordinary JSON through `PersistenceSystem`.
+- **`ModelLibrary.js`** — the metadata index (name, format, and — new in
+  the Being Creator phase — a cached `skeletonMap` once one's been
+  auto-detected) for imported models, ordinary JSON through
+  `PersistenceSystem`.
 - **`ModelLoader.js`** — turns a model id into an actual, usable, cached
   `THREE.Object3D` via `GLTFLoader`. The only file that knows what a
   `GLTFLoader` is.
+- **`BodyCompiler.js`** *(new in the Being Creator phase)* — turns a flat,
+  parent-referencing body-parts array into a real, hierarchical
+  `THREE.Object3D` plus an exact skeleton derived from explicit joint
+  assignments — see "Body Construction" below.
 - **`BeingBehaviours.js`** — the modular behaviour vocabulary (Movement,
   Idle, Awareness, Interaction, plus Being Type) as plain data — ids,
   labels, short descriptions. No scripting surface anywhere in it.
@@ -65,22 +71,26 @@ true today: nothing in this trio has a single Being-specific line in it.
 `BeingLibrary` has never heard of a `THREE.Object3D`; `ModelLibrary` has
 never heard of a Being; `BeingMovementSystem`'s functions take plain
 vectors and colliders as arguments, with no reference to `BeingController`
-or any store at all.
+or any store at all; `BodyCompiler.js` has never heard of `BeingLibrary`
+either — it only ever operates on a plain `bodyParts` array handed to it,
+by `BeingCreatorApp.js`'s own draft or by `BeingController.js`'s own
+saved definition, whichever is asking.
 
 ## Being Creator
 
-`BeingCreatorApp.js` — "the Workshop's creature creation workspace...
-clean, comfortable, simple, persistent." Reuses `PreviewRenderer.js`
-completely unchanged (it was already written generically enough that "a
-small, self-contained Three.js scene previewing whatever object3D you
-hand it" needed nothing Being-specific added), and the same
-`.builder-workspace`/`.builder-workspace-preview`/`.builder-workspace-form`
-layout classes `BuilderApp.js` already established — orbit (drag) and
-zoom (scroll) both come for free.
+`BeingCreatorApp.js` — "the Workshop should allow creators to build life
+from nothing. Not just import it... just as the Builder creates
+buildings, the Being Creator should create creatures." Reuses
+`PreviewRenderer.js` completely unchanged (it was already written
+generically enough that "a small, self-contained Three.js scene
+previewing whatever object3D you hand it" needed nothing Being-specific
+added), and the same `.builder-workspace`/`.builder-workspace-preview`/
+`.builder-workspace-form` layout classes `BuilderApp.js` already
+established — orbit (drag) and zoom (scroll) both come for free.
 
 **Editing is draft-then-save**, exactly like Builder — nothing reaches
-`BeingLibrary` until "Save to Library" is pressed, so trying a walk speed
-or a different model costs nothing. "Creating a Being should not
+`BeingLibrary` until "Save to Library" is pressed, so trying a shape, a
+colour, or a different model costs nothing. "Creating a Being should not
 automatically place it into the world" is true by construction: this file
 never imports or calls anything on `BeingInstanceStore` at all.
 
@@ -90,6 +100,170 @@ Radius, Interaction Behaviour, plus Awareness — is a real, editable field.
 Movement/turn speed fields only appear once a Movement Style other than
 Static is chosen, since they're meaningless for something that never
 moves.
+
+**Being Creator phase (v2.0.7): a body comes from exactly one of two
+places.** `draft.bodySource` is `"primitives"` (new — see "Body
+Construction" below) or `"model"` (imported, unchanged from earlier
+phases) — a plain toggle at the top of the form. A fresh Being now starts
+with `bodySource: "primitives"` and one sensible starting part (a
+"Torso," already tagged with the `torso` rig joint) rather than an empty
+form, so there's immediately something to look at and build outward from
+— "the experience should feel fast, intuitive and enjoyable" made
+concrete as the very first thing a new user sees.
+
+## Body Construction
+
+"Support creating beings entirely from primitive shapes... introduce a
+true body hierarchy... the hierarchy should become the heart of the
+Being Creator." `src/beings/BodyCompiler.js` is the whole mechanism — the
+same role `ObjectCompiler.js` already plays for Builder objects (turn a
+plain data description into a real `THREE.Object3D`, nothing more),
+applied to something `ObjectCompiler.js`'s own flat, single-root `parts`
+array was never built for: a genuine parent-child hierarchy and full
+three-axis rotation per part.
+
+**A body part is `{id, name, parentId, jointName, shape, position,
+rotation, scale, color}`.** Four primitive shapes — Cube, Sphere,
+Cylinder, Capsule (`THREE.CapsuleGeometry`, available since Three.js
+r142; this Workshop runs r164) — each built once as a cached, unit-sized
+geometry and reused across every part that needs it, exactly
+`ObjectCompiler.js`'s own "geometry itself never varies" reasoning.
+`parentId` is another part's own id, or `null` for a part attached
+directly to the body's own root — "the hierarchy should remain flexible
+rather than enforcing a humanoid structure... two arms, six legs, four
+wings, multiple heads, or anything else the creator imagines" is true
+because nothing about this shape assumes any particular structure at
+all; it's just a tree.
+
+**A body part *is* a rig joint, when the creator says so — not two
+separate systems.** "Rig Creation... please optimise for clarity rather
+than complexity" is honoured directly: rather than a second, parallel
+"bones" data structure layered on top of the body hierarchy, any part can
+carry an optional `jointName` — one of `WorkshopSkeleton.WORKSHOP_JOINTS`'
+own ids (Head, Chest, Upper/Lower Arms and Legs, Hands, Feet — see
+`docs/ANIMATION.md`'s own "Skeleton Mapping" section for the full list
+and reasoning). `BodyCompiler.compileBody()` derives a complete, *exact*
+`skeletonMap`/`skeletonRest` directly from whichever parts were actually
+tagged — no heuristic bone-name matching is ever needed for a primitive
+body, since the creator declared the mapping explicitly and correctly by
+construction. At most one part per joint name — the editor's own "Rig
+Joint" dropdown simply leaves out whichever joints another part has
+already claimed, rather than allowing a conflict and needing to resolve
+one later.
+
+**Construction Workflow.** "Adding new parts, selecting parts, moving/
+rotating/scaling, duplicating, mirroring, symmetry tools, resetting
+transforms." A flat, indented hierarchy list (`orderedByHierarchy()` —
+every part appears right after its own parent, however the underlying
+array happens to be ordered, so re-parenting never leaves the list
+looking scrambled) doubles as the selection mechanism — clicking a row
+selects that part, which is also highlighted in the live preview (an
+emissive material tint cloned onto its mesh, the identical technique
+`BuilderApp.js`'s own part selection already uses, down to disposing the
+clone on every refresh rather than mutating the shared cached material).
+"Add Part" adds a new Cube parented to whichever part is currently
+selected (or the root, if none is); "Mirror" duplicates an entire
+selected sub-tree — not just one part — reflected across the body's own
+centre line, with `jointName`/`name` swapped Left↔Right wherever that
+text or joint id appears (`BodyCompiler.mirrorSubtree()`), and reattached
+as a sibling of the original rather than nested inside it. "Duplicate"
+copies just the one selected part (never its own `jointName`, since a
+joint id can only ever belong to one part at a time). "Delete" removes a
+part and everything parented beneath it, honestly, rather than leaving
+orphaned children behind. Every transform field (position, rotation —
+shown in degrees for readability, converted to/from the radians actually
+stored, the same convention the Animation Editor already established —
+and scale) is three sliders in a row, immediate, no separate "apply"
+step.
+
+**Selecting a part directly from the 3D preview, collapsing hierarchy
+branches, and true drag-and-drop re-parenting are all honest, deliberate
+simplifications this phase — see "Known simplifications" below**; a
+"Parent" dropdown (excluding the part itself and its own descendants, so
+re-parenting can never create a cycle — `BodyCompiler.descendantIds()`)
+covers re-parenting today, just without the drag gesture.
+
+## Imported Models
+
+"The Workshop should treat imported beings exactly the same as internally
+created beings." True for everything *downstream* of a model — animation
+playback, Asset System integration, saving — unchanged from the Advanced
+Animation phase's own retargeting work (see `docs/ANIMATION.md`). What
+this phase does *not* attempt is true hybrid editing — adding new
+primitive body parts onto an existing imported model's own hierarchy, or
+replacing one of its parts — which stays an honest future extension
+point (see "Known simplifications" below) rather than a half-built
+feature. An imported model and a primitive-built body are each a
+complete, independent way to give a Being its own physical form today;
+mixing the two within one Being is real, valuable, future work this
+phase deliberately didn't rush.
+
+## Animation Compatibility
+
+"The Being Creator does not need to become an animation editor. However,
+it should prepare beings so they're ready to move." The Being Creator's
+own preview pane genuinely plays Workshop animations now — a "Preview"
+button next to the Idle Animation dropdown, using the exact same
+`ClipPlayer`/`AnimationRetargeting.applyPoseToMappedSkeleton()` pairing
+`BeingController.js` uses for a placed Being, so a preview here is an
+honest rehearsal of what actually happens once this Being is saved and
+placed, not an approximation of it. This works identically for both body
+sources: a primitive body's own skeleton is exact (see "Body
+Construction" above); an imported model's is checked the identical way
+`BeingController.js` checks it for real — `WorkshopSkeleton.
+autoMapSkeleton()`, with an honest note shown instead of a play button
+when nothing maps confidently enough. "Skeleton validation... rig
+validation" happens automatically, every time the form re-renders — a
+primitive Being with no Rig Joints assigned, or an imported one whose
+skeleton doesn't map, both show a plain, specific explanation right where
+the Preview button would otherwise be, rather than a button that quietly
+does nothing when clicked.
+
+## Asset System Integration
+
+"Being Creator should now fully integrate with the Workshop Asset
+System... completed beings should become Workshop Assets. The creator
+should not manage files directly. It should create Workshop Assets."
+`"beings"` is a real, registered `AssetService` kind (`main.js`'s own
+asset-kind wiring), following the identical pattern every other kind
+already does:
+
+- **Metadata, Categories, Tags** — real, from the Being's own Name,
+  Description, and Tags fields; `beingType` (Resident, Person, Animal,
+  Robot, Creature, Decoration, Custom — an organisational label, unrelated
+  to actual behaviour) maps onto `WorkshopAssetSchema.
+  WORKSHOP_ASSET_CATEGORIES`'s own suggested vocabulary.
+- **Thumbnails** — real, for a primitive-built body: `buildSwatchThumbnail()`
+  built from the body's own actual part colours, the identical technique
+  Objects/Blueprints already use.
+- **Dependencies, genuinely real, not fabricated** — a Being depends on
+  the model it's built from (if imported) and on whichever animation
+  clips it's assigned, computed the same honest way Blueprints depending
+  on Objects already are (see `docs/ASSETS.md`'s own "Relationships &
+  Dependencies" section).
+- **Validation** — a primitive Being with no body parts, no Rig Joints
+  assigned, or an imported one with no model chosen, are each flagged
+  with a specific, genuinely useful issue, not a generic "invalid" label.
+- **Searching** — real, immediately, via the same `workshop://search`
+  every other kind already feeds.
+- **A real Browser detail page** — `asset://being/<id>` (`AssetPages.js`),
+  following the identical shape Objects/Blueprints/Animations already
+  established: a real preview (part-colour swatches for a primitive body,
+  an honest note for an imported one), the full common envelope,
+  dependencies and used-by, and honest actions.
+
+**A real, unrelated bug found and fixed along the way.** Building this
+kind's own dependency-checking surfaced that `AnimationLibraryStore.
+get(id)` deliberately only searches *user* clips (`getClip(id)` is the
+one that resolves either kind — see that file's own comment) — the
+"animations" kind's own `get()` had been using the wrong one since the
+Workshop Asset System phase, meaning any of the eight seeded default
+clips (Walk, Wave, Jump...) silently failed `AssetService.describe()`/
+`exists()` — a broken detail page, a favourited default clip quietly
+vanishing from Favourites, and (the more serious consequence) a false
+"missing dependency" validation warning on any Being or Blueprint that
+referenced one. Fixed at the root, in both the "animations" kind's own
+registration and `AssetPages.js`'s matching call.
 
 ## Model Library and Model Import
 
@@ -207,6 +381,15 @@ unmapped or absent model simply doesn't animate, exactly as it always
 has; nothing about this required any Being's own appearance to change.
 See `docs/ANIMATION.md` for the full architecture.
 
+**Being Creator phase (v2.0.7): a second, exact way to get a rig.** A
+primitive-built body (`BodyCompiler.js`) needs no heuristic detection at
+all — its own skeleton is derived directly from whichever parts the
+creator explicitly tagged with a `jointName`, in `BeingCreatorApp.js`'s
+own Body Construction section. Both paths feed the exact same
+`ClipPlayer`/`applyPoseToMappedSkeleton()` pairing above; `BeingController
+._spawnRuntime()` simply picks which one applies based on `definition.
+bodySource`. See "Body Construction" above for the full account.
+
 ## Being Library
 
 "Create, Save, Edit, Duplicate, Rename, Delete, Export, Import."
@@ -274,8 +457,6 @@ needs to be roughly current at save time.
 
 ## Known simplifications (by design, for this phase)
 
-- **Cloned skinned/animated models share a skeleton** — see "Model
-  Library and Model Import" above.
 - **Interaction is a toast message, not a conversation** — Beings aren't
   connected to Ollama the way the Workshop's own resident is.
 - **No true pathfinding** — obstacle avoidance is a steering nudge, per
@@ -286,8 +467,37 @@ needs to be roughly current at save time.
   will need this to become room-aware the same way
   `WorldObjectsStore.js`'s own `roomId` field already anticipates for
   Builder objects.
+- **No selecting a body part directly from the 3D preview** — only from
+  the hierarchy list; a click-to-select raycast into `PreviewRenderer.js`'s
+  own scene is real, reasonable future work (see `docs/BROWSER.md`'s own
+  precedent of the identical trade-off for the Animation Editor's own
+  preview).
+- **No collapsing/expanding hierarchy branches, no true drag-and-drop
+  re-parenting** — a "Parent" dropdown covers re-parenting today; both
+  are reasonable at the scale a single Being's own body actually reaches
+  (rarely more than a few dozen parts), which is why neither felt worth
+  the added complexity this phase.
+- **No editing an imported model's own hierarchy** — adding, removing, or
+  replacing parts on an imported `.glb`/`.gltf` stays a primitive-body-only
+  capability this phase; see "Imported Models" above for the full
+  reasoning.
+- **Body parts have no material beyond a flat colour** — no roughness/
+  metalness/texture per part, unlike `ObjectLibraryStore.js`'s own
+  parts, which stay flat-colour-only for the identical "keep the field
+  set uniform across every primitive type" reasoning `ObjectCompiler.js`'s
+  own comment already gives.
 
 ## Future extension points
+
+- **Manual skeleton-map correction for imported models** — see
+  `docs/ANIMATION.md`'s own "Future extension points" for the identical
+  need on the Animation Editor side.
+- **Click-to-select in the 3D preview**, and true drag-and-drop
+  re-parenting in the hierarchy list.
+- **Hybrid bodies** — primitive parts attached onto an imported model's
+  own hierarchy, or replacing one of its parts; see "Imported Models"
+  above for why this phase kept the two paths separate.
+- **Per-part materials** beyond a flat colour.
 
 - **Future AI Residents as a Being type.** "Future AI Residents should
   naturally become another type of Being rather than requiring a separate

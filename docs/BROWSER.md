@@ -211,15 +211,14 @@ address bar and pressing Enter is a real, working search today, not only
 a dedicated search page someone has to know to visit.
 
 **What's indexed today**: every built-in `workshop://` and `host://`
-page, by its own static title and a handful of keywords, plus — as of the
-Workshop Asset System phase — every individual asset from any kind with
-a real detail page (Objects, Blueprints, Animations, and anything a
-plugin registers the same way), merged in live at render time from
-`AssetService.search()` rather than a static entry, so a definition built
-moments ago is searchable immediately. **What's still not indexed**:
-individual residents and individual projects — each is a natural next
-step (see "Future extension points"), not something this phase claims to
-have finished.
+page, by its own static title and a handful of keywords, plus every
+individual asset from any kind with a real detail page (Objects,
+Blueprints, Animations, Beings, and anything a plugin registers the same
+way), merged in live at render time from `AssetService.search()` rather
+than a static entry, so a definition built moments ago is searchable
+immediately. **What's still not indexed**: individual residents and
+individual projects — each is a natural next step (see "Future extension
+points"), not something this phase claims to have finished.
 
 ## Host Pages
 
@@ -263,13 +262,15 @@ actions, relationships." `src/browser/AssetPages.js`:
 - **`asset://`** — the overview. Favourites and Recently Viewed first
   (both genuinely real — see docs/ASSETS.md's own "Asset Library"
   section), then every kind the Workshop has a library for (Objects,
-  Blueprints, Animations, Models, Images, Music, plus anything a plugin
-  registers), each a live count read straight from `AssetService`.
-- **`asset://<category>/<id>`** — real per-item detail pages for three
-  of those kinds (Objects, Blueprints, Animations), registered as a
-  single dynamic resolver rather than one exact registration per item
-  (see "Architecture" above). Each shows a genuine preview (an object or
-  blueprint's own part colours, rendered as a small row of swatches, the
+  Blueprints, Animations, Beings, Models, Images, Music, Poses, plus
+  anything a plugin registers), each a live count read straight from
+  `AssetService`.
+- **`asset://<category>/<id>`** — real per-item detail pages for four
+  of those kinds (Objects, Blueprints, Animations, Beings), registered as
+  a single dynamic resolver rather than one exact registration per item
+  (see "Architecture" above). Each shows a genuine preview (an object,
+  blueprint, or primitive-built Being's own part colours, rendered as a
+  small row of swatches, the
   same real data `AssetService`'s own `buildSwatchThumbnail()` uses for
   the portable thumbnail form — there's no practical way to render an
   actual live 3D preview inside a `srcdoc` iframe without embedding a

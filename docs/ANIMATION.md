@@ -190,6 +190,17 @@ immediately, rather than re-running the heuristic matcher every time.
 one wrong entry in an otherwise-good auto-detected mapping — see "Known
 simplifications" below.
 
+**Being Creator phase (v2.0.7): a second, exact alternative that needs no
+heuristic at all.** A body built entirely from Workshop primitives
+(`docs/BEINGS.md`'s own "Body Construction" section) doesn't need its
+skeleton *detected* — the creator assigns each part's own `jointName`
+directly, and `BodyCompiler.compileBody()` derives a complete, exact
+`skeletonMap`/`skeletonRest` straight from those assignments. The two
+approaches suit two different situations: heuristic detection is what
+makes an *imported* rig (whose bone names this Workshop had no hand in
+choosing) usable without manual setup; explicit assignment is simpler and
+more reliable whenever the rig is being built here in the first place.
+
 ## Imported Rig Support
 
 "Imported humanoid models should naturally become compatible with

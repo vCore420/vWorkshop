@@ -754,5 +754,20 @@ related, previously-theoretical `ModelLoader.js` bug (shared skeletons
 across cloned models) was found and fixed once animated models actually
 needed it to be correct. See `docs/ANIMATION.md` for the full account.
 
+**Version 2, Phase 7 — Being Creator (v2.0.7)** — a complete, working
+body-construction workflow: beings can now be built entirely from
+primitive shapes (Cube, Sphere, Cylinder, Capsule) in a genuine
+parent-child hierarchy, with rig creation kept deliberately simple —
+tagging a part with a Workshop skeleton joint name directly, rather than
+a second bones system. A real hierarchy editor (selection, re-parenting,
+duplication, and a genuine Mirror tool reflecting an entire limb at
+once), live animation preview inside the Creator itself, and full
+Workshop Asset System integration (real metadata, thumbnails,
+dependencies, validation, and a Browser detail page) round it out. A
+real, unrelated bug in `AnimationLibraryStore` lookups — silently
+breaking every default animation clip's own Asset System integration —
+was found and fixed along the way. See `docs/BEINGS.md` for the full
+account.
+
 </details>
 
