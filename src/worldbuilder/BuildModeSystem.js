@@ -10,11 +10,24 @@ import { CONSTRUCTION_PIECES, getConstructionPiece } from "./ConstructionLibrary
 import { compileDefinition } from "./ObjectCompiler.js";
 import { BuilderPhoneUI } from "./BuilderPhoneUI.js";
 import { makeTransparent, restoreMaterials, disposeGhostMaterials, defaultGhostPoint } from "./GhostPreview.js";
+import { EditHistory } from "./EditHistory.js";
+import { alignPositions, distributeEvenly } from "./AlignmentTools.js";
 
 const ROTATE_STEP = Math.PI / 4; // 45° per press — coarse enough to feel deliberate, fine enough to square something up
 const WHEEL_ROTATE_STEP = Math.PI / 36; // 5° per tick — fine, continuous control matching common 3D editing workflows, not the button's own coarse step
 const GRID_SNAP_SIZE = 0.5; // metres — fine enough for ordinary furniture spacing, coarse enough to actually feel like a grid
 const ROTATION_SNAP_STEP = Math.PI / 4; // 45° increments — matches ROTATE_STEP, so "snap rotation" and "the rotate button" always agree
+const DRAG_SELECT_THRESHOLD_PX = 6; // a pointerdown that never moves this far is a click, not the start of a box-select drag
+
+/** The same "timestamp + random suffix, no persisted counter to keep in
+ *  sync across reloads" scheme `BlueprintStore.create()` already uses —
+ *  a group id is just a value stored redundantly on every member's own
+ *  `groupId` field (see this file's own "Grouping" section), not an
+ *  entry in some separate registry a counter would need to stay
+ *  consistent with. */
+function nextGroupId() {
+  return `group-${Date.now()}-${Math.round(Math.random() * 10000)}`;
+}
 
 /**
  * BuildModeSystem
@@ -62,6 +75,21 @@ const ROTATION_SNAP_STEP = Math.PI / 4; // 45° increments — matches ROTATE_ST
  * (`buildmode:entered`/`buildmode:exited`) — see InteractionSystem's own
  * `_suspended` flag. Neither system imports the other's internals beyond
  * that.
+ *
+ * **Builder Evolution phase: multi-selection, grouping, history, and
+ * layout tools, all layered on top of the mechanics above without
+ * changing them.** "The Builder should never fight the player... small
+ * workflow improvements are often more valuable than large new features."
+ * `this.selection` is still the ordinary single "primary" item every
+ * existing method already assumed; `this.additionalSelection` is the
+ * *only* new field, holding whatever else is also selected — see
+ * `getSelectedItems()`. Shift-click and drag-select (a screen-space
+ * rectangle, `#build-select-root` in `index.html`) both feed the same
+ * mechanism. A shared, undoable `EditHistory.js` stack, real object
+ * grouping (a `groupId`/`groupName` value shared across members, no
+ * separate registry), alignment/distribution (`AlignmentTools.js`), and
+ * transform copy/paste/reset round out the rest — see each section's own
+ * comment further down this file.
  */
 export class BuildModeSystem {
   constructor({ objectLibraryStore, worldObjectsStore, modelLibrary, modelLoader, blueprintStore }) {
@@ -78,8 +106,32 @@ export class BuildModeSystem {
     this.snapToGrid = false;
     this.snapRotation = false;
 
-    /** { kind: "furniture"|"worldObject", id } | null — a *confirmed*, non-editing selection */
+    /** { kind: "furniture"|"worldObject", id } | null — a *confirmed*, non-editing selection.
+     *  The "primary"/anchor item — see `additionalSelection` below for the rest of a multi-selection. */
     this.selection = null;
+    /** Array<{kind, id}> — every *other* currently-selected item, beyond
+     *  `this.selection` itself. Empty for the ordinary single-selection
+     *  case, which is why nothing about existing single-object code paths
+     *  (`_applyDirectTransformEdit`, `_duplicateSelected`, `_deleteSelected`,
+     *  and so on) needed to change at all — they only ever look at
+     *  `this.selection`. `getSelectedItems()` is the one place both are
+     *  combined; see "Multi-Selection" in this class's own comment. */
+    this.additionalSelection = [];
+
+    // "Continue improving editing history... the Builder should give
+    // players confidence to experiment." One shared stack for every
+    // mutating action Build Mode performs — see `_pushHistory()`.
+    this.editHistory = new EditHistory();
+
+    // "Copy transforms. Paste transforms." A plain snapshot, not a
+    // reference to any live object — copying, then deleting the object it
+    // came from, still leaves a valid clipboard to paste from.
+    this._transformClipboard = null;
+
+    // Screen-space box-select tracking — see `_handlePointerDown()`/
+    // `_handlePointerMove()`/`_handlePointerUp()`. `null` whenever no drag
+    // is in progress.
+    this._dragSelectStart = null;
 
     /**
      * The one piece of live placement/movement state. Shape:
@@ -110,10 +162,14 @@ export class BuildModeSystem {
 
     this._onPointerMove = (e) => this._handlePointerMove(e);
     this._onPointerDown = (e) => this._handlePointerDown(e);
+    this._onPointerUp = (e) => this._handlePointerUp(e);
     this._onWheel = (e) => this._handleWheel(e);
+    this._onKeyDown = (e) => this._handleKeyDown(e);
     engine.canvas.addEventListener("pointermove", this._onPointerMove);
     engine.canvas.addEventListener("pointerdown", this._onPointerDown);
+    engine.canvas.addEventListener("pointerup", this._onPointerUp);
     engine.canvas.addEventListener("wheel", this._onWheel, { passive: false });
+    window.addEventListener("keydown", this._onKeyDown);
 
     engine.events.on("library:changed", () => {
       if (this.active) this._renderLibrary();
@@ -153,6 +209,26 @@ export class BuildModeSystem {
       onDelete: () => this._deleteSelected(),
       onResetFurniturePosition: () => this._resetSelectedFurniture(),
       onDeselect: () => this._select(null),
+
+      // --- Builder Evolution: multi-selection, grouping, history, transform/alignment tools ---
+      onSelectAll: () => this._selectAll(),
+      onInvertSelection: () => this._invertSelection(),
+      onClearSelection: () => this._select(null),
+      onGroupSelection: () => this._promptGroupSelection(),
+      onUngroupSelection: () => this._ungroupSelection(),
+      onDuplicateMultiple: () => this._duplicateMultiple(),
+      onDeleteMultiple: () => this._deleteMultiple(),
+      onAlign: (axis, mode) => this._alignSelection(axis, mode),
+      onDistribute: (axis) => this._distributeSelection(axis),
+      onCopyTransform: () => this._copyTransform(),
+      onPasteTransform: () => this._pasteTransform(),
+      onResetTransform: () => this._resetTransform(),
+      onSaveMultipleAsBlueprint: () => this._promptSaveMultipleAsBlueprint(),
+      onUndo: () => this._undo(),
+      onRedo: () => this._redo(),
+      canUndo: () => this.editHistory.canUndo(),
+      canRedo: () => this.editHistory.canRedo(),
+      getMeasurement: () => this._measureSelection(),
     });
     this.enter();
   }
@@ -317,12 +393,14 @@ export class BuildModeSystem {
     this.ui.showGhostScreen(blueprint, "Place");
   }
 
-  /** "Save as Blueprint" — captures the currently selected World Object
-   *  plus every other one within `radius` of it, storing each one's own
-   *  position/rotation/scale as an offset relative to the selected
-   *  object's own position. See BlueprintStore.js's own comment on why
-   *  this radius-based capture, rather than a full multi-select
-   *  interface, is this phase's own deliberate scope. */
+  /** "Save as Blueprint" (single-selection screen) — captures the
+   *  currently selected World Object plus every other one within
+   *  `radius` of it, storing each one's own position/rotation/scale as an
+   *  offset relative to the selected object's own position. The quick,
+   *  no-multi-select-needed option for a single click; see
+   *  `_captureSelectionAsBlueprintObjects()`/`_promptSaveMultipleAsBlueprint()`
+   *  for the exact-capture alternative once a real multi-selection is
+   *  active. See `BlueprintStore.js`'s own comment for why both exist. */
   captureBlueprintNearSelection(name, radius = 3) {
     if (!this.blueprintStore || this.selection?.kind !== "worldObject") return null;
     const center = this.worldObjectsStore.get(this.selection.id);
@@ -355,7 +433,12 @@ export class BuildModeSystem {
   }
 
   _startMoveSelected() {
-    if (!this.selection || this._ghost) return;
+    if (this._ghost) return;
+    if (this.getSelectedItems().length > 1) {
+      this._startMoveMultiple();
+      return;
+    }
+    if (!this.selection) return;
     if (this.selection.kind === "worldObject") {
       const instance = this.worldObjectsStore.get(this.selection.id);
       const entity = this._worldObjectsSystem?.getLiveEntity(this.selection.id);
@@ -386,6 +469,44 @@ export class BuildModeSystem {
     this.ui.showGhostScreen(this._ghost.definition, "Move here");
   }
 
+  /** "Groups should simplify editing rather than complicate it" — a
+   *  group (or any multi-selection) needs to be movable as one unit for
+   *  grouping to actually save any effort. Deliberately translation-only
+   *  (no rotate, no snap-to-surface pivoting) — real rotation around a
+   *  shared pivot for an arbitrary cluster is a genuinely harder problem
+   *  than this phase's own time stretched to; see docs/WORLDBUILDER.md's
+   *  own "Known simplifications." Every member keeps its own live
+   *  `object3D` as a direct child of the scene the entire time (no
+   *  temporary reparenting) — only its position is nudged by the same
+   *  delta every other member gets, computed from how far the *first*
+   *  selected item's own original position is from wherever the pointer
+   *  now raycasts to (see `_handlePointerMove()`'s own `moveMultiple`
+   *  branch). Safer than reparenting real, live entities into a
+   *  throwaway group and back out again, and visually identical. */
+  _startMoveMultiple() {
+    const items = this.getSelectedItems().filter((i) => i.kind === "worldObject");
+    if (items.length < 2) return;
+    const members = [];
+    for (const item of items) {
+      const entity = this._worldObjectsSystem?.getLiveEntity(item.id);
+      if (!entity?.object3D) continue;
+      const obj = entity.object3D;
+      members.push({ id: item.id, object3D: obj, materialSwap: makeTransparent(obj), originalPosition: [obj.position.x, obj.position.y, obj.position.z] });
+    }
+    if (members.length < 2) {
+      for (const m of members) restoreMaterials(m.materialSwap);
+      return;
+    }
+    this._ghost = {
+      kind: "moveMultiple",
+      object3D: null, // deliberately no single object3D — see this method's own comment
+      definition: { name: `${members.length} objects` },
+      members,
+      anchorOriginalPosition: [...members[0].originalPosition],
+    };
+    this.ui.showGhostScreen(this._ghost.definition, "Move here", { allowRotate: false });
+  }
+
   _resolveWorldObjectDefinition(instance) {
     if (instance.definitionSource === "construction") return getConstructionPiece(instance.definitionId);
     return this.objectLibraryStore.get(instance.definitionId);
@@ -404,7 +525,7 @@ export class BuildModeSystem {
   }
 
   _rotateGhost() {
-    if (!this._ghost) return;
+    if (!this._ghost || this._ghost.kind === "moveMultiple") return; // translation-only — see _startMoveMultiple()'s own comment
     this._ghost.rotationY += ROTATE_STEP;
     this._applyGhostRotation();
   }
@@ -417,8 +538,32 @@ export class BuildModeSystem {
    *  `rotationX`/`rotationZ` default to 0 on every ghost and are only
    *  ever set here — placing/moving an ordinary object never touches
    *  them, so nothing needs to change for the common, Y-only case. */
+  /** "Continue improving editing history... undo, redo." The ordinary,
+   *  universally-expected shortcuts — Ctrl+Z (Cmd+Z on a Mac) to undo,
+   *  Ctrl+Y or Ctrl+Shift+Z to redo — work anywhere Build Mode is open,
+   *  not only while something happens to be selected, since "what should
+   *  I press to undo" shouldn't depend on the current screen. Ignored
+   *  entirely while a ghost is active — undoing *through* an in-progress
+   *  placement would be confusing (what would it even undo — the last
+   *  confirmed action, or the placement that hasn't happened yet?); the
+   *  ghost's own Cancel is the right tool for "I changed my mind about
+   *  this one." */
+  _handleKeyDown(event) {
+    if (!this.active || this._ghost) return;
+    const ctrlOrCmd = event.ctrlKey || event.metaKey;
+    if (!ctrlOrCmd) return;
+    const key = event.key.toLowerCase();
+    if (key === "z" && !event.shiftKey) {
+      event.preventDefault();
+      this._undo();
+    } else if (key === "y" || (key === "z" && event.shiftKey)) {
+      event.preventDefault();
+      this._redo();
+    }
+  }
+
   _handleWheel(event) {
-    if (!this._ghost) return;
+    if (!this._ghost || this._ghost.kind === "moveMultiple") return; // translation-only — see _startMoveMultiple()'s own comment
     event.preventDefault();
     const step = Math.sign(event.deltaY) * WHEEL_ROTATE_STEP;
     if (event.shiftKey) {
@@ -463,7 +608,7 @@ export class BuildModeSystem {
         // added to the final placement point.
         const cos = Math.cos(ghost.rotationY);
         const sin = Math.sin(ghost.rotationY);
-        let lastInstance = null;
+        const created = [];
         for (const obj of ghost.definition.objects) {
           const [ox, oy, oz] = obj.offset;
           const rotatedX = ox * cos + oz * sin;
@@ -478,11 +623,21 @@ export class BuildModeSystem {
             colorOverride: obj.colorOverride ?? null,
           });
           this._worldObjectsSystem?.spawnInstance(instance);
-          lastInstance = instance;
+          created.push(instance);
         }
         this.engine.events.emit("persistence:saveRequested");
+        this._pushHistory(
+          `Place blueprint "${ghost.definition.name}"`,
+          () => {
+            for (const c of created) this._removeInstanceSilently(c.id);
+          },
+          () => {
+            for (const c of created) this._worldObjectsSystem?.spawnInstance(this.worldObjectsStore.restore(c));
+            this.engine.events.emit("persistence:saveRequested");
+          }
+        );
         this._ghost = null;
-        if (lastInstance) this._select({ kind: "worldObject", id: lastInstance.id });
+        if (created.length) this._select({ kind: "worldObject", id: created[created.length - 1].id });
         return;
       }
 
@@ -498,21 +653,60 @@ export class BuildModeSystem {
       });
       this._worldObjectsSystem?.spawnInstance(instance);
       this.engine.events.emit("persistence:saveRequested");
+      this._pushHistory(
+        `Place ${ghost.definition.name}`,
+        () => this._removeInstanceSilently(instance.id),
+        () => {
+          this._worldObjectsSystem?.spawnInstance(this.worldObjectsStore.restore(instance));
+          this.engine.events.emit("persistence:saveRequested");
+        }
+      );
       this._ghost = null;
       this._select({ kind: "worldObject", id: instance.id });
+      return;
+    }
+
+    if (ghost.kind === "moveMultiple") {
+      const previous = ghost.members.map((m) => ({ id: m.id, position: m.originalPosition }));
+      const next = ghost.members.map((m) => ({ id: m.id, position: [m.object3D.position.x, m.object3D.position.y, m.object3D.position.z] }));
+      for (const m of ghost.members) restoreMaterials(m.materialSwap);
+      for (const n of next) this._worldObjectsSystem?.updateInstanceTransform(n.id, { position: n.position });
+      this.engine.events.emit("persistence:saveRequested");
+      this._pushHistory(
+        `Move ${ghost.members.length} objects`,
+        () => {
+          for (const p of previous) this._worldObjectsSystem?.updateInstanceTransform(p.id, { position: p.position });
+          this.engine.events.emit("persistence:saveRequested");
+        },
+        () => {
+          for (const n of next) this._worldObjectsSystem?.updateInstanceTransform(n.id, { position: n.position });
+          this.engine.events.emit("persistence:saveRequested");
+        }
+      );
+      this._ghost = null;
+      this._setSelectionItems(ghost.members.map((m) => ({ kind: "worldObject", id: m.id })));
       return;
     }
 
     restoreMaterials(ghost.materialSwap);
     const position = ghost.object3D.position;
     if (ghost.kind === "moveWorldObject") {
-      this._worldObjectsSystem?.updateInstanceTransform(ghost.sourceId, {
-        position: [position.x, position.y, position.z],
-        rotationY: ghost.rotationY,
-      });
+      const next = { position: [position.x, position.y, position.z], rotationY: ghost.rotationY };
+      this._worldObjectsSystem?.updateInstanceTransform(ghost.sourceId, next);
+      this._pushHistory(
+        `Move ${ghost.definition?.name ?? "object"}`,
+        () => this._worldObjectsSystem?.updateInstanceTransform(ghost.sourceId, ghost.originalTransform),
+        () => this._worldObjectsSystem?.updateInstanceTransform(ghost.sourceId, next)
+      );
       this._select({ kind: "worldObject", id: ghost.sourceId });
     } else {
-      this._furnitureSystem?.setOverride(ghost.sourceId, [position.x, position.y, position.z], ghost.rotationY);
+      const next = { position: [position.x, position.y, position.z], rotationY: ghost.rotationY };
+      this._furnitureSystem?.setOverride(ghost.sourceId, next.position, next.rotationY);
+      this._pushHistory(
+        `Move ${ghost.definition?.name ?? "furniture"}`,
+        () => this._furnitureSystem?.setOverride(ghost.sourceId, ghost.originalTransform.position, ghost.originalTransform.rotationY),
+        () => this._furnitureSystem?.setOverride(ghost.sourceId, next.position, next.rotationY)
+      );
       this._select({ kind: "furniture", id: ghost.sourceId });
     }
     this.engine.events.emit("persistence:saveRequested");
@@ -531,6 +725,16 @@ export class BuildModeSystem {
       return;
     }
 
+    if (ghost.kind === "moveMultiple") {
+      for (const m of ghost.members) {
+        restoreMaterials(m.materialSwap);
+        m.object3D.position.set(...m.originalPosition);
+      }
+      this._ghost = null;
+      this._setSelectionItems(ghost.members.map((m) => ({ kind: "worldObject", id: m.id })));
+      return;
+    }
+
     restoreMaterials(ghost.materialSwap);
     ghost.object3D.position.set(...ghost.originalTransform.position);
     ghost.object3D.rotation.y = ghost.originalTransform.rotationY;
@@ -541,7 +745,13 @@ export class BuildModeSystem {
 
   // -----------------------------------------------------------------
   // Pointer handling — hover (mouse) or drag (touch) repositions the
-  // active ghost; a plain click/tap with no ghost active selects/deselects.
+  // active ghost; with no ghost active, a pointerdown starts *tracking* a
+  // potential drag rather than deciding anything immediately — only once
+  // the pointer actually moves past a small threshold does this become a
+  // box-select drag (see `_handlePointerMove`/`_handlePointerUp` below);
+  // otherwise, releasing at essentially the same spot is an ordinary
+  // click/tap, indistinguishable in feel from how selection always
+  // worked, just decided a few pixels later than before.
   // -----------------------------------------------------------------
 
   _updatePointerNDC(event) {
@@ -552,15 +762,45 @@ export class BuildModeSystem {
   }
 
   _handlePointerMove(event) {
-    if (!this.active || !this._ghost) return;
-    this._updatePointerNDC(event);
-    const point = this._raycastGhostSurfaces();
-    if (point) {
-      if (this.snapToGrid) {
-        point.x = Math.round(point.x / GRID_SNAP_SIZE) * GRID_SNAP_SIZE;
-        point.z = Math.round(point.z / GRID_SNAP_SIZE) * GRID_SNAP_SIZE;
+    if (!this.active) return;
+    if (this._ghost) {
+      this._updatePointerNDC(event);
+      const point = this._raycastGhostSurfaces();
+      if (point) {
+        if (this.snapToGrid) {
+          point.x = Math.round(point.x / GRID_SNAP_SIZE) * GRID_SNAP_SIZE;
+          point.z = Math.round(point.z / GRID_SNAP_SIZE) * GRID_SNAP_SIZE;
+        }
+        if (this._ghost.kind === "moveMultiple") {
+          // The raycast point directly becomes where the *first* member
+          // ends up; every other member keeps its own original offset
+          // from that one, so the whole selection translates rigidly
+          // together — see `_startMoveMultiple()`'s own comment for why
+          // this is a delta, not a reparented group.
+          const [ax, ay, az] = this._ghost.anchorOriginalPosition;
+          const dx = point.x - ax;
+          const dy = point.y - ay;
+          const dz = point.z - az;
+          for (const member of this._ghost.members) {
+            member.object3D.position.set(member.originalPosition[0] + dx, member.originalPosition[1] + dy, member.originalPosition[2] + dz);
+          }
+        } else {
+          this._ghost.object3D.position.copy(point);
+        }
       }
-      this._ghost.object3D.position.copy(point);
+      return;
+    }
+    if (!this._dragSelectStart) return;
+    const drag = this._dragSelectStart;
+    const moved = Math.hypot(event.clientX - drag.clientX, event.clientY - drag.clientY);
+    if (!drag.dragging && moved > DRAG_SELECT_THRESHOLD_PX) {
+      drag.dragging = true;
+      this._showDragSelectRect();
+    }
+    if (drag.dragging) {
+      drag.currentX = event.clientX;
+      drag.currentY = event.clientY;
+      this._updateDragSelectRect();
     }
   }
 
@@ -577,25 +817,111 @@ export class BuildModeSystem {
       if (event.button === 0) this._confirmGhost();
       return;
     }
+    if (event.button !== 0) return; // only the primary button ever starts a selection or a drag-select
+    this._dragSelectStart = { clientX: event.clientX, clientY: event.clientY, currentX: event.clientX, currentY: event.clientY, shiftKey: event.shiftKey, dragging: false };
+  }
 
+  /** The one place a pointerdown actually resolves into something —
+   *  either an ordinary click/tap (raycast select/deselect, unchanged
+   *  in feel from before this phase) or, if the pointer travelled far
+   *  enough first, a box-select over whatever fell inside the dragged
+   *  rectangle. "Shift-select... drag selection... box selection where
+   *  appropriate" are all decided right here, together, since they're
+   *  really one gesture with two possible endings. */
+  _handlePointerUp(event) {
+    if (!this.active || !this._dragSelectStart) return;
+    const drag = this._dragSelectStart;
+    this._dragSelectStart = null;
+
+    if (drag.dragging) {
+      this._hideDragSelectRect();
+      this._finishDragSelect(drag);
+      return;
+    }
+
+    this._updatePointerNDC(event);
     this._raycaster.setFromCamera(this._pointerNDC, this.engine.camera);
     const targets = [...(this._worldObjectsSystem?.getAllLiveObjects() ?? []), ...this._furnitureObjects()];
     const hit = this._raycastFirst(targets);
-    this._select(hit ? this._identifyHit(hit.object) : null);
+    const identified = hit ? this._identifyHit(hit.object) : null;
+    if (identified) this._select(identified, { additive: drag.shiftKey });
+    else if (!drag.shiftKey) this._select(null); // empty space, no shift — clear. With shift, clicking empty space leaves an existing multi-selection untouched rather than discarding it by accident.
+  }
+
+  _showDragSelectRect() {
+    const root = document.getElementById("build-select-root");
+    if (!root) return;
+    this._dragRectEl = document.createElement("div");
+    this._dragRectEl.className = "build-select-rect";
+    root.appendChild(this._dragRectEl);
+  }
+
+  _updateDragSelectRect() {
+    if (!this._dragRectEl || !this._dragSelectStart) return;
+    const { clientX, clientY, currentX, currentY } = this._dragSelectStart;
+    const left = Math.min(clientX, currentX);
+    const top = Math.min(clientY, currentY);
+    Object.assign(this._dragRectEl.style, { left: `${left}px`, top: `${top}px`, width: `${Math.abs(currentX - clientX)}px`, height: `${Math.abs(currentY - clientY)}px` });
+  }
+
+  _hideDragSelectRect() {
+    this._dragRectEl?.remove();
+    this._dragRectEl = null;
+  }
+
+  /** Projects every live World Object's own current world position into
+   *  screen space (`THREE.Vector3.project()`, the ordinary way anything
+   *  goes from 3D to 2D) and keeps whichever fall inside the dragged
+   *  rectangle — furniture is deliberately excluded from box-select (it
+   *  can still be selected by an ordinary click; a rectangle drag is
+   *  about laying out *Builder* objects, not accidentally sweeping up
+   *  the Workshop's own permanent furniture). */
+  _finishDragSelect(drag) {
+    const rect = this.engine.canvas.getBoundingClientRect();
+    const minX = Math.min(drag.clientX, drag.currentX);
+    const maxX = Math.max(drag.clientX, drag.currentX);
+    const minY = Math.min(drag.clientY, drag.currentY);
+    const maxY = Math.max(drag.clientY, drag.currentY);
+    const scratch = new THREE.Vector3();
+
+    const hits = [];
+    for (const instance of this.worldObjectsStore.byRoom()) {
+      const entity = this._worldObjectsSystem?.getLiveEntity(instance.id);
+      if (!entity?.object3D) continue;
+      entity.object3D.getWorldPosition(scratch);
+      scratch.project(this.engine.camera);
+      if (scratch.z < -1 || scratch.z > 1) continue; // behind the camera, or beyond the far plane
+      const screenX = rect.left + ((scratch.x + 1) / 2) * rect.width;
+      const screenY = rect.top + ((1 - scratch.y) / 2) * rect.height;
+      if (screenX >= minX && screenX <= maxX && screenY >= minY && screenY <= maxY) hits.push({ kind: "worldObject", id: instance.id });
+    }
+
+    if (hits.length === 0) {
+      if (!drag.shiftKey) this._select(null);
+      return;
+    }
+    const expanded = hits.flatMap((h) => this._expandGroup(h)).filter((item, index, arr) => arr.findIndex((x) => this._sameItem(x, item)) === index);
+    if (drag.shiftKey) {
+      const already = this.getSelectedItems();
+      this._setSelectionItems([...already, ...expanded.filter((item) => !already.some((s) => this._sameItem(s, item)))]);
+    } else {
+      this._setSelectionItems(expanded);
+    }
   }
 
   /** Floor/ground + every already-placed object (world objects and
    *  furniture both) — a ghost can rest on top of something else exactly
-   *  as naturally as on the floor. Excludes the ghost's own object when
-   *  moving something that already exists, so it never collides with
-   *  itself while dragging. */
+   *  as naturally as on the floor. Excludes the ghost's own object(s)
+   *  when moving something that already exists, so it never collides
+   *  with itself while dragging — a `moveMultiple` ghost excludes every
+   *  one of its own members, not just a single object3D. */
   _gatherSurfaces() {
     const floorMesh = this.engine.getSystem(RoomLayoutSystem)?.getFloorMesh();
     const groundMesh = this.engine.getSystem(WorldEnvironmentSystem)?.getGroundMesh();
     const surfaces = [floorMesh, groundMesh].filter(Boolean);
     const objects = [...(this._worldObjectsSystem?.getAllLiveObjects() ?? []), ...this._furnitureObjects()];
-    const excluding = this._ghost?.object3D;
-    return [...surfaces, ...objects].filter((o) => o !== excluding);
+    const excluding = this._ghost?.kind === "moveMultiple" ? new Set(this._ghost.members.map((m) => m.object3D)) : new Set([this._ghost?.object3D].filter(Boolean));
+    return [...surfaces, ...objects].filter((o) => !excluding.has(o));
   }
 
   _furnitureObjects() {
@@ -643,12 +969,94 @@ export class BuildModeSystem {
   // Selection (confirmed, not currently moving)
   // -----------------------------------------------------------------
 
-  _select(selection) {
-    this.selection = selection;
+  /** Every currently-selected item, primary first — the one place both
+   *  halves of the selection (`this.selection` and
+   *  `this.additionalSelection`) are combined. Every bulk action
+   *  (group, align, duplicate-all, delete-all, measure) reads from this,
+   *  never from the two fields directly. */
+  getSelectedItems() {
+    return this.selection ? [this.selection, ...this.additionalSelection] : [];
+  }
+
+  _sameItem(a, b) {
+    return a?.kind === b?.kind && a?.id === b?.id;
+  }
+
+  /** "Shift-select... working with many objects should become
+   *  comfortable." `additive` (a shift-click, or a member of a group
+   *  being auto-expanded — see below) adds `selection` to whatever's
+   *  already selected instead of replacing it; clicking something already
+   *  selected while `additive` removes just that one item. A plain click
+   *  (not additive) always replaces the whole selection outright — the
+   *  ordinary, unchanged single-selection behaviour every existing call
+   *  site still relies on.
+   *
+   *  **Selecting a grouped object selects its whole group** — "selecting
+   *  groups" from the brief, made automatic rather than needing its own
+   *  separate gesture: any `worldObject` selected (by click or shift-click)
+   *  that carries a `groupId` pulls in every other instance sharing that
+   *  same id, the same click a player would already make to select one
+   *  piece of it. */
+  _select(selection, { additive = false } = {}) {
     if (!selection) {
+      this.selection = null;
+      this.additionalSelection = [];
       this.ui.showLibraryScreen();
       return;
     }
+
+    const groupItems = this._expandGroup(selection);
+
+    if (additive) {
+      const already = this.getSelectedItems();
+      const stillPresent = groupItems.every((item) => already.some((s) => this._sameItem(s, item)));
+      const next = stillPresent
+        ? already.filter((item) => !groupItems.some((g) => this._sameItem(g, item))) // shift-clicking an already-selected (group of) item removes it
+        : [...already, ...groupItems.filter((item) => !already.some((s) => this._sameItem(s, item)))];
+      this._setSelectionItems(next);
+    } else {
+      this._setSelectionItems(groupItems);
+    }
+  }
+
+  /** Every member currently sharing `selection`'s own `groupId`, or just
+   *  `[selection]` for furniture (which has no grouping concept) or a
+   *  worldObject with no group at all. */
+  _expandGroup(selection) {
+    if (selection.kind !== "worldObject") return [selection];
+    const instance = this.worldObjectsStore.get(selection.id);
+    if (!instance?.groupId) return [selection];
+    return this.worldObjectsStore
+      .all()
+      .filter((i) => i.groupId === instance.groupId)
+      .map((i) => ({ kind: "worldObject", id: i.id }));
+  }
+
+  /** The one place `this.selection`/`this.additionalSelection` are
+   *  actually assigned, and the UI re-rendered to match — chooses between
+   *  the ordinary single-selection screen, the multi-selection bulk-action
+   *  screen, or the empty library screen, based purely on how many items
+   *  ended up selected. */
+  _setSelectionItems(items) {
+    if (items.length === 0) {
+      this.selection = null;
+      this.additionalSelection = [];
+      this.ui.showLibraryScreen();
+      return;
+    }
+    if (items.length === 1) {
+      this.selection = items[0];
+      this.additionalSelection = [];
+      this._showSingleSelection();
+      return;
+    }
+    this.selection = items[0];
+    this.additionalSelection = items.slice(1);
+    this._showMultiSelection();
+  }
+
+  _showSingleSelection() {
+    const selection = this.selection;
     if (selection.kind === "worldObject") {
       const instance = this.worldObjectsStore.get(selection.id);
       const definition = instance ? this._resolveWorldObjectDefinition(instance) : null;
@@ -657,7 +1065,7 @@ export class BuildModeSystem {
         this.ui.showLibraryScreen();
         return;
       }
-      this.ui.showSelectionScreen({ kind: "worldObject", instance, definition });
+      this.ui.showSelectionScreen({ kind: "worldObject", instance, definition, groupName: instance.groupName ?? null });
     } else {
       const piece = this._furnitureSystem?.getPiece(selection.id);
       if (!piece) {
@@ -677,6 +1085,31 @@ export class BuildModeSystem {
     }
   }
 
+  _showMultiSelection() {
+    const items = this.getSelectedItems();
+    const groupIds = new Set(
+      items
+        .filter((i) => i.kind === "worldObject")
+        .map((i) => this.worldObjectsStore.get(i.id)?.groupId)
+        .filter(Boolean)
+    );
+    const isSingleGroup = groupIds.size === 1;
+    this.ui.showMultiSelectionScreen({
+      count: items.length,
+      allWorldObjects: items.every((i) => i.kind === "worldObject"),
+      isSingleGroup,
+      groupName: isSingleGroup ? this.worldObjectsStore.get(items.find((i) => i.kind === "worldObject").id)?.groupName : null,
+    });
+  }
+
+  /** Deliberately not wrapped in an undo entry — this fires on every
+   *  single `input` event while a slider is being dragged (position,
+   *  rotation, scale), and pushing one history entry per pixel of drag
+   *  would make undo nearly useless (one press would barely move
+   *  anything back). "Move," "Reset Transform," and "Paste Transform"
+   *  are the real, coarse-grained transform actions that get their own
+   *  undo entry — a discrete, deliberate action each time, not a
+   *  continuous stream of them. */
   _applyDirectTransformEdit(patch) {
     if (!this.selection) return;
     if (this.selection.kind === "worldObject") {
@@ -708,17 +1141,37 @@ export class BuildModeSystem {
     if (!instance) return;
     const copy = this.worldObjectsStore.create({
       ...instance,
+      groupId: null, // a duplicate starts its own life, not silently joining the original's group
+      groupName: null,
       position: [instance.position[0] + 0.3, instance.position[1], instance.position[2] + 0.3],
     });
     this._worldObjectsSystem?.spawnInstance(copy);
     this.engine.events.emit("persistence:saveRequested");
+    this._pushHistory(
+      `Duplicate ${this._resolveWorldObjectDefinition(instance)?.name ?? "object"}`,
+      () => this._removeInstanceSilently(copy.id),
+      () => {
+        this._worldObjectsSystem?.spawnInstance(this.worldObjectsStore.restore(copy));
+        this.engine.events.emit("persistence:saveRequested");
+      }
+    );
     this._select({ kind: "worldObject", id: copy.id });
   }
 
   _deleteSelected() {
     if (this.selection?.kind !== "worldObject") return; // furniture can be moved, never deleted
+    const instance = this.worldObjectsStore.get(this.selection.id);
+    if (!instance) return;
     this._worldObjectsSystem?.removeInstance(this.selection.id);
     this.engine.events.emit("persistence:saveRequested");
+    this._pushHistory(
+      `Delete ${this._resolveWorldObjectDefinition(instance)?.name ?? "object"}`,
+      () => {
+        this._worldObjectsSystem?.spawnInstance(this.worldObjectsStore.restore(instance));
+        this.engine.events.emit("persistence:saveRequested");
+      },
+      () => this._removeInstanceSilently(instance.id)
+    );
     this._select(null);
   }
 
@@ -726,6 +1179,344 @@ export class BuildModeSystem {
     if (this.selection?.kind !== "furniture") return;
     this._furnitureSystem?.clearOverride(this.selection.id);
     this._select(this.selection);
+  }
+
+  _removeInstanceSilently(id) {
+    this._worldObjectsSystem?.removeInstance(id);
+    this.engine.events.emit("persistence:saveRequested");
+  }
+
+  // -----------------------------------------------------------------
+  // Editing History — "undo, redo, history inspection... confidence to
+  // experiment." See EditHistory.js's own comment for the mechanism
+  // itself; every method below is just "do the thing, then push one
+  // entry describing how to reverse and reapply it."
+  // -----------------------------------------------------------------
+
+  _pushHistory(label, undo, redo) {
+    this.editHistory.push({ label, undo, redo });
+  }
+
+  _undo() {
+    const label = this.editHistory.undo();
+    this._refreshSelectionDisplay();
+    return label;
+  }
+
+  _redo() {
+    const label = this.editHistory.redo();
+    this._refreshSelectionDisplay();
+    return label;
+  }
+
+  /** After an undo/redo, the current selection may no longer exist (its
+   *  own creation was just undone, say) or may have moved/changed —
+   *  re-validating through `_select()` itself (rather than trusting
+   *  whatever the panel already shows) is what keeps the displayed
+   *  fields honest either way. */
+  _refreshSelectionDisplay() {
+    if (this.additionalSelection.length > 0) this._setSelectionItems(this.getSelectedItems());
+    else if (this.selection) this._select(this.selection);
+    else this.ui.showLibraryScreen();
+  }
+
+  // -----------------------------------------------------------------
+  // Multi-Selection — "shift-select, drag selection, select all, invert
+  // selection... working with many objects should become comfortable."
+  // -----------------------------------------------------------------
+
+  _selectAll() {
+    const items = this.worldObjectsStore.byRoom().map((i) => ({ kind: "worldObject", id: i.id }));
+    this._setSelectionItems(items);
+  }
+
+  _invertSelection() {
+    const selected = this.getSelectedItems();
+    const everything = this.worldObjectsStore.byRoom().map((i) => ({ kind: "worldObject", id: i.id }));
+    this._setSelectionItems(everything.filter((item) => !selected.some((s) => this._sameItem(s, item))));
+  }
+
+  // -----------------------------------------------------------------
+  // Grouping — "creating groups, naming groups, selecting groups, editing
+  // groups, duplicating groups, ungrouping." A group is just a shared
+  // `groupId`/`groupName` value stored redundantly on every member's own
+  // instance record — no separate group registry to keep in sync (see
+  // `nextGroupId()`'s own comment). Selecting any one member already
+  // selects the whole group (`_expandGroup()`); duplicating or deleting a
+  // multi-selection already handles a group's members the same as any
+  // other multi-selection would.
+  // -----------------------------------------------------------------
+
+  _promptGroupSelection() {
+    const items = this.getSelectedItems().filter((i) => i.kind === "worldObject");
+    if (items.length < 2) return;
+    const name = window.prompt("Name this group:", "New Group");
+    if (!name) return;
+    const groupId = nextGroupId();
+    const previous = items.map((item) => {
+      const instance = this.worldObjectsStore.get(item.id);
+      return { id: item.id, groupId: instance?.groupId ?? null, groupName: instance?.groupName ?? null };
+    });
+    const apply = () => {
+      for (const item of items) this._worldObjectsSystem?.updateInstanceTransform(item.id, { groupId, groupName: name });
+      this.engine.events.emit("persistence:saveRequested");
+    };
+    apply();
+    this._pushHistory(
+      `Group ${items.length} objects as "${name}"`,
+      () => {
+        for (const p of previous) this._worldObjectsSystem?.updateInstanceTransform(p.id, { groupId: p.groupId, groupName: p.groupName });
+        this.engine.events.emit("persistence:saveRequested");
+      },
+      apply
+    );
+    this._setSelectionItems(items);
+  }
+
+  _ungroupSelection() {
+    const items = this.getSelectedItems().filter((i) => i.kind === "worldObject");
+    const previous = items.map((item) => {
+      const instance = this.worldObjectsStore.get(item.id);
+      return { id: item.id, groupId: instance?.groupId ?? null, groupName: instance?.groupName ?? null };
+    });
+    if (previous.every((p) => !p.groupId)) return;
+    for (const item of items) this._worldObjectsSystem?.updateInstanceTransform(item.id, { groupId: null, groupName: null });
+    this.engine.events.emit("persistence:saveRequested");
+    this._pushHistory(
+      `Ungroup ${items.length} objects`,
+      () => {
+        for (const p of previous) this._worldObjectsSystem?.updateInstanceTransform(p.id, { groupId: p.groupId, groupName: p.groupName });
+        this.engine.events.emit("persistence:saveRequested");
+      },
+      () => {
+        for (const item of items) this._worldObjectsSystem?.updateInstanceTransform(item.id, { groupId: null, groupName: null });
+        this.engine.events.emit("persistence:saveRequested");
+      }
+    );
+    this._setSelectionItems(items);
+  }
+
+  _duplicateMultiple() {
+    const items = this.getSelectedItems().filter((i) => i.kind === "worldObject");
+    if (items.length === 0) return;
+    const newGroupId = items.length > 1 && this.worldObjectsStore.get(items[0].id)?.groupId ? nextGroupId() : null;
+    const copies = [];
+    for (const item of items) {
+      const instance = this.worldObjectsStore.get(item.id);
+      if (!instance) continue;
+      const copy = this.worldObjectsStore.create({
+        ...instance,
+        groupId: newGroupId,
+        groupName: newGroupId ? instance.groupName : null,
+        position: [instance.position[0] + 0.3, instance.position[1], instance.position[2] + 0.3],
+      });
+      this._worldObjectsSystem?.spawnInstance(copy);
+      copies.push(copy);
+    }
+    this.engine.events.emit("persistence:saveRequested");
+    this._pushHistory(
+      `Duplicate ${copies.length} objects`,
+      () => {
+        for (const c of copies) this._removeInstanceSilently(c.id);
+      },
+      () => {
+        for (const c of copies) this._worldObjectsSystem?.spawnInstance(this.worldObjectsStore.restore(c));
+        this.engine.events.emit("persistence:saveRequested");
+      }
+    );
+    this._setSelectionItems(copies.map((c) => ({ kind: "worldObject", id: c.id })));
+  }
+
+  _deleteMultiple() {
+    const items = this.getSelectedItems().filter((i) => i.kind === "worldObject");
+    if (items.length === 0) return;
+    const removed = items.map((item) => this.worldObjectsStore.get(item.id)).filter(Boolean);
+    for (const instance of removed) this._worldObjectsSystem?.removeInstance(instance.id);
+    this.engine.events.emit("persistence:saveRequested");
+    this._pushHistory(
+      `Delete ${removed.length} objects`,
+      () => {
+        for (const instance of removed) this._worldObjectsSystem?.spawnInstance(this.worldObjectsStore.restore(instance));
+        this.engine.events.emit("persistence:saveRequested");
+      },
+      () => {
+        for (const instance of removed) this._removeInstanceSilently(instance.id);
+      }
+    );
+    this._select(null);
+  }
+
+  // -----------------------------------------------------------------
+  // Alignment & Distribution — "align left, centre, right, top, bottom,
+  // even spacing... simplify creating clean layouts." Pure math lives in
+  // AlignmentTools.js; this is just the plumbing between "the current
+  // selection's own positions" and "a real, undoable transform update
+  // per instance."
+  // -----------------------------------------------------------------
+
+  _alignSelection(axis, mode) {
+    const items = this.getSelectedItems().filter((i) => i.kind === "worldObject");
+    if (items.length < 2) return;
+    this._applyPositions(items, alignPositions(items.map((i) => this.worldObjectsStore.get(i.id).position), axis, mode), `Align ${items.length} objects`);
+  }
+
+  _distributeSelection(axis) {
+    const items = this.getSelectedItems().filter((i) => i.kind === "worldObject");
+    if (items.length < 3) return;
+    this._applyPositions(items, distributeEvenly(items.map((i) => this.worldObjectsStore.get(i.id).position), axis), `Distribute ${items.length} objects`);
+  }
+
+  _applyPositions(items, nextPositions, label) {
+    const previous = items.map((item) => [...this.worldObjectsStore.get(item.id).position]);
+    const apply = (positions) => {
+      items.forEach((item, i) => this._worldObjectsSystem?.updateInstanceTransform(item.id, { position: positions[i] }));
+      this.engine.events.emit("persistence:saveRequested");
+    };
+    apply(nextPositions);
+    this._pushHistory(label, () => apply(previous), () => apply(nextPositions));
+    this._setSelectionItems(items);
+  }
+
+  // -----------------------------------------------------------------
+  // Transform tools — "reset transforms, copy transforms, paste
+  // transforms."
+  // -----------------------------------------------------------------
+
+  _copyTransform() {
+    if (this.selection?.kind !== "worldObject") return;
+    const instance = this.worldObjectsStore.get(this.selection.id);
+    if (!instance) return;
+    this._transformClipboard = { rotationY: instance.rotationY, rotationX: instance.rotationX ?? 0, rotationZ: instance.rotationZ ?? 0, scale: instance.scale };
+  }
+
+  /** Pastes rotation and scale (never position — "paste transform" means
+   *  "make this one oriented/sized like that one," not "stack them on top
+   *  of each other") onto every selected World Object. */
+  _pasteTransform() {
+    if (!this._transformClipboard) return;
+    const items = this.getSelectedItems().filter((i) => i.kind === "worldObject");
+    if (items.length === 0) return;
+    const clip = this._transformClipboard;
+    const previous = items.map((item) => {
+      const i = this.worldObjectsStore.get(item.id);
+      return { rotationY: i.rotationY, rotationX: i.rotationX ?? 0, rotationZ: i.rotationZ ?? 0, scale: i.scale };
+    });
+    const apply = (values) => {
+      items.forEach((item, i) => this._worldObjectsSystem?.updateInstanceTransform(item.id, values[i] ?? values));
+      this.engine.events.emit("persistence:saveRequested");
+    };
+    apply(items.map(() => clip));
+    this._pushHistory(
+      `Paste transform onto ${items.length} object${items.length === 1 ? "" : "s"}`,
+      () => apply(previous),
+      () => apply(items.map(() => clip))
+    );
+    this._refreshSelectionDisplay();
+  }
+
+  _resetTransform() {
+    const items = this.getSelectedItems().filter((i) => i.kind === "worldObject");
+    if (items.length === 0) return;
+    const previous = items.map((item) => {
+      const i = this.worldObjectsStore.get(item.id);
+      return { rotationY: i.rotationY, rotationX: i.rotationX ?? 0, rotationZ: i.rotationZ ?? 0, scale: i.scale };
+    });
+    const reset = { rotationY: 0, rotationX: 0, rotationZ: 0, scale: 1 };
+    const apply = (values) => {
+      items.forEach((item, i) => this._worldObjectsSystem?.updateInstanceTransform(item.id, values[i] ?? values));
+      this.engine.events.emit("persistence:saveRequested");
+    };
+    apply(items.map(() => reset));
+    this._pushHistory(
+      `Reset transform on ${items.length} object${items.length === 1 ? "" : "s"}`,
+      () => apply(previous),
+      () => apply(items.map(() => reset))
+    );
+    this._refreshSelectionDisplay();
+  }
+
+  // -----------------------------------------------------------------
+  // Measurement — "distance measurement, object dimensions... feel
+  // confident building accurately." Reuses `WorldObjectsSystem.
+  // getFootprints()`'s own already-computed, real `THREE.Box3` per
+  // instance (built from the object's actual compiled geometry for
+  // collision purposes) rather than maintaining a second, parallel
+  // dimensions calculation.
+  // -----------------------------------------------------------------
+
+  _measureSelection() {
+    const items = this.getSelectedItems().filter((i) => i.kind === "worldObject");
+    if (items.length === 0) return null;
+    const boxes = items.map((item) => this._worldObjectsSystem?.getFootprint(item.id)).filter(Boolean);
+    if (boxes.length === 0) return null;
+
+    if (items.length === 1) {
+      const box = boxes[0];
+      return { kind: "dimensions", width: box.max.x - box.min.x, height: box.max.y - box.min.y, depth: box.max.z - box.min.z };
+    }
+    if (items.length === 2) {
+      const a = this.worldObjectsStore.get(items[0].id).position;
+      const b = this.worldObjectsStore.get(items[1].id).position;
+      const distance = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+      return { kind: "distance", distance };
+    }
+    const min = [Math.min(...boxes.map((b) => b.min.x)), Math.min(...boxes.map((b) => b.min.y)), Math.min(...boxes.map((b) => b.min.z))];
+    const max = [Math.max(...boxes.map((b) => b.max.x)), Math.max(...boxes.map((b) => b.max.y)), Math.max(...boxes.map((b) => b.max.z))];
+    return { kind: "bounds", width: max[0] - min[0], height: max[1] - min[1], depth: max[2] - min[2] };
+  }
+
+  // -----------------------------------------------------------------
+  // Blueprint Workflow — "create, edit, duplicate, update, replace,
+  // reuse, share... blueprint editing should feel natural." Now that real
+  // multi-selection exists, capturing a Blueprint from *exactly* the
+  // selected objects replaces the radius-based guess
+  // `captureBlueprintNearSelection()` still offers as a quick, no-selection
+  // fallback (kept for a single-object quick-capture — see its own
+  // comment) — see docs/WORLDBUILDER.md for the full account.
+  // -----------------------------------------------------------------
+
+  /** `objects` in the exact shape `BlueprintStore.create()`/`update()`
+   *  already expect — every position relative to the first selected
+   *  item's own position, matching `captureBlueprintNearSelection()`'s
+   *  own convention exactly, so a blueprint captured either way places
+   *  identically. */
+  _captureSelectionAsBlueprintObjects() {
+    const items = this.getSelectedItems().filter((i) => i.kind === "worldObject");
+    if (items.length === 0) return null;
+    const instances = items.map((item) => this.worldObjectsStore.get(item.id)).filter(Boolean);
+    if (instances.length === 0) return null;
+    const [cx, cy, cz] = instances[0].position;
+    return instances.map((instance) => ({
+      definitionId: instance.definitionId,
+      definitionSource: instance.definitionSource,
+      offset: [instance.position[0] - cx, instance.position[1] - cy, instance.position[2] - cz],
+      rotationY: instance.rotationY,
+      scale: instance.scale,
+      colorOverride: instance.colorOverride,
+    }));
+  }
+
+  _promptSaveMultipleAsBlueprint() {
+    if (!this.blueprintStore) return;
+    const objects = this._captureSelectionAsBlueprintObjects();
+    if (!objects) return;
+    const name = window.prompt(`Name this Blueprint (captures exactly the ${objects.length} selected objects):`, "New Blueprint");
+    if (!name) return;
+    this.blueprintStore.create(name, objects);
+  }
+
+  /** "Update... replace." Re-captures the current selection's own
+   *  transforms into an *existing* blueprint, keeping its id (and
+   *  therefore every place that already references it) — the real
+   *  "update this blueprint to match how I've since rearranged its
+   *  pieces" workflow the brief asks for, rather than only ever being
+   *  able to create a brand new one. */
+  updateBlueprintFromSelection(blueprintId) {
+    if (!this.blueprintStore?.get(blueprintId)) return false;
+    const objects = this._captureSelectionAsBlueprintObjects();
+    if (!objects) return false;
+    this.blueprintStore.update(blueprintId, objects);
+    return true;
   }
 
   update(_dt) {
@@ -746,6 +1537,8 @@ export class BuildModeSystem {
   dispose() {
     this.engine.canvas.removeEventListener("pointermove", this._onPointerMove);
     this.engine.canvas.removeEventListener("pointerdown", this._onPointerDown);
+    this.engine.canvas.removeEventListener("pointerup", this._onPointerUp);
     this.engine.canvas.removeEventListener("wheel", this._onWheel);
+    window.removeEventListener("keydown", this._onKeyDown);
   }
 }

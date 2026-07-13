@@ -15,15 +15,17 @@ import { EventBus } from "../core/EventBus.js";
  * separately-selectable World Object the moment it exists, not a single
  * combined thing with its own special editing rules.
  *
- * **How a blueprint is captured**: rather than building a full
- * multi-object selection UI (a substantial interaction surface this
- * phase's own time didn't stretch to), "Save as Blueprint" captures
- * every World Object within a chosen radius of the *currently selected*
- * one — select any single piece of an already-built cluster (one wall of
- * a shed, say) and everything else nearby comes with it. A real,
- * acknowledged simplification, not a hidden one — see
- * `BuildModeSystem.js`'s own `captureBlueprintNearSelection()` and
- * docs/WORLD.md's own account of it.
+ * **How a blueprint is captured.** Real multi-selection exists as of the
+ * Builder Evolution phase (shift-click, drag-select — see
+ * `BuildModeSystem.js`'s own "Multi-Selection" section) — "Save as
+ * Blueprint" from a multi-selection screen captures *exactly* the
+ * selected objects (`BuildModeSystem._captureSelectionAsBlueprintObjects()`),
+ * no guessing involved. The original, radius-based capture (select one
+ * piece of an already-built cluster and everything within a chosen
+ * distance comes with it — `captureBlueprintNearSelection()`) still
+ * exists as a genuinely useful quick option when only a single object is
+ * selected, not a compromise being carried forward — sometimes "grab
+ * everything nearby" really is faster than selecting each piece by hand.
  */
 export class BlueprintStore {
   constructor() {
@@ -40,6 +42,21 @@ export class BlueprintStore {
     const id = `blueprint-${Date.now()}-${Math.round(Math.random() * 10000)}`;
     const blueprint = { id, name: name?.trim() || "Untitled Blueprint", objects, createdAt: new Date().toISOString() };
     this.blueprints[id] = blueprint;
+    this._emitChanged();
+    return blueprint;
+  }
+
+  /** "Update... replace." Re-captures a blueprint's own object list in
+   *  place — same id, same name, same createdAt — the one method that
+   *  lets an already-placed, already-shared blueprint be brought up to
+   *  date with how its own pieces have since been rearranged, rather
+   *  than only ever being able to save a brand new one under a new id.
+   *  Called by `BuildModeSystem.updateBlueprintFromSelection()`. */
+  update(id, objects) {
+    const blueprint = this.get(id);
+    if (!blueprint) return null;
+    blueprint.objects = objects;
+    blueprint.updatedAt = new Date().toISOString();
     this._emitChanged();
     return blueprint;
   }

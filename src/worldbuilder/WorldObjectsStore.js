@@ -6,7 +6,7 @@ import { EventBus } from "../core/EventBus.js";
  * Every *placed* copy of a library object, anywhere in the (currently
  * singular) world:
  *
- *   { id, definitionId, definitionSource, roomId, position:[x,y,z], rotationY, scale, colorOverride }
+ *   { id, definitionId, definitionSource, roomId, position:[x,y,z], rotationY, scale, colorOverride, groupId, groupName }
  *
  * `definitionSource` is `"library"` (a user-authored `ObjectLibraryStore`
  * definition, the default) or `"construction"` (a permanent
@@ -36,7 +36,7 @@ export class WorldObjectsStore {
     this.instances = [];
   }
 
-  create({ definitionId, definitionSource = "library", roomId = CURRENT_ROOM_ID, position, rotationY = 0, rotationX = 0, rotationZ = 0, scale = 1, colorOverride = null }) {
+  create({ definitionId, definitionSource = "library", roomId = CURRENT_ROOM_ID, position, rotationY = 0, rotationX = 0, rotationZ = 0, scale = 1, colorOverride = null, groupId = null, groupName = null }) {
     const instance = {
       id: _nextId++,
       definitionId,
@@ -52,6 +52,12 @@ export class WorldObjectsStore {
       rotationZ,
       scale,
       colorOverride,
+      // "Introduce object grouping." A group is nothing more than this
+      // value shared redundantly across every member's own record — see
+      // BuildModeSystem.js's own "Grouping" section for why that's
+      // simpler and more robust than a separate group registry.
+      groupId,
+      groupName,
       createdAt: new Date().toISOString(),
     };
     this.instances.push(instance);
@@ -69,6 +75,19 @@ export class WorldObjectsStore {
 
   remove(id) {
     this.instances = this.instances.filter((i) => i.id !== id);
+    this.events.emit("instances:changed", this.instances);
+  }
+
+  /** "The Builder should give players confidence to experiment" —
+   *  undoing a deletion needs the exact instance back, same id and all,
+   *  not a fresh `create()` (which would mint a new one and could
+   *  outlive whatever briefly referenced the old one, a sibling's own
+   *  `groupId` membership included, if this ever raced with something
+   *  else reading the store mid-undo). Only ever called by
+   *  `BuildModeSystem.js`'s own undo entries — an ordinary "add a new
+   *  object" always goes through `create()` instead. */
+  restore(instance) {
+    this.instances.push(instance);
     this.events.emit("instances:changed", this.instances);
   }
 
@@ -95,7 +114,7 @@ export class WorldObjectsStore {
 
   load(data) {
     if (!data?.instances) return;
-    this.instances = data.instances.map((i) => ({ definitionSource: "library", roomId: CURRENT_ROOM_ID, rotationY: 0, scale: 1, colorOverride: null, ...i }));
+    this.instances = data.instances.map((i) => ({ definitionSource: "library", roomId: CURRENT_ROOM_ID, rotationY: 0, scale: 1, colorOverride: null, groupId: null, groupName: null, ...i }));
     const maxId = this.instances.reduce((m, i) => Math.max(m, i.id), 0);
     _nextId = maxId + 1;
     this.events.emit("instances:changed", this.instances);

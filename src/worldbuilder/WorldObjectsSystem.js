@@ -116,6 +116,15 @@ export class WorldObjectsSystem {
     return [...this.footprints.values()];
   }
 
+  /** A single instance's own cached collision box, or `null` if it has
+   *  none (entirely above head height — see `_updateFootprint()`'s own
+   *  comment — or simply not currently live). "Object dimensions" reuses
+   *  this real, already-computed box rather than a second, parallel
+   *  measurement — see `BuildModeSystem._measureSelection()`. */
+  getFootprint(instanceId) {
+    return this.footprints.get(instanceId) ?? null;
+  }
+
   _updateFootprint(instanceId, object3D) {
     object3D.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(object3D);

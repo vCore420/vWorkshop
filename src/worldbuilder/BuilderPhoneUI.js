@@ -41,6 +41,32 @@ export class BuilderPhoneUI {
     this.screen = rootEl;
   }
 
+  /** "Undo, redo, history inspection." Shown at the top of every screen
+   *  (Library, Ghost excluded — a ghost's own Cancel already covers "I
+   *  changed my mind about this one placement," and undoing something
+   *  from *before* it started would be a confusing thing to allow mid-
+   *  placement) rather than tucked away on just one — the Builder should
+   *  give players confidence to experiment regardless of what they
+   *  happen to be looking at when they want to undo something. */
+  _buildHistoryBar() {
+    const bar = document.createElement("div");
+    bar.className = "builder-phone-history-bar";
+    const undoBtn = document.createElement("button");
+    undoBtn.type = "button";
+    undoBtn.className = "builder-phone-small-button";
+    undoBtn.textContent = "\u21B6 Undo";
+    undoBtn.disabled = !this.callbacks.canUndo();
+    undoBtn.addEventListener("click", () => this.callbacks.onUndo());
+    const redoBtn = document.createElement("button");
+    redoBtn.type = "button";
+    redoBtn.className = "builder-phone-small-button";
+    redoBtn.textContent = "\u21B7 Redo";
+    redoBtn.disabled = !this.callbacks.canRedo();
+    redoBtn.addEventListener("click", () => this.callbacks.onRedo());
+    bar.append(undoBtn, redoBtn);
+    return bar;
+  }
+
   // -----------------------------------------------------------------
   // Screen: Library
   // -----------------------------------------------------------------
@@ -53,6 +79,26 @@ export class BuilderPhoneUI {
   showLibraryScreen() {
     this._currentScreen = "library";
     this.screen.innerHTML = "";
+    this.screen.appendChild(this._buildHistoryBar());
+
+    // "Select all. Invert selection." Available from the Library screen
+    // specifically, since that's what's showing whenever nothing (or
+    // exactly one thing) is currently selected — the natural place to
+    // reach for "actually, everything" or "everything except this."
+    const selectionRow = document.createElement("div");
+    selectionRow.className = "builder-phone-history-bar";
+    const selectAllBtn = document.createElement("button");
+    selectAllBtn.type = "button";
+    selectAllBtn.className = "builder-phone-small-button";
+    selectAllBtn.textContent = "Select All";
+    selectAllBtn.addEventListener("click", () => this.callbacks.onSelectAll());
+    const invertBtn = document.createElement("button");
+    invertBtn.type = "button";
+    invertBtn.className = "builder-phone-small-button";
+    invertBtn.textContent = "Invert Selection";
+    invertBtn.addEventListener("click", () => this.callbacks.onInvertSelection());
+    selectionRow.append(selectAllBtn, invertBtn);
+    this.screen.appendChild(selectionRow);
 
     const tabs = document.createElement("div");
     tabs.className = "builder-phone-tabs";
@@ -146,7 +192,7 @@ export class BuilderPhoneUI {
   // Screen: Ghost (placing or moving)
   // -----------------------------------------------------------------
 
-  showGhostScreen(definition, confirmLabel) {
+  showGhostScreen(definition, confirmLabel, { allowRotate = true } = {}) {
     this._currentScreen = "ghost";
     this.screen.innerHTML = "";
 
@@ -162,7 +208,9 @@ export class BuilderPhoneUI {
     // action in the hint text instead — the distinction between placing
     // something new and moving something that already exists is still
     // worth saying, just not as a button anymore.
-    hint.textContent = `Move your pointer (or drag, on touch) to position it, rotate (button, or scroll the mouse wheel) if you need to, then left-click in the world to ${confirmLabel.toLowerCase()}.`;
+    hint.textContent = allowRotate
+      ? `Move your pointer (or drag, on touch) to position it, rotate (button, or scroll the mouse wheel) if you need to, then left-click in the world to ${confirmLabel.toLowerCase()}.`
+      : `Move your pointer (or drag, on touch) to position the whole selection, then left-click in the world to ${confirmLabel.toLowerCase()}. Moving several objects together is translation-only \u2014 rotate them individually instead.`;
     this.screen.appendChild(hint);
 
     const snapRow = document.createElement("div");
@@ -173,24 +221,29 @@ export class BuilderPhoneUI {
     gridCheckbox.checked = this.callbacks.getSnapToGrid();
     gridCheckbox.addEventListener("change", () => this.callbacks.onToggleSnapToGrid());
     gridLabel.append(gridCheckbox, " Snap to grid");
-    const rotationLabel = document.createElement("label");
-    const rotationCheckbox = document.createElement("input");
-    rotationCheckbox.type = "checkbox";
-    rotationCheckbox.checked = this.callbacks.getSnapRotation();
-    rotationCheckbox.addEventListener("change", () => this.callbacks.onToggleSnapRotation());
-    rotationLabel.append(rotationCheckbox, " Snap rotation");
-    snapRow.append(gridLabel, rotationLabel);
+    snapRow.appendChild(gridLabel);
+    if (allowRotate) {
+      const rotationLabel = document.createElement("label");
+      const rotationCheckbox = document.createElement("input");
+      rotationCheckbox.type = "checkbox";
+      rotationCheckbox.checked = this.callbacks.getSnapRotation();
+      rotationCheckbox.addEventListener("change", () => this.callbacks.onToggleSnapRotation());
+      rotationLabel.append(rotationCheckbox, " Snap rotation");
+      snapRow.appendChild(rotationLabel);
+    }
     this.screen.appendChild(snapRow);
 
     const actions = document.createElement("div");
     actions.className = "builder-phone-ghost-actions";
 
-    const rotateBtn = document.createElement("button");
-    rotateBtn.type = "button";
-    rotateBtn.className = "builder-phone-button";
-    rotateBtn.textContent = "\u21BB Rotate";
-    rotateBtn.addEventListener("click", () => this.callbacks.onRotateGhost());
-    actions.appendChild(rotateBtn);
+    if (allowRotate) {
+      const rotateBtn = document.createElement("button");
+      rotateBtn.type = "button";
+      rotateBtn.className = "builder-phone-button";
+      rotateBtn.textContent = "\u21BB Rotate";
+      rotateBtn.addEventListener("click", () => this.callbacks.onRotateGhost());
+      actions.appendChild(rotateBtn);
+    }
 
     const cancelBtn = document.createElement("button");
     cancelBtn.type = "button";
@@ -209,6 +262,7 @@ export class BuilderPhoneUI {
   showSelectionScreen(selection) {
     this._currentScreen = "selection";
     this.screen.innerHTML = "";
+    this.screen.appendChild(this._buildHistoryBar());
 
     const backRow = document.createElement("button");
     backRow.type = "button";
@@ -220,6 +274,21 @@ export class BuilderPhoneUI {
     const title = document.createElement("h3");
     title.textContent = selection.definition.name;
     this.screen.appendChild(title);
+
+    if (selection.groupName) {
+      const groupNote = document.createElement("p");
+      groupNote.className = "builder-phone-hint";
+      groupNote.textContent = `Part of "${selection.groupName}" \u2014 selecting this selected the whole group.`;
+      this.screen.appendChild(groupNote);
+    }
+
+    const measurement = this.callbacks.getMeasurement?.();
+    if (measurement?.kind === "dimensions") {
+      const dims = document.createElement("p");
+      dims.className = "builder-phone-hint";
+      dims.textContent = `${measurement.width.toFixed(2)}m wide \u00d7 ${measurement.height.toFixed(2)}m tall \u00d7 ${measurement.depth.toFixed(2)}m deep`;
+      this.screen.appendChild(dims);
+    }
 
     const isWorldObject = selection.kind === "worldObject";
     const position = isWorldObject ? selection.instance.position : selection.position;
@@ -316,6 +385,29 @@ export class BuilderPhoneUI {
       duplicateBtn.addEventListener("click", () => this.callbacks.onDuplicate());
       actions.appendChild(duplicateBtn);
 
+      const copyBtn = document.createElement("button");
+      copyBtn.type = "button";
+      copyBtn.className = "builder-phone-button";
+      copyBtn.textContent = "Copy Transform";
+      copyBtn.title = "Remembers this object's own rotation and scale, to paste onto another";
+      copyBtn.addEventListener("click", () => this.callbacks.onCopyTransform());
+      actions.appendChild(copyBtn);
+
+      const pasteBtn = document.createElement("button");
+      pasteBtn.type = "button";
+      pasteBtn.className = "builder-phone-button";
+      pasteBtn.textContent = "Paste Transform";
+      pasteBtn.addEventListener("click", () => this.callbacks.onPasteTransform());
+      actions.appendChild(pasteBtn);
+
+      const resetBtn = document.createElement("button");
+      resetBtn.type = "button";
+      resetBtn.className = "builder-phone-button";
+      resetBtn.textContent = "Reset Transform";
+      resetBtn.title = "Sets rotation and scale back to their defaults";
+      resetBtn.addEventListener("click", () => this.callbacks.onResetTransform());
+      actions.appendChild(resetBtn);
+
       const blueprintBtn = document.createElement("button");
       blueprintBtn.type = "button";
       blueprintBtn.className = "builder-phone-button";
@@ -339,5 +431,161 @@ export class BuilderPhoneUI {
       actions.appendChild(resetBtn);
     }
     this.screen.appendChild(actions);
+  }
+
+  // -----------------------------------------------------------------
+  // Screen: Multi-Selection — "working with many objects should become
+  // comfortable." Deliberately simpler than the single-selection screen
+  // (no per-object numeric fields — with several objects selected, whose
+  // position would that even show?), just bulk actions over the whole
+  // group at once.
+  // -----------------------------------------------------------------
+
+  showMultiSelectionScreen({ count, allWorldObjects, isSingleGroup, groupName }) {
+    this._currentScreen = "multi";
+    this.screen.innerHTML = "";
+    this.screen.appendChild(this._buildHistoryBar());
+
+    const backRow = document.createElement("button");
+    backRow.type = "button";
+    backRow.className = "builder-phone-back";
+    backRow.textContent = "\u2039 Clear Selection";
+    backRow.addEventListener("click", () => this.callbacks.onClearSelection());
+    this.screen.appendChild(backRow);
+
+    const title = document.createElement("h3");
+    title.textContent = isSingleGroup ? `"${groupName}" (${count} objects)` : `${count} objects selected`;
+    this.screen.appendChild(title);
+
+    const measurement = this.callbacks.getMeasurement?.();
+    if (measurement) {
+      const measureText = document.createElement("p");
+      measureText.className = "builder-phone-hint";
+      measureText.textContent =
+        measurement.kind === "distance"
+          ? `${measurement.distance.toFixed(2)}m apart`
+          : `Overall footprint: ${measurement.width.toFixed(2)}m \u00d7 ${measurement.height.toFixed(2)}m \u00d7 ${measurement.depth.toFixed(2)}m`;
+      this.screen.appendChild(measureText);
+    }
+
+    if (!allWorldObjects) {
+      const note = document.createElement("p");
+      note.className = "builder-phone-hint";
+      note.textContent = "Furniture can only be moved one piece at a time \u2014 grouping, duplicating, and aligning apply to Builder objects only.";
+      this.screen.appendChild(note);
+    }
+
+    const groupHeading = document.createElement("h4");
+    groupHeading.className = "builder-phone-group-heading";
+    groupHeading.textContent = "Group";
+    this.screen.appendChild(groupHeading);
+    const groupRow = document.createElement("div");
+    groupRow.className = "builder-phone-ghost-actions";
+    if (isSingleGroup) {
+      const ungroupBtn = document.createElement("button");
+      ungroupBtn.type = "button";
+      ungroupBtn.className = "builder-phone-button";
+      ungroupBtn.textContent = "Ungroup";
+      ungroupBtn.addEventListener("click", () => this.callbacks.onUngroupSelection());
+      groupRow.appendChild(ungroupBtn);
+    } else {
+      const groupBtn = document.createElement("button");
+      groupBtn.type = "button";
+      groupBtn.className = "builder-phone-button";
+      groupBtn.textContent = "Group";
+      groupBtn.title = "Selecting any one member will always select the whole group";
+      groupBtn.disabled = !allWorldObjects;
+      groupBtn.addEventListener("click", () => this.callbacks.onGroupSelection());
+      groupRow.appendChild(groupBtn);
+    }
+    this.screen.appendChild(groupRow);
+
+    const bulkHeading = document.createElement("h4");
+    bulkHeading.className = "builder-phone-group-heading";
+    bulkHeading.textContent = "All Selected";
+    this.screen.appendChild(bulkHeading);
+    const bulkRow = document.createElement("div");
+    bulkRow.className = "builder-phone-ghost-actions";
+    const dupAllBtn = document.createElement("button");
+    dupAllBtn.type = "button";
+    dupAllBtn.className = "builder-phone-button";
+    dupAllBtn.textContent = "Duplicate All";
+    dupAllBtn.disabled = !allWorldObjects;
+    dupAllBtn.addEventListener("click", () => this.callbacks.onDuplicateMultiple());
+    const pasteBtn = document.createElement("button");
+    pasteBtn.type = "button";
+    pasteBtn.className = "builder-phone-button";
+    pasteBtn.textContent = "Paste Transform";
+    pasteBtn.disabled = !allWorldObjects;
+    pasteBtn.addEventListener("click", () => this.callbacks.onPasteTransform());
+    const resetBtn = document.createElement("button");
+    resetBtn.type = "button";
+    resetBtn.className = "builder-phone-button";
+    resetBtn.textContent = "Reset Transforms";
+    resetBtn.disabled = !allWorldObjects;
+    resetBtn.addEventListener("click", () => this.callbacks.onResetTransform());
+    const blueprintBtn = document.createElement("button");
+    blueprintBtn.type = "button";
+    blueprintBtn.className = "builder-phone-button";
+    blueprintBtn.textContent = "Save as Blueprint";
+    blueprintBtn.title = `Captures exactly these ${count} objects`;
+    blueprintBtn.disabled = !allWorldObjects;
+    blueprintBtn.addEventListener("click", () => this.callbacks.onSaveMultipleAsBlueprint());
+    const deleteAllBtn = document.createElement("button");
+    deleteAllBtn.type = "button";
+    deleteAllBtn.className = "builder-phone-button builder-phone-button-danger";
+    deleteAllBtn.textContent = "Delete All";
+    deleteAllBtn.disabled = !allWorldObjects;
+    deleteAllBtn.addEventListener("click", () => this.callbacks.onDeleteMultiple());
+    bulkRow.append(dupAllBtn, pasteBtn, resetBtn, blueprintBtn, deleteAllBtn);
+    this.screen.appendChild(bulkRow);
+
+    if (allWorldObjects) {
+      const alignHeading = document.createElement("h4");
+      alignHeading.className = "builder-phone-group-heading";
+      alignHeading.textContent = "Align";
+      this.screen.appendChild(alignHeading);
+      this.screen.appendChild(this._buildAlignRow("X (left \u2194 right)", "x"));
+      this.screen.appendChild(this._buildAlignRow("Y (bottom \u2194 top)", "y"));
+      this.screen.appendChild(this._buildAlignRow("Z (near \u2194 far)", "z"));
+
+      if (count >= 3) {
+        const distHeading = document.createElement("h4");
+        distHeading.className = "builder-phone-group-heading";
+        distHeading.textContent = "Distribute Evenly";
+        this.screen.appendChild(distHeading);
+        const distRow = document.createElement("div");
+        distRow.className = "builder-phone-ghost-actions";
+        for (const [axis, label] of [["x", "X"], ["y", "Y"], ["z", "Z"]]) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "builder-phone-small-button";
+          btn.textContent = label;
+          btn.addEventListener("click", () => this.callbacks.onDistribute(axis));
+          distRow.appendChild(btn);
+        }
+        this.screen.appendChild(distRow);
+      }
+    }
+  }
+
+  _buildAlignRow(label, axis) {
+    const row = document.createElement("div");
+    row.className = "builder-phone-row";
+    const labelEl = document.createElement("span");
+    labelEl.textContent = label;
+    row.appendChild(labelEl);
+    const buttons = document.createElement("div");
+    buttons.className = "builder-phone-align-buttons";
+    for (const [mode, glyph] of [["min", "\u21E4"], ["center", "\u2194"], ["max", "\u21E5"]]) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "builder-phone-small-button";
+      btn.textContent = glyph;
+      btn.addEventListener("click", () => this.callbacks.onAlign(axis, mode));
+      buttons.appendChild(btn);
+    }
+    row.appendChild(buttons);
+    return row;
   }
 }
