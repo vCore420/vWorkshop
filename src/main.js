@@ -78,6 +78,7 @@ import { BeingSpawnerSystem } from "./beings/BeingSpawnerSystem.js";
 import { PlayerCharacterSystem } from "./player/PlayerCharacterSystem.js";
 import { PlayerAnimationSystem } from "./player/PlayerAnimationSystem.js";
 import { AnimationLibraryStore } from "./player/AnimationLibraryStore.js";
+import { PoseLibraryStore } from "./player/PoseLibraryStore.js";
 
 import { ProjectsStore } from "./data/ProjectsStore.js";
 import { NotesStore } from "./data/NotesStore.js";
@@ -178,6 +179,25 @@ const hostConnectionManager = new HostConnectionManager();
 // pageRegistry, since PluginRegistry (owned by HostManager) needs the
 // real registry to register future plugin pages against directly.
 const hostManager = new HostManager(pageRegistry, hostConnectionManager);
+// "The Host should understand assets independently of the Builder or
+// Browser" — AssetService itself already exists the moment HostManager's
+// own constructor runs (registered under "assets" immediately, alongside
+// every other zero-dependency service — see HostManager.js's own
+// comment). Keeping a named reference to it here, right next to
+// `hostManager` itself, rather than only ever re-fetching it later via
+// `hostManager.services.get("assets")`, is what keeps this a plain,
+// ordinary top-level `const` any later line in this file can safely read
+// — including `persistenceSystem.registerProvider("assetLibrary", ...)`
+// below, which needs it *before* the asset-kind registrations further
+// down even run. Registering each individual asset *kind*
+// (`assetService.registerKind("objects", {...})` and so on) still
+// happens much later — see the "Workshop Platform" wiring block near the
+// end of this file — since populating them needs stores
+// (`objectLibraryStore`, `animationLibraryStore`, and so on) that don't
+// exist yet at this point in the file. Obtaining the *instance* and
+// *populating* it are two genuinely separate steps, on two genuinely
+// different schedules; this line only ever does the former.
+const assetService = hostManager.services.get("assets");
 // Workshop/Host/Asset page registration itself now happens much later in
 // this file (see the "Browser Ecosystem" block near the end) — moved
 // there once the new pages needed stores (residentProfileStore,
@@ -273,6 +293,11 @@ engine.addSystem(playerCharacterSystem);
 cameraSystem.setCharacterSystem(playerCharacterSystem);
 
 const animationLibraryStore = new AnimationLibraryStore();
+// "Please introduce the foundations for a shared pose library... these
+// should become reusable Workshop Assets." Constructed alongside its own
+// sibling clip library; registered as an Asset kind, and with
+// PersistenceSystem, in this file's own later wiring blocks.
+const poseLibraryStore = new PoseLibraryStore();
 const playerAnimationSystem = new PlayerAnimationSystem({ characterSystem: playerCharacterSystem, libraryStore: animationLibraryStore });
 engine.addSystem(playerAnimationSystem);
 const ladderSystem = engine.addSystem(new LadderSystem());
@@ -313,7 +338,7 @@ const beingInstanceStore = new BeingInstanceStore();
 // since BeingManagerApp.js reads `beingController.engine` the same way
 // MediaApp.js already reads `musicSystem.engine`, rather than needing its
 // own dedicated engine dependency.
-const beingController = engine.addSystem(new BeingController({ beingLibrary, beingInstanceStore, modelLoader }));
+const beingController = engine.addSystem(new BeingController({ beingLibrary, beingInstanceStore, modelLoader, modelLibrary, animationLibraryStore }));
 const beingSpawnerSystem = engine.addSystem(new BeingSpawnerSystem({ beingLibrary, beingInstanceStore }));
 // "Interaction: Talk, Wave, Inspect, None." Deliberately not a chat
 // interface — a Being isn't connected to Ollama the way the Workshop's
@@ -384,6 +409,7 @@ const computerSystem = engine.addSystem(
     outfitStore,
     textureStore,
     animationLibraryStore,
+    poseLibraryStore,
     imageLibraryStore,
     imageAssetStore,
     browserStore,
@@ -491,6 +517,7 @@ persistenceSystem.registerProvider("modelLibrary", modelLibrary);
 persistenceSystem.registerProvider("beingLibrary", beingLibrary);
 persistenceSystem.registerProvider("beingInstances", beingInstanceStore);
 persistenceSystem.registerProvider("animationLibrary", animationLibraryStore);
+persistenceSystem.registerProvider("poseLibrary", poseLibraryStore);
 persistenceSystem.registerProvider("plugins", engine.plugins);
 persistenceSystem.registerProvider("hostPermissions", hostManager.permissions);
 persistenceSystem.registerProvider("hostProjects", hostManager.services.get("projects"));
@@ -546,20 +573,15 @@ hostManager.services.register(
 );
 // "The Host should understand assets independently of the Builder or
 // Browser... assets should be capable of registering themselves with the
-// Host" — one registerKind() call per real backing store, each just
-// handing over the two functions (`all`/`get`) it already has, rather
-// than AssetService importing any of these stores itself. See
-// AssetService.js's own comment.
-const assetService = hostManager.services.get("assets");
-// "The Host should understand assets independently of the Builder or
-// Browser... assets should be capable of registering themselves with the
 // Host" — one registerKind() call per real backing store. Each kind now
 // also hands over `toDescriptor()` (mapping its own real item into the
 // shared Workshop Asset envelope — see WorkshopAssetSchema.js) and,
 // where a real relationship exists, `getDependencies()`. Kinds that
 // don't track anything worth calling a dependency (Animations, Models,
 // Images, Music) simply omit it — AssetService.js's own default is an
-// honestly empty array, not a fabricated one.
+// honestly empty array, not a fabricated one. `assetService` itself was
+// already obtained much earlier in this file, right next to `hostManager`
+// — see that declaration's own comment for why.
 assetService.registerKind("objects", {
   label: "Objects",
   all: () => objectLibraryStore.all(),
@@ -626,6 +648,17 @@ assetService.registerKind("music", {
   all: () => musicLibraryStore.allSongs(),
   get: (id) => musicLibraryStore.getSong(id),
   toDescriptor: (s) => ({ name: s.title, description: [s.artist, s.album].filter(Boolean).join(" \u2014 "), categories: ["Workshop"], tags: [s.artist, s.album].filter(Boolean) }),
+});
+// "Pose Library... these should become reusable Workshop Assets" —
+// Advanced Animation phase. A pose has no dependencies of its own to
+// compute (it's a single frame, not a sequence referencing anything
+// else), so this kind simply omits getDependencies() — AssetService.js's
+// own default (an honestly empty array) is exactly right here.
+assetService.registerKind("poses", {
+  label: "Poses",
+  all: () => poseLibraryStore.all(),
+  get: (id) => poseLibraryStore.get(id),
+  toDescriptor: (p) => ({ name: p.name, categories: p.category ? [p.category] : [], createdAt: p.createdAt, updatedAt: p.updatedAt }),
 });
 
 // --- Browser Ecosystem: Workshop pages, Host pages, Asset pages, Unified
