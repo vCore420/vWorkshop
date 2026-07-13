@@ -1967,6 +1967,66 @@ despite the previous phase's own documentation claiming it was — fixed
 this phase, so the Browser page and the Host Dashboard now share one real
 report rather than two copies quietly able to drift apart.
 
+## Version 2 — Phase 6 — Advanced Animation (v2.0.6)
+
+**Goal:** "Version 1 established the Workshop's animation architecture.
+Version 2 is about completing it... animation becomes a Workshop Asset...
+a shared language spoken by every moving thing inside the Workshop." See
+docs/ANIMATION.md for the full write-up; docs/PLAYER.md and
+docs/BEINGS.md for how the Player and Beings each consume it.
+
+**Frame advancement and pose blending extracted into `AnimationPlayback.js`**
+— pure functions, verified behaviourally identical to
+`PlayerAnimationSystem.js`'s own previous private implementation before
+anything was wired to depend on them, plus a small `ClipPlayer`
+convenience class for any new consumer.
+
+**Skeleton Mapping and Retargeting, both genuinely real.**
+`WorkshopSkeleton.autoMapSkeleton()` is a tested heuristic bone-name
+matcher (Mixamo's own real naming quirks included, found and fixed by
+testing against a mock rig during development) that maps an arbitrary
+imported skeleton onto the shared fourteen-joint Workshop vocabulary;
+`AnimationRetargeting.applyPoseToMappedSkeleton()` applies a clip's own
+pose as a rest-pose delta, not a naive overwrite.
+
+**Beings genuinely play Workshop animations for the first time** —
+`idleAnimationClipId`/`walkAnimationClipId` existed as data references
+since an earlier phase with nothing reading them; `BeingController.js`
+now does, through the retargeting path above, the moment a Being's own
+model maps usably.
+
+**A real, related bug found and fixed**: making retargeted playback work
+correctly for multiple Beings sharing one animated model surfaced a
+previously-documented `ModelLoader.js` limitation (plain `.clone(true)`
+sharing a skinned mesh's own skeleton across clones) that had been purely
+theoretical until this phase actually needed animated models to work.
+Fixed with `SkeletonUtils.clone()`, the standard Three.js answer.
+
+**A real, tested two-bone IK solver** (`TwoBoneIK.js`, law of cosines) —
+verified against actual geometric properties (reachable targets land
+exactly on the target; unreachable ones clamp gracefully with no `NaN`) —
+architecture and real math, not yet wired to any specific gameplay
+system, exactly as the brief's own "architecture established, complete
+implementation deferred" asked for.
+
+**Procedural animation layers, real and working** on the Player rig —
+`playOverlay(clipId, jointGroup)`/`stopOverlay()`, blending a second clip
+over a chosen joint subset on top of whatever's already playing.
+
+**Animation Events** — a frame can carry `{type, data}` events, fired on
+the engine's own `EventBus` as `"animation:event"` by whichever system is
+playing the clip; a real, working mechanism with no listener wired to it
+yet.
+
+**A real, working shared Pose Library** — `PoseLibraryStore.js`,
+registered as a seventh Workshop Asset kind, with a genuine "Save Frame as
+Pose" button now living in the Animation Editor.
+
+**The Animation Editor's own model preview became genuinely retargeted**
+— selecting a Saved Being or Imported Model now actually plays the
+current pose/clip on that model's own real skeleton, not only its static
+proportions.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

@@ -741,5 +741,18 @@ Workshop Assets the same way they register pages — proven with three
 small, real "sticker" assets contributed by the reference example
 plugin. See `docs/ASSETS.md` for the full account.
 
+**Version 2, Phase 6 — Advanced Animation (v2.0.6)** — movement became a
+shared language: frame advancement and pose blending extracted into
+reusable pure functions, a real, tested skeleton-mapping heuristic
+(Mixamo's own naming quirks included) letting imported rigs join the same
+animation vocabulary the Player rig always spoke, and real rest-pose-aware
+retargeting. Beings genuinely play Workshop animations for the first
+time. A real two-bone IK solver, procedural animation layering ("walking
+while waving"), animation events, and a working shared Pose Library all
+arrived alongside a genuinely retargeted Animation Editor preview. A
+related, previously-theoretical `ModelLoader.js` bug (shared skeletons
+across cloned models) was found and fixed once animated models actually
+needed it to be correct. See `docs/ANIMATION.md` for the full account.
+
 </details>
 

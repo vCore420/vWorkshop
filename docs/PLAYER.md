@@ -522,6 +522,17 @@ Animation Editor uses to show them as read-only, offering "Duplicate to
 Edit" instead of letting them be changed directly — the same read-only-
 defaults rule the Construction Library already follows.
 
+**Advanced Animation phase (v2.0.6): the shared language, made literal.**
+Frame advancement and pose blending were extracted out of this class's
+own private methods into `AnimationPlayback.js` — pure functions any
+system can call identically, which is what let Beings start playing
+these same clips for real (see `docs/BEINGS.md`'s own "Animation
+Integration" section) without a second animation engine. Retargeting,
+skeleton mapping, two-bone IK, procedural layering, animation events, and
+the Pose Library all arrived the same phase — see **`docs/ANIMATION.md`**
+for the complete account; this section stays focused on the Player rig's
+own original architecture, unchanged at its core.
+
 ### The Animation Editor: another creative application, not a technical tool
 
 `AnimationEditorApp.js` follows the Builder app's exact split-workspace
@@ -550,6 +561,22 @@ Frame operations (add, duplicate, delete, reorder) and rotation editing
 the radians a pose actually stores) are all immediate, no separate "apply"
 step, matching how every other editing surface in the Workshop already
 works.
+
+**"The player should be capable of previewing animations using different
+compatible models" (Advanced Animation phase).** The Model dropdown
+(Player, any Saved Being, any Imported Model) already existed; what
+changed is what selecting one actually does. Choosing a Being or Model
+now genuinely retargets the current pose/playback onto that model's own
+skeleton — via the exact same `WorkshopSkeleton.autoMapSkeleton()`/
+`AnimationRetargeting.applyPoseToMappedSkeleton()` path
+`BeingController.js` uses for a placed Being — whenever that model's
+skeleton maps confidently enough; an honest note explains why not,
+otherwise. Editing itself still only ever moves the Player rig's own
+named pivots regardless of which model is being previewed, since a clip
+is authored once, against the shared vocabulary, not against any one
+rig's own bone names. "Save Frame as Pose" (see docs/ANIMATION.md's own
+"Pose Library" section) sits right next to the frame list, saving the
+current frame into the new shared Pose Library.
 
 ### Import / Export: animations are portable Workshop assets
 

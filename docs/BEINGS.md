@@ -110,17 +110,23 @@ Preview happens automatically — selecting a model in the dropdown updates
 the live 3D viewport immediately, the same view used for editing
 everything else about the Being.
 
-**A known, honest limitation**: `ModelLoader.load()` clones a parsed
-model's scene graph with a plain `object3D.clone(true)`, not
-`SkeletonUtils.clone()`. This is correct for simple, unanimated models
-(placing the same Being definition twice never means one copy secretly
-moves the other's mesh), but a *skinned, animated* rig cloned this way
-shares its skeleton across every clone — multiple placed instances of the
-same animated model would all animate identically or not at all, rather
-than independently. Worth fixing with `SkeletonUtils` before animated
-GLB models become a common case; not attempted this phase, since "no
-built-in content is required" meant there was nothing animated to test
-against yet.
+**A real bug, found and fixed in the Advanced Animation phase**:
+`ModelLoader.load()` used to clone a parsed model's scene graph with a
+plain `object3D.clone(true)`, not `SkeletonUtils.clone()` — documented
+here, at the time, as "correct for simple, unanimated models... a
+skinned, animated rig cloned this way shares its skeleton across every
+clone... worth fixing before animated Beings actually needed it." That
+moment arrived this phase: `BeingController.js` began genuinely
+retargeting Workshop animations onto a Being's own model (see
+`docs/ANIMATION.md`), which is exactly the scenario that limitation
+would have broken — two Beings sharing one animated model would have
+shown identical, shared, or simply wrong movement, since a `SkinnedMesh`'s
+own `.skeleton.bones` reference list isn't part of the ordinary
+parent/child hierarchy a plain clone correctly duplicates. Fixed at the
+root: `ModelLoader.js` now uses `SkeletonUtils.clone()`, the standard
+Three.js answer to exactly this, which works identically to plain clone
+for a model with no skeleton at all — a safe, unconditional replacement,
+not a special case reserved for "animated models only."
 
 ## Behaviour System
 
@@ -184,6 +190,22 @@ exact same `AnimationLibraryStore` the Player Animation Editor already
 edits, shown as a dropdown of that store's own real clips in the Being
 Creator. There is no second animation system, no Being-specific clip
 format, anywhere in `src/beings/`.
+
+**Advanced Animation phase (v2.0.6): genuinely real playback, not only a
+data reference.** The moment a Being's own model finishes loading,
+`BeingController.js` maps its skeleton onto the shared Workshop
+vocabulary (`WorkshopSkeleton.autoMapSkeleton()` — see
+`docs/ANIMATION.md`'s own "Skeleton Mapping" section), caching the result
+on `ModelLibrary` so the same model's next spawn resolves it immediately
+rather than re-detecting it. If the mapping is usable, a `ClipPlayer`
+(`AnimationPlayback.js`) picks `walkAnimationClipId`/`idleAnimationClipId`
+based on `instance.currentState` (already tracked for movement) and
+applies the result through `AnimationRetargeting.
+applyPoseToMappedSkeleton()` every frame — the identical retargeting path
+the Animation Editor's own model preview now uses. A Being with an
+unmapped or absent model simply doesn't animate, exactly as it always
+has; nothing about this required any Being's own appearance to change.
+See `docs/ANIMATION.md` for the full architecture.
 
 ## Being Library
 
