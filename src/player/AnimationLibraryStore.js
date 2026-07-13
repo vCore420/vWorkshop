@@ -23,6 +23,25 @@ const CURRENT_VERSION = 1;
  * frame/pose shape. This store has no opinion on what a pose *means*;
  * `PlayerAnimationSystem` and the Animation Editor are the only things
  * that interpret one.
+ *
+ * **Animation Events, new in the Advanced Animation phase.** A frame can
+ * optionally carry `events: [{type, data}]` — "footstep sounds,
+ * particles, interaction timing" (the brief's own examples) become
+ * `{type: "footstep", data: {foot: "left"}}` and similar, fired by
+ * whichever system is actually playing the clip (see
+ * `AnimationPlayback.advanceFrame()`'s own `crossedEvents`) on its own
+ * `EventBus` as `"animation:event"`. This store itself doesn't interpret
+ * events any more than it interprets poses — it only ensures every
+ * frame, old or new, always has a real (possibly empty) `events` array
+ * to read, via `load()`'s own normalisation below.
+ *
+ * **Every clip is retargeting-compatible by construction.** Since every
+ * pose is already authored against the shared Workshop skeleton's own
+ * joint names (see `WorkshopSkeleton.js`), there's no separate
+ * "compatible skeletons" field to maintain here — any rig with a usable
+ * skeleton map (`WorkshopSkeleton.isSkeletonMapUsable()`) can play any
+ * clip in this store, the Player rig included, with no per-clip
+ * bookkeeping needed at all.
  */
 export class AnimationLibraryStore {
   constructor() {
@@ -39,7 +58,7 @@ export class AnimationLibraryStore {
       category,
       loop,
       speed,
-      frames: frames.length > 0 ? frames : [{ duration: 1, pose: {} }],
+      frames: frames.length > 0 ? frames.map(normalizeFrame) : [{ duration: 1, pose: {}, events: [] }],
       version: CURRENT_VERSION,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -75,7 +94,7 @@ export class AnimationLibraryStore {
       category: source.category,
       loop: source.loop,
       speed: source.speed,
-      frames: JSON.parse(JSON.stringify(source.frames)),
+      frames: JSON.parse(JSON.stringify(source.frames)).map(normalizeFrame),
     });
   }
 
@@ -141,6 +160,7 @@ export class AnimationLibraryStore {
       frames: [],
       version: CURRENT_VERSION,
       ...c,
+      frames: (c.frames ?? []).map(normalizeFrame),
     }));
     const maxId = this.clips.reduce((m, c) => {
       const match = /^clip-(\d+)$/.exec(c.id ?? "");
@@ -149,4 +169,14 @@ export class AnimationLibraryStore {
     _nextId = maxId + 1;
     this.events.emit("library:changed", this.all());
   }
+}
+
+/** Every frame, old or new, always ends up with a real (possibly empty)
+ *  `events` array — a clip saved before the Advanced Animation phase
+ *  simply had no events at all, which normalises to exactly that, rather
+ *  than `undefined` needing a null-check at every single call site that
+ *  reads a frame's own events (`AnimationPlayback.advanceFrame()`
+ *  included). */
+function normalizeFrame(frame) {
+  return { ...frame, events: Array.isArray(frame.events) ? frame.events : [] };
 }

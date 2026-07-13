@@ -1,8 +1,7 @@
 import { applyPose } from "./PlayerCharacter.js";
-import { lerp, clamp } from "../utils/MathUtils.js";
 import { MOVEMENT_STATE_TO_CLIP_ID } from "./AnimationClips.js";
-
-const MAX_FRAME_ADVANCE_STEPS = 12; // bounds the catch-up loop below if dt is ever unusually large (a backgrounded tab resuming, say), rather than looping unbounded
+import { advanceFrame, computeBlendedPose, ClipPlayer } from "./AnimationPlayback.js";
+import { mergePoses, JOINT_GROUPS } from "./AnimationLayers.js";
 
 /**
  * PlayerAnimationSystem
@@ -29,13 +28,19 @@ const MAX_FRAME_ADVANCE_STEPS = 12; // bounds the catch-up loop below if dt is e
  * actual movement (anything other than idle), so playing an emote while
  * standing still, then walking away, naturally hands control back.
  *
- * **Interpolation** is plain linear interpolation of Euler angles between
- * a clip's two nearest frames, not quaternion slerp — a deliberate
- * simplification (see AnimationClips.js's own note) that holds up fine
- * for the modest rotation ranges ordinary locomotion and gestures
- * actually need, in exchange for authoring and reasoning about poses as
- * plain per-axis numbers rather than a heavier rotation representation.
- * "Favour believable over physically perfect."
+ * **Frame advancement and pose blending** live in `AnimationPlayback.js`
+ * as of the Advanced Animation phase — pure functions this class calls
+ * rather than its own private math, so `BeingController.js` (this
+ * phase's own new consumer) plays a clip identically without
+ * reimplementing it. Interpolation itself is still plain linear
+ * interpolation of Euler angles between a clip's two nearest frames, not
+ * quaternion slerp — a deliberate simplification that holds up fine for
+ * the modest rotation ranges ordinary locomotion and gestures actually
+ * need. "Favour believable over physically perfect."
+ *
+ * **Animation Events, new this phase.** Any event a played clip's own
+ * frames carry is emitted on `engine.events` as `"animation:event"` —
+ * see this file's own `update()`.
  *
  * This system works identically regardless of which body model is
  * active — it only ever asks `PlayerCharacterSystem.getPivots()` for
@@ -60,6 +65,14 @@ export class PlayerAnimationSystem {
     this._frameIndex = 0;
     this._frameT = 0;
     this._overriding = false; // true while an explicitly-requested (emote) clip is in control
+    // "Procedural Animation Layers... walking while waving." A second,
+    // independent ClipPlayer, restricted to a joint subset — see
+    // playOverlay()/stopOverlay() below and AnimationLayers.js's own
+    // comment. `null` whenever nothing is layered, which is most of the
+    // time — this never affects ordinary playback until something
+    // explicitly requests it.
+    this._overlayClipPlayer = null;
+    this._overlayJointNames = null;
   }
 
   init(engine) {
@@ -108,6 +121,29 @@ export class PlayerAnimationSystem {
     return this._overriding;
   }
 
+  /** "Walking while waving, walking while carrying" — plays `clipId`
+   *  layered *on top of* whatever's already playing (movement state or
+   *  an override), restricted to `jointGroupName`'s own joints
+   *  (`AnimationLayers.JOINT_GROUPS` — `"upperBody"` by default, since
+   *  that's the brief's own most common example). The base layer
+   *  (movement/override) keeps running completely unaffected — this
+   *  never replaces it, only overrides a subset of its joints each
+   *  frame. Calling this again with a different clip simply switches
+   *  which one is layered; `stopOverlay()` removes it entirely, letting
+   *  the base layer's own pose show through on every joint again. */
+  playOverlay(clipId, jointGroupName = "upperBody") {
+    const clip = this.libraryStore.getClip(clipId);
+    if (!clip) return;
+    if (!this._overlayClipPlayer) this._overlayClipPlayer = new ClipPlayer();
+    this._overlayClipPlayer.setClip(clip);
+    this._overlayJointNames = JOINT_GROUPS[jointGroupName] ?? JOINT_GROUPS.upperBody;
+  }
+
+  stopOverlay() {
+    this._overlayClipPlayer = null;
+    this._overlayJointNames = null;
+  }
+
   _playClipForState(state) {
     const clipId = MOVEMENT_STATE_TO_CLIP_ID[state] ?? MOVEMENT_STATE_TO_CLIP_ID.idle;
     const clip = this.libraryStore.getClip(clipId);
@@ -122,73 +158,48 @@ export class PlayerAnimationSystem {
     this._frameT = 0;
   }
 
+  /** "Animations should be capable of triggering Workshop behaviours" —
+   *  events collected by `advanceFrame()` (see `AnimationPlayback.js`)
+   *  are emitted here, on the engine's own `EventBus`, as
+   *  `"animation:event"` with `{source: "player", clipId, type, data}` —
+   *  the one place any system (a footstep-sound listener, a future
+   *  particle system) can react to *any* clip's own events without
+   *  needing to know which system is currently playing it. The overlay
+   *  layer, if one is active, is advanced and blended in afterward (see
+   *  `playOverlay()`'s own comment) — its own events are emitted
+   *  identically, tagged `"player-overlay"` rather than `"player"` so a
+   *  listener can tell which layer an event came from if it cares. */
   update(dt) {
     this._advance(dt);
     const pivots = this.characterSystem?.getPivots?.();
     if (!pivots || !this._activeClip) return;
-    applyPose(pivots, this._computePose());
+    let pose = computeBlendedPose(this._activeClip, this._frameIndex, this._frameT);
+    if (this._overlayClipPlayer) {
+      const { pose: overlayPose, events } = this._overlayClipPlayer.advance(dt);
+      for (const event of events) this.engine?.events.emit("animation:event", { source: "player-overlay", clipId: this._overlayClipPlayer.clip?.id, ...event });
+      pose = mergePoses(pose, overlayPose, this._overlayJointNames);
+    }
+    applyPose(pivots, pose);
   }
 
   _advance(dt) {
     const clip = this._activeClip;
-    if (!clip || clip.frames.length === 0) return;
-    let remaining = dt * (clip.speed || 1);
-    let steps = 0;
+    if (!clip) return;
+    const result = advanceFrame(clip, { frameIndex: this._frameIndex, frameT: this._frameT }, dt);
+    this._frameIndex = result.frameIndex;
+    this._frameT = result.frameT;
+    for (const event of result.crossedEvents) this.engine?.events.emit("animation:event", { source: "player", clipId: clip.id, ...event });
 
-    while (steps < MAX_FRAME_ADVANCE_STEPS) {
-      const frame = clip.frames[this._frameIndex];
-      const frameDuration = Math.max(frame.duration, 0.001); // never divide by/loop on a zero-duration frame
-      const budget = frameDuration - this._frameT;
-      if (remaining < budget) {
-        this._frameT += remaining;
-        return;
-      }
-      remaining -= budget;
-      const atLastFrame = this._frameIndex >= clip.frames.length - 1;
-      if (atLastFrame) {
-        if (clip.loop) {
-          this._frameIndex = 0;
-          this._frameT = 0;
-        } else {
-          // A non-looping clip (Jump, Land, or a one-shot emote) has
-          // finished — "the animation should play once before returning
-          // naturally to the appropriate idle state." Hold its final
-          // pose for this instant, then hand control straight back to
-          // whatever movement currently calls for.
-          this._frameT = frameDuration;
-          if (this._overriding) this._overriding = false;
-          this._playClipForState(this._movementState);
-          return;
-        }
-      } else {
-        this._frameIndex++;
-        this._frameT = 0;
-      }
-      steps++;
+    if (result.finished) {
+      // A non-looping clip (Jump, Land, or a one-shot emote) has
+      // finished — "the animation should play once before returning
+      // naturally to the appropriate idle state." Hand control straight
+      // back to whatever movement currently calls for; its own final
+      // pose stays held for this one instant regardless (see
+      // `computeBlendedPose()`'s own comment), same as before this
+      // refactor.
+      if (this._overriding) this._overriding = false;
+      this._playClipForState(this._movementState);
     }
-  }
-
-  /** Linearly interpolates between the current frame's pose and the
-   *  next's, based on how far through the current frame playback is. A
-   *  pivot neither frame mentions is simply omitted — `applyPose()`
-   *  itself resets anything omitted to rest rotation, so there's no need
-   *  to compute a redundant zero here. */
-  _computePose() {
-    const clip = this._activeClip;
-    const frame = clip.frames[this._frameIndex];
-    if (!clip.loop && this._frameIndex === clip.frames.length - 1) return frame.pose; // final frame of a one-shot clip — hold it, nothing to blend toward
-
-    const nextIndex = (this._frameIndex + 1) % clip.frames.length;
-    const nextFrame = clip.frames[nextIndex];
-    const t = clamp(this._frameT / Math.max(frame.duration, 0.001), 0, 1);
-
-    const blended = {};
-    const names = new Set([...Object.keys(frame.pose), ...Object.keys(nextFrame.pose)]);
-    for (const name of names) {
-      const a = frame.pose[name] ?? [0, 0, 0];
-      const b = nextFrame.pose[name] ?? [0, 0, 0];
-      blended[name] = [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
-    }
-    return blended;
   }
 }
