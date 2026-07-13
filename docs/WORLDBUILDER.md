@@ -38,6 +38,9 @@ src/worldbuilder/
   BuilderPhoneUI.js             the Builder Phone — see "The Builder Phone" below
   GhostPreview.js               the transparent-preview mechanic, shared identically by
                                 new placement and by moving something that already exists
+  EditHistory.js                 a small, generic undo/redo command stack — see "Editing History"
+  AlignmentTools.js              pure alignment/distribution math over plain position arrays —
+                                see "Alignment, Distribution & Measurement"
   ConstructionLibrary.js        the permanent Construction Library pieces — see below
   behaviours/
     registry.js                 type -> { propsSchema, apply(), dispose() }
@@ -388,10 +391,156 @@ even that can be undone ("Reset Position", shown only once an override
 actually exists).
 
 `BuildModeSystem._ghost.kind` (`"new"` / `"moveWorldObject"` /
-`"moveFurniture"`) is the *only* place this distinction is ever visible.
-Raycasting, rotating, the transparent material treatment, and the Phone's
-own Rotate/Confirm/Cancel buttons are all completely unaware which kind
-they're looking at.
+`"moveFurniture"` / `"moveMultiple"` — the last one new in the Builder
+Evolution phase, see "Multi-Selection & Grouping" below) is the *only*
+place this distinction is ever visible. Raycasting, rotating, the
+transparent material treatment, and the Phone's own Rotate/Confirm/Cancel
+buttons are all completely unaware which kind they're looking at (except
+Rotate itself, which a `moveMultiple` ghost simply doesn't offer — see
+that section's own account of why).
+
+## Multi-Selection & Grouping
+
+"Expand object selection... shift-select, drag selection, select all,
+invert selection, box selection where appropriate... working with many
+objects should become comfortable." Real multi-selection, layered
+entirely on top of the single-selection mechanics above without changing
+them: `this.selection` is still the ordinary "primary" item every
+existing method already assumed (`_applyDirectTransformEdit`,
+`_duplicateSelected`, and so on all still only ever look at it);
+`this.additionalSelection` is the one new field, holding whatever else is
+also selected. `getSelectedItems()` combines both — the one place any
+bulk action reads from.
+
+**Three ways to build a multi-selection**, all converging on the same
+`_setSelectionItems()`:
+
+- **Shift-click** an object to add it (or, if it's already selected,
+  remove it) without disturbing the rest of the selection.
+- **Drag-select** — pointerdown on empty space starts *tracking* a
+  potential drag rather than deciding anything immediately; only once the
+  pointer travels more than a few pixels does it become a real
+  screen-space rectangle (`#build-select-root` in `index.html`, styled by
+  `.build-select-rect`), and releasing selects every World Object whose
+  own live position projects inside it (`THREE.Vector3.project()`, the
+  ordinary way anything goes from 3D to 2D). Releasing without having
+  dragged far enough is just an ordinary click — indistinguishable in
+  feel from how selection always worked, decided a few pixels later than
+  before, not a new gesture to learn. Furniture is deliberately excluded
+  from box-select (still selectable by an ordinary click) — a rectangle
+  drag is about laying out *Builder* objects, not accidentally sweeping
+  up the Workshop's own permanent furniture.
+- **Select All / Invert Selection** — two buttons on the Library screen,
+  for "everything" or "everything except what I've already got."
+
+**Grouping is a shared value, not a separate registry.** "Introduce
+object grouping... groups should simplify editing rather than complicate
+it." A group is nothing more than a `groupId`/`groupName` pair stored
+redundantly on every member's own `WorldObjectsStore` record — no
+separate group table to keep in sync, no orphaned-group cleanup to worry
+about. Selecting *any* member of a group automatically selects the whole
+group (`_expandGroup()`), which is what makes "selecting groups" feel
+automatic rather than needing its own gesture — the identical click a
+player would already make to select one piece of it. Ungrouping clears
+both fields on every member; ids are generated the same
+timestamp-plus-random scheme `BlueprintStore.create()` already uses, so
+there's no persisted counter that could ever fall out of sync across a
+reload.
+
+**Moving several objects (a multi-selection, or an auto-expanded group)
+together is real, and deliberately translation-only.** "Groups should
+simplify editing rather than complicate it" only holds if a group can
+actually be *moved* as one unit — the `"moveMultiple"` ghost kind exists
+specifically for this. Every member keeps its own live `object3D` as a
+direct child of the scene the entire time; only its position is nudged by
+the same delta every other member gets, computed from how far the first
+selected item's own original position is from wherever the pointer now
+raycasts to. This is deliberately simpler (and safer) than temporarily
+reparenting real, live entities into a throwaway `THREE.Group` and back
+out again — visually identical, with none of the risk of a scene-graph
+reparenting mistake affecting a real, already-placed object. Rotation is
+intentionally not offered for a multi-move (the Rotate button doesn't
+even appear) — real rotation around a shared pivot for an arbitrary
+cluster is a genuinely harder problem than this phase's own time
+stretched to; see "Known simplifications" below.
+
+## Editing History
+
+"Continue improving editing history. Support undo, redo, history
+inspection... the Builder should give players confidence to experiment."
+`EditHistory.js` is a small, generic, bounded (100 entries) command
+stack — every mutating action pushes one `{label, undo, redo}` entry
+describing how to reverse and reapply *itself*; the stack never inspects
+what actually changed. Placing something new, moving something (single
+object, a whole group, or furniture), duplicating, deleting, grouping,
+ungrouping, aligning, distributing, and copy/paste/reset transform all
+get their own entry. Ctrl+Z (Cmd+Z) undoes, Ctrl+Y or Ctrl+Shift+Z
+redoes — the ordinary, universally-expected shortcuts, available
+anywhere Build Mode is open (not only while something happens to be
+selected), plus dedicated buttons shown at the top of every screen except
+the Ghost screen itself (undoing *through* an in-progress placement would
+be confusingly ambiguous about what it's even undoing — Cancel is the
+right tool for that one).
+
+**Deliberately not tracked**: continuous slider drags (position/rotation/
+scale fields on the single-selection screen) and colour picker drags —
+these fire on every single `input` event, and pushing one history entry
+per pixel of a drag would make undo nearly useless. The coarse,
+deliberate actions around them (Move, Reset Transform, Paste Transform)
+are what get tracked instead.
+
+## Alignment, Distribution & Measurement
+
+"Introduce alignment helpers... align left, centre, right, top, bottom,
+even spacing... introduce useful building measurements... players should
+feel confident building accurately." `AlignmentTools.js` — pure functions
+over plain position arrays, with no knowledge of `WorldObjectsStore` or
+Three.js at all, so they're testable and reusable on their own:
+
+- **`alignPositions(positions, axis, mode)`** — every position ends up
+  with the identical value on the chosen axis (`"x"`/`"y"`/`"z"`), set to
+  the group's own minimum, maximum, or midpoint (`mode`). Expressed as
+  Workshop world axes rather than screen-relative terms, since this means
+  "line these objects up in 3D space," not "as seen from the current
+  camera angle."
+- **`distributeEvenly(positions, axis)`** — spreads three or more
+  positions evenly between the group's own current extremes on that
+  axis; the two extremes never move, only whatever's between them
+  redistributes to equal gaps.
+
+**Measurement reuses real, already-computed data rather than a second,
+parallel calculation** — `WorldObjectsSystem.getFootprint(id)` already
+computes a genuine `THREE.Box3` per instance for collision purposes (see
+"Collision integration" below); `_measureSelection()` reads the exact
+same boxes. One object selected shows its own real width/height/depth;
+exactly two shows the straight-line distance between them; three or more
+shows the whole selection's own overall bounding footprint.
+
+## Transform Tools
+
+"Continue refining transform controls... reset transforms, copy
+transforms, paste transforms." Copy Transform remembers a World Object's
+own rotation and scale (never position — copying a *position* onto
+something else would stack them on top of each other, which "paste
+transform" was never meant to do); Paste applies it to every currently
+selected object. Reset sets rotation and scale back to their defaults.
+Both work identically for a single selection or a whole multi-selection
+at once.
+
+## Blueprint Workflow
+
+"Continue refining blueprints... create, edit, duplicate, update,
+replace, reuse, share." Two ways to capture one, now: the original
+radius-based `captureBlueprintNearSelection()` (select one piece of an
+already-built cluster, everything within a chosen distance comes with
+it — still the fastest option for a single click) and, with a real
+multi-selection now possible, an *exact* capture
+(`_captureSelectionAsBlueprintObjects()`) — no guessing, precisely the
+objects actually selected. **"Update"** is genuinely new:
+`BlueprintStore.update()` re-captures a blueprint's own object list in
+place, same id and all — the real "bring this shared Blueprint up to
+date with how I've since rearranged its pieces" workflow, rather than
+only ever being able to save a brand new one under a new name.
 
 ## Collision integration
 
@@ -510,6 +659,23 @@ than special-casing one construction piece.
   specifically so a second room is a matter of spawning instances with a
   different id and filtering by it — not a schema change — but there is
   only one room ("workshop") to be scoped to today.
+- **Moving a multi-selection or a group is translation-only** — no
+  rotation, no snap-to-surface pivoting. Real rotation around a shared
+  pivot for an arbitrary cluster of objects (each potentially a different
+  distance and angle from that pivot) is a genuinely harder problem than
+  this phase's own time stretched to; see "Multi-Selection & Grouping"
+  above.
+- **Grid snapping only, still no true vertex/edge/surface snapping** — the
+  brief's own fuller wish list (surface snapping beyond "rest on top of
+  what's already there," edge snapping, vertex snapping) stays an honest
+  future extension; see below.
+- **No manual grid-cell size control, no scale snapping** — the existing
+  `GRID_SNAP_SIZE`/`ROTATION_SNAP_STEP` constants stay fixed, not
+  player-adjustable, and there's no equivalent "snap scale to nice
+  increments" option yet.
+- **Box-select only recognises Builder objects, never furniture** — see
+  "Multi-Selection & Grouping" above for why that's a deliberate choice,
+  not an oversight.
 
 ## Future extension points
 
@@ -523,14 +689,22 @@ than special-casing one construction piece.
   Builder app's own toolbar — would need its own small offscreen
   render pass per definition, deliberately not attempted here to keep
   this pass's own scope to the workspace and shape set specifically.
-- **Multi-select and group operations** — `BuildModeSystem.selection` is
-  currently a single `{kind, id}`; a future version could hold an array,
-  with `_confirmGhost()`/`_cancelGhost()` applying to every selected
-  ghost at once rather than one at a time.
-- **Snapping** — to a grid, or to another object's edges — would slot
-  into `_raycastGhostSurfaces()` as an additional step after the raycast
-  hit point is found, before it's applied to the ghost. Nothing about the
-  ghost mechanic itself assumes an unsnapped, freely-continuous position.
+- **Rotating a multi-selection or a group around a shared pivot** — the
+  real next step for "Transform Improvements... local and world space"
+  once moving several objects together already works; see "Multi-
+  Selection & Grouping" above for exactly where that boundary sits today.
+- **Richer snapping** — true surface/edge/vertex snapping (beyond "the
+  ghost can rest on top of another object"), and scale snapping
+  alongside the existing grid/rotation snap — would slot into
+  `_raycastGhostSurfaces()`/`_handlePointerMove()` as additional steps,
+  the same way grid snapping already does. Nothing about the ghost
+  mechanic itself assumes an unsnapped, freely-continuous position.
+- **The Builder's own Recent/Favourite assets** — `AssetService.js`
+  already computes both (see docs/ASSETS.md) for the general Shared
+  Asset Library; wiring the Builder Phone's own library screen to show a
+  "Recent" tab (touching an asset each time it's armed) and a favourite
+  toggle is real, valuable, and deliberately not attempted this phase to
+  keep its own scope to editing workflow specifically.
 - **Richer Display Surface content** — video, a live canvas, a cycling
   slideshow — see the Behaviours section above for why none of these
   need an architectural change, only a different source feeding
@@ -547,11 +721,6 @@ than special-casing one construction piece.
   ._computeFootprintBox`'s own comment). Fine for "don't walk through
   it"; a tighter box would only matter for something that needs precise
   edge-to-edge collision.
-- **Undo/redo** — every mutation already goes through a small, consistent
-  set of store methods (`create`/`update`/`remove` on `WorldObjectsStore`,
-  `setOverride`/`clearOverride` on `FurnitureSystem`); a command-history
-  layer could sit in front of those without BuildModeSystem itself
-  changing.
 - **The furniture overrides map generalising further** — right now it's
   position/rotation only. Extending it to (say) a colour override for
   furniture, the way Builder objects already have one, would follow the

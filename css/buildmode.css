@@ -224,6 +224,26 @@
   cursor: pointer;
 }
 .builder-phone-small-button:hover { border-color: var(--wood-mid); color: var(--ink); }
+.builder-phone-small-button:disabled,
+.builder-phone-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* ---------- Builder Evolution: history bar, multi-select alignment ---------- */
+.builder-phone-history-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.builder-phone-history-bar .builder-phone-small-button { flex: 1; text-align: center; }
+.builder-phone-align-buttons {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+.builder-phone-align-buttons button { flex: 1; }
 
 /* ---------- Shared action buttons (ghost + selection screens) ---------- */
 .builder-phone-ghost-actions {

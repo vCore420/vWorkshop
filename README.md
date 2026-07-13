@@ -769,5 +769,18 @@ breaking every default animation clip's own Asset System integration —
 was found and fixed along the way. See `docs/BEINGS.md` for the full
 account.
 
+**Version 2, Phase 8 — Builder Evolution (v2.0.8)** — the Builder became
+a genuinely professional creative tool: real multi-selection (shift-
+click, and a true screen-space drag-select rectangle), object grouping
+(select, and now move, an entire group as one unit), a generic undo/redo
+system covering every mutating Build Mode action, alignment and
+distribution tools, real measurement (dimensions and inter-object
+distance, reusing already-computed collision data), and transform copy/
+paste/reset. Blueprint capture now works from an exact multi-selection
+rather than only a radius guess, and blueprints can be updated in place
+for the first time. All of it layered on top of the existing single-
+selection mechanics without changing them. See `docs/WORLDBUILDER.md`
+for the full account.
+
 </details>
 

@@ -2086,6 +2086,52 @@ preview, no drag-and-drop re-parenting, and no hybrid editing of an
 imported model's own hierarchy; all documented plainly as real future
 extension points rather than silently absent.
 
+## Version 2 — Phase 8 — Builder Evolution (v2.0.8)
+
+**Goal:** "This phase is NOT about introducing entirely new building
+systems. It is about refining the Builder into a professional creative
+tool... small workflow improvements are often more valuable than large
+new features... prioritise completing and refining existing workflows
+over introducing unnecessary new systems." See docs/WORLDBUILDER.md for
+the full write-up.
+
+**Real multi-selection, layered on top of single-selection without
+changing it** — `BuildModeSystem.selection` stays the ordinary primary
+item every existing method already assumed; `additionalSelection` is the
+one new field. Shift-click, and a genuine screen-space drag-select
+rectangle (`THREE.Vector3.project()`, Builder objects only — furniture
+stays click-only on purpose), both converge on the same mechanism, plus
+Select All / Invert Selection.
+
+**Real object grouping** — a `groupId`/`groupName` pair shared across
+members, no separate registry; selecting any one member selects the
+whole group automatically. A whole multi-selection or group can be moved
+together for the first time (translation-only, by design — see "Known
+simplifications").
+
+**A real, generic undo/redo system** — `EditHistory.js`, a bounded
+command stack; every mutating Build Mode action (place, move — single,
+multiple, or furniture — duplicate, delete, group, ungroup, align,
+distribute, copy/paste/reset transform) gets its own entry. Ctrl+Z/
+Ctrl+Y work anywhere Build Mode is open.
+
+**Alignment, distribution, and measurement** — `AlignmentTools.js`, pure
+functions over plain position arrays; real bounding-box dimensions and
+inter-object distance reusing `WorldObjectsSystem`'s own already-computed
+collision boxes rather than a second calculation.
+
+**Blueprint Workflow, genuinely improved** — exact multi-select capture
+(no more radius-guessing, though that option stays available for a
+single click) and a real "Update" — re-capturing a blueprint's own object
+list in place, same id, the first time an already-shared Blueprint can be
+brought up to date rather than only ever saved anew.
+
+**Two stale "future extension point" bullets from earlier phases were
+found and corrected** while writing this phase's own documentation —
+"multi-select" and "undo/redo" had both been listed as *not yet built* in
+docs/WORLDBUILDER.md even after this phase built them; fixed alongside
+everything else.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space
