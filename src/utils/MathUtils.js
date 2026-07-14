@@ -18,6 +18,30 @@ export function lerpColorHex(hexA, hexB, t) {
   return `#${((1 << 24) + (r << 16) + (g << 8) + bl).toString(16).slice(1)}`;
 }
 
+/**
+ * Samples a piecewise-linear colour gradient at `key` — `stops` is a
+ * `[key, hexColor]` array sorted ascending by key (not enforced, just
+ * expected; every call site here builds its own literal array in order).
+ * Below the first stop or above the last, the nearest end colour holds
+ * flat rather than extrapolating. Generalises `lerpColorHex`'s single
+ * A→B blend to any number of bands — the Atmosphere phase's richer sky
+ * (night → blue hour → dawn → golden hour → day, and back) is one
+ * ordered list of (altitude, colour) pairs sampled through this, rather
+ * than a chain of manually nested if/else branches.
+ */
+export function sampleColorGradient(stops, key) {
+  if (key <= stops[0][0]) return stops[0][1];
+  for (let i = 1; i < stops.length; i++) {
+    const [k, color] = stops[i];
+    if (key <= k) {
+      const [prevKey, prevColor] = stops[i - 1];
+      const t = k === prevKey ? 1 : (key - prevKey) / (k - prevKey);
+      return lerpColorHex(prevColor, color, clamp(t, 0, 1));
+    }
+  }
+  return stops[stops.length - 1][1];
+}
+
 export const TAU = Math.PI * 2;
 
 /**

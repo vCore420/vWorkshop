@@ -1,4 +1,5 @@
 import { isRainingNow, isGoldenHourNow, currentTimeBucket, currentWeatherId } from "../resident/ResidentWorldSignals.js";
+import { getObserverLocation, dayOfYear, getSeason } from "../utils/Astronomy.js";
 
 /**
  * WorldAwareness
@@ -65,11 +66,17 @@ export class WorldAwareness {
    *  answered as one plain object. Cheap enough to call often (every
    *  field is either already-computed state or a short array filter, no
    *  new work invented here), but still meant for "ask when you actually
-   *  need to know," not "poll every frame." */
+   *  need to know," not "poll every frame." `season` is the one
+   *  exception to "every field already lived somewhere real" — Season
+   *  Foundations (Atmosphere phase) is architecture, not a store, so
+   *  it's computed fresh from the real calendar date each call via the
+   *  same pure `Astronomy.getSeason()` a future seasonal system would
+   *  also call directly. */
   snapshot() {
     const hour = this._timeOfDaySystem?.currentTime ?? 12;
     const timeBucket = currentTimeBucket(this._timeOfDaySystem);
     const weatherId = currentWeatherId(this._environmentSystem);
+    const location = getObserverLocation();
 
     return {
       time: {
@@ -82,6 +89,7 @@ export class WorldAwareness {
         id: weatherId,
         isRaining: isRainingNow(this._environmentSystem),
       },
+      season: getSeason(dayOfYear(new Date()), location.latitude),
       music: this._musicSystem ? { isPlaying: !!this._musicSystem.isPlaying, songTitle: this._musicSystem.currentSong?.title ?? null } : null,
       player: this._cameraSystem ? { position: this._cameraSystem.position } : null,
       room: "workshop", // the one room the Workshop currently has — see docs/WORLD.md's own account of why this stays a plain constant rather than a real lookup until a second room exists

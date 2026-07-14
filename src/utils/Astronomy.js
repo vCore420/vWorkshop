@@ -180,4 +180,35 @@ export function moonriseMoonset(latitude, dayOfYearValue, phaseFraction) {
   return findRiseSet((hour) => solarPosition((hour + offsetHours) % 24, latitude, dayOfYearValue).altitude);
 }
 
+// Approximate day-of-year for the four meteorological season boundaries
+// (Mar/Jun/Sep/Dec) — "meteorological" rather than the exact astronomical
+// equinox/solstice moment (which shifts by a day or two year to year),
+// since nothing here needs more precision than "which of four roughly
+// three-month blocks is it" in the first place.
+const SEASON_BOUNDARIES = [79, 172, 266, 355]; // ~Mar 20, Jun 21, Sep 23, Dec 21
+const NORTHERN_SEASON_NAMES = ["spring", "summer", "autumn", "winter"];
+const SOUTHERN_SEASON_NAMES = ["autumn", "winter", "spring", "summer"]; // same four boundaries, shifted a half-year for the opposite hemisphere
+
+/**
+ * Season Foundations (Atmosphere phase). "Establish clean architectural
+ * foundations... do not fully implement seasonal gameplay." A single
+ * pure function — real day-of-year math, no invented state, nothing to
+ * persist — is deliberately the entire foundation for now: a future
+ * phase giving seasons real teeth (vegetation, resident behaviour,
+ * environmental simulation) only ever needs to call this, the same way
+ * `getObserverLocation()`'s latitude already decides which hemisphere's
+ * naming applies to `solarPosition()` without a second, parallel
+ * concept. Southern-hemisphere latitudes (negative) get the same four
+ * boundaries with the names rotated a half-year, rather than a
+ * different calculation.
+ */
+export function getSeason(dayOfYearValue, latitude = 45) {
+  const names = latitude < 0 ? SOUTHERN_SEASON_NAMES : NORTHERN_SEASON_NAMES;
+  if (dayOfYearValue < SEASON_BOUNDARIES[0]) return names[3];
+  if (dayOfYearValue < SEASON_BOUNDARIES[1]) return names[0];
+  if (dayOfYearValue < SEASON_BOUNDARIES[2]) return names[1];
+  if (dayOfYearValue < SEASON_BOUNDARIES[3]) return names[2];
+  return names[3];
+}
+
 export { dayOfYear };

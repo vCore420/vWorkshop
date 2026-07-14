@@ -10,6 +10,7 @@ import { CONSTRUCTION_PIECES, getConstructionPiece, getConstructionGroup } from 
 import { LightingSystem } from "./systems/LightingSystem.js";
 import { TimeOfDaySystem } from "./systems/TimeOfDaySystem.js";
 import { EnvironmentSystem, WEATHER_STATES } from "./systems/EnvironmentSystem.js";
+import { AtmosphereProfileStore } from "./systems/AtmosphereProfileStore.js";
 import { currentTimeBucket } from "./resident/ResidentWorldSignals.js";
 import { AudioSystem } from "./systems/AudioSystem.js";
 import { CameraSystem } from "./systems/CameraSystem.js";
@@ -261,6 +262,7 @@ const conversationMemory = new ConversationMemory();
 // already-finished project as a fresh milestone on the very next load.
 conversationMemory.watchProjects(projectsStore, () => residentProfileStore.getActive()?.memory?.categories);
 const settingsStore = new SettingsStore();
+const atmosphereProfileStore = new AtmosphereProfileStore();
 const appearanceStore = new PlayerAppearanceStore();
 const outfitStore = new OutfitStore();
 const textureStore = new TextureStore();
@@ -474,6 +476,7 @@ const computerSystem = engine.addSystem(
     worldObjectsStore,
     worldObjectsSystem,
     settingsStore,
+    atmosphereProfileStore,
     appearanceStore,
     outfitStore,
     textureStore,
@@ -572,6 +575,7 @@ persistenceSystem.registerProvider("worldObjects", worldObjectsStore);
 persistenceSystem.registerProvider("musicLibrary", musicLibraryStore);
 persistenceSystem.registerProvider("playlists", playlistStore);
 persistenceSystem.registerProvider("settings", settingsStore);
+persistenceSystem.registerProvider("atmosphereProfiles", atmosphereProfileStore);
 persistenceSystem.registerProvider("playerAppearance", appearanceStore);
 persistenceSystem.registerProvider("outfits", outfitStore);
 persistenceSystem.registerProvider("imageLibrary", imageLibraryStore);
