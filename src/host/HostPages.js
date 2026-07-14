@@ -260,43 +260,102 @@ function modelsPage(modelRegistry) {
   return { title: "Models", html: wrapPage("Models", html) };
 }
 
-/** "The Host should become responsible for managing Workshop plugins."
- *  Reads `PluginService` (registered under `"plugins"` once `main.js`'s
- *  own Workshop Platform wiring constructs it — see `HostManager.js`'s
- *  own comment on why that happens later than most services) rather
- *  than `pluginRegistry.contributors()` directly, so this page shows
- *  *every* currently-loaded plugin — both the general lifecycle contract
- *  (`engine.plugins`) and the Browser-page contract
- *  (`hostManager.pluginRegistry`) — not only the ones that happen to
- *  register a page. */
+/** "The Plugin Manager should become the central place for managing
+ *  Workshop extensions." Reads the same enriched `PluginService
+ *  .listAll()` `host://plugins` always has, now carrying real status
+ *  (`active`/`disabled`/`error`), manifest metadata, and per-plugin
+ *  permissions for anything loaded through `PluginLoader.js`. Enable/
+ *  Disable/Reload and the permission checkboxes are genuinely
+ *  interactive, the identical `postMessage` shape `host://permissions`'
+ *  own checkboxes already established — see that function's own
+ *  comment for why the real call always happens in `BrowserApp.js`,
+ *  never inside this page's own `srcdoc`. A plugin registered the
+ *  older, direct way (no manifest) still shows up, honestly labelled —
+ *  see `stateLabel()`. */
 function pluginsPage(hostManager) {
   const pluginService = hostManager.services.get("plugins");
   const plugins = pluginService?.listAll() ?? [];
   const rows = plugins.length
-    ? plugins
-        .map(
-          (p) => `
-            <div class="workshop-home-tile" style="cursor:default">
-              <span class="workshop-home-tile-title">${escapeHtml(p.name)}</span>
-              <span class="workshop-home-tile-meta">${p.contracts.map(contractLabel).join(" \u00b7 ")}</span>
-              <span class="workshop-home-tile-meta">${p.pages.length ? p.pages.map((page) => `<a href="${escapeHtml(page)}">${escapeHtml(page)}</a>`).join(", ") : "No pages declared"}</span>
-              ${p.assetKinds.length ? `<span class="workshop-home-tile-meta">Asset kinds: ${p.assetKinds.map(escapeHtml).join(", ")}</span>` : ""}
-            </div>
-          `
-        )
-        .join("")
+    ? plugins.map((p) => pluginCard(p)).join("")
     : `<p class="workshop-page-empty">No plugins are currently loaded.</p>`;
   const html = `
     <span class="workshop-page-badge">Workshop Host</span>
     <h1>Plugins</h1>
-    <p class="workshop-page-subtitle">Every plugin currently loaded, from any contract it implements: general engine lifecycle (<code>engine.plugins</code>), Browser pages, or Workshop Assets (both via <code>hostManager.pluginRegistry</code>). See <code>docs/PLUGIN_GUIDE.md</code> and the two working examples below.</p>
-    <div class="workshop-home-grid">${rows}</div>
+    <p class="workshop-page-subtitle">Every plugin currently loaded — the new Plugin SDK (<code>manifest</code> + <code>setup(Workshop)</code>, see <code>docs/PLUGIN_SDK.md</code>) alongside the two original contracts it was built on top of (<code>engine.plugins</code>, and Browser pages/Workshop Assets via <code>hostManager.pluginRegistry</code> — see <code>docs/PLUGIN_GUIDE.md</code>). <a href="plugin://workshop-toolkit">plugin://workshop-toolkit</a> is the current reference example.</p>
+    ${rows}
     <p><a href="host://services">Back to the Host Dashboard</a></p>
+    <script>
+      document.querySelectorAll("[data-plugin-action]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          window.parent.postMessage({ type: "workshop-browser-plugin-action", action: btn.dataset.pluginAction, id: btn.dataset.pluginId }, "*");
+        });
+      });
+      document.querySelectorAll("input[data-plugin-permission]").forEach((checkbox) => {
+        checkbox.addEventListener("change", () => {
+          window.parent.postMessage({ type: "workshop-browser-set-plugin-permission", pluginId: checkbox.dataset.pluginId, capabilityId: checkbox.dataset.pluginPermission, granted: checkbox.checked }, "*");
+        });
+      });
+    </script>
   `;
   return { title: "Plugins", html: wrapPage("Plugins", html) };
 }
 
+function pluginCard(p) {
+  const isSdkPlugin = !!p.manifest; // only a real PluginLoader.js entry has enable/disable/reload and permissions worth showing
+  const permissionRows = (p.permissions ?? [])
+    .map(
+      (perm) => `
+        <div class="workshop-permission-row">
+          <label class="workshop-permission-label">
+            <input type="checkbox" data-plugin-id="${escapeHtml(p.id)}" data-plugin-permission="${escapeHtml(perm.id)}" ${perm.granted ? "checked" : ""}>
+            <span>
+              <strong>${escapeHtml(perm.label)}</strong>
+              <span class="workshop-page-subtitle" style="margin:2px 0 0;">${escapeHtml(perm.description)}</span>
+            </span>
+          </label>
+        </div>
+      `
+    )
+    .join("");
+  const pageLinks = p.pages.length ? p.pages.map((page) => `<a href="${escapeHtml(page)}">${escapeHtml(page)}</a>`).join(", ") : "No pages registered";
+  const assetLine = p.assetKinds.length ? `<span class="workshop-home-tile-meta">Asset kinds: ${p.assetKinds.map(escapeHtml).join(", ")}</span>` : "";
+  const actions = isSdkPlugin
+    ? `
+      <div class="workshop-page-actions" style="flex-direction:row; gap:8px; margin:8px 0;">
+        ${p.state === "disabled"
+          ? `<button class="workshop-favourite-button" data-plugin-action="enable" data-plugin-id="${escapeHtml(p.id)}">Enable</button>`
+          : `<button class="workshop-favourite-button" data-plugin-action="disable" data-plugin-id="${escapeHtml(p.id)}">Disable</button>`}
+        <button class="workshop-favourite-button" data-plugin-action="reload" data-plugin-id="${escapeHtml(p.id)}">Reload</button>
+      </div>
+    `
+    : "";
+  return `
+    <div class="workshop-home-tile" style="cursor:default; margin-bottom:14px;">
+      <span class="workshop-home-tile-title">${escapeHtml(p.name)} ${manifestVersionBadge(p.manifest)}</span>
+      <span class="workshop-home-tile-meta">${stateLabel(p)} \u00b7 ${p.contracts.map(contractLabel).join(" \u00b7 ")}</span>
+      ${p.manifest?.description ? `<span class="workshop-home-tile-meta">${escapeHtml(p.manifest.description)}</span>` : ""}
+      ${p.manifest?.author ? `<span class="workshop-home-tile-meta">by ${escapeHtml(p.manifest.author)}</span>` : ""}
+      <span class="workshop-home-tile-meta">${pageLinks}</span>
+      ${assetLine}
+      ${actions}
+      ${permissionRows}
+    </div>
+  `;
+}
+
+function manifestVersionBadge(manifest) {
+  return manifest?.version ? `<span class="workshop-page-subtitle" style="display:inline;">v${escapeHtml(manifest.version)}</span>` : "";
+}
+
+function stateLabel(p) {
+  if (!p.manifest) return "engine.plugins / pluginRegistry contract (no manifest)";
+  if (p.state === "error") return `\u26a0 Error: ${escapeHtml(p.error ?? "unknown error")}`;
+  if (p.state === "disabled") return "Disabled";
+  return "Active";
+}
+
 function contractLabel(contract) {
+  if (contract === "sdk") return "Plugin SDK";
   if (contract === "pages") return "registers pages";
   if (contract === "assets") return "registers assets";
   return "engine lifecycle";

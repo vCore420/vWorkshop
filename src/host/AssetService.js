@@ -61,6 +61,16 @@ export class AssetService {
     });
   }
 
+  /** The counterpart to registerKind() — "Unloading" a plugin that
+   *  registered a kind (Plugin SDK phase) should mean its assets
+   *  genuinely stop appearing, not linger as dangling entries nothing
+   *  can reach any more. Built-in kinds (Objects, Blueprints...) never
+   *  call this — only a plugin's own unload path does, via
+   *  `WorkshopSDK.js`'s own disposer. */
+  unregisterKind(id) {
+    this._kinds.delete(id);
+  }
+
   kinds() {
     return [...this._kinds.values()].map(({ id, label }) => ({ id, label }));
   }
