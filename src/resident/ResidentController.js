@@ -7,6 +7,7 @@ import { ResidentRenderer } from "./ResidentRenderer.js";
 import { createResidentEntity } from "./ResidentEntity.js";
 import { getPersonalityModifiers } from "./ResidentContext.js";
 import { isRainingNow, isGoldenHourNow, currentTimeBucket, currentWeatherId } from "./ResidentWorldSignals.js";
+import { FURNITURE_LAYOUT } from "../data/layoutDefault.js";
 
 const EXPRESSION_CHECK_INTERVAL = 0.5; // seconds — expression/awake checks don't need to run every single frame
 const FOLLOW_DISTANCE = 1.3; // metres — "Follow Me" stops closing the gap once this near, hovering companionably rather than stepping right up to the player's own eye position
@@ -17,6 +18,7 @@ const PATTERN_SAMPLE_INTERVAL = 25; // seconds — how often player-position/pre
 const MOOD_DRIFT_MIN_SECONDS = 120; // "medium-term emotional state" — mood reconsiders itself every couple of minutes, not every frame
 const MOOD_DRIFT_MAX_SECONDS = 300;
 const MOOD_CANDIDATES = ["content", "curious", "happy"]; // "sleeping"/"thinking" are always situational, never a resting mood; see ResidentBehaviour.computeExpression's own priority order
+const BEING_AWARENESS_RADIUS = 4; // metres — "who they spend time near," not "who is anywhere in the Workshop" — roughly the same generous, comfortable radius PlayerPatternMemory.js's own zones already use
 
 /**
  * ResidentController
@@ -198,8 +200,16 @@ export class ResidentController {
    *  the music cabinet while something's actually playing all combine the
    *  same way, multiplicatively, into one weights object
    *  `ResidentMovement.maybePickNewLocation()` already knew how to
-   *  accept. Still never guaranteed, never scripted — an ordinary
-   *  weighted pick among idle locations that already exist either way. */
+   *  accept. **Living World phase**: watching the player work (a plain
+   *  proximity check, not anything the player did *to* Bubble), an
+   *  active project pulling gently toward the workbench
+   *  (`WorldAwareness.snapshot().activeProjects`), and a Quiet Corner
+   *  pull at night all join the same mechanism, unchanged — "everything
+   *  should quietly observe, remember and respond" is true here by
+   *  simply adding more real signals into a merge function that already
+   *  existed, not a new decision system layered on top of it. Still
+   *  never guaranteed, never scripted — an ordinary weighted pick among
+   *  idle locations that already exist either way. */
   _windowWatchWeights() {
     const weights = {};
     const merge = (extra) => {
@@ -218,7 +228,35 @@ export class ResidentController {
 
     if (this.musicSystem?.isPlaying) merge({ byMusicPlayer: 1.6 });
 
+    // "A resident watching the player work." A plain proximity check
+    // against the same real furniture positions `PlayerPatternMemory.js`'s
+    // own zones already use — the player doesn't need to be doing
+    // anything in particular, just genuinely standing there, the same
+    // "quiet noticing, not a scripted reaction" the whole phase asks for.
+    const playerPos = this._cameraSystem?.position;
+    if (playerPos) {
+      if (this._nearFurniture(playerPos, FURNITURE_LAYOUT.computerDesk.position, 2.4)) merge({ besideComputer: 3 });
+      else if (this._nearFurniture(playerPos, FURNITURE_LAYOUT.workbench.position, 2.4)) merge({ aboveWorkbench: 3 });
+    }
+
+    // "Remaining near ongoing projects." An active project (Workshop's
+    // own Notebook status, not anything Bubble was told directly) pulls
+    // gently toward the workbench, the same way a favourite location
+    // already does — never a guarantee, just one more real signal in the
+    // same weighted pick.
+    if ((this.worldAwareness?.snapshot().activeProjects.length ?? 0) > 0) merge({ aboveWorkbench: 2 });
+
+    // "Becoming quieter at night." Not a movement-speed change (which
+    // risks fighting with the trait/dial multipliers already applied
+    // elsewhere) — a gentle pull toward the Quiet Corner specifically,
+    // the one idle spot already named for exactly this.
+    if (currentTimeBucket(this._timeOfDaySystem) === "night") merge({ besideQuietCorner: 2 });
+
     return Object.keys(weights).length ? weights : null;
+  }
+
+  _nearFurniture(playerPos, [fx, , fz], radius) {
+    return Math.hypot(playerPos.x - fx, playerPos.z - fz) <= radius;
   }
 
   /** "The player often builds near the workbench... usually visits in the
@@ -246,6 +284,17 @@ export class ResidentController {
     if (this.residentState.idleLocationId === "lookingOutWindow") {
       if (isRainingNow(this._environmentSystem)) this.residentPreferences?.bump("activities", "watchingRain");
       else if (isGoldenHourNow(this._timeOfDaySystem)) this.residentPreferences?.bump("activities", "watchingTheSky");
+    }
+
+    // "Residents should become aware of one another... who they spend
+    // time near." The same slow, infrequent sampling as everything else
+    // in this method — a relationship is a pattern noticed over many
+    // quiet moments, not something worth checking every frame.
+    const bubblePos = this.movement.currentPosition;
+    for (const being of this.worldAwareness?.snapshot().nearbyBeings ?? []) {
+      const dx = (being.position?.[0] ?? 0) - bubblePos.x;
+      const dz = (being.position?.[2] ?? 0) - bubblePos.z;
+      if (Math.hypot(dx, dz) <= BEING_AWARENESS_RADIUS) this.residentPreferences?.bump("relationships", String(being.id));
     }
   }
 

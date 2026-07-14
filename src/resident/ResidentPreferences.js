@@ -46,6 +46,17 @@ export class ResidentPreferences {
     this.weather = {};
     this.timeOfDay = {};
     this.activities = {};
+    // "Residents should become aware of one another... who they spend
+    // time near." With a single AI resident, "one another" today means
+    // Bubble and the Workshop's own Beings — a plain affinity bag keyed
+    // by Being instance id, bumped whenever Bubble genuinely idles near
+    // one (see `ResidentController._maybeSamplePatterns()`). "Lightweight
+    // during this phase... a strong architectural foundation for future
+    // development" is exactly this: the identical `bump()`/`favourite()`
+    // mechanism every other dimension already uses, so a second AI
+    // resident later needs no new relationship system of its own, just
+    // its own instance of this same class.
+    this.relationships = {};
     this._seeded = false;
   }
 
@@ -84,6 +95,7 @@ export class ResidentPreferences {
       weather: this.weather,
       timeOfDay: this.timeOfDay,
       activities: this.activities,
+      relationships: this.relationships,
       seeded: this._seeded,
     };
   }
@@ -94,6 +106,7 @@ export class ResidentPreferences {
     this.weather = data.weather ?? {};
     this.timeOfDay = data.timeOfDay ?? {};
     this.activities = data.activities ?? {};
+    this.relationships = data.relationships ?? {};
     this._seeded = data.seeded ?? false;
   }
 }

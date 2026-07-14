@@ -44,6 +44,13 @@ export class PlayerPatternMemory {
     this.events = new EventBus();
     this.zoneCounts = {};
     this.timeOfDayCounts = {};
+    // "Usual working hours." Distinct from `timeOfDayCounts` above (which
+    // tracks *any* time the player happens to be sampled, wherever they
+    // are) — this only bumps when the player is *also* in a working zone
+    // (the workbench or the computer desk) at that same moment, so "the
+    // player usually visits in the evening" and "the player usually
+    // works in the evening" can genuinely differ.
+    this.workingHourCounts = {};
   }
 
   /** `position` is a `THREE.Vector3`-shaped object (only `.x`/`.z` are
@@ -57,7 +64,10 @@ export class PlayerPatternMemory {
   sample(position, timeBucket) {
     if (timeBucket) bumpAffinity(this.timeOfDayCounts, timeBucket);
     const zone = this._nearestZone(position);
-    if (zone) bumpAffinity(this.zoneCounts, zone.id);
+    if (zone) {
+      bumpAffinity(this.zoneCounts, zone.id);
+      if (timeBucket && (zone.id === "workbench" || zone.id === "computerDesk")) bumpAffinity(this.workingHourCounts, timeBucket);
+    }
   }
 
   _nearestZone(position) {
@@ -86,15 +96,22 @@ export class PlayerPatternMemory {
     return leadingAffinity(this.timeOfDayCounts, MIN_SAMPLES);
   }
 
+  /** "Usual working hours" — see the constructor's own comment on how
+   *  this differs from `leadingTimeBucket()`. */
+  leadingWorkingHours() {
+    return leadingAffinity(this.workingHourCounts, MIN_SAMPLES);
+  }
+
   // ---- persistence contract, read by PersistenceSystem ----
   save() {
-    return { zoneCounts: this.zoneCounts, timeOfDayCounts: this.timeOfDayCounts };
+    return { zoneCounts: this.zoneCounts, timeOfDayCounts: this.timeOfDayCounts, workingHourCounts: this.workingHourCounts };
   }
 
   load(data) {
     if (!data) return;
     this.zoneCounts = data.zoneCounts ?? {};
     this.timeOfDayCounts = data.timeOfDayCounts ?? {};
+    this.workingHourCounts = data.workingHourCounts ?? {};
   }
 }
 

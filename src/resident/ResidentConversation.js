@@ -43,6 +43,7 @@ export function createResidentConversationOverlay({
   worldObjectsStore = null,
   environmentSystem = null,
   timeOfDaySystem = null,
+  worldEventLog = null,
 }) {
   const history = []; // [{role: "user"|"assistant", content}] — this session only
 
@@ -60,6 +61,7 @@ export function createResidentConversationOverlay({
         worldObjectsStore,
         environmentSystem,
         timeOfDaySystem,
+        worldEventLog,
       });
       // "A resident that just noticed something interesting briefly shows
       // that over its own steadier mood" — see ResidentBehaviour.js's own

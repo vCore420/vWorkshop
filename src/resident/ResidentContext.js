@@ -70,15 +70,25 @@ function buildPreferenceLine(profile, { residentPreferences }) {
  *  why a sandbox preview must never consume the real "something new was
  *  built" note. */
 export function buildConversationContext(profile, deps, { mutateCuriosity = true } = {}) {
-  const { residentCuriosity, residentPreferences, playerPatternMemory, conversationMemory, worldObjectsStore, environmentSystem, timeOfDaySystem } = deps;
+  const { residentCuriosity, residentPreferences, playerPatternMemory, conversationMemory, worldObjectsStore, environmentSystem, timeOfDaySystem, worldEventLog } = deps;
   const curiosityNotes = residentCuriosity
     ? residentCuriosity.gatherNotes({ worldObjectsStore, environmentSystem, timeOfDaySystem, residentPreferences, playerPatternMemory, mutate: mutateCuriosity })
     : [];
+  // "A living world is one that quietly notices... recent events." The
+  // same "Things you might have noticed recently" line curiosity notes
+  // already produce is exactly where a real weather change or a song
+  // starting belongs too — one shared line, not a second new one, since
+  // both are genuinely the same kind of thing from Bubble's own
+  // perspective: something that happened, worth a passing mention, never
+  // the centre of the conversation. Capped at two, oldest-noticed-first
+  // discarded, so this never crowds out curiosity's own notes about the
+  // Workshop itself.
+  const worldEventNotes = (worldEventLog?.recent(2) ?? []).map((e) => e.summary);
   const memoryEnabled = profile?.memory?.mode !== "disabled";
   return {
     personalityLine: buildPersonalityLine(profile),
     preferenceLine: buildPreferenceLine(profile, { residentPreferences }),
-    curiosityNotes,
+    curiosityNotes: [...curiosityNotes, ...worldEventNotes],
     memoryNotes: memoryEnabled ? conversationMemory?.mostRelevant() ?? [] : [],
   };
 }

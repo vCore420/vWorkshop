@@ -6,6 +6,7 @@ import { FurnitureSystem } from "./FurnitureSystem.js";
 import { WorldObjectsSystem } from "../worldbuilder/WorldObjectsSystem.js";
 import { LadderSystem } from "./LadderSystem.js";
 import { PlayerAnimationSystem } from "../player/PlayerAnimationSystem.js";
+import { TerrainSystem } from "./TerrainSystem.js";
 
 const WALK_SPEED = 2.3; // metres/second
 const RUN_MULTIPLIER = 1.8;
@@ -145,6 +146,7 @@ export class CameraSystem {
     this._worldObjectsSystem = engine.getSystem(WorldObjectsSystem);
     this._ladderSystem = engine.getSystem(LadderSystem);
     this._animationSystem = engine.getSystem(PlayerAnimationSystem);
+    this._terrainSystem = engine.getSystem(TerrainSystem);
     // Scratch objects reused every frame in _updateWalk/_resolveCollisions
     // instead of allocating a fresh Vector2/Vector3 each call — walking is
     // the workshop's default, continuous state, so this is the hottest
@@ -547,8 +549,19 @@ export class CameraSystem {
    *  to step up onto or land on, not a distant platform floating far
    *  overhead that would otherwise teleport the player up onto it the
    *  moment they walked underneath it. */
+  /** "The surrounding world should feel just as thoughtfully designed as
+   *  the Workshop itself" — walking across sculpted terrain needed to
+   *  feel as solid as walking across a Builder-built floor. The base
+   *  height is now `TerrainSystem.getHeightAt()` (bilinearly
+   *  interpolated — smooth footing on a slope, not a staircase of flat
+   *  triangles) wherever the terrain patch actually covers this point;
+   *  `null` outside it (or with no TerrainSystem registered at all) falls
+   *  back to the flat `0` this always used, unchanged. Standing on top of
+   *  a Builder object placed *on* the terrain still works exactly as
+   *  before — the footprint loop below simply compares against whichever
+   *  base height won. */
   _computeGroundHeight(x, z) {
-    let best = 0;
+    let best = this._terrainSystem?.getHeightAt(x, z) ?? 0;
     for (const box of this._worldObjectsSystem?.getFootprints?.() ?? []) {
       if (x < box.min.x || x > box.max.x || z < box.min.z || z > box.max.z) continue;
       if (box.max.y > best && box.max.y <= this._footY + STEP_TOLERANCE) best = box.max.y;
