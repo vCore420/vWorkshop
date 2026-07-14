@@ -796,6 +796,19 @@ top of it:
   risk fighting with the trait/dial multipliers already applied
   elsewhere).
 
+**Atmosphere phase, layered onto the exact same mechanism**: a windy day
+(the `windy` weather state specifically, not an arbitrary wind-speed
+threshold) now also counts as "worth watching" from the window, alongside
+rain and golden hour; and a storm specifically pulls toward the Quiet
+Corner — sheltering, reusing the identical pull night already
+established rather than inventing a second one. `WorldAwareness.snapshot()`
+also gained a `season` field this phase (`Astronomy.getSeason()`,
+read-only, computed fresh from the real calendar date) — nothing
+currently reads it from `ResidentController.js`; it's there for a future
+phase that wants Bubble to notice the season the same way it already
+notices weather and time. See `docs/ATMOSPHERE.md`'s "Living World
+Integration" section for the fuller account.
+
 None of these are guarantees — every one is one more weighted option
 among several in the same ordinary `maybePickNewLocation()` pick idle
 locations already use, exactly the "subtlety, not spectacle" the phase's

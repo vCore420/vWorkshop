@@ -57,7 +57,7 @@ src/
   utils/                     PlaceholderFactory, ProceduralTexture, AudioSynth, InputManager, SimpleMarkdown, math, storage, ScreenProjector, AffinityTracker
   plugins/examples/          dustMotesPlugin.js (engine.plugins contract), examplePagePlugin.js + calculatorPlugin.js (Browser-page contract) — see PLUGIN_GUIDE.md
   main.js                    wiring only — construct, register, start. No behaviour here.
-docs/                        this file, COMPUTER.md, WORKBENCH.md, WORLDBUILDER.md, WORLD.md, POLISH.md, MUSIC.md, PERFORMANCE.md, PLAYER.md, ANIMATION.md, BROWSER.md, AI.md, RESIDENT.md, HOST.md, ASSETS.md, BEINGS.md, PHONE.md, PERSISTENCE.md, RESPONSIVE.md, REFINEMENT.md, ROADMAP.md, PLUGIN_GUIDE.md
+docs/                        this file, COMPUTER.md, WORKBENCH.md, WORLDBUILDER.md, WORLD.md, ATMOSPHERE.md, POLISH.md, MUSIC.md, PERFORMANCE.md, PLAYER.md, ANIMATION.md, BROWSER.md, AI.md, RESIDENT.md, HOST.md, ASSETS.md, BEINGS.md, PHONE.md, PERSISTENCE.md, RESPONSIVE.md, REFINEMENT.md, ROADMAP.md, PLUGIN_GUIDE.md
 assets/                      README explaining the "no shipped binary assets yet" decision
 host-companion/              a real, optional, zero-dependency local server the Workshop Host can talk to — NOT part of the browser bundle; see docs/HOST.md's own "The Workshop Host Companion" section and host-companion/README.md
 ```

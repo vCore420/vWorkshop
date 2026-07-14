@@ -809,4 +809,21 @@ hours" distinct from ordinary visiting patterns — all layered onto
 existing mechanisms rather than a new decision system built on top. See
 `docs/RESIDENT.md`'s own "World Awareness" section for the full account.
 
+**Version 2, Phase 11 — Atmosphere (v2.1.1)** — teaching the Workshop
+how to breathe, not adding more weather effects. A real, altitude-driven
+sky gradient (night through blue hour, dawn, golden hour, and day, correct
+for sunrise and sunset at any latitude), two cloud layers that pick up
+the sky's own colour instead of staying flat white, and cloud cover that
+now genuinely dims the stars and moon. A real indoor/outdoor audio
+split — rain stays close and present through a roof, wind is heavily
+buried through a wall — and four-phase nature audio (a brighter dawn
+chorus, a warmer dusk insect mix, the original untouched night crickets).
+Season Foundations: a real `getSeason()`, surfaced but deliberately
+inert. Atmosphere Profiles: six built-in presets (Sunny Morning, Golden
+Evening, Storm, Fog, Winter Morning, Summer Afternoon) plus anything
+saved by hand, applied in one click from a reorganised Atmosphere tab.
+Bubble now also watches a windy window and shelters from a storm, using
+the exact mechanism Living World 2.0 already established. See
+`docs/ATMOSPHERE.md` for the full account.
+
 </details>

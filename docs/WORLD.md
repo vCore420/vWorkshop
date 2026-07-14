@@ -99,6 +99,14 @@ for the two passes immediately before this one — this is the third system
 in a row to grow this way: get the core idea working simply first, then
 widen it once it's proven itself, rather than over-building it up front.
 
+**Deepened substantially in Version 2's own Atmosphere phase** — a
+richer, real-astronomy sky gradient, two cloud layers, cloud-cover-aware
+star/moon visibility, morning mist, four-phase nature audio, and a real
+indoor/outdoor audio split all layered onto exactly the architecture
+described below, without changing it. See `docs/ATMOSPHERE.md` for that
+full account; this section stays as the original Environment System
+write-up.
+
 ### One state, five independent listeners
 
 `EnvironmentSystem` computes weather and wind and emits one event,
@@ -200,17 +208,22 @@ inline styles.
 volumetric or particle-heavy. Sun and moon are soft glow sprites
 (`THREE.Sprite`, always facing the camera for free), not lit 3D geometry;
 stars are a single `THREE.Points` cloud (one draw call for all ~300 of
-them); clouds are a small, fixed number (12) of soft sprite blobs drifting
-with the wind. Every one of these is positioned *relative to the camera*,
-not the world origin, each frame — both so they stay within the camera's
-far clipping plane no matter which Render Distance setting is active (see
-`SKY_RADIUS`'s own comment for the "Short" preset's 55m minimum, which is
-what actually forced this design) and so they're always somewhere
-overhead no matter how far from the origin something eventually gets
-built. Moon phase comes from the real calendar date (a simplified ~29.53
-day cycle from a fixed reference new moon) — one more small way "stepping
-outside" looks quietly different day to day, independent of weather
-entirely.
+them); clouds are a small, fixed number of soft sprite blobs drifting
+with the wind (two layers as of the Atmosphere phase — see
+`docs/ATMOSPHERE.md` — still a fixed, modest total, not a step toward
+anything volumetric). Every one of these is positioned *relative to the
+camera*, not the world origin, each frame — both so they stay within the
+camera's far clipping plane no matter which Render Distance setting is
+active (see `SKY_RADIUS`'s own comment for the "Short" preset's 55m
+minimum, which is what actually forced this design) and so they're
+always somewhere overhead no matter how far from the origin something
+eventually gets built. Moon phase comes from the real calendar date (a
+simplified ~29.53 day cycle from a fixed reference new moon) — one more
+small way "stepping outside" looks quietly different day to day,
+independent of weather entirely. The sky's own colour gradient, and how
+cloud cover now dims stars and the moon together, are both part of the
+Atmosphere phase's own deepening — see `docs/ATMOSPHERE.md`'s "Sky"
+section for the full account rather than duplicating it here.
 
 ### Environmental audio
 
@@ -221,15 +234,17 @@ already use, no audio files:
 - **Weather ambience** — filtered noise, unchanged in kind from the
   original three-state WeatherSystem, now with a distinct storm preset
   (louder, brighter filter) alongside wind and rain.
-- **Nature ambience** — birds by day, crickets by night, entirely
-  independent of the weather layer (both can be audible at once — a light
-  rain with birdsong easing back in as it clears is exactly the kind of
-  thing this split makes possible). Quieted, not silenced, under heavy
-  precipitation, since birdsong over a downpour reads as a mistake rather
-  than atmosphere. `createNatureAmbience()` schedules its own brief
+- **Nature ambience** — a four-phase dawn/day/dusk/night bird-and-insect
+  bed as of the Atmosphere phase (originally a simpler day/night pair —
+  see `docs/ATMOSPHERE.md`'s "Nature" section for the fuller account),
+  entirely independent of the weather layer (both can be audible at once
+  — a light rain with birdsong easing back in as it clears is exactly the
+  kind of thing this split makes possible). Quieted, not silenced, under
+  heavy precipitation, since birdsong over a downpour reads as a mistake
+  rather than atmosphere. `createNatureAmbience()` schedules its own brief
   oscillator-based chirps/pulses via `setTimeout` and disposes each one as
   it finishes — the caller only ever starts it once and adjusts its
-  day/night state and intensity.
+  current phase and intensity.
 
 ### Atmosphere
 
@@ -521,10 +536,16 @@ what's still current everywhere.)
   current flash-only implementation was judged enough for "subtle
   atmosphere rather than spectacle," but a full version is a natural
   next step from the same seam.
-- **Seasonal variation** — foliage colour, day-length drift across a real
-  year, particularly cold/hot spells — would be another independent
+- **Seasonal variation, built on real foundations now** — the Atmosphere
+  phase added `Astronomy.getSeason()` (a real day-of-year/hemisphere
+  calculation, surfaced in `WorldAwareness.snapshot().season` and the
+  Atmosphere tab) specifically so this bullet has something solid to
+  stand on; actually *changing* anything because of the season — foliage
+  colour, day-length drift across a real year, particularly cold/hot
+  spells — is still future work, and would be another independent
   listener on `timeofday:changed`/`environment:changed`, the same way
-  every current consumer is, not a change to either emitter.
+  every current consumer is, not a change to either emitter. See
+  `docs/ATMOSPHERE.md`'s own "Season Foundations" section.
 - **Snow's own visual and ambience**, once genuinely wanted — the
   `WeatherProvider.js` mapping already isolates exactly where this would
   plug in.

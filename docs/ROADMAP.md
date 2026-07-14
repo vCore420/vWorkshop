@@ -2212,6 +2212,73 @@ dimension already uses.
 distinguishing "usual visiting hours" from genuine "usual working hours"
 (only bumped when the player is in a working zone specifically).
 
+## Version 2 — Phase 11 — Atmosphere (v2.1.1)
+
+**Goal:** "The Workshop now understands the world around it. Now it
+needs to understand atmosphere... this phase is NOT about simply adding
+more weather effects. It is about teaching the Workshop how to breathe."
+See `docs/ATMOSPHERE.md` for the full write-up.
+
+**A richer, real-astronomy sky** — `TimeOfDaySystem`'s own sky colour
+moved from a flat two-stop blend to `SKY_GRADIENT`, an eight-stop table
+keyed by the sun's real altitude (`MathUtils.sampleColorGradient()`, a
+small generalisation of the existing `lerpColorHex`) — night, blue hour,
+civil twilight, dawn/dusk, golden hour, and day, correct for sunrise
+*and* sunset, at any latitude or season, from one ordered list.
+
+**Two cloud layers, better lit.** `WorldEnvironmentSystem._buildClouds()`
+now builds a low, denser field and a second, higher, sparser, faster-
+drifting one from a shared helper; every cloud's own material colour now
+tints toward the sky's current hue and the weather's own tint
+(`_updateCloudTint()`) instead of staying flat white regardless of
+conditions. Cloud cover now also dims stars and the moon together
+(`_applyCelestialVisibility()`), and a small, standalone "morning mist"
+contribution (`_dawnMistStrength()`) layers into the fog calculation
+around sunrise, independent of any weather state.
+
+**A real indoor/outdoor audio split.** `AudioSystem` gained a Location
+layer — two shared lowpass filters, checked against `InteriorSystem
+.isInside()` on a slow throttle, with a per-ambience-type indoor gain
+multiplier (rain stays close and present; wind is heavily buried; storm
+sits between) rather than one flat muffle for everything. The wind/storm
+ambience's own filter cutoff now also breathes with live `windSpeed`
+between throttled checks — "wind through trees," pulled directly from
+`EnvironmentSystem` since its own gust wobble updates every frame but
+doesn't re-emit an event for it.
+
+**Four-phase nature audio.** `AudioSynth.createNatureAmbience()` grew
+from a flat day/night pair into dawn (a denser, brighter bird chorus),
+day (unchanged), dusk (a new, warmer, lower insect trill mixed with the
+occasional dimmer bird call), and night (the original cricket trill,
+deliberately untouched) — all four sharing exactly two parameterised
+synthesis functions rather than four independent ones.
+
+**Season Foundations, real but deliberately inert.**
+`Astronomy.getSeason(dayOfYear, latitude)` — a pure function, no new
+state, no migration — is the entire foundation this phase asks for,
+surfaced in `WorldAwareness.snapshot().season` and a read-only Atmosphere
+tab row (plus a quiet mention in the window's own summary line). Nothing
+currently changes because of the season; that's honestly next phase's
+problem.
+
+**Atmosphere Profiles, a real save/apply workflow.**
+`AtmosphereProfileStore.js` follows the identical "permanent built-in
+set in code, user profiles in the mutable store" shape
+`AnimationLibraryStore.js` already established — six built-ins (Sunny
+Morning, Golden Evening, Storm, Fog, Winter Morning, Summer Afternoon)
+plus anything a person saves themselves, all applied through the exact
+same `setWeather()`/`setManualOverride()`/`setTime()` calls the
+Atmosphere tab's other controls already use. The tab itself leads with
+Profiles now — a creative starting point ahead of the detailed live
+read-out already there.
+
+**Living World, extended once more onto the same mechanism.** A windy
+day now also counts as "worth watching" from the window
+(`ResidentController._windowWatchWeights()`), and a storm specifically
+pulls toward the Quiet Corner — sheltering, reusing the identical pull
+night already established. See `docs/RESIDENT.md`'s own "Resident
+awareness, extended" section.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

@@ -492,6 +492,43 @@
 }
 .danger-zone-button-severe:hover { background: rgba(184, 74, 58, 0.32); }
 
+/* ---------- Atmosphere Profiles ---------- */
+.atmosphere-profile-grid {
+  display: flex;
+  flex-direction: column;
+  margin-top: 6px;
+}
+.atmosphere-profile-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.atmosphere-profile-info strong {
+  display: block;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 2px;
+}
+.atmosphere-profile-info p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+  max-width: 46ch;
+}
+.atmosphere-profile-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.atmosphere-profile-actions .settings-action-button,
+.atmosphere-profile-actions .danger-zone-button {
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
 /* ---------- AI Mission Control ---------- */
 .ai-status-card {
   background: rgba(127, 216, 196, 0.06);
