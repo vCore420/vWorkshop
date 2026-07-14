@@ -213,9 +213,14 @@ function favouriteButton(assetId, isFavourite) {
   `;
 }
 
-function objectDetailPage(descriptor, { objectLibraryStore, worldObjectsStore, assetService }) {
+/** Resolves either an `ObjectLibraryStore` id (numeric) or a Construction
+ *  Library id (a string like `"tree"`) — the identical fallback chain
+ *  the "objects" AssetService kind's own `get()` already uses (see
+ *  `main.js`'s own asset-kind wiring), so a search result and its own
+ *  detail page can never disagree about whether something exists. */
+function objectDetailPage(descriptor, { objectLibraryStore, worldObjectsStore, assetService, getConstructionPiece }) {
   const id = descriptor.assetId.slice(descriptor.assetId.indexOf(":") + 1);
-  const def = objectLibraryStore?.get(Number(id)) ?? objectLibraryStore?.get(id);
+  const def = objectLibraryStore?.get(Number(id)) ?? objectLibraryStore?.get(id) ?? getConstructionPiece?.(id);
   if (!def) return notFoundPage(`asset://object/${id}`);
 
   const placedCount = (worldObjectsStore?.all() ?? []).filter((instance) => instance.definitionId === def.id).length;
@@ -236,7 +241,11 @@ function objectDetailPage(descriptor, { objectLibraryStore, worldObjectsStore, a
 
     <h2>Actions</h2>
     <div class="workshop-page-actions">
-      <p>Open the Builder from the Computer's rail to edit this object \u2014 editing it there updates every placed instance automatically.</p>
+      <p>${
+        def.isConstruction
+          ? "A permanent Construction Library piece \u2014 place it from the Builder Phone's own Construction Library tab. It can't be edited or deleted."
+          : "Open the Builder from the Computer's rail to edit this object \u2014 editing it there updates every placed instance automatically."
+      }</p>
     </div>
 
     <p><a href="asset://">\u2190 Back to the Asset Library</a></p>

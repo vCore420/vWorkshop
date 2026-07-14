@@ -49,6 +49,7 @@ export function createAIApp({
   worldObjectsStore = null,
   environmentSystem = null,
   timeOfDaySystem = null,
+  worldEventLog = null,
 }) {
   return {
     id: "ai",
@@ -698,7 +699,7 @@ export function createAIApp({
           try {
             const context = buildConversationContext(
               profile,
-              { residentCuriosity, residentPreferences, playerPatternMemory, conversationMemory, worldObjectsStore, environmentSystem, timeOfDaySystem },
+              { residentCuriosity, residentPreferences, playerPatternMemory, conversationMemory, worldObjectsStore, environmentSystem, timeOfDaySystem, worldEventLog },
               { mutateCuriosity: false }
             );
             const systemPrompt = composeSystemPrompt(profile, context);
