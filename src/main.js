@@ -60,6 +60,12 @@ import { buildSwatchThumbnail } from "./host/WorkshopAssetSchema.js";
 import { registerHostPages } from "./host/HostPages.js";
 import { examplePagePlugin } from "./plugins/examples/examplePagePlugin.js";
 import { calculatorPlugin } from "./plugins/examples/calculatorPlugin.js";
+import { workshopToolkitPlugin } from "./plugins/examples/workshopToolkitPlugin.js";
+import { PluginPermissions } from "./plugins/PluginPermissions.js";
+import { PluginStorage } from "./plugins/PluginStorage.js";
+import { loadWorkshopPlugin } from "./plugins/PluginLoader.js";
+import { registerAppFactory } from "./computer/apps/registry.js";
+import { registerPhoneAppFactory } from "./phone/apps/registry.js";
 import { AIConnectionManager } from "./ai/AIConnectionManager.js";
 import { ModelRegistry } from "./ai/ModelRegistry.js";
 import { ResidentProfileStore } from "./ai/ResidentProfileStore.js";
@@ -191,6 +197,12 @@ const hostConnectionManager = new HostConnectionManager();
 // pageRegistry, since PluginRegistry (owned by HostManager) needs the
 // real registry to register future plugin pages against directly.
 const hostManager = new HostManager(pageRegistry, hostConnectionManager);
+// "Plugin SDK" phase — both genuinely standalone stores (no dependency
+// on hostManager or anything else), constructed here so they're ready
+// before any plugin loads later in this file. See
+// docs/PLUGIN_SDK.md's own "Permissions" and "Storage" sections.
+const pluginPermissions = new PluginPermissions();
+const pluginStorage = new PluginStorage();
 // "The Host should understand assets independently of the Builder or
 // Browser" — AssetService itself already exists the moment HostManager's
 // own constructor runs (registered under "assets" immediately, alongside
@@ -525,6 +537,30 @@ const interactionSystem = engine.addSystem(new InteractionSystem());
 // already exist in the list" (they do, above).
 const buildModeSystem = engine.addSystem(new BuildModeSystem({ objectLibraryStore, worldObjectsStore, modelLibrary, modelLoader, blueprintStore, terrainSystem }));
 
+// "Plugin SDK" phase — every SDK-style plugin (`{manifest, setup(Workshop)}`)
+// loads here, through `loadWorkshopPlugin()`, before the Phone (below)
+// or the Computer (`engine.init()`, later) build their own app lists —
+// see `WorkshopSDK.js`'s own `registerPhoneApp()`/`registerComputerApp()`
+// comments for why that ordering matters. Each plugin gets its own SDK
+// instance, scoped to its own manifest id — see `docs/PLUGIN_SDK.md`.
+// The two *original* example plugins (`examplePagePlugin`,
+// `calculatorPlugin`, registered later via `hostManager.pluginRegistry`
+// directly) are untouched — this is a new, additional way to load a
+// plugin, not a replacement for the contracts they already use.
+const WORKSHOP_VERSION = "2.1.2";
+const pluginContext = {
+  engine,
+  pageRegistry,
+  hostManager,
+  pluginPermissions,
+  pluginStorage,
+  projectsStore,
+  registerComputerAppFactory: registerAppFactory,
+  registerPhoneAppFactory,
+  workshopVersion: WORKSHOP_VERSION,
+};
+loadWorkshopPlugin(workshopToolkitPlugin(), pluginContext);
+
 // "The Computer is for creating. The Phone is for using." Built after
 // every system/store an app might need already exists above — the exact
 // same "assemble the shared deps object once, hand it to every app
@@ -576,6 +612,8 @@ persistenceSystem.registerProvider("musicLibrary", musicLibraryStore);
 persistenceSystem.registerProvider("playlists", playlistStore);
 persistenceSystem.registerProvider("settings", settingsStore);
 persistenceSystem.registerProvider("atmosphereProfiles", atmosphereProfileStore);
+persistenceSystem.registerProvider("pluginPermissions", pluginPermissions);
+persistenceSystem.registerProvider("pluginStorage", pluginStorage);
 persistenceSystem.registerProvider("playerAppearance", appearanceStore);
 persistenceSystem.registerProvider("outfits", outfitStore);
 persistenceSystem.registerProvider("imageLibrary", imageLibraryStore);
@@ -638,7 +676,9 @@ engine.plugins.register(dustMotesPlugin());
 // --- three services that need stores/engine access HostManager didn't
 // have at its own construction time (see HostManager.js's own comment),
 // plus dynamic asset-kind registration for AssetService.
-hostManager.services.register("plugins", new PluginService({ engine, pluginRegistry: hostManager.pluginRegistry }));
+hostManager.services.register("plugins", new PluginService({ engine, pluginRegistry: hostManager.pluginRegistry, pluginPermissions }));
+hostManager.services.register("pluginPermissions", pluginPermissions);
+hostManager.services.register("pluginStorage", pluginStorage);
 hostManager.services.register(
   "residents",
   new ResidentService({ residentProfileStore, residentState, residentBehaviour, conversationMemory })

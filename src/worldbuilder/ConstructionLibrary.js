@@ -701,6 +701,52 @@ export function getConstructionPiece(id) {
   return CONSTRUCTION_PIECES.find((p) => p.id === id) ?? null;
 }
 
+/** "Plugins should be capable of extending the Builder... new assets."
+ *  The same `registerFurniture()`/`registerBehaviour()`/
+ *  `registerPresenceType()` shape every other Workshop registry already
+ *  uses — a plain function that appends to the exact array
+ *  `getConstructionPiece()`/`BuildModeSystem.js`/`main.js`'s own asset-
+ *  kind registration already read *live*, not a snapshot frozen at
+ *  startup (see this file's own top comment on why a construction piece
+ *  and a Builder-designed object share one shape). `piece` only needs
+ *  `id`/`name`/`description`/`parts`; every other field the ordinary
+ *  `piece()` helper above would default to is filled in here the same
+ *  way, so a plugin author can hand this the same minimal shape a
+ *  built-in piece's own definition uses. `group` is optional — omitted,
+ *  the piece still appears in the library, filed under "Other" via
+ *  `getConstructionGroup()`'s own fallback. */
+export function registerConstructionPiece(piece) {
+  if (!piece?.id) {
+    console.error("[ConstructionLibrary] registerConstructionPiece: a piece needs an `id`.");
+    return;
+  }
+  if (CONSTRUCTION_PIECES.some((p) => p.id === piece.id)) {
+    console.warn(`[ConstructionLibrary] "${piece.id}" is already registered — skipping.`);
+    return;
+  }
+  const { group, ...rest } = piece;
+  CONSTRUCTION_PIECES.push({
+    category: "Construction",
+    tags: ["construction"],
+    defaultScale: 1,
+    defaultRotationY: 0,
+    behaviours: [],
+    version: 1,
+    isConstruction: true,
+    ...rest,
+  });
+  if (group) CONSTRUCTION_GROUPS[piece.id] = group;
+}
+
+/** The counterpart to registerConstructionPiece() — "Unloading" a plugin
+ *  should mean its own pieces genuinely stop appearing in the library.
+ *  Built-in pieces never call this. */
+export function unregisterConstructionPiece(id) {
+  const index = CONSTRUCTION_PIECES.findIndex((p) => p.id === id);
+  if (index !== -1) CONSTRUCTION_PIECES.splice(index, 1);
+  delete CONSTRUCTION_GROUPS[id];
+}
+
 /** "Please continue organising Builder assets into clear categories as
  *  the library expands." A compact id → group lookup, kept separate from
  *  each piece's own definition rather than adding a `group` field to
