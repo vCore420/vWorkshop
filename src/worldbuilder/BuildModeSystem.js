@@ -92,12 +92,13 @@ function nextGroupId() {
  * comment further down this file.
  */
 export class BuildModeSystem {
-  constructor({ objectLibraryStore, worldObjectsStore, modelLibrary, modelLoader, blueprintStore }) {
+  constructor({ objectLibraryStore, worldObjectsStore, modelLibrary, modelLoader, blueprintStore, terrainSystem }) {
     this.objectLibraryStore = objectLibraryStore;
     this.worldObjectsStore = worldObjectsStore;
     this.modelLibrary = modelLibrary;
     this.modelLoader = modelLoader;
     this.blueprintStore = blueprintStore;
+    this.terrainSystem = terrainSystem;
     this.active = false;
     // "Please investigate introducing optional snapping systems... snapping
     // should remain optional." Both default off — building without any
@@ -132,6 +133,15 @@ export class BuildModeSystem {
     // `_handlePointerMove()`/`_handlePointerUp()`. `null` whenever no drag
     // is in progress.
     this._dragSelectStart = null;
+
+    // "Introduce a dedicated terrain editing workflow." `null` (the
+    // ordinary place/select mode, unchanged) or `{type, materialId?,
+    // radius, strength}` — see "Terrain Editing" further down this file
+    // for the full mechanism. Set via `setTerrainTool()`, read by
+    // `_handlePointerDown/Move/Up()` to decide whether a click sculpts
+    // the ground instead of selecting something.
+    this._terrainTool = null;
+    this._terrainStrokeSnapshot = null; // {heights, materialIndex} captured once at the start of a stroke — see _beginTerrainStroke()
 
     /**
      * The one piece of live placement/movement state. Shape:
@@ -229,6 +239,7 @@ export class BuildModeSystem {
       canUndo: () => this.editHistory.canUndo(),
       canRedo: () => this.editHistory.canRedo(),
       getMeasurement: () => this._measureSelection(),
+      onSetTerrainTool: (tool) => this.setTerrainTool(tool),
     });
     this.enter();
   }
@@ -274,6 +285,9 @@ export class BuildModeSystem {
 
   exit() {
     if (!this.active) return;
+    if (this._terrainPointerDown) this._finishTerrainStroke();
+    this._terrainTool = null;
+    this._terrainPointerDown = false;
     this._cancelGhost();
     this._select(null);
     this.active = false;
@@ -763,6 +777,11 @@ export class BuildModeSystem {
 
   _handlePointerMove(event) {
     if (!this.active) return;
+    if (this._terrainTool) {
+      this._updatePointerNDC(event);
+      if (this._terrainPointerDown) this._applyTerrainToolAtPointer();
+      return;
+    }
     if (this._ghost) {
       this._updatePointerNDC(event);
       const point = this._raycastGhostSurfaces();
@@ -807,6 +826,13 @@ export class BuildModeSystem {
   _handlePointerDown(event) {
     if (!this.active) return;
     this._updatePointerNDC(event);
+    if (this._terrainTool) {
+      if (event.button !== 0) return;
+      this._beginTerrainStroke();
+      this._terrainPointerDown = true;
+      this._applyTerrainToolAtPointer();
+      return;
+    }
     if (this._ghost) {
       // "Left-clicking in the world should place the currently previewed
       // object" — the ghost's own position is already current, from the
@@ -829,7 +855,15 @@ export class BuildModeSystem {
    *  appropriate" are all decided right here, together, since they're
    *  really one gesture with two possible endings. */
   _handlePointerUp(event) {
-    if (!this.active || !this._dragSelectStart) return;
+    if (!this.active) return;
+    if (this._terrainTool) {
+      if (this._terrainPointerDown) {
+        this._terrainPointerDown = false;
+        this._finishTerrainStroke();
+      }
+      return;
+    }
+    if (!this._dragSelectStart) return;
     const drag = this._dragSelectStart;
     this._dragSelectStart = null;
 
@@ -1519,10 +1553,84 @@ export class BuildModeSystem {
     return true;
   }
 
+  // -----------------------------------------------------------------
+  // Terrain Editing — "raise, lower, flatten, smooth, terrace terrain...
+  // paint terrain materials... terrain editing should feel natural,
+  // responsive and easy to control." The actual sculpting math lives
+  // entirely in `TerrainSystem.js`; this is the interaction layer —
+  // deciding what a click-and-drag in the world means while a terrain
+  // tool is active, the same "this file owns *when*, the real logic
+  // lives elsewhere" split every other tool in Build Mode already
+  // follows. Selecting/placing objects and sculpting terrain are
+  // mutually exclusive — activating a terrain tool cancels any ghost or
+  // selection in progress first, and vice versa (see `setTerrainTool()`),
+  // so there's never an ambiguous "what does clicking do right now."
+  // -----------------------------------------------------------------
+
+  /** `tool` is `null` (back to ordinary select/place) or `{type:
+   *  "raise"|"lower"|"flatten"|"smooth"|"terrace"|"paint", materialId?,
+   *  radius, strength}`. Called from the Builder Phone's own Terrain
+   *  tab every time a tool, brush size, strength, or paint material is
+   *  chosen — cheap enough to call on every single change rather than
+   *  needing its own "confirm" step. */
+  setTerrainTool(tool) {
+    if (this._ghost) this._cancelGhost();
+    if (this.selection || this.additionalSelection.length) this._select(null);
+    this._terrainTool = tool;
+    this._terrainPointerDown = false;
+  }
+
+  _beginTerrainStroke() {
+    if (!this.terrainSystem) return;
+    // A full snapshot, not a diff — 49x49 vertices is small enough
+    // (under 5,000 numbers each) that copying both arrays whole is
+    // simpler and safer than tracking exactly which vertices a stroke
+    // touched, and still cheap enough to do on every single stroke.
+    this._terrainStrokeSnapshot = {
+      heights: Float32Array.from(this.terrainSystem.heights),
+      materialIndex: Uint8Array.from(this.terrainSystem.materialIndex),
+    };
+  }
+
+  _finishTerrainStroke() {
+    if (!this.terrainSystem || !this._terrainStrokeSnapshot) return;
+    const before = this._terrainStrokeSnapshot;
+    this._terrainStrokeSnapshot = null;
+    const after = { heights: Float32Array.from(this.terrainSystem.heights), materialIndex: Uint8Array.from(this.terrainSystem.materialIndex) };
+    // A stroke that didn't actually change anything (a click that missed
+    // the terrain patch entirely, say) isn't worth an undo entry at all.
+    if (before.heights.every((h, i) => h === after.heights[i]) && before.materialIndex.every((m, i) => m === after.materialIndex[i])) return;
+    this.engine.events.emit("persistence:saveRequested");
+    this._pushHistory(
+      `Sculpt terrain (${this._terrainTool?.type ?? "edit"})`,
+      () => {
+        this.terrainSystem.load({ heights: Array.from(before.heights), materialIndex: Array.from(before.materialIndex) });
+        this.engine.events.emit("persistence:saveRequested");
+      },
+      () => {
+        this.terrainSystem.load({ heights: Array.from(after.heights), materialIndex: Array.from(after.materialIndex) });
+        this.engine.events.emit("persistence:saveRequested");
+      }
+    );
+  }
+
+  _applyTerrainToolAtPointer() {
+    if (!this.terrainSystem || !this._terrainTool) return;
+    this._raycaster.setFromCamera(this._pointerNDC, this.engine.camera);
+    const hits = this._raycaster.intersectObject(this.terrainSystem.mesh, false);
+    const hit = hits[0];
+    if (!hit) return;
+    const { x, z } = hit.point;
+    const { type, radius, strength, materialId } = this._terrainTool;
+    if (type === "paint") this.terrainSystem.paint(x, z, radius, materialId, strength);
+    else if (typeof this.terrainSystem[type] === "function") this.terrainSystem[type](x, z, radius, strength);
+  }
+
   update(_dt) {
     if (!this.active) return;
     if (this.engine.input?.wasJustPressed("cancel")) {
       if (this._ghost) this._cancelGhost();
+      else if (this._terrainTool) this.setTerrainTool(null);
       else if (this.selection) this._select(null);
       // Deliberately no "else exit()" branch — with nothing left to
       // cancel/deselect, this same Escape press is handled by

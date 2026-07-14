@@ -48,6 +48,19 @@ export function compileDefinition(definition, { colorOverride = null } = {}) {
     mesh.rotation.set(part.rotationX ?? 0, part.rotationY ?? 0, part.rotationZ ?? 0);
     mesh.scale.set(...part.scale);
     mesh.userData.partId = part.id;
+    // "Begin preparing the World Builder for future Atmosphere
+    // systems... wind influencing vegetation." A genuinely real, cheap
+    // effect rather than only a prepared hook — see
+    // `WorldObjectsSystem.js`'s own `_updateWindSway()`, the one place
+    // that actually reads this flag. `restRotation` is captured once,
+    // here, since sway is always expressed *relative to* however the
+    // part was actually authored (a flower stem angled sideways on
+    // purpose should sway around its own angle, not snap upright first).
+    if (part.swaysInWind) {
+      mesh.userData.swaysInWind = true;
+      mesh.userData.restRotation = { x: mesh.rotation.x, y: mesh.rotation.y, z: mesh.rotation.z };
+      mesh.userData.swayPhase = Math.random() * Math.PI * 2; // desynchronised — a whole tree line swaying in perfect unison reads as artificial
+    }
     group.add(mesh);
   }
   return group;

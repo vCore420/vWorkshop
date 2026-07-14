@@ -29,12 +29,21 @@
  *     Workshop default).
  */
 import { getConstructionGroup, CONSTRUCTION_GROUP_ORDER } from "./ConstructionLibrary.js";
+import { TERRAIN_MATERIALS } from "../systems/TerrainSystem.js";
 
 export class BuilderPhoneUI {
   constructor(rootEl, callbacks) {
     this.callbacks = callbacks;
     this._libraryData = { constructionPieces: [], libraryDefinitions: [] };
     this._activeTab = "construction";
+    // "Brush size adjustment. Brush strength adjustment." Local UI state
+    // only — BuildModeSystem itself is the source of truth for whether a
+    // tool is *active*; this is just what the next `onSetTerrainTool()`
+    // call will describe.
+    this._terrainToolType = "raise";
+    this._terrainMaterialId = "grass";
+    this._terrainRadius = 4;
+    this._terrainStrength = 0.6;
 
     // The Phone's own content container, handed straight in — no shell
     // of this class's own to build around it any more.
@@ -102,18 +111,24 @@ export class BuilderPhoneUI {
 
     const tabs = document.createElement("div");
     tabs.className = "builder-phone-tabs";
-    for (const [id, label] of [["construction", "Construction Library"], ["saved", "Saved Objects"], ["models", "Imported Models"], ["blueprints", "Blueprints"]]) {
+    for (const [id, label] of [["construction", "Construction Library"], ["saved", "Saved Objects"], ["models", "Imported Models"], ["blueprints", "Blueprints"], ["terrain", "Terrain"]]) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.textContent = label;
       btn.className = id === this._activeTab ? "active" : "";
       btn.addEventListener("click", () => {
+        if (this._activeTab === "terrain" && id !== "terrain") this.callbacks.onSetTerrainTool(null);
         this._activeTab = id;
         this.showLibraryScreen();
       });
       tabs.appendChild(btn);
     }
     this.screen.appendChild(tabs);
+
+    if (this._activeTab === "terrain") {
+      this.screen.appendChild(this._buildTerrainPanel());
+      return;
+    }
 
     const grid = document.createElement("div");
     grid.className = "builder-phone-grid";
@@ -586,6 +601,111 @@ export class BuilderPhoneUI {
       buttons.appendChild(btn);
     }
     row.appendChild(buttons);
+    return row;
+  }
+
+  // -----------------------------------------------------------------
+  // Terrain panel — "terrain editing should feel natural, responsive and
+  // easy to control." Choosing a tool, brush size, brush strength, or
+  // paint material all immediately call `onSetTerrainTool()` with the
+  // *complete* current tool description — BuildModeSystem itself never
+  // needs to remember a partial tool state across separate calls.
+  // Sculpting/painting itself happens directly in the 3D world (click and
+  // drag), not through this panel at all — the panel only ever describes
+  // *which* tool a click-and-drag currently means.
+  // -----------------------------------------------------------------
+
+  _pushTerrainTool() {
+    const tool = { type: this._terrainToolType, radius: this._terrainRadius, strength: this._terrainStrength };
+    if (this._terrainToolType === "paint") tool.materialId = this._terrainMaterialId;
+    this.callbacks.onSetTerrainTool(tool);
+  }
+
+  _buildTerrainPanel() {
+    const wrap = document.createElement("div");
+
+    const hint = document.createElement("p");
+    hint.className = "builder-phone-hint";
+    hint.textContent = "Click and drag anywhere on the ground to sculpt or paint with the tool selected below.";
+    wrap.appendChild(hint);
+
+    const shapeHeading = document.createElement("h4");
+    shapeHeading.className = "builder-phone-group-heading";
+    shapeHeading.textContent = "Shape";
+    wrap.appendChild(shapeHeading);
+    const shapeRow = document.createElement("div");
+    shapeRow.className = "builder-phone-ghost-actions";
+    for (const [type, label] of [["raise", "Raise"], ["lower", "Lower"], ["flatten", "Flatten"], ["smooth", "Smooth"], ["terrace", "Terrace"]]) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = type === this._terrainToolType ? "builder-phone-button builder-phone-button-primary" : "builder-phone-button";
+      btn.textContent = label;
+      btn.addEventListener("click", () => {
+        this._terrainToolType = type;
+        this._pushTerrainTool();
+        this.showLibraryScreen();
+      });
+      shapeRow.appendChild(btn);
+    }
+    wrap.appendChild(shapeRow);
+
+    const paintHeading = document.createElement("h4");
+    paintHeading.className = "builder-phone-group-heading";
+    paintHeading.textContent = "Paint";
+    wrap.appendChild(paintHeading);
+    const paintRow = document.createElement("div");
+    paintRow.className = "builder-phone-ghost-actions";
+    for (const material of TERRAIN_MATERIALS) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      const isActive = this._terrainToolType === "paint" && this._terrainMaterialId === material.id;
+      btn.className = isActive ? "builder-phone-button builder-phone-button-primary" : "builder-phone-button";
+      btn.textContent = material.label;
+      btn.style.borderLeft = `4px solid ${material.color}`;
+      btn.addEventListener("click", () => {
+        this._terrainToolType = "paint";
+        this._terrainMaterialId = material.id;
+        this._pushTerrainTool();
+        this.showLibraryScreen();
+      });
+      paintRow.appendChild(btn);
+    }
+    wrap.appendChild(paintRow);
+
+    const brushHeading = document.createElement("h4");
+    brushHeading.className = "builder-phone-group-heading";
+    brushHeading.textContent = "Brush";
+    wrap.appendChild(brushHeading);
+    wrap.appendChild(this._terrainSliderRow("Size", this._terrainRadius, 1, 12, 0.5, (v) => (v.toFixed(1) + "m"), (v) => { this._terrainRadius = v; this._pushTerrainTool(); }));
+    wrap.appendChild(this._terrainSliderRow("Strength", this._terrainStrength, 0.05, 1.5, 0.05, (v) => v.toFixed(2), (v) => { this._terrainStrength = v; this._pushTerrainTool(); }));
+
+    // Activating the panel always (re)pushes the currently-configured
+    // tool immediately, so opening the Terrain tab is itself enough to
+    // start sculpting — no separate "activate" step to remember.
+    this._pushTerrainTool();
+    return wrap;
+  }
+
+  _terrainSliderRow(label, value, min, max, step, format, onChange) {
+    const row = document.createElement("div");
+    row.className = "panel-row";
+    const labelEl = document.createElement("span");
+    labelEl.textContent = label;
+    const input = document.createElement("input");
+    input.type = "range";
+    input.min = String(min);
+    input.max = String(max);
+    input.step = String(step);
+    input.value = String(value);
+    const valueEl = document.createElement("span");
+    valueEl.className = "settings-range-value";
+    valueEl.textContent = format(value);
+    input.addEventListener("input", () => {
+      const v = parseFloat(input.value);
+      valueEl.textContent = format(v);
+      onChange(v);
+    });
+    row.append(labelEl, input, valueEl);
     return row;
   }
 }

@@ -565,6 +565,136 @@ export const CONSTRUCTION_PIECES = [
       { id: "box", type: "box", position: [0, 1.05, 0], rotationY: 0, scale: [0.3, 0.2, 0.18], color: "#4a5a6a" },
     ],
   }),
+
+  // ============================================================
+  // Nature — "the World Builder should encourage thoughtful outdoor
+  // design... landscape assets should become Workshop Assets just like
+  // every other object." Ordinary construction pieces, built from the
+  // exact same primitive-part vocabulary as everything above — nothing
+  // about a tree needs a different kind of definition than a wall does.
+  // Every piece here also gets a real, cheap wind-sway (see
+  // WorldEnvironmentSystem.js's own comment on `windSpeed`/
+  // `windDirectionRad` and ObjectCompiler.js's `swaysInWind` flag) —
+  // "begin preparing the World Builder for future Atmosphere systems...
+  // wind influencing vegetation" made concrete now, not only prepared.
+  // ============================================================
+  piece({
+    id: "tree",
+    name: "Tree",
+    description: "A simple tree — a trunk and a rounded canopy. Scale it up for something towering, or down for a sapling.",
+    parts: [
+      { id: "trunk", type: "cylinder", position: [0, 0.9, 0], rotationY: 0, scale: [0.16, 1.8, 0.16], color: BARK_COLOR, segments: 7 },
+      { id: "canopyLow", type: "sphere", position: [0, 1.9, 0], rotationY: 0, scale: [1.1, 0.9, 1.1], color: FOLIAGE_COLOR, segments: 8, swaysInWind: true },
+      { id: "canopyHigh", type: "sphere", position: [0, 2.5, 0], rotationY: 0, scale: [0.75, 0.7, 0.75], color: FOLIAGE_COLOR_LIGHT, segments: 8, swaysInWind: true },
+    ],
+  }),
+
+  piece({
+    id: "bush",
+    name: "Bush",
+    description: "A low, rounded cluster of foliage — a hedge, a shrub, or scattered as undergrowth.",
+    parts: [
+      { id: "a", type: "sphere", position: [-0.18, 0.28, 0.05], rotationY: 0, scale: [0.55, 0.5, 0.55], color: FOLIAGE_COLOR, segments: 7, swaysInWind: true },
+      { id: "b", type: "sphere", position: [0.2, 0.32, -0.1], rotationY: 0, scale: [0.5, 0.45, 0.5], color: FOLIAGE_COLOR_LIGHT, segments: 7, swaysInWind: true },
+      { id: "c", type: "sphere", position: [0, 0.24, -0.15], rotationY: 0, scale: [0.45, 0.4, 0.45], color: FOLIAGE_COLOR, segments: 7, swaysInWind: true },
+    ],
+  }),
+
+  piece({
+    id: "flower",
+    name: "Flower",
+    description: "A single flowering stem — placed a handful at a time, a real garden starts to take shape.",
+    parts: [
+      { id: "stem", type: "cylinder", position: [0, 0.18, 0], rotationY: 0, scale: [0.015, 0.36, 0.015], color: FOLIAGE_COLOR, segments: 5, swaysInWind: true },
+      { id: "bloom", type: "sphere", position: [0, 0.38, 0], rotationY: 0, scale: [0.09, 0.08, 0.09], color: "#e8829c", segments: 6, swaysInWind: true },
+    ],
+  }),
+
+  piece({
+    id: "rock",
+    name: "Rock",
+    description: "An irregular boulder — scattered singly or clustered, along a path edge or a garden border.",
+    parts: [
+      { id: "a", type: "roundedBox", position: [0, 0.22, 0], rotationY: 0.4, rotationX: 0.15, scale: [0.5, 0.42, 0.4], color: STONE_COLOR },
+      { id: "b", type: "roundedBox", position: [0.12, 0.12, 0.1], rotationY: 1.1, rotationX: 0, scale: [0.22, 0.22, 0.22], color: STONE_COLOR },
+    ],
+  }),
+
+  piece({
+    id: "log",
+    name: "Log",
+    description: "A fallen log, lying on its side — a rustic border, a bit of forest-floor detail, or a low seat.",
+    parts: [{ id: "a", type: "cylinder", position: [0, 0.18, 0], rotationY: 0, rotationZ: Math.PI / 2, scale: [0.18, 1.4, 0.18], color: BARK_COLOR, segments: 8 }],
+  }),
+
+  piece({
+    id: "grassPatch",
+    name: "Grass Patch",
+    description: "A low, flat tuft of longer grass — scattered across a lawn or a meadow for texture the terrain's own paint job alone can't give it.",
+    parts: [
+      { id: "a", type: "cone", position: [-0.08, 0.12, 0], rotationY: 0.3, rotationX: 0, scale: [0.03, 0.24, 0.03], color: FOLIAGE_COLOR_LIGHT, segments: 4, swaysInWind: true },
+      { id: "b", type: "cone", position: [0.06, 0.1, 0.05], rotationY: 1.4, rotationX: 0, scale: [0.03, 0.2, 0.03], color: FOLIAGE_COLOR, segments: 4, swaysInWind: true },
+      { id: "c", type: "cone", position: [0, 0.09, -0.07], rotationY: 2.2, rotationX: 0, scale: [0.03, 0.18, 0.03], color: FOLIAGE_COLOR_LIGHT, segments: 4, swaysInWind: true },
+    ],
+  }),
+
+  piece({
+    id: "gardenBed",
+    name: "Garden Bed",
+    description: "A raised rectangular bed of soil, framed in timber — the natural home for a row of Flowers.",
+    parts: [
+      { id: "soil", type: "box", position: [0, 0.14, 0], rotationY: 0, scale: [1.2, 0.22, 0.7], color: SOIL_COLOR },
+      { id: "frameA", type: "box", position: [0, 0.13, 0.36], rotationY: 0, scale: [1.24, 0.24, 0.05], color: WOOD_COLOR },
+      { id: "frameB", type: "box", position: [0, 0.13, -0.36], rotationY: 0, scale: [1.24, 0.24, 0.05], color: WOOD_COLOR },
+      { id: "frameC", type: "box", position: [0.6, 0.13, 0], rotationY: 0, scale: [0.05, 0.24, 0.7], color: WOOD_COLOR },
+      { id: "frameD", type: "box", position: [-0.6, 0.13, 0], rotationY: 0, scale: [0.05, 0.24, 0.7], color: WOOD_COLOR },
+    ],
+  }),
+
+  // ============================================================
+  // Paths — "roads and paths should naturally follow curves where
+  // appropriate." Each one is a single tile, exactly the same
+  // "small alphabet piece, assembled by the player" philosophy the whole
+  // Construction Library already follows for walls and floors, not a
+  // separate curve-generation system — laying a curved path is laying a
+  // curve of path tiles, the same way a curved wall is a curve of wall
+  // segments. Sized at 1m (half a Floor tile) specifically so a path can
+  // wind more tightly than a building's own 2m structural grid needs to.
+  // ============================================================
+  piece({
+    id: "stonePath",
+    name: "Stone Path",
+    description: "A 1m flagstone paving tile.",
+    parts: [{ id: "a", type: "box", position: [0, 0.025, 0], rotationY: 0, scale: [1, 0.05, 1], color: STONE_COLOR }],
+  }),
+
+  piece({
+    id: "gravelPath",
+    name: "Gravel Path",
+    description: "A 1m gravel paving tile.",
+    parts: [{ id: "a", type: "box", position: [0, 0.02, 0], rotationY: 0, scale: [1, 0.04, 1], color: GRAVEL_COLOR }],
+  }),
+
+  piece({
+    id: "dirtPath",
+    name: "Dirt Path",
+    description: "A 1m worn dirt paving tile.",
+    parts: [{ id: "a", type: "box", position: [0, 0.015, 0], rotationY: 0, scale: [1, 0.03, 1], color: DIRT_COLOR }],
+  }),
+
+  piece({
+    id: "timberPath",
+    name: "Timber Path",
+    description: "A 1m timber boardwalk tile.",
+    parts: [{ id: "a", type: "box", position: [0, 0.04, 0], rotationY: 0, scale: [1, 0.08, 1], color: WOOD_COLOR }],
+  }),
+
+  piece({
+    id: "concretePath",
+    name: "Concrete Path",
+    description: "A 1m concrete paving tile.",
+    parts: [{ id: "a", type: "box", position: [0, 0.025, 0], rotationY: 0, scale: [1, 0.05, 1], color: CONCRETE_COLOR }],
+  }),
 ];
 
 export function getConstructionPiece(id) {

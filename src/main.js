@@ -5,9 +5,12 @@ import { RoomLayoutSystem } from "./systems/RoomLayoutSystem.js";
 import { FurnitureSystem } from "./systems/FurnitureSystem.js";
 import { ReflectionSystem } from "./systems/ReflectionSystem.js";
 import { WorldEnvironmentSystem } from "./systems/WorldEnvironmentSystem.js";
+import { TerrainSystem } from "./systems/TerrainSystem.js";
+import { CONSTRUCTION_PIECES, getConstructionPiece, getConstructionGroup } from "./worldbuilder/ConstructionLibrary.js";
 import { LightingSystem } from "./systems/LightingSystem.js";
 import { TimeOfDaySystem } from "./systems/TimeOfDaySystem.js";
-import { EnvironmentSystem } from "./systems/EnvironmentSystem.js";
+import { EnvironmentSystem, WEATHER_STATES } from "./systems/EnvironmentSystem.js";
+import { currentTimeBucket } from "./resident/ResidentWorldSignals.js";
 import { AudioSystem } from "./systems/AudioSystem.js";
 import { CameraSystem } from "./systems/CameraSystem.js";
 import { LadderSystem } from "./systems/LadderSystem.js";
@@ -63,6 +66,8 @@ import { ResidentState } from "./resident/ResidentState.js";
 import { ResidentBehaviour } from "./resident/ResidentBehaviour.js";
 import { ResidentConnection } from "./resident/ResidentConnection.js";
 import { ResidentController } from "./resident/ResidentController.js";
+import { WorldAwareness } from "./world/WorldAwareness.js";
+import { WorldEventLog } from "./world/WorldEventLog.js";
 import { createResidentConversationOverlay } from "./resident/ResidentConversation.js";
 import { ResidentPreferences } from "./resident/ResidentPreferences.js";
 import { PlayerPatternMemory } from "./resident/PlayerPatternMemory.js";
@@ -127,6 +132,12 @@ const reflectionSystem = engine.addSystem(new ReflectionSystem());
 // "timeofday:changed" synchronously, and WorldEnvironmentSystem needs to
 // already be listening to paint the very first frame's sky correctly.
 const worldEnvironmentSystem = engine.addSystem(new WorldEnvironmentSystem());
+// "Introduce a dedicated terrain editing workflow... the surrounding
+// world should feel just as thoughtfully designed as the Workshop
+// itself." A real, bounded, editable heightmap patch — see
+// TerrainSystem.js's own comment for why this is a separate mesh from
+// WorldEnvironmentSystem's own flat, infinitely-recentring ground.
+const terrainSystem = engine.addSystem(new TerrainSystem());
 const lightingSystem = engine.addSystem(new LightingSystem());
 const timeOfDaySystem = engine.addSystem(new TimeOfDaySystem());
 const environmentSystem = engine.addSystem(new EnvironmentSystem());
@@ -340,6 +351,63 @@ const beingInstanceStore = new BeingInstanceStore();
 // own dedicated engine dependency.
 const beingController = engine.addSystem(new BeingController({ beingLibrary, beingInstanceStore, modelLoader, modelLibrary, animationLibraryStore }));
 const beingSpawnerSystem = engine.addSystem(new BeingSpawnerSystem({ beingLibrary, beingInstanceStore }));
+
+// "A living world is one that quietly notices... rather than individual
+// systems inventing their own logic, they should all observe the same
+// world state." Constructed here, once every dependency it reads from
+// already exists (see WorldAwareness.js's own comment on why it owns no
+// state of its own, only knows where to find it) — `worldAwareness`
+// itself is handed to `residentController` a few lines below, after
+// `residentController` exists, since some of these same dependencies
+// (`beingInstanceStore` included) weren't ready yet at that constructor's
+// own call site further up this file.
+const worldEventLog = new WorldEventLog();
+const worldAwareness = new WorldAwareness({
+  timeOfDaySystem,
+  environmentSystem,
+  musicSystem,
+  cameraSystem,
+  projectsStore,
+  beingInstanceStore,
+  residentState,
+  worldEventLog,
+});
+residentController.worldAwareness = worldAwareness;
+
+// "Begin introducing lightweight world events... weather changing,
+// sunrise, sunset, music beginning... nothing should feel scripted.
+// Everything should simply feel like the world continuing." Each
+// listener below only records a genuine *transition* (this weather is
+// different from the last one noted, day just became night, a song just
+// started), never a continuous stream of the same ongoing state — see
+// WorldEventLog.js's own comment on why this stays "meaningful," not
+// "infinite," history.
+{
+  let lastWeatherId = null;
+  engine.events.on("environment:changed", (state) => {
+    if (state.id && state.id !== lastWeatherId) {
+      if (lastWeatherId !== null) worldEventLog.record("weatherChanged", `The weather turned ${WEATHER_STATES[state.id]?.label ?? state.id}.`);
+      lastWeatherId = state.id;
+    }
+  });
+
+  let lastIsNight = null;
+  engine.events.on("timeofday:changed", (state) => {
+    const isNight = currentTimeBucket(timeOfDaySystem) === "night";
+    if (lastIsNight !== null && isNight !== lastIsNight) worldEventLog.record(isNight ? "nightfall" : "sunrise", isNight ? "Night fell over the Workshop." : "The sun rose over the Workshop.");
+    lastIsNight = isNight;
+    void state;
+  });
+
+  let wasMusicPlaying = false;
+  engine.events.on("music:playbackStateChanged", () => {
+    if (musicSystem.isPlaying && !wasMusicPlaying) {
+      const title = musicSystem.currentSong?.title;
+      worldEventLog.record("musicStarted", title ? `"${title}" began playing.` : "Music began playing.");
+    }
+    wasMusicPlaying = musicSystem.isPlaying;
+  });
+}
 // "Interaction: Talk, Wave, Inspect, None." Deliberately not a chat
 // interface — a Being isn't connected to Ollama the way the Workshop's
 // own resident is (see docs/AI.md/docs/RESIDENT.md) — a brief, honest
@@ -401,6 +469,7 @@ const computerSystem = engine.addSystem(
     lightingSystem,
     timeOfDaySystem,
     environmentSystem,
+    worldEventLog,
     objectLibraryStore,
     worldObjectsStore,
     worldObjectsSystem,
@@ -451,7 +520,7 @@ const interactionSystem = engine.addSystem(new InteractionSystem());
 // WorldObjectsSystem at the moment it needs them, not at init() time, so it
 // has no strict ordering requirement beyond "after the systems it looks up
 // already exist in the list" (they do, above).
-const buildModeSystem = engine.addSystem(new BuildModeSystem({ objectLibraryStore, worldObjectsStore, modelLibrary, modelLoader, blueprintStore }));
+const buildModeSystem = engine.addSystem(new BuildModeSystem({ objectLibraryStore, worldObjectsStore, modelLibrary, modelLoader, blueprintStore, terrainSystem }));
 
 // "The Computer is for creating. The Phone is for using." Built after
 // every system/store an app might need already exists above — the exact
@@ -522,6 +591,8 @@ persistenceSystem.registerProvider("plugins", engine.plugins);
 persistenceSystem.registerProvider("hostPermissions", hostManager.permissions);
 persistenceSystem.registerProvider("hostProjects", hostManager.services.get("projects"));
 persistenceSystem.registerProvider("assetLibrary", assetService);
+persistenceSystem.registerProvider("terrain", terrainSystem);
+persistenceSystem.registerProvider("worldEventLog", worldEventLog);
 
 // --- Overlays: one registration per physical object that opens a panel ---
 // (The computer and the workbench no longer work this way — see
@@ -547,6 +618,7 @@ overlayManager.register(
     worldObjectsStore,
     environmentSystem,
     timeOfDaySystem,
+    worldEventLog,
   })
 );
 overlayManager.register("window", createWindowOverlay({ environmentSystem, timeOfDaySystem }));
@@ -584,18 +656,48 @@ hostManager.services.register(
 // — see that declaration's own comment for why.
 assetService.registerKind("objects", {
   label: "Objects",
-  all: () => objectLibraryStore.all(),
-  get: (id) => objectLibraryStore.get(Number(id)) ?? objectLibraryStore.get(id),
-  toDescriptor: (o) => ({
-    name: o.name,
-    description: o.description,
-    categories: o.category ? [o.category] : [],
-    tags: o.tags ?? [],
-    createdAt: o.createdAt,
-    updatedAt: o.updatedAt,
-    thumbnail: buildSwatchThumbnail((o.parts ?? []).map((p) => p.color)),
-  }),
+  // "The World Builder should consume Workshop Assets rather than
+  // maintaining separate object systems... landscape assets should
+  // become Workshop Assets just like every other object." Construction
+  // Library pieces (walls, doors — and, new this phase, every Nature/
+  // Paths piece) were always a second *source* of the identical
+  // definition shape `ObjectLibraryStore` items already have (see
+  // ConstructionLibrary.js's own comment) — merging them into this one
+  // kind is what makes that true for the Asset System specifically:
+  // real search, favouriting, and a Browser detail page for a Tree or a
+  // Stone Path, exactly like a player-designed object gets.
+  all: () => [...objectLibraryStore.all(), ...CONSTRUCTION_PIECES],
+  get: (id) => objectLibraryStore.get(Number(id)) ?? objectLibraryStore.get(id) ?? getConstructionPiece(id),
+  toDescriptor: (o) => {
+    if (o.isConstruction) {
+      // A permanent, code-defined piece — genuinely no author beyond
+      // the Workshop itself, and no creation date, since "created" isn't
+      // a meaningful question for something that's always existed. Its
+      // own construction *group* (already the exact categorisation the
+      // Builder Phone's own library screen groups by) becomes its real
+      // Asset System category, rather than the single flat
+      // `category: "Construction"` every piece happens to share.
+      return {
+        name: o.name,
+        description: o.description,
+        author: "Workshop",
+        categories: [getConstructionGroup(o.id)],
+        tags: ["construction", ...(o.tags ?? [])],
+        thumbnail: buildSwatchThumbnail((o.parts ?? []).map((p) => p.color)),
+      };
+    }
+    return {
+      name: o.name,
+      description: o.description,
+      categories: o.category ? [o.category] : [],
+      tags: o.tags ?? [],
+      createdAt: o.createdAt,
+      updatedAt: o.updatedAt,
+      thumbnail: buildSwatchThumbnail((o.parts ?? []).map((p) => p.color)),
+    };
+  },
   validateItem: (o) => {
+    if (o.isConstruction) return []; // permanent and hand-authored — never in an invalid state the way a player-designed object briefly could be
     const issues = [];
     if (!Number.isFinite(o.defaultScale) || o.defaultScale <= 0) issues.push("Invalid scale.");
     if (!o.parts || o.parts.length === 0) issues.push("No parts defined.");
@@ -731,7 +833,7 @@ registerWorkshopPages(pageRegistry, searchIndex, {
   searchIndex,
 });
 registerHostPages(pageRegistry, searchIndex, { hostManager, modelRegistry });
-registerAssetPages(pageRegistry, searchIndex, { objectLibraryStore, blueprintStore, animationLibraryStore, modelLibrary, imageLibraryStore, musicLibraryStore, worldObjectsStore, assetService, beingLibrary });
+registerAssetPages(pageRegistry, searchIndex, { objectLibraryStore, blueprintStore, animationLibraryStore, modelLibrary, imageLibraryStore, musicLibraryStore, worldObjectsStore, assetService, beingLibrary, getConstructionPiece });
 
 // "Plugins should be capable of registering Browser pages... naturally
 // integrate into Browser navigation without requiring hardcoded

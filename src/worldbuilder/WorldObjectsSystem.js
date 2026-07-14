@@ -6,6 +6,7 @@ import { applyBehaviour, disposeBehaviour } from "./behaviours/index.js";
 import { CURRENT_ROOM_ID } from "./WorldObjectsStore.js";
 import { getConstructionPiece } from "./ConstructionLibrary.js";
 import { COLLISION_HEIGHT_LIMIT } from "../entities/room/WorkshopRoom.js";
+import { EnvironmentSystem } from "../systems/EnvironmentSystem.js";
 
 /**
  * WorldObjectsSystem
@@ -47,10 +48,14 @@ export class WorldObjectsSystem {
     this.liveInstances = new Map();
     /** @type {Map<number, THREE.Box3>} instanceId -> cached collision box, skipped from the map entirely if the object sits entirely above head height */
     this.footprints = new Map();
+    /** @type {Array<{instanceId:number, mesh:THREE.Object3D}>} every currently-live mesh tagged `swaysInWind` — see `_registerSwayParts()`/`update()`. */
+    this._swayParts = [];
+    this._swayTime = 0;
   }
 
   init(engine) {
     this.engine = engine;
+    this._environmentSystem = engine.getSystem(EnvironmentSystem); // resolved once — see WorldEnvironmentSystem.js's own init() comment on why this is safe regardless of registration order
   }
 
   /** Called once from main.js after persistence has actually loaded. */
@@ -72,6 +77,7 @@ export class WorldObjectsSystem {
     this.engine.entities.destroy(live.entity);
     this.liveInstances.delete(instanceId);
     this.footprints.delete(instanceId);
+    this._swayParts = this._swayParts.filter((p) => p.instanceId !== instanceId);
     this.worldObjectsStore.remove(instanceId);
   }
 
@@ -141,6 +147,7 @@ export class WorldObjectsSystem {
       this._disposeInstanceBehaviours(instance, live.entity);
       this.engine.entities.destroy(live.entity);
       this.liveInstances.delete(instance.id);
+      this._swayParts = this._swayParts.filter((p) => p.instanceId !== instance.id); // otherwise _spawn()'s own _registerSwayParts() below would append fresh entries on top of stale references to the just-destroyed mesh
     }
     this._spawn(instance);
   }
@@ -224,8 +231,45 @@ export class WorldObjectsSystem {
     this.engine.entities.create(entity);
     this.liveInstances.set(instance.id, { entity });
     this._updateFootprint(instance.id, object3D);
+    this._registerSwayParts(instance.id, object3D);
     return entity;
   }
 
-  update(_dt) {}
+  /** "Wind influencing vegetation" — collected once per spawn (a
+   *  one-time `traverse()`, not a per-frame search), so `update()` below
+   *  only ever iterates a flat, already-known list of the meshes that
+   *  actually asked for this (`ObjectCompiler.js`'s own `swaysInWind`
+   *  flag), never every mesh in the scene. */
+  _registerSwayParts(instanceId, object3D) {
+    object3D.traverse((child) => {
+      if (child.userData?.swaysInWind) this._swayParts.push({ instanceId, mesh: child });
+    });
+  }
+
+  /** "Wind influencing vegetation" — a small, cheap sinusoidal rotation
+   *  offset applied on top of each swaying part's own authored rest
+   *  rotation (captured once, in `ObjectCompiler.js`), not a real cloth/
+   *  soft-body simulation. Reads `EnvironmentSystem.windSpeed`/
+   *  `windDirectionRad` directly (both already real, already computed —
+   *  see that file's own comment) — genuinely tying into the existing
+   *  weather system rather than a second, parallel wind value invented
+   *  for this. Amplitude scales with `windSpeed`, so a still day is
+   *  visibly still and a storm visibly tosses the branches, the same
+   *  "fades in proportion to the condition driving it" instinct
+   *  `WorldEnvironmentSystem.js`'s own clouds already follow. */
+  update(dt) {
+    if (this._swayParts.length === 0) return;
+    this._swayTime += dt;
+    const windSpeed = this._environmentSystem?.windSpeed ?? 0;
+    const windDirectionRad = this._environmentSystem?.windDirectionRad ?? 0;
+    const amplitude = 0.03 + windSpeed * 0.12; // radians — subtle even in a strong wind, never a violent thrash
+    const speed = 1.2 + windSpeed * 2.2;
+    for (const { mesh } of this._swayParts) {
+      const rest = mesh.userData.restRotation;
+      if (!rest) continue;
+      const sway = Math.sin(this._swayTime * speed + mesh.userData.swayPhase) * amplitude;
+      mesh.rotation.x = rest.x + sway * Math.sin(windDirectionRad);
+      mesh.rotation.z = rest.z + sway * Math.cos(windDirectionRad);
+    }
+  }
 }
