@@ -1,5 +1,26 @@
-import { lerpColorHex, clamp } from "../utils/MathUtils.js";
+import { lerpColorHex, sampleColorGradient, clamp } from "../utils/MathUtils.js";
 import { solarPosition, azimuthAltitudeToDirection, moonPhaseFraction, moonIllumination, dayOfYear, getObserverLocation, requestGeolocation } from "../utils/Astronomy.js";
+
+// Atmosphere phase — "richer dawn colours, golden hour, blue hour,
+// improved sunset, richer night sky." Keyed by the sun's real altitude
+// (degrees) rather than the clock hour, this one ordered list reproduces
+// every named band players actually notice — and, because altitude
+// (not hour) drives it, the exact same table produces a correct sunrise
+// *and* sunset, in every season and at every latitude, with no separate
+// morning/evening branches to keep in sync (a low winter sun and a high
+// summer one pass through the same bands, just faster or slower). See
+// `sampleColorGradient()`'s own comment for how a `key` between two
+// entries is resolved.
+const SKY_GRADIENT = [
+  [-90, "#05070c"], // deep night — a touch richer than flat black, never truly empty
+  [-8, "#0d1b2e"], // night proper
+  [-4, "#22345c"], // blue hour — the sky's own colour, no sunlight left to scatter warm
+  [-1, "#6a5a8c"], // civil twilight — the violet hinge between blue hour and the first warm light
+  [1.5, "#ff9d7a"], // dawn/dusk — the sun right at the horizon, richest warm band
+  [8, "#ffd9a0"], // golden hour — climbing clear of the horizon, still low and warm
+  [20, "#bfe6ff"], // full day
+  [90, "#bfe6ff"],
+];
 
 function toRadLocal(deg) {
   return (deg * Math.PI) / 180;
@@ -232,9 +253,12 @@ export class TimeOfDaySystem {
     const hemiIntensity = 0.28 + dayFactor * 0.5;
     const ambientIntensity = 0.12 + dayFactor * 0.16;
 
-    let skyColor;
-    if (dayFactor > 0.15) skyColor = lerpColorHex("#ffb27a", "#bfe6ff", clamp((dayFactor - 0.15) / 0.4, 0, 1));
-    else skyColor = lerpColorHex("#0d1b2e", "#ffb27a", clamp(dayFactor / 0.15, 0, 1));
+    // "The sky should become something players genuinely enjoy watching."
+    // Driven by real solar altitude (see SKY_GRADIENT's own comment) —
+    // night, blue hour, civil twilight, dawn/dusk, golden hour, and full
+    // day all fall out of the same one ordered table, correct for
+    // sunrise and sunset alike, at any latitude or season.
+    const skyColor = sampleColorGradient(SKY_GRADIENT, sun.altitude);
 
     return {
       sunDirection, sunColor, sunIntensity, hemiIntensity, ambientIntensity, skyColor, dayFactor,

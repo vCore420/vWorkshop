@@ -40,7 +40,8 @@ const WEATHER_SKY_TINT = {
   storm: { color: "#454b53", strength: 0.75 }, // the darkest, coldest sky of any condition
 };
 const STAR_COUNT = 320;
-const CLOUD_COUNT = 12;
+const CLOUD_COUNT = 12; // the low, denser layer — genuine weather-bearing cloud
+const HIGH_CLOUD_COUNT = 7; // a second, higher, thinner layer — cirrus-like, drifts faster, never fully opaque
 
 /**
  * WorldEnvironmentSystem
@@ -61,10 +62,11 @@ const CLOUD_COUNT = 12;
  * the same sky and in the same fog as the workshop itself, automatically.
  *
  * Kept deliberately restrained per "avoid making the sky visually
- * overwhelming": a modest, fixed number of clouds and stars, soft glow
- * sprites rather than lit 3D spheres for the sun/moon, and every effect
- * (cloud opacity, star visibility, fog density) fades in proportion to the
- * condition driving it rather than switching on abruptly.
+ * overwhelming": a modest, fixed number of clouds (two layers — see
+ * _buildClouds()) and stars, soft glow sprites rather than lit 3D
+ * spheres for the sun/moon, and every effect (cloud opacity, star
+ * visibility, fog density) fades in proportion to the condition driving
+ * it rather than switching on abruptly.
  */
 export class WorldEnvironmentSystem {
   constructor() {
@@ -82,6 +84,11 @@ export class WorldEnvironmentSystem {
     this._weatherTint = null; // { color: THREE.Color, strength } — see _applySkyColor()
     this._precipitation = 0;
     this._rainData = null; // { points, positions } — see _buildRain()
+    // Atmosphere phase additions — see _updateCloudTint()/_applyCelestialVisibility()/_applyFog().
+    this._cloudTintColor = new THREE.Color("#ffffff");
+    this._starVisibilityBase = 0; // TimeOfDaySystem's own value, before cloud cover dims it further
+    this._moonIllumBase = 0.6;
+    this._hour = 12;
   }
 
   init(engine) {
@@ -220,30 +227,41 @@ export class WorldEnvironmentSystem {
     this.shootingStar.material.opacity = Math.min(1, t * 8) * (1 - t) * 0.9;
   }
 
-  /** A handful of sprite clouds drifting with the wind — cheap, and
-   *  "moving clouds" without anything as heavy as a real volumetric or
-   *  particle system. Positions are relative to the camera and wrapped
-   *  the same "effectively infinite, never actually infinite" way the
-   *  ground already is (see update()), so clouds stay visible no matter
-   *  how far from the origin something eventually gets built. */
+  /** "Multiple cloud layers." Two independent fields sharing one build
+   *  helper: a low, denser layer (unchanged from before this phase —
+   *  genuine weather-bearing cloud, closely tied to `cloudCoverage`) and
+   *  a second, higher, sparser, thinner one (cirrus-like — drifts
+   *  faster, catches more of the sky's own colour since it's more
+   *  translucent, and never reaches full opacity even at total overcast).
+   *  Both wrap around the camera the same "effectively infinite" way
+   *  the ground already does — see update(). */
   _buildClouds() {
-    this._cloudData = [];
-    for (let i = 0; i < CLOUD_COUNT; i++) {
+    this._cloudData = [
+      ...this._buildCloudLayer(CLOUD_COUNT, { minScale: 10, maxScale: 19, minHeight: 12, maxHeight: 21, driftMultiplier: 1, opacityScale: 1 }),
+      ...this._buildCloudLayer(HIGH_CLOUD_COUNT, { minScale: 14, maxScale: 24, minHeight: 24, maxHeight: 30, driftMultiplier: 1.8, opacityScale: 0.4 }),
+    ];
+  }
+
+  _buildCloudLayer(count, { minScale, maxScale, minHeight, maxHeight, driftMultiplier, opacityScale }) {
+    const clouds = [];
+    for (let i = 0; i < count; i++) {
       const sprite = new THREE.Sprite(
         new THREE.SpriteMaterial({ map: cloudBlobTexture(), transparent: true, depthWrite: false, opacity: 0 })
       );
-      const scale = 10 + Math.random() * 9;
+      const scale = minScale + Math.random() * (maxScale - minScale);
       sprite.scale.set(scale, scale * 0.55, 1);
       this.engine.scene.add(sprite);
-      this._cloudData.push({
+      clouds.push({
         sprite,
         // Offsets from the camera, not world-space coordinates — see update().
         offsetX: (Math.random() - 0.5) * CLOUD_HALF_RANGE * 2,
         offsetZ: (Math.random() - 0.5) * CLOUD_HALF_RANGE * 2,
-        height: 12 + Math.random() * 9,
-        opacityJitter: 0.7 + Math.random() * 0.3,
+        height: minHeight + Math.random() * (maxHeight - minHeight),
+        opacityJitter: (0.7 + Math.random() * 0.3) * opacityScale,
+        driftMultiplier,
       });
     }
+    return clouds;
   }
 
   /** A field of short falling line-segments, camera-relative and wrapped
@@ -305,26 +323,45 @@ export class WorldEnvironmentSystem {
     // fogDensity 1 -> a genuinely thick fog, much closer on both ends —
     // "Fog"/"Mist" should feel like weather, not just a slightly hazier
     // version of a clear day.
-    const density = this._weatherFogDensity;
+    const density = Math.max(this._weatherFogDensity, this._dawnMistStrength());
     this.engine.scene.fog.near = this._baseFogNear * (1 - density * 0.75);
     this.engine.scene.fog.far = Math.max(this.engine.scene.fog.near + 4, this._baseFogFar * (1 - density * 0.88));
   }
 
+  /** "Morning mist." A soft, low ground haze specifically around sunrise
+   *  — real morning mist is overnight radiative cooling, not a weather
+   *  *state* at all, so it's a small standalone contribution layered
+   *  against whatever the current weather's fog density already is
+   *  (`Math.max`, in `_applyFog()` — the stronger of the two wins, they
+   *  don't stack into something thicker than either alone) rather than a
+   *  new WEATHER_STATES entry. Fixed local-hour window, not sun-altitude
+   *  — the same honest simplification `sunColor`'s own dawn/dusk blend in
+   *  `TimeOfDaySystem.js` already uses, and for the same reason: this is
+   *  a small atmospheric flourish, not something that needs to be exact
+   *  to the minute or correct at every latitude. Suppressed once real
+   *  precipitation is already falling — a rainstorm reads as itself, not
+   *  as "misty." */
+  _dawnMistStrength() {
+    if (this._hour < 4 || this._hour > 9) return 0;
+    const t = 1 - Math.min(1, Math.abs(this._hour - 6) / 2.5);
+    return t * 0.3 * (1 - Math.min(1, this._precipitation * 2));
+  }
+
   _onTimeChanged({ skyColor, sunDirection, moonDirection, moonIllumination, starVisibility, hour }) {
     this._baseSkyColor.set(skyColor);
+    this._hour = hour;
     this._applySkyColor();
+    this._updateCloudTint();
     if (this.engine.scene.fog) this.engine.scene.fog.color.copy(this.engine.scene.background);
+    this._applyFog(); // dawn mist depends on `hour` — see its own comment
 
     this._sunDirection.copy(sunDirection);
     this._moonDirection.copy(moonDirection);
     this.sunSprite.visible = sunDirection.y > -0.08;
     this.moonSprite.visible = moonDirection.y > -0.08;
-    // A new moon is genuinely dim, not just "the same disc, less lit" —
-    // moonIllumination scales both how visible it is and how much it
-    // stands out against the night sky.
-    this.moonSprite.material.opacity = 0.25 + moonIllumination * 0.65;
-    this.stars.material.opacity = starVisibility * 0.85;
-    this._starVisibility = starVisibility;
+    this._starVisibilityBase = starVisibility;
+    this._moonIllumBase = moonIllumination;
+    this._applyCelestialVisibility();
     // "Stars mapped to the real night sky where practical" — not a full
     // constellation catalogue (a genuinely different-scale undertaking),
     // but the star field does turn slowly with the hour, the same
@@ -350,6 +387,32 @@ export class WorldEnvironmentSystem {
     this.engine.scene.background = background;
   }
 
+  /** "Better cloud lighting." Clouds read as lit by the same sky they sit
+   *  in — mostly white, but picking up whatever hue the sky itself
+   *  currently has (a warm blush at golden hour, a cool blue-grey at
+   *  night) and however grey a storm or overcast day already tints the
+   *  background — rather than a single flat white regardless of
+   *  conditions. Reacts to state that already exists (`_baseSkyColor`,
+   *  `_weatherTint`); nothing new is computed here. */
+  _updateCloudTint() {
+    this._cloudTintColor.set("#ffffff").lerp(this._baseSkyColor, 0.35);
+    if (this._weatherTint) this._cloudTintColor.lerp(this._weatherTint.color, this._weatherTint.strength * 0.6);
+  }
+
+  /** "Cloud cover influence" on the night sky. Stars and the moon each
+   *  have their own base visibility from TimeOfDaySystem (how dark it is,
+   *  what phase the moon's in) — this layers real cloud cover over that,
+   *  the way an actually overcast night genuinely does hide the sky,
+   *  without either signal needing to know about the other. Called from
+   *  both _onTimeChanged and _onEnvironmentChanged, same reasoning as
+   *  _applySkyColor() above. */
+  _applyCelestialVisibility() {
+    const clearFactor = 1 - this._cloudCoverage * 0.7;
+    this.moonSprite.material.opacity = (0.25 + this._moonIllumBase * 0.65) * clearFactor;
+    this.stars.material.opacity = this._starVisibilityBase * 0.85 * clearFactor;
+    this._starVisibility = this._starVisibilityBase * clearFactor;
+  }
+
   _onEnvironmentChanged({ id, fogDensity, cloudCoverage, windSpeed, windDirectionRad, precipitation }) {
     this._weatherFogDensity = fogDensity ?? 0;
     this._cloudCoverage = cloudCoverage ?? 0.1;
@@ -359,6 +422,8 @@ export class WorldEnvironmentSystem {
     const tintDef = WEATHER_SKY_TINT[id];
     this._weatherTint = tintDef ? { color: new THREE.Color(tintDef.color), strength: tintDef.strength } : null;
     this._applySkyColor();
+    this._updateCloudTint();
+    this._applyCelestialVisibility();
     if (this.engine.scene.fog) this.engine.scene.fog.color.copy(this.engine.scene.background);
     this._applyFog();
   }
@@ -391,13 +456,17 @@ export class WorldEnvironmentSystem {
     // (via their own offsetX/offsetZ) so they're always somewhere
     // overhead. Opacity eases toward cloudCoverage rather than snapping,
     // so a change in conditions reads as clouds gathering/clearing, not a
-    // light switch.
+    // light switch. Each cloud's own driftMultiplier (see
+    // _buildCloudLayer()) lets the high, thin layer visibly outrun the
+    // low one — real high cirrus does exactly this, no separate wind
+    // value needed for it.
     const windX = Math.cos(this._windDirectionRad);
     const windZ = Math.sin(this._windDirectionRad);
     const driftSpeed = 0.15 + this._windSpeed * 1.6;
     for (const cloud of this._cloudData) {
-      cloud.offsetX += windX * driftSpeed * dt;
-      cloud.offsetZ += windZ * driftSpeed * dt;
+      const speed = driftSpeed * cloud.driftMultiplier;
+      cloud.offsetX += windX * speed * dt;
+      cloud.offsetZ += windZ * speed * dt;
       if (cloud.offsetX > CLOUD_HALF_RANGE) cloud.offsetX -= CLOUD_HALF_RANGE * 2;
       else if (cloud.offsetX < -CLOUD_HALF_RANGE) cloud.offsetX += CLOUD_HALF_RANGE * 2;
       if (cloud.offsetZ > CLOUD_HALF_RANGE) cloud.offsetZ -= CLOUD_HALF_RANGE * 2;
@@ -405,6 +474,7 @@ export class WorldEnvironmentSystem {
       if (camPos) cloud.sprite.position.set(camPos.x + cloud.offsetX, cloud.height, camPos.z + cloud.offsetZ);
       const targetOpacity = this._cloudCoverage * 0.75 * cloud.opacityJitter;
       cloud.sprite.material.opacity += (targetOpacity - cloud.sprite.material.opacity) * Math.min(1, dt * 0.5);
+      cloud.sprite.material.color.copy(this._cloudTintColor);
     }
     // Rain falls continuously whenever precipitation is active and the
     // camera isn't inside a registered interior volume (InteriorSystem —

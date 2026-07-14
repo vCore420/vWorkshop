@@ -204,12 +204,16 @@ export class ResidentController {
    *  proximity check, not anything the player did *to* Bubble), an
    *  active project pulling gently toward the workbench
    *  (`WorldAwareness.snapshot().activeProjects`), and a Quiet Corner
-   *  pull at night all join the same mechanism, unchanged — "everything
-   *  should quietly observe, remember and respond" is true here by
-   *  simply adding more real signals into a merge function that already
-   *  existed, not a new decision system layered on top of it. Still
-   *  never guaranteed, never scripted — an ordinary weighted pick among
-   *  idle locations that already exist either way. */
+   *  pull at night all join the same mechanism, unchanged. **Atmosphere
+   *  phase**: a windy day joins golden hour and rain as "worth watching
+   *  from the window," and a storm specifically (not just any strong
+   *  wind) adds its own pull toward the Quiet Corner — sheltering,
+   *  reusing the exact pull night already established rather than a new
+   *  one. "Everything should quietly observe, remember and respond" is
+   *  true here by simply adding more real signals into a merge function
+   *  that already existed, not a new decision system layered on top of
+   *  it. Still never guaranteed, never scripted — an ordinary weighted
+   *  pick among idle locations that already exist either way. */
   _windowWatchWeights() {
     const weights = {};
     const merge = (extra) => {
@@ -217,9 +221,17 @@ export class ResidentController {
     };
 
     if (this._environmentSystem && this._timeOfDaySystem) {
-      const worthWatching = isRainingNow(this._environmentSystem) || isGoldenHourNow(this._timeOfDaySystem);
+      const worthWatching = isRainingNow(this._environmentSystem) || isGoldenHourNow(this._timeOfDaySystem) || this._environmentSystem.current === "windy";
       if (worthWatching) merge({ lookingOutWindow: 4 });
     }
+
+    // "Residents should naturally respond to... wind... environmental
+    // conditions." Not fear, just the same unhurried preference for
+    // something calmer that already pulls the resident to the Quiet
+    // Corner at night (below), now also triggered by weather worth
+    // sheltering from — a real named state (`storm`), not an arbitrary
+    // wind-speed threshold invented for this.
+    if (this._environmentSystem?.current === "storm") merge({ besideQuietCorner: 1.6 });
 
     merge(this._traitModifiers.locationWeights);
 

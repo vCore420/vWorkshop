@@ -1,4 +1,30 @@
 import { playAmbientTrack, createNoiseSource, createNatureAmbience, getTrackList } from "../utils/AudioSynth.js";
+import { CameraSystem } from "./CameraSystem.js";
+import { InteriorSystem } from "./InteriorSystem.js";
+import { EnvironmentSystem } from "./EnvironmentSystem.js";
+
+// Atmosphere phase — "indoor ambience, outdoor ambience... audio should
+// respond naturally to location." One shared lowpass filter downstream
+// of each layer's own gain (see resumeContext()) gives every ambience
+// the generic "heard through walls" muffling; these per-ambience-type
+// multipliers then decide how much *presence* each specific sound keeps
+// once indoors — rain on the roof stays close and audible (you very much
+// still hear it), wind is heavily buried (a wall genuinely blocks moving
+// air in a way it doesn't block a heavy patter), storm sits between the
+// two. Nothing here invents a third audio layer for "rain on windows" —
+// the window pane streak overlay (EnvironmentSystem.js) already
+// represents that visually; this is the same rain sound, just heard
+// through a wall instead of falling on one directly outdoors.
+const INDOOR_AMBIENCE_PROFILE = {
+  rain: { cutoff: 3200, gainMult: 1 },
+  storm: { cutoff: 2600, gainMult: 0.88 },
+  wind: { cutoff: 650, gainMult: 0.32 },
+};
+const OUTDOOR_FILTER_CUTOFF = 19000; // effectively unfiltered — a plain, high lowpass ceiling rather than bypassing the node entirely, so ramping toward it stays a lowpass sweep, not a click
+const INDOOR_NATURE_CUTOFF = 1100; // "distant birds" through a wall
+const INDOOR_NATURE_GAIN_MULT = 0.45;
+const LOCATION_CHECK_INTERVAL = 0.6; // seconds — indoor/outdoor doesn't need checking every frame
+const WIND_GUST_MODULATION_INTERVAL = 0.2;
 
 /**
  * AudioSystem
@@ -13,13 +39,15 @@ import { playAmbientTrack, createNoiseSource, createNatureAmbience, getTrackList
  *   - Weather ambience: a noise bed tied to the current environment (wind,
  *     rain, a heavier storm mix). Controlled entirely by
  *     EnvironmentSystem's events — no direct coupling.
- *   - Nature ambience: birds by day, crickets by night — controlled by
- *     TimeOfDaySystem's own day/night state, and quieted down (not
- *     silenced) during heavier precipitation, since birdsong over a
+ *   - Nature ambience: a four-phase dawn/day/dusk/night bird-and-insect
+ *     bed — controlled by TimeOfDaySystem's own hour, and quieted down
+ *     (not silenced) during heavier precipitation, since birdsong over a
  *     rainstorm reads as a mistake, not atmosphere. This is a second,
  *     independent gain from the weather layer, not a replacement for it —
  *     both can be audible at once, the way a light rain with birdsong
  *     easing back in as it clears actually sounds.
+ *   - Location: indoors vs outdoors, checked against InteriorSystem —
+ *     see the INDOOR_AMBIENCE_PROFILE comment below.
  *
  * The AudioContext can only start after a user gesture (browser autoplay
  * policy), so `resume()` is called from the entry screen's "Step inside"
@@ -39,8 +67,15 @@ export class AudioSystem {
     this.isPlaying = false;
     this._pendingTrackId = null;
     this._lastAmbienceId = null;
-    this._isDay = true;
     this._precipitation = 0;
+    // Atmosphere phase — location + live wind (see INDOOR_AMBIENCE_PROFILE
+    // and update()'s own wind-gust modulation).
+    this._cameraSystem = null;
+    this._interiorSystem = null;
+    this._environmentSystem = null;
+    this._indoor = false;
+    this._locationCheckTimer = 0;
+    this._windGustTimer = 0;
     // Settings-driven multipliers (Settings app's Audio tab), layered on
     // top of this system's own existing volume/balance choices below,
     // rather than replacing them — see setVolumeMultipliers.
@@ -52,15 +87,17 @@ export class AudioSystem {
 
   init(engine) {
     this.engine = engine;
+    this._cameraSystem = engine.getSystem(CameraSystem); // resolved once — safe regardless of registration order, see ARCHITECTURE.md's own note on this pattern
+    this._interiorSystem = engine.getSystem(InteriorSystem);
+    this._environmentSystem = engine.getSystem(EnvironmentSystem);
     engine.events.on("environment:changed", ({ ambience, precipitation }) => {
       this._lastAmbienceId = ambience;
       this._precipitation = precipitation ?? 0;
       this._setAmbience(ambience);
       this._updateNatureIntensity();
     });
-    engine.events.on("timeofday:changed", ({ dayFactor }) => {
-      this._isDay = dayFactor > 0.08; // matches the same rough dawn/dusk threshold TimeOfDaySystem's own sun visibility uses
-      this.nature?.setDayNight(this._isDay);
+    engine.events.on("timeofday:changed", ({ hour }) => {
+      this.nature?.setHour(hour);
     });
     engine.events.on("persistence:save", (bag) => {
       bag.audio = { trackId: this.currentTrack?.id ?? null, isPlaying: this.isPlaying, volume: this.volume };
@@ -86,12 +123,31 @@ export class AudioSystem {
     this.musicGain = this.context.createGain();
     this.musicGain.gain.value = this._musicMultiplier;
     this.musicGain.connect(this.masterGain);
+
+    // "Indoor ambience. Outdoor ambience... audio should respond
+    // naturally to location." One shared lowpass per layer, downstream
+    // of that layer's own gain — indoors, both ease toward a lower
+    // cutoff (see _applyLocationFilter()); outdoors, toward
+    // OUTDOOR_FILTER_CUTOFF, which is high enough to be effectively no
+    // filtering at all. Built at the outdoor value; _applyLocationFilter()
+    // below corrects it to the player's real starting location (indoors,
+    // in the Workshop) before the first frame renders, rather than
+    // waiting for update()'s own throttled check to notice.
+    this._locationFilterAmbience = this.context.createBiquadFilter();
+    this._locationFilterAmbience.type = "lowpass";
+    this._locationFilterAmbience.frequency.value = OUTDOOR_FILTER_CUTOFF;
+    this._locationFilterNature = this.context.createBiquadFilter();
+    this._locationFilterNature.type = "lowpass";
+    this._locationFilterNature.frequency.value = OUTDOOR_FILTER_CUTOFF;
+
     this.ambienceGain = this.context.createGain();
     this.ambienceGain.gain.value = 0.25;
-    this.ambienceGain.connect(this.masterGain);
+    this.ambienceGain.connect(this._locationFilterAmbience);
+    this._locationFilterAmbience.connect(this.masterGain);
     this.natureGain = this.context.createGain();
     this.natureGain.gain.value = 0.3;
-    this.natureGain.connect(this.masterGain);
+    this.natureGain.connect(this._locationFilterNature);
+    this._locationFilterNature.connect(this.masterGain);
 
     if (this._pendingTrackId) {
       this.playTrack(this._pendingTrackId);
@@ -99,8 +155,9 @@ export class AudioSystem {
     }
     this._setAmbience(this._lastAmbienceId);
     this.nature = createNatureAmbience(this.context, this.natureGain);
-    this.nature.setDayNight(this._isDay);
+    this.nature.setHour(12); // a harmless starting guess — corrected on the very next timeofday:changed tick
     this._updateNatureIntensity();
+    this._checkLocation(true); // establish the real indoor/outdoor state immediately rather than waiting a full LOCATION_CHECK_INTERVAL
   }
 
   getTrackList() {
@@ -143,20 +200,57 @@ export class AudioSystem {
     if (!this.context) return;
     this.masterGain.gain.linearRampToValueAtTime(this.volume * this._masterMultiplier, this.context.currentTime + 0.1);
     this.musicGain.gain.linearRampToValueAtTime(this._musicMultiplier, this.context.currentTime + 0.1);
-    if (this.currentAmbience) {
-      this.currentAmbience.gain.gain.linearRampToValueAtTime(this._ambiencePeak * this._ambientMultiplier, this.context.currentTime + 0.5);
-    }
-    this._updateNatureIntensity();
+    this._applyLocationFilter(); // re-applies the ambience gain (with the indoor multiplier folded in) and nature's own intensity together, rather than duplicating that math here
   }
 
   /** Nature's own target level, before EnvironmentSystem or Settings say
    *  otherwise: quieted under heavier precipitation (birdsong over a
-   *  downpour reads as a mistake), scaled by the same ambient multiplier
-   *  the weather layer already respects. */
+   *  downpour reads as a mistake), quieted further indoors ("distant
+   *  birds" through a wall), scaled by the same ambient multiplier the
+   *  weather layer already respects. */
   _updateNatureIntensity() {
     if (!this.nature) return;
     const precipitationQuiet = 1 - Math.min(1, this._precipitation * 0.9);
-    this.nature.setIntensity(0.5 * precipitationQuiet * this._ambientMultiplier);
+    const locationMult = this._indoor ? INDOOR_NATURE_GAIN_MULT : 1;
+    this.nature.setIntensity(0.5 * precipitationQuiet * this._ambientMultiplier * locationMult);
+  }
+
+  /** Recomputes whether the player is currently indoors (via
+   *  InteriorSystem — the same "one generic question, architected once"
+   *  capability its own doc comment already names "muffling outdoor
+   *  sound" as a natural future use of) and, only on an actual change
+   *  (or when `force` is set, from resumeContext()'s own first call),
+   *  re-applies every location-dependent level. Called from update() on
+   *  a slow throttle — indoor/outdoor doesn't need checking every frame. */
+  _checkLocation(force = false) {
+    const pos = this._cameraSystem?.position;
+    const indoor = pos ? (this._interiorSystem?.isInside(pos) ?? false) : this._indoor;
+    if (indoor !== this._indoor || force) {
+      this._indoor = indoor;
+      this._applyLocationFilter();
+    }
+  }
+
+  /** "Indoor ambience. Outdoor ambience... rain on roof... wind through
+   *  trees... audio should respond naturally to location." Eases (never
+   *  snaps) the two shared location filters toward the indoor or outdoor
+   *  cutoff, and re-applies the current ambience's own indoor gain
+   *  multiplier (see INDOOR_AMBIENCE_PROFILE) and nature's own (see
+   *  _updateNatureIntensity()) together, so a doorway crossing reads as
+   *  one coherent change rather than several small ones landing at
+   *  slightly different times. */
+  _applyLocationFilter() {
+    if (!this.context) return;
+    const RAMP = 1.2;
+    const t = this.context.currentTime;
+    const profile = INDOOR_AMBIENCE_PROFILE[this._lastAmbienceId] ?? { cutoff: 900, gainMult: 0.5 };
+    this._locationFilterAmbience.frequency.linearRampToValueAtTime(this._indoor ? profile.cutoff : OUTDOOR_FILTER_CUTOFF, t + RAMP);
+    this._locationFilterNature.frequency.linearRampToValueAtTime(this._indoor ? INDOOR_NATURE_CUTOFF : OUTDOOR_FILTER_CUTOFF, t + RAMP);
+    if (this.currentAmbience) {
+      const mult = this._indoor ? profile.gainMult : 1;
+      this.currentAmbience.gain.gain.linearRampToValueAtTime(this._ambiencePeak * this._ambientMultiplier * mult, t + RAMP);
+    }
+    this._updateNatureIntensity();
   }
 
   _setAmbience(ambienceId) {
@@ -176,8 +270,13 @@ export class AudioSystem {
     gain.connect(this.ambienceGain);
     source.start();
     this._ambiencePeak = { rain: 0.9, storm: 1, wind: 0.5 }[ambienceId] ?? 0.5;
-    gain.gain.linearRampToValueAtTime(this._ambiencePeak * this._ambientMultiplier, this.context.currentTime + 1.5);
-    this.currentAmbience = { id: ambienceId, source, gain };
+    const indoorMult = this._indoor ? (INDOOR_AMBIENCE_PROFILE[ambienceId]?.gainMult ?? 0.5) : 1;
+    gain.gain.linearRampToValueAtTime(this._ambiencePeak * this._ambientMultiplier * indoorMult, this.context.currentTime + 1.5);
+    // `filter`/`baseFrequency` kept on the record (not just closure-
+    // locals) so update() can live-modulate the cutoff with real wind
+    // gusts, varying around this base rather than overwriting it — see
+    // "Wind through trees" in update()'s own comment.
+    this.currentAmbience = { id: ambienceId, source, filter, baseFrequency: filter.frequency.value, gain };
   }
 
   _stopAmbience() {
@@ -189,5 +288,35 @@ export class AudioSystem {
     this.currentAmbience = null;
   }
 
-  update(_dt) {}
+  /** Two independent, both throttled, slow checks — neither needs
+   *  per-frame precision:
+   *   - Indoor/outdoor (`_checkLocation`) — LOCATION_CHECK_INTERVAL.
+   *   - "Wind through trees" — the current ambience's own base filter
+   *     cutoff (see _setAmbience's own `baseFrequency`) breathes with
+   *     EnvironmentSystem's *live* windSpeed (already gust-smoothed
+   *     there every frame — see that file's own `_windGustPhase`), for
+   *     wind/storm specifically; a gust genuinely brightens the noise
+   *     bed for a moment, the same way real wind moving through trees
+   *     swells and fades rather than holding one flat, unchanging pitch.
+   *     Pulled directly from EnvironmentSystem rather than waiting for
+   *     its own `environment:changed` event, which only fires on a
+   *     state *change*, not on every frame's own gust wobble.
+   */
+  update(dt) {
+    if (!this.context) return;
+
+    this._locationCheckTimer -= dt;
+    if (this._locationCheckTimer <= 0) {
+      this._locationCheckTimer = LOCATION_CHECK_INTERVAL;
+      this._checkLocation();
+    }
+
+    this._windGustTimer -= dt;
+    if (this._windGustTimer <= 0 && this.currentAmbience && (this.currentAmbience.id === "wind" || this.currentAmbience.id === "storm")) {
+      this._windGustTimer = WIND_GUST_MODULATION_INTERVAL;
+      const windSpeed = this._environmentSystem?.windSpeed ?? 0.2;
+      const gustFrequency = this.currentAmbience.baseFrequency * (0.85 + windSpeed * 0.6);
+      this.currentAmbience.filter.frequency.linearRampToValueAtTime(gustFrequency, this.context.currentTime + WIND_GUST_MODULATION_INTERVAL);
+    }
+  }
 }

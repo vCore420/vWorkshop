@@ -1,4 +1,5 @@
 import { WEATHER_STATES } from "../../systems/EnvironmentSystem.js";
+import { getObserverLocation, dayOfYear, getSeason } from "../../utils/Astronomy.js";
 
 const MODES = [
   ["manual", "Manual"],
@@ -21,6 +22,10 @@ function compassLabel(directionRad) {
   return COMPASS[Math.round(deg / 45) % 8];
 }
 
+function capitalize(text) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 /**
  * createWindowOverlay
  * ---------------------
@@ -37,6 +42,11 @@ function compassLabel(directionRad) {
  * fetch: a short-lived poll (cleared on close, see the returned disposer)
  * re-renders while a request is in flight, since nothing else would
  * otherwise notice when it resolves.
+ *
+ * The summary line now quietly names the season too (Season
+ * Foundations, Atmosphere phase) — read straight off `Astronomy.getSeason()`,
+ * the same pure function anything else that wants to know the season
+ * calls, not a value this file computes or owns.
  */
 export function createWindowOverlay({ environmentSystem, timeOfDaySystem }) {
   return {
@@ -72,7 +82,8 @@ export function createWindowOverlay({ environmentSystem, timeOfDaySystem }) {
 
         const summary = document.createElement("p");
         summary.className = "environment-summary";
-        summary.textContent = `${weatherDef.label} \u2014 ${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+        const season = getSeason(dayOfYear(new Date()), getObserverLocation().latitude);
+        summary.textContent = `${weatherDef.label}, ${capitalize(season)} \u2014 ${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
         panelEl.appendChild(summary);
 
         const wind = document.createElement("p");
