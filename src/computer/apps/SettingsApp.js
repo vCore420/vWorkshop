@@ -10,13 +10,15 @@
  * what each one does and why the ranges are what they are.
  *
  * The room lighting / clock-mode / weather controls that used to live in
- * "General" now live in "Atmosphere" instead — "the central place for
- * understanding and controlling the Workshop's environmental
- * simulation" — alongside a full, live read-out of the same environment
- * the 3D scene itself renders (see renderAtmosphere()'s own comment).
+ * "General" now live in "Atmosphere" instead — "the application should
+ * become the central place for controlling environmental conditions" —
+ * alongside a full, live read-out of the same environment the 3D scene
+ * itself renders (see renderAtmosphere()'s own comment), and, since the
+ * Atmosphere phase, Atmosphere Profiles (see renderAtmosphereProfiles()).
  */
 import { WEATHER_STATES } from "../../systems/EnvironmentSystem.js";
-import { getObserverLocation, solarPosition, moonPhaseFraction, moonIllumination, sunriseSunset, moonriseMoonset, dayOfYear } from "../../utils/Astronomy.js";
+import { getObserverLocation, solarPosition, moonPhaseFraction, moonIllumination, sunriseSunset, moonriseMoonset, dayOfYear, getSeason } from "../../utils/Astronomy.js";
+
 
 function formatClockTime(hour) {
   const h = Math.floor(hour) % 24;
@@ -126,7 +128,7 @@ function overrideSliderRow(labelText, currentValue, onChange) {
   return row;
 }
 
-export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySystem, environmentSystem, musicSystem, dangerZoneActions, aiConnectionManager, residentProfileStore, residentBehaviour, cameraSystem, interiorSystem, hostManager }) {
+export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySystem, environmentSystem, musicSystem, dangerZoneActions, aiConnectionManager, residentProfileStore, residentBehaviour, cameraSystem, interiorSystem, hostManager, atmosphereProfileStore }) {
   const engine = musicSystem.engine; // same trick MediaApp.js uses — avoids a dedicated engine dependency just for this
 
   const TABS = [
@@ -210,6 +212,8 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         const moonTimes = moonriseMoonset(location.latitude, doy, phaseFrac);
         const starsVisible = sun.altitude < -2; // roughly matches TimeOfDaySystem's own soft star-visibility threshold
 
+        if (atmosphereProfileStore) renderAtmosphereProfilesSection(el);
+
         el.appendChild(sectionHeading("Weather"));
         el.appendChild(
           buildSelectRow(
@@ -251,6 +255,11 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
 
         el.appendChild(sectionHeading("Date & Time"));
         el.appendChild(infoRow("Current date", now.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })));
+        el.appendChild(infoRow("Season", capitalize(getSeason(doy, location.latitude))));
+        const seasonHint = document.createElement("p");
+        seasonHint.className = "app-subtitle";
+        seasonHint.textContent = "Season Foundations \u2014 the Workshop now knows what season it is, from your real date and hemisphere. Seasonal vegetation, resident behaviour, and deeper environmental change are future work; this is the architecture they'll build on.";
+        el.appendChild(seasonHint);
         el.appendChild(infoRow("Current time", formatClockTime(timeOfDaySystem.currentTime)));
         el.appendChild(
           buildSelectRow(
@@ -312,6 +321,93 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         el.appendChild(starsHint);
 
         return null;
+      }
+
+      /** "Support creating and saving atmosphere profiles... the
+       *  application should become the central place for controlling
+       *  environmental conditions." Six permanent built-in profiles (see
+       *  AtmosphereProfileStore.js) plus anything the person has saved
+       *  themselves, each a one-click Apply away — "Apply" is just
+       *  handing the profile's own plain weather/time snapshot straight
+       *  to the exact same `setWeather()`/`setManualOverride()`/
+       *  `setTime()` calls every other control on this tab already uses,
+       *  nothing new to interpret. Placed first on the tab, ahead of the
+       *  live weather read-out below — a creative starting point, then
+       *  the fine detail for anyone who wants to adjust further. */
+      function renderAtmosphereProfilesSection(el) {
+        el.appendChild(sectionHeading("Atmosphere Profiles"));
+        const intro = document.createElement("p");
+        intro.className = "app-subtitle";
+        intro.textContent = "Apply a saved combination of weather and time in one click, or save the atmosphere exactly as it looks right now.";
+        el.appendChild(intro);
+
+        const saveBtn = document.createElement("button");
+        saveBtn.type = "button";
+        saveBtn.className = "settings-action-button";
+        saveBtn.textContent = "Save current as profile\u2026";
+        saveBtn.addEventListener("click", () => {
+          const name = window.prompt("Name this atmosphere:", "New Atmosphere");
+          if (!name) return;
+          atmosphereProfileStore.create({
+            name,
+            weather: { current: environmentSystem.current, manualOverrides: { ...environmentSystem.manualOverrides } },
+            time: { hour: timeOfDaySystem.currentTime },
+          });
+          setTab("atmosphere");
+        });
+        el.appendChild(saveBtn);
+
+        const grid = document.createElement("div");
+        grid.className = "atmosphere-profile-grid";
+        for (const profile of atmosphereProfileStore.all()) grid.appendChild(buildAtmosphereProfileRow(profile));
+        el.appendChild(grid);
+      }
+
+      function buildAtmosphereProfileRow(profile) {
+        const row = document.createElement("div");
+        row.className = "atmosphere-profile-row";
+
+        const info = document.createElement("div");
+        info.className = "atmosphere-profile-info";
+        const title = document.createElement("strong");
+        title.textContent = profile.name;
+        info.appendChild(title);
+        if (profile.description) {
+          const desc = document.createElement("p");
+          desc.textContent = profile.description;
+          info.appendChild(desc);
+        }
+        row.appendChild(info);
+
+        const actions = document.createElement("div");
+        actions.className = "atmosphere-profile-actions";
+
+        const applyBtn = document.createElement("button");
+        applyBtn.type = "button";
+        applyBtn.className = "settings-action-button";
+        applyBtn.textContent = "Apply";
+        applyBtn.addEventListener("click", () => {
+          environmentSystem.setWeather(profile.weather.current);
+          for (const [key, value] of Object.entries(profile.weather.manualOverrides ?? {})) environmentSystem.setManualOverride(key, value);
+          timeOfDaySystem.setTime(profile.time.hour);
+          setTab("atmosphere");
+        });
+        actions.appendChild(applyBtn);
+
+        if (!atmosphereProfileStore.isBuiltIn(profile.id)) {
+          const deleteBtn = document.createElement("button");
+          deleteBtn.type = "button";
+          deleteBtn.className = "danger-zone-button";
+          deleteBtn.textContent = "Delete";
+          deleteBtn.addEventListener("click", () => {
+            if (!window.confirm(`Delete the "${profile.name}" atmosphere profile?`)) return;
+            atmosphereProfileStore.remove(profile.id);
+            setTab("atmosphere");
+          });
+          actions.appendChild(deleteBtn);
+        }
+        row.appendChild(actions);
+        return row;
       }
 
       function renderGraphics(el) {
