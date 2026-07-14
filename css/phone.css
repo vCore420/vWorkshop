@@ -166,6 +166,22 @@
   color: #14211d;
   border-color: transparent;
 }
+.workshop-phone-textarea {
+  width: 100%;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  resize: vertical;
+  box-sizing: border-box;
+}
+.workshop-phone-textarea:focus {
+  outline: none;
+  border-color: var(--screen-glow);
+}
 
 .workshop-phone-list {
   display: flex;

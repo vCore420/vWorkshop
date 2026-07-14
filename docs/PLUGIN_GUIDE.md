@@ -1,5 +1,15 @@
 # Plugin guide
 
+**Starting a new plugin? Read `docs/PLUGIN_SDK.md` first.** The Plugin
+SDK phase built a friendlier, permission-aware `Workshop` facade on top
+of everything this document describes — one `manifest` + `setup(Workshop)`
+function instead of learning each registry below individually. Nothing
+here changed shape or stopped working; this document remains accurate
+for the underlying mechanisms (and for anything already written directly
+against one of them), and the SDK's own docs point back to specific
+sections here where it's useful to understand what's actually happening
+underneath.
+
 The workshop is meant to grow for a long time. Rather than editing core
 systems every time a new idea shows up, most ideas should arrive as
 **plugins**: self-contained objects registered with `engine.plugins`, with

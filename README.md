@@ -424,10 +424,14 @@ assets/          currently empty of artwork on purpose — see assets/README.md
 
 ## Extending this
 
-Read `docs/PLUGIN_GUIDE.md` first — most new ideas (a GitHub integration, a
-local AI companion, workshop calculators, whatever comes next) should arrive
-as a plugin, not as edits to core systems. `docs/ARCHITECTURE.md` explains
-the interaction pipeline and event names every plugin builds on.
+Read `docs/PLUGIN_SDK.md` first — a `manifest` + `setup(Workshop)` plugin
+can register a Browser page, a Phone app, a Builder asset, a Host
+service, and its own isolated storage, all through one object, with real
+permissions and error isolation so a broken plugin can't take the
+Workshop down. `docs/PLUGIN_GUIDE.md` documents the lower-level
+registries the SDK is built on, for anything already written against
+them directly. `docs/ARCHITECTURE.md` explains the interaction pipeline
+and event names every plugin builds on.
 
 ## Technology
 
@@ -825,5 +829,22 @@ saved by hand, applied in one click from a reorganised Atmosphere tab.
 Bubble now also watches a windy window and shelters from a storm, using
 the exact mechanism Living World 2.0 already established. See
 `docs/ATMOSPHERE.md` for the full account.
+
+**Version 2, Phase 12 — Plugin SDK (v2.1.2)** — the Workshop becomes a
+real platform, not just extensible in theory. A unified `Workshop`
+facade (manifest + `setup(Workshop)`) built entirely on top of the
+registries that already existed — pages, assets, Phone/Computer apps,
+Host services, the Construction Library — none of which changed shape.
+Real per-plugin permissions (auto-granted, genuinely revocable, since
+there's no real sandbox to gate same-origin code behind), isolated
+per-plugin storage, and error isolation strong enough that a throwing
+plugin marks itself `"error"` rather than taking the Workshop down.
+`host://plugins` is now a genuine Plugin Manager — live status,
+manifest metadata, permission checkboxes, and real Enable/Disable/
+Reload. One new reference plugin, `workshopToolkitPlugin.js`, touches
+every capability at once (a page, a Builder asset, a Phone app with
+real persisted storage, a Host service); the original two example
+plugins are untouched, still demonstrating the contracts the SDK sits
+on top of. See `docs/PLUGIN_SDK.md` for the full account.
 
 </details>

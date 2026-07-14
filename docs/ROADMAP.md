@@ -2279,6 +2279,77 @@ pulls toward the Quiet Corner — sheltering, reusing the identical pull
 night already established. See `docs/RESIDENT.md`'s own "Resident
 awareness, extended" section.
 
+## Version 2 — Phase 12 — Plugin SDK (v2.1.2)
+
+**Goal:** "The Workshop is now a mature platform. It is time to allow
+other creators to build on top of it... by the end of this phase a
+developer should be capable of extending the Workshop without modifying
+the Workshop itself." See `docs/PLUGIN_SDK.md` for the full write-up.
+
+**A unified `Workshop` facade, built on top of what already existed, not
+a replacement for it.** `WorkshopSDK.js` wraps `PageRegistry`,
+`AssetService`, the Phone/Computer app registries, `ServiceRegistry`,
+and the Construction Library — none of which changed shape. A plugin now
+needs one `{manifest, setup(Workshop)}` shape and one loader call
+(`loadWorkshopPlugin()`) instead of learning each registry individually;
+the two original plugin contracts (`engine.plugins`,
+`hostManager.pluginRegistry`) remain fully supported, completely
+unchanged, for anything already written against them.
+
+**A real manifest and validation.** `PluginManifest.js` — required
+`id`/`name`/`version`, an optional `permissions` array checked against a
+real capability vocabulary, and a simple semver-lite
+`minWorkshopVersion` check that warns rather than blocks. A plugin with
+an invalid manifest is refused with a specific, actionable error before
+its own code ever runs.
+
+**Real per-plugin permissions.** `PluginPermissions.js` — a plugin's
+declared capabilities are auto-granted (there's no real sandbox to gate
+same-origin code behind; a blocking install prompt would be theatre),
+but genuinely revocable from `host://plugins`, and every `Workshop.*`
+method checks `isGranted()` before doing anything. `Workshop.storage` is
+the one capability never gated — isolated per plugin by construction,
+nothing shared for a grant to protect it from.
+
+**The Workshop remains stable even when a plugin fails.** Every call
+into a plugin's own code now funnels through `PluginManager._safeCall()`
+— a thrown error is caught, logged clearly, and marks that one plugin
+`"error"`, rather than taking down `engine.init()` or the frame loop.
+Real Enable/Disable/Reload joined the original `init`/`dispose` pair,
+with the SDK's own automatic disposal (pages, asset kinds, event
+listeners) making a reload genuinely clean for anything registered
+through it.
+
+**A real, interactive Plugin Manager.** `host://plugins` now shows live
+status (active/disabled/error, with the actual error), manifest
+metadata, and per-plugin permission checkboxes, alongside genuine
+Enable/Disable/Reload buttons — the identical `postMessage` pattern
+`host://permissions`' own checkboxes already established.
+
+**One polished reference example**, `workshopToolkitPlugin.js` —
+registers a Browser page, a Builder asset (a genuinely placeable
+signpost), a Phone app (with a real `Workshop.storage`-backed personal
+note), and a Host service, plus an optional `Workshop.lifecycle()` pair,
+all through the manifest + `setup(Workshop)` shape. The two original
+example plugins are untouched, still demonstrating the contracts the SDK
+is built on top of directly.
+
+**Two small, honest lifecycle additions to registries that needed them**
+— `AssetService.unregisterKind()` and
+`ConstructionLibrary.registerConstructionPiece()`/
+`unregisterConstructionPiece()` — both new, both small, both required
+for a plugin's own assets and Builder pieces to genuinely disappear on
+disable rather than lingering as dangling entries.
+
+**Honest, deliberate scope boundaries** — Phone/Computer app
+registrations can't be cleanly undone (both registries build their app
+list once, at startup); no dynamic install/uninstall flow; no plugin
+dependency resolution; `registerBehaviour()` isn't wrapped by the SDK
+yet; Resident/Automation/Hardware capabilities remain architecture-only,
+matching their Host-level equivalents' own honest status. All named
+explicitly in `docs/PLUGIN_SDK.md`'s own "Known simplifications" rather
+than silently absent.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

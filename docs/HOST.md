@@ -234,6 +234,17 @@ directly, the same "the real state change always happens in
 `BrowserApp.js`, never inside the `srcdoc` page" pattern
 `workshop-browser-remove-bookmark` already established).
 
+**A second, deliberately separate permissions system, since the Plugin
+SDK phase.** `PluginPermissions.js` grants *per plugin*, not per
+Workshop — "can `your-name.my-plugin` register a Browser page," not "can
+plugins in general do X." This isn't a replacement for the category
+above (`PermissionsService`'s own `"plugins"` entry keeps its existing,
+honest, not-yet-real status — a global switch with nothing to gate) —
+it's a different shape entirely, real from the moment a plugin's own
+manifest declares what it wants. See `docs/PLUGIN_SDK.md`'s own
+"Permissions" section for the full account, including why capabilities
+are auto-granted rather than gated behind a blocking prompt.
+
 ## Asset Service
 
 "Begin preparing the Host for the future Shared Asset Library... the
@@ -276,25 +287,32 @@ slowly-diverging copies of the same computation).
 
 "Continue expanding plugin support... plugin discovery, registration,
 lifecycle, permissions, metadata, updates, dependencies. The Host should
-become responsible for managing Workshop plugins." The Workshop actually
-has two independent plugin contracts (see `docs/PLUGIN_GUIDE.md`):
-`engine.plugins` (general lifecycle) and `hostManager.pluginRegistry`
-(Browser pages, and — new in the Workshop Asset System phase — Workshop
-Assets, via the same registry's own second method,
-`provideAssets(assetService)`). `PluginService.js` is the one place that
-can answer "what plugins currently exist, and which capability does each
-one contribute" without a caller needing to know every system exists
-separately — a plugin implementing more than one contract shows up once,
-every contract it implements listed, not duplicated. `host://plugins`
-reads this rather than `pluginRegistry.contributors()` directly, showing
-every loaded plugin and, where applicable, which asset kinds it
-registered.
+become responsible for managing Workshop plugins." The Workshop now has
+*three* ways a plugin can exist (see `docs/PLUGIN_SDK.md`): the original
+`engine.plugins` (general lifecycle), the original
+`hostManager.pluginRegistry` (Browser pages and Workshop Assets, via
+`providePages()`/`provideAssets()` — still fully supported, unchanged),
+and, since the Plugin SDK phase, any plugin loaded through
+`PluginLoader.js` — which also becomes a real `engine.plugins` entry,
+carrying a manifest, live status, and permission grants along with it.
+`PluginService.js` is still the one place that can answer "what plugins
+currently exist, and what does each one provide" without a caller
+needing to know any of these mechanisms exist separately.
 
-Discovery, metadata, dependencies, updates, and permissions (the rest of
-this phase's own list) stay honestly out of scope, for the identical
-reason Automation's own scheduling does — there's no real design yet for
-"a plugin depends on another plugin," and inventing one to fill space
-would be premature architecture, not preparation.
+**Discovery, metadata, and permissions are now genuinely real** — a
+plugin's manifest (`id`, `name`, `version`, `description`, `author`),
+its live status (`active`/`disabled`/`error`, with the actual error
+message), and its per-capability permission grants (via
+`PluginPermissions.js`) are all real, persisted, and shown at
+`host://plugins`, which is now genuinely interactive: Enable/Disable/
+Reload buttons and permission checkboxes, the identical `postMessage`
+pattern `host://permissions`' own checkboxes established. **Dependencies
+and updates stay honestly out of scope** — there's still no real design
+for "a plugin depends on another plugin" or "a plugin has a newer
+version available," and inventing either to fill space would be
+premature architecture, not preparation. See `docs/PLUGIN_SDK.md` for
+the complete account — this section stays a short summary of where
+`PluginService` sits in the Host's own architecture specifically.
 
 ## Automation Service
 
@@ -372,7 +390,9 @@ template a future Ollama migration would follow, not just a diagram.
 Unchanged from the Browser Ecosystem phase's own account — two real
 plugins (`plugin://example-plugin`, `plugin://calculator`) prove the
 Browser-page contract end-to-end; see `docs/BROWSER.md`'s own "Plugin
-Pages" section and `docs/PLUGIN_GUIDE.md`.
+Pages" section and `docs/PLUGIN_GUIDE.md`. A third,
+`plugin://workshop-toolkit`, joined them in the Plugin SDK phase — see
+`docs/PLUGIN_SDK.md`.
 
 ## Browser Refinement: the page-refresh bug, fixed at its root
 

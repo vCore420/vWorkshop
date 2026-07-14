@@ -320,6 +320,16 @@ either to exist — the entire point being demonstrated. `host://plugins`
 lists every contributing plugin and which pages each one declared
 (`plugin.pages`, an optional manifest field, purely for display).
 
+**Plugin SDK phase**: a third path now exists — `Workshop.registerPage()`,
+reached from a plugin's own `setup(Workshop)` rather than
+`providePages(pageRegistry)` directly. It's the identical
+`pageRegistry.register()` call underneath (see `WorkshopSDK.js`), with a
+permission check and automatic cleanup on disable layered on top — see
+`docs/PLUGIN_SDK.md`. `plugin://workshop-toolkit` is the reference
+example for this newer path; `example-plugin`/`calculator` remain
+exactly as they were, still demonstrating the original, still-supported
+contract directly.
+
 ## Local Protocols (Workshop Platform phase)
 
 "Continue expanding Workshop protocols... `asset://`, `resident://`,
