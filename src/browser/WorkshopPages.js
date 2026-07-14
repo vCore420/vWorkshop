@@ -54,6 +54,7 @@ export function registerWorkshopPages(pageRegistry, searchIndex, deps) {
   pageRegistry.register("workshop://docs", () => docFilePage("Workshop Documentation", "./README.md")); // alias — see this file's own comment
   pageRegistry.register("workshop://builder", () => docFilePage("Builder Documentation", "./docs/WORLDBUILDER.md"));
   pageRegistry.register("workshop://animation", () => docFilePage("Player & Animation Documentation", "./docs/PLAYER.md"));
+  pageRegistry.register("workshop://plugin-sdk", () => docFilePage("Plugin SDK Documentation", "./docs/PLUGIN_SDK.md"));
   pageRegistry.register("workshop://projects", () => projectsPage(projectsStore, hostProjectsService));
   pageRegistry.register("workshop://settings", () => settingsPage());
   pageRegistry.register("workshop://residents", () => residentsPage({ residentProfileStore, residentState, residentBehaviour, conversationMemory, aiConnectionManager }));
@@ -68,6 +69,7 @@ export function registerWorkshopPages(pageRegistry, searchIndex, deps) {
     { url: "workshop://", title: "Workshop Home", category: "Workshop", keywords: ["home", "start"] },
     { url: "workshop://documentation", title: "Workshop Documentation", category: "Documentation", keywords: ["docs", "readme", "help"] },
     { url: "workshop://builder", title: "Builder Documentation", category: "Documentation", keywords: ["builder", "construction", "objects"] },
+    { url: "workshop://plugin-sdk", title: "Plugin SDK Documentation", category: "Documentation", keywords: ["plugin", "sdk", "developer", "extend"] },
     { url: "workshop://animation", title: "Player & Animation Documentation", category: "Documentation", keywords: ["animation", "player", "movement"] },
     { url: "project://", title: "Workshop Projects", category: "Workshop", keywords: ["notebook", "pinboard", "workbench"] },
     { url: "workshop://settings", title: "Browser Settings", category: "Workshop", keywords: ["preferences", "clear data"] },
@@ -123,6 +125,7 @@ function homePage({ browserStore, hostManager, residentProfileStore }) {
         ${tile("workshop://documentation", "Workshop Documentation", "How the Workshop is built")}
         ${tile("workshop://builder", "Builder Documentation", "Building objects and behaviours")}
         ${tile("workshop://animation", "Player & Animation", "Identity, movement, and animation")}
+        ${tile("workshop://plugin-sdk", "Plugin SDK", "Extending the Workshop with plugins")}
         ${tile("workshop://bookmarks", "Bookmarks", "Pages you've saved")}
         ${tile("workshop://settings", "Browser Settings", "This browser's own preferences")}
       </div>

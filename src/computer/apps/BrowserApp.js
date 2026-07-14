@@ -342,6 +342,24 @@ export function createBrowserApp({ browserStore, pageRegistry, hostManager }) {
           hostManager?.services.get("assets")?.toggleFavourite(event.data.assetId);
           const tabId = activeTabId();
           if (frames.has(tabId)) loadIntoFrame(tabId, browserStore.getCurrentUrl(tabId));
+        } else if (event.data?.type === "workshop-browser-plugin-action" && event.data.id) {
+          // host://plugins' own Enable/Disable/Reload buttons — see
+          // HostPages.js's own pluginsPage() comment. The real
+          // PluginManager call always happens here, via PluginService's
+          // own thin action methods.
+          const pluginService = hostManager?.services.get("plugins");
+          if (event.data.action === "enable") pluginService?.enablePlugin(event.data.id);
+          else if (event.data.action === "disable") pluginService?.disablePlugin(event.data.id);
+          else if (event.data.action === "reload") pluginService?.reloadPlugin(event.data.id);
+          const tabId = activeTabId();
+          if (frames.has(tabId)) loadIntoFrame(tabId, browserStore.getCurrentUrl(tabId));
+        } else if (event.data?.type === "workshop-browser-set-plugin-permission" && event.data.pluginId && event.data.capabilityId) {
+          // host://plugins' own per-plugin permission checkboxes.
+          const pluginService = hostManager?.services.get("plugins");
+          if (event.data.granted) pluginService?.grantPermission(event.data.pluginId, event.data.capabilityId);
+          else pluginService?.revokePermission(event.data.pluginId, event.data.capabilityId);
+          const tabId = activeTabId();
+          if (frames.has(tabId)) loadIntoFrame(tabId, browserStore.getCurrentUrl(tabId));
         }
       };
       window.addEventListener("message", onMessage);
