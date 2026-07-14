@@ -443,6 +443,19 @@ the sunrise, watching rain, floating near the record player while music
 plays, returning to favourite spots) is the *visible result* of this
 system, not a separate routine that had to be built on top of it.
 
+**Living World phase: a fifth bag, `relationships`.** "Residents should
+become aware of one another... who they spend time near." With a single
+AI resident, "one another" today means Bubble and the Workshop's own
+Beings — keyed by Being instance id, bumped by the same
+`_maybeSamplePatterns()` timer whenever Bubble genuinely idles within a
+few metres of one (`BEING_AWARENESS_RADIUS` in `ResidentController.js`).
+"Relationships should remain lightweight during this phase but provide a
+strong architectural foundation for future development" is true by
+construction — this is the identical `bump()`/`favourite()` mechanism
+every other dimension already uses, so a second AI resident later needs
+no new relationship system of its own, only its own instance of this
+same class.
+
 ## Behaviour Memory
 
 "Residents should begin remembering behavioural patterns rather than
@@ -469,6 +482,15 @@ with a lower sample-count bar — see `MIN_SAMPLES` in each file's own
 comment for the reasoning), which is the whole point: a pattern about a
 *player's* habits is meant to accumulate over the life of the Workshop,
 not reset every time it's reopened.
+
+**Living World phase: "usual working hours."** A third bag,
+`workingHourCounts` — distinct from `timeOfDayCounts` above (which bumps
+whenever the player is sampled, wherever they happen to be) in that this
+one only bumps when the player is *also* in a working zone (the
+workbench or the computer desk) at that same moment. "The player usually
+visits in the evening" and "the player usually works in the evening" can
+now genuinely differ — `leadingWorkingHours()` answers the second
+question specifically.
 
 ### A quiet familiarity, shared
 
@@ -669,6 +691,116 @@ Continuing the account above:
   path the real conversation uses, rather than an approximation of it.
   See docs/AI.md's own "Resident Sandbox" and "Resident Health" sections.
 
+## World Awareness (Living World 2.0 phase)
+
+"Rather than individual systems inventing their own logic, they should
+all observe the same world state... future systems should naturally
+consume this same awareness architecture." Before this phase, "is it
+raining," "what time bucket is it," and "is there an active project"
+were each answered correctly by whichever system happened to need the
+answer — `ResidentController.js`'s own `_windowWatchWeights()`/
+`_maybeDriftMood()` reaching into `EnvironmentSystem`/`TimeOfDaySystem`
+directly, `ResidentWorldSignals.js` already having pulled the two most
+commonly repeated questions ("is it raining," "is it golden hour") into
+one shared place for exactly that reason (see that file's own comment).
+`src/world/WorldAwareness.js` is the more general next step — one small,
+read-only class, owning no state of its own, that answers "what does the
+world look like right now" as a single, consistent snapshot:
+
+```js
+const state = worldAwareness.snapshot();
+// { time: {hour, bucket, isNight, isGoldenHour},
+//   weather: {id, isRaining},
+//   music: {isPlaying, songTitle} | null,
+//   player: {position} | null,
+//   room: "workshop",
+//   activeProjects: [...],
+//   nearbyBeings: [...],
+//   residentMood: "content" | ...,
+//   recentEvents: [...] }
+```
+
+**Deliberately query-based, not event-based** — `snapshot()` is called
+whenever a consumer actually wants to know something
+(`ResidentController.js`'s own slow pattern-sampling timer, currently the
+only real consumer), not fired continuously. A future consumer wanting
+to react the *instant* something changes should listen to the same
+underlying events this class itself reads from (`environment:changed`,
+`timeofday:changed`, and so on) — `WorldAwareness` summarises their
+current state on demand, it doesn't wrap or replace them.
+
+**Every dependency is optional, every field degrades gracefully** — a
+Workshop with no `musicSystem` wired in still gets a valid snapshot back
+(`music: null`, not a thrown error), the same standard every other
+cross-system read in this codebase already holds itself to.
+
+### World Event Log
+
+"Begin introducing lightweight world events... weather changing,
+sunrise, sunset, music beginning... nothing should feel scripted.
+Everything should simply feel like the world continuing."
+`src/world/WorldEventLog.js` — a small, bounded (40 entries — "the goal
+is not infinite history, the goal is meaningful history"), persisted
+list of `{type, summary, at}` entries. It's a record, not a trigger:
+nothing here fires an event or drives behaviour by itself;
+`WorldAwareness.snapshot().recentEvents` is the one place anything
+downstream actually reads it.
+
+Populated entirely by listening to events other systems already emit
+(`main.js`'s own wiring) — never a new signal invented for this:
+
+- **`environment:changed`** — only recorded when the weather id actually
+  *differs* from the last one noted, not on every frame's own gradual
+  fog/cloud easing.
+- **`timeofday:changed`** — only recorded at the specific moment
+  `ResidentWorldSignals.currentTimeBucket()` crosses into or out of
+  `"night"` — a genuine sunrise or nightfall, not a running commentary on
+  the sun's own continuous movement.
+- **`music:playbackStateChanged`** — only recorded on the transition from
+  not-playing to playing, with the song's own real title where available.
+
+Each listener tracks its own "last known state" locally (a closure
+variable in `main.js`, not a field on `WorldEventLog` itself) specifically
+so the class stays a plain, generic record-keeper with no opinion about
+*which* transitions count as noteworthy — that judgement call belongs to
+whoever's actually watching a specific system, the same "this file owns
+*when*, the real logic lives elsewhere" split the rest of the Workshop
+already follows.
+
+**A real, visible payoff**: `ResidentContext.buildConversationContext()`
+now folds the two most recent world events into the same "Things you
+might have noticed recently" line Bubble's own curiosity notes already
+produce — a real weather change or a song starting is genuinely the same
+*kind* of thing from Bubble's own perspective as noticing something new
+built nearby, so it shares that one line rather than needing a second,
+separate one.
+
+### Resident awareness, extended
+
+Three new small, believable behaviours, each layered directly into the
+exact weighted-merge mechanism `_windowWatchWeights()` already used for
+window-watching and favourite places — "everything should quietly
+observe, remember and respond" made concrete by adding more real signals
+into a merge function that already existed, not a new decision system on
+top of it:
+
+- **"Watching the player work"** — a plain proximity check against the
+  same real workbench/computer-desk positions `PlayerPatternMemory.js`'s
+  own zones already use. The player doesn't need to be doing anything in
+  particular, just genuinely standing there.
+- **"Remaining near ongoing projects"** — `WorldAwareness.snapshot()
+  .activeProjects.length > 0` pulls gently toward the workbench, the
+  same modest weight a favourite location already gets.
+- **"Becoming quieter at night"** — a pull toward the Quiet Corner
+  specifically at night, rather than a movement-speed change (which would
+  risk fighting with the trait/dial multipliers already applied
+  elsewhere).
+
+None of these are guarantees — every one is one more weighted option
+among several in the same ordinary `maybePickNewLocation()` pick idle
+locations already use, exactly the "subtlety, not spectacle" the phase's
+own brief asks for.
+
 ## Known simplifications (by design, for this phase)
 
 - **One resident, not several** — `ResidentController` assumes a single
@@ -707,6 +839,18 @@ Continuing the account above:
   they lean far enough from neutral** — a dial sitting close to 0.5 says
   nothing at all, on purpose; a resident with every dial left at default
   should read exactly as it did before dials existed.
+- **`WorldAwareness.room` is a plain constant, not a real lookup** — "the
+  one room the Workshop currently has," honestly; a second room existing
+  is what would turn this into a genuine query.
+- **Relationships track *proximity*, not genuine interaction** — Bubble
+  idling near a Being bumps the same affinity a real conversation would;
+  there's no way yet to distinguish "spent time near" from "actually did
+  something with."
+- **World events are noticed, never acted on beyond conversation
+  colour** — `WorldEventLog` is a memory, not a trigger; nothing currently
+  changes behaviour *because* an event was logged, only because the
+  underlying world state (weather, time, an active project) itself
+  changed, which `_windowWatchWeights()` already reads independently.
 
 ## Future extension points
 
@@ -758,5 +902,17 @@ Continuing the account above:
   narrow, two-mode state machine is deliberately simple; a future
   behaviour system could layer richer states on top without touching
   `ResidentMovement`/`ResidentRenderer` at all.
+- **Event-driven `WorldAwareness` consumers** — today's one real consumer
+  (`ResidentController.js`) only ever polls on its own slow timer; a
+  future system wanting to react the instant something changes has the
+  identical underlying events (`environment:changed`,
+  `timeofday:changed`, `worldEvents:changed`) already available to listen
+  to directly.
+- **Beings reading `WorldAwareness` too** — `BeingController.js` doesn't
+  consume it yet; a Being noticing the weather or an active project would
+  follow the exact same pattern `ResidentController.js` already
+  establishes, not a new one.
+- **A real room lookup for `WorldAwareness.room`**, the moment a second
+  room exists to distinguish.
 
 

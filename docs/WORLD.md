@@ -589,13 +589,22 @@ fuller version would need.
 "If something naturally exists within the Workshop world, it should also
 exist as a Builder asset." The construction catalogue grew substantially
 this phase — Foundation and Railing complete the Buildings list (Floors,
-Walls, Corners, Roofs, Doors, Windows, Stairs already existed); Nature
-(tree, bush, flower, rock, log, grass patch, garden bed), Paths (stone,
-gravel, dirt, timber, concrete), and Lighting (garden light, street
-light, lantern, floodlight, campfire — every one carrying the same
-`lightSource` behaviour the original ceiling light already used) are
-entirely new categories; Mailbox completes Utilities (Fence, Gate, and
-Sign, which already doubled as a signpost, existed already).
+Walls, Corners, Roofs, Doors, Windows, Stairs already existed); Mailbox
+completes Utilities (Fence, Gate, and Sign, which already doubled as a
+signpost, existed already). **Nature, Paths, and Lighting were reserved
+as real categories here** (`CONSTRUCTION_GROUPS` already named every
+piece this phase intended — `tree`, `bush`, `flower`, `rock`, `log`,
+`grassPatch`, `gardenBed`; `stonePath`, `gravelPath`, `dirtPath`,
+`timberPath`, `concretePath`; `gardenLight`, `streetLight`, `lantern`,
+`floodlight`, `campfire`) **but the real piece definitions themselves
+weren't actually added yet** — a gap between this document's own claim
+and the code that went unnoticed until the World Builder phase (Version
+2, Phase 9) actually populated Nature and Paths for real; see this
+document's own "World Builder (Version 2, Phase 9)" section further
+below for the full, corrected account. Lighting (garden light, street
+light, lantern, floodlight, campfire) remains reserved but still
+unpopulated — a genuine future extension point, not claimed as done here
+any longer.
 
 With the catalogue now well past its original size, the library screen
 groups pieces by category (`CONSTRUCTION_GROUPS`, a compact id → group
@@ -642,4 +651,162 @@ this, not just preview it on the ghost.
 - **Grid/interior-detection bounds are fixed to a generous area around
   the Workshop**, not the whole conceivable world — reasonable for "a
   village beside the Workshop," not yet for an unbounded map.
+
+## World Builder (Version 2, Phase 9) — real terrain, real ground cover
+
+"The Builder creates structures. The World Builder creates places... the
+surrounding world should feel just as thoughtfully designed as the
+Workshop itself." Distinct from the "World Builder" section above (an
+earlier, Version 1 phase's own work, evolving Build Mode to recognise
+player-built interiors) — this is the phase that gave the *ground
+itself* something to shape, corrected the Nature/Paths documentation gap
+noted above, and gave every existing outdoor system (wind, weather) a
+first real thing to visibly affect.
+
+### Terrain, a real bounded heightmap
+
+`src/systems/TerrainSystem.js` — a genuine, editable 48m×48m patch of
+ground, layered a few centimetres above `WorldEnvironmentSystem`'s own
+flat, infinitely-recentring ground rather than replacing it. That
+distinction matters: the existing ground solves "the world never
+visibly ends" by discarding any specific location's own identity
+(recentring around the camera); terrain needed the opposite property — a
+fixed patch someone can return to and find exactly as they left it. "The
+goal is not creating a huge world. The goal is creating a beautiful one"
+is taken literally: a generous garden's worth of sculptable ground, not
+an attempt to make the *entire* infinite ground editable.
+
+Every vertex position is written directly from this file's own
+`gridToWorldX/Z()` formula (the exact inverse of `worldToGridX/Z()`,
+used for every query) rather than trusted to `THREE.PlaneGeometry`'s own
+default layout — `PlaneGeometry` is used only for its already-correct
+triangle index buffer and UV layout, real work worth reusing. That
+symmetry is what makes "click here, the terrain changes here" reliable
+rather than a rotation-direction assumption.
+
+**Raise, Lower, Flatten, Smooth, Terrace** — five real brush operations,
+each a genuine, tested algorithm (law-of-cosines-simple, not
+approximated): Raise/Lower add a falloff-weighted height delta; Flatten
+eases every point toward the brush centre's own current height; Smooth
+eases each point toward its own immediate neighbours' average; Terrace
+snaps to the nearest 0.5m step. Every brush uses linear falloff (full
+strength at the centre, nothing at the edge) — soft-edged, not a
+hard-walled cylinder of effect. Height queries
+(`getHeightAt()`) are bilinearly interpolated, so walking across a slope
+feels like a slope, not a staircase of flat triangles.
+
+**Terrain painting** — plain vertex colours (`grass`, `dirt`, `rock`,
+`sand`, `gravel`, `mud`, `path`), blended by ordinary linear
+interpolation between the existing and new colour at paint time. No
+texture splatting, no shader work — the same "genuinely real,
+deliberately simple" standard `AnimationPlayback.js`'s own Euler-lerp
+interpolation already holds itself to.
+
+**Walking on it is real, not just visual.** `CameraSystem.
+_computeGroundHeight()` now queries `TerrainSystem.getHeightAt()` as its
+base height (falling back to the flat `0` it always used outside the
+terrain patch or with no TerrainSystem registered), before the existing
+footprint loop still lets a player stand on top of something placed on
+that terrain, unchanged.
+
+### Roads & Paths — tiles, not curves
+
+"Roads and paths should naturally follow curves where appropriate." A
+deliberate, honest scope choice: rather than a spline/curve-generation
+system, a path is laid the same way a wall is built — small alphabet
+tiles (`stonePath`/`gravelPath`/`dirtPath`/`timberPath`/`concretePath`,
+1m squares, half a Floor tile's own size for tighter winding), placed one
+at a time, or a `"path"` terrain-paint colour striped across the ground
+directly. Both are genuinely real, working ways to make a path; neither
+pretends to generate a smooth spline a player didn't actually lay out
+themselves.
+
+### Landscape Assets — real Nature pieces, at last
+
+"Landscape assets should become Workshop Assets just like every other
+object." `ConstructionLibrary.js`'s own `CONSTRUCTION_GROUPS` mapping
+had already reserved the exact ids this phase needed (`tree`, `bush`,
+`flower`, `rock`, `log`, `grassPatch`, `gardenBed`) and every colour
+constant (`FOLIAGE_COLOR`, `BARK_COLOR`, `STONE_COLOR`, `SOIL_COLOR`, and
+so on) — see "Builder Library" above for the corrected account of that
+gap. This phase filled it in for real: seven genuine multi-part
+definitions, built from the identical primitive-part vocabulary every
+other Construction piece already uses.
+
+**A tree gently moves in the wind, for real.** `ObjectCompiler.js`
+gained a `swaysInWind` per-part flag; `WorldObjectsSystem.js` collects
+every tagged part once per spawn (never a per-frame search) and applies
+a small sinusoidal rotation on top of each part's own authored rest
+rotation, reading `EnvironmentSystem.windSpeed`/`windDirectionRad`
+directly — the identical, already-computed wind values
+`WorldEnvironmentSystem.js`'s own clouds already drift by. "Begin
+preparing the World Builder for future Atmosphere systems... wind
+influencing vegetation" is genuinely real today, not only a prepared
+hook — amplitude scales with wind speed, so a still day is visibly still
+and a storm visibly tosses the branches.
+
+### Asset System Integration — Construction pieces join for real
+
+Construction Library pieces (every wall, door, and — new this phase —
+every Nature/Paths piece) are now merged into the `"objects"`
+`AssetService` kind alongside player-designed `ObjectLibraryStore` items
+— real search, favouriting, and a genuine `asset://object/<id>` detail
+page for a Tree or a Stone Path, using each piece's own real
+`getConstructionGroup()` category (already the exact categorisation the
+Builder Phone's own library screen groups by) rather than the single
+flat `"Construction"` label every piece happened to share internally.
+
+### Terrain Editing UI
+
+A fifth tab (`BuilderPhoneUI.js`) alongside Construction Library/Saved
+Objects/Imported Models/Blueprints — choosing a shape tool or a paint
+material immediately arms it; sculpting itself happens by clicking and
+dragging directly in the 3D world, the identical interaction gesture
+placing and moving objects already use, not a separate mode with its own
+different feel. A full stroke (from pointerdown to pointerup) is one
+undo entry, snapshotting the whole 49×49 heightmap and colour map before
+and after — small enough (under 5,000 numbers each) that a whole-array
+snapshot per stroke is simpler and safer than tracking exactly which
+vertices a stroke touched.
+
+### Known simplifications (by design, for this phase)
+
+- **No Building Plots** — the brief's own "define suitable areas for
+  future buildings" concept was judged a real, separate feature (its own
+  data store, its own visual marker) rather than something to squeeze in
+  alongside terrain, painting, and real Nature assets; a genuine future
+  extension, not silently dropped.
+- **No dedicated Water Features tool** — a pond today is whatever a
+  future Nature-library "pond" piece or a painted low terrain basin
+  looks like; a real, animated water surface (even a simple one) is
+  future work.
+- **Lighting fixtures remain reserved, still unpopulated** — see
+  "Builder Library" above; `gardenLight`/`streetLight`/`lantern`/
+  `floodlight`/`campfire` stay ids without real pieces behind them yet.
+- **One bounded terrain patch, not a whole editable world** — 48m
+  square, fixed size and position, centred on the Workshop. Consistent
+  with "the goal is not creating a huge world."
+- **No terrain-aware collision beyond height** — a very steep raised
+  cliff doesn't stop horizontal movement the way a wall does; only the
+  vertical foot-height calculation changed.
+- **Imported structures don't yet get automatic terrain integration**
+  (footprint-shaped terrain flattening on import, say) — still placed
+  exactly as before, on whatever height the terrain already has there.
+
+### Future extension points
+
+- **Building Plots** — a small, real data store (position, size,
+  rotation, name) and a translucent ground marker, integrating with the
+  Builder the same way a Blueprint's own placement preview already does.
+- **A real water surface** — even a simple animated, semi-transparent
+  plane would satisfy "ponds, streams" honestly, without attempting
+  large-scale simulation the brief itself explicitly didn't ask for.
+- **Lighting fixtures**, completing the reserved category with the same
+  `lightSource` behaviour the original ceiling light already uses.
+- **Terrain-aware collision** for steep slopes, not just height.
+- **Multiple terrain patches**, or a larger single one, if "the grounds"
+  ever needs to grow substantially beyond a single 48m square.
+- **Manual terrain-brush falloff curves** (smoothstep instead of linear)
+  for an even softer edge, if the current linear falloff ever reads as
+  too mechanical in practice.
 

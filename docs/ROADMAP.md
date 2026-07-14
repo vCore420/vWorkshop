@@ -2132,6 +2132,86 @@ found and corrected** while writing this phase's own documentation —
 docs/WORLDBUILDER.md even after this phase built them; fixed alongside
 everything else.
 
+## Version 2 — Phase 9 — World Builder (v2.0.9)
+
+**Goal:** "The Builder creates structures. The World Builder creates
+places... the surrounding world should feel just as thoughtfully
+designed as the Workshop itself." See docs/WORLD.md's own "World Builder
+(Version 2, Phase 9)" section for the full write-up.
+
+**A real, bounded, editable terrain heightmap** (`TerrainSystem.js`) — a
+48m patch layered above the existing infinite flat ground, not a
+replacement for it. Raise/Lower/Flatten/Smooth/Terrace, all genuine,
+tested algorithms with soft falloff; vertex-colour painting (grass,
+dirt, rock, sand, gravel, mud, path) blended by real linear
+interpolation. Walking on it is real — `CameraSystem` now queries a
+bilinearly-interpolated terrain height as its base ground height.
+
+**A real, previously-undiscovered documentation/implementation gap,
+found and corrected**: `docs/WORLD.md` had claimed Nature, Paths, and
+Lighting Construction Library pieces already existed from an earlier
+Version 1 phase; they didn't — only their category reservations
+(`CONSTRUCTION_GROUPS`) and colour constants did. This phase filled in
+seven real Nature pieces and five real Path pieces for good, corrected
+the historical record, and honestly left Lighting fixtures still
+reserved-but-unpopulated rather than claiming them too.
+
+**Trees genuinely sway in the wind** — a small, cheap, real effect
+(`ObjectCompiler.js`'s new `swaysInWind` part flag,
+`WorldObjectsSystem.js`'s own update loop) reading the exact same wind
+values `WorldEnvironmentSystem`'s clouds already drift by — "begin
+preparing the World Builder for future Atmosphere systems" made
+concrete now, not only a prepared hook.
+
+**Construction Library pieces joined the Asset System for real** — every
+wall, door, and new Nature/Paths piece is now searchable, favouritable,
+and has a genuine Browser detail page, merged into the existing
+`"objects"` kind alongside player-designed objects.
+
+**Honest, deliberate scope boundaries**: no Building Plots, no dedicated
+water-feature tool, no curved-spline paths (tile-based instead, the same
+"alphabet pieces" philosophy every other Construction piece already
+follows) — all named explicitly as real future extension points rather
+than silently absent.
+
+## Version 2 — Phase 10 — Living World 2.0 (v2.1.0)
+
+**Goal:** "A living world is not one that constantly performs. A living
+world is one that quietly notices... the goal is subtlety, not
+spectacle." See docs/RESIDENT.md's own "World Awareness" section for the
+full write-up.
+
+**A shared World Awareness layer** (`WorldAwareness.js`) — one small,
+read-only, query-based class answering "what does the world look like
+right now" (time, weather, music, player, room, active projects, nearby
+Beings, resident mood, recent events) as a single consistent snapshot,
+owning no state of its own — every field already lived somewhere real;
+this is the first place anything can ask for all of it at once.
+
+**A real World Event Log** (`WorldEventLog.js`) — a small, bounded (40
+entries), persisted record of genuine transitions (a weather change, a
+sunrise or nightfall, a song starting), populated entirely by listening
+to events the Workshop already emits. A real, visible payoff: the two
+most recent events now fold into Bubble's own "things you might have
+noticed recently" conversation line, alongside its existing curiosity
+notes.
+
+**Three new believable resident behaviours**, each layered directly into
+the existing weighted location-merge mechanism, not a new decision system
+on top of it: watching the player work (a plain proximity check),
+remaining near ongoing projects (`activeProjects` pulling toward the
+workbench), and becoming quieter at night (a Quiet Corner pull, not a
+movement-speed change).
+
+**Lightweight relationships** — a fifth `ResidentPreferences` affinity
+bag tracking which Beings Bubble has genuinely spent time near, using the
+identical `bump()`/`favourite()` mechanism every other preference
+dimension already uses.
+
+**Player habits, extended** — `PlayerPatternMemory` gained a third bag,
+distinguishing "usual visiting hours" from genuine "usual working hours"
+(only bumped when the player is in a working zone specifically).
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

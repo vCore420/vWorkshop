@@ -782,5 +782,31 @@ for the first time. All of it layered on top of the existing single-
 selection mechanics without changing them. See `docs/WORLDBUILDER.md`
 for the full account.
 
-</details>
+**Version 2, Phase 9 — World Builder (v2.0.9)** — the Workshop grew real
+grounds: a genuine, bounded, editable terrain heightmap (raise, lower,
+flatten, smooth, terrace, all real tested algorithms, plus vertex-colour
+painting for grass/dirt/rock/sand/gravel/mud/path), walkable for real via
+`CameraSystem`'s own ground-height query. Seven real Nature pieces
+(trees that genuinely sway in the wind) and five real Path tiles filled a
+gap this phase discovered — `docs/WORLD.md` had documented these as
+already existing from an earlier phase when only their category
+reservations did; corrected alongside the real implementation.
+Construction Library pieces (walls, doors, and the new Nature/Paths ones
+alike) joined the Shared Asset Library for real. See `docs/WORLD.md`'s
+own "World Builder (Version 2, Phase 9)" section for the full account.
 
+**Version 2, Phase 10 — Living World 2.0 (v2.1.0)** — the Workshop's
+systems began quietly observing one another. A shared World Awareness
+layer (`WorldAwareness.js`) answers "what does the world look like right
+now" — time, weather, music, player, active projects, nearby Beings,
+resident mood, recent events — as one consistent snapshot any system can
+query, alongside a real, bounded World Event Log recording genuine
+transitions (a weather change, a sunrise, a song starting). Bubble
+gained three new believable behaviours (watching the player work,
+remaining near ongoing projects, becoming quieter at night), a
+lightweight awareness of the Workshop's own Beings, and "usual working
+hours" distinct from ordinary visiting patterns — all layered onto
+existing mechanisms rather than a new decision system built on top. See
+`docs/RESIDENT.md`'s own "World Awareness" section for the full account.
+
+</details>
