@@ -35,7 +35,7 @@ const PANEL_REVEAL_END = 1.0; // ...and is fully shown by this progress
  */
 export class ComputerSystem {
   constructor(deps) {
-    this.deps = deps; // { projectsStore, notesStore, musicSystem, lightingSystem, timeOfDaySystem, environmentSystem, settingsStore, appearanceStore, outfitStore, textureStore, dangerZoneActions }
+    this.deps = deps; // { projectsStore, notesStore, musicSystem, lightingSystem, timeOfDaySystem, environmentSystem, settingsStore, appearanceStore, outfitStore, textureStore, dangerZoneActions, audioSystem }
     this.active = false;
     this.progress = 0;
     this.lastAppId = "projects";
@@ -92,12 +92,22 @@ export class ComputerSystem {
     });
   }
 
+  /** Desk phase — "chair movement... small interaction sounds... everything
+   *  should remain understated." A soft creak on sitting down and a
+   *  slightly lower-pitched one standing back up — `AudioSystem`'s own
+   *  `playInteractionSound()` entry point, the same one the Workbench's
+   *  paper shuffle already uses, just a second `kind`. Keyboard/mouse
+   *  sounds were considered and deliberately left out: the player's own,
+   *  real physical keyboard already makes that sound while they type into
+   *  this panel's text fields, and synthesising a second one under it
+   *  would be redundant at best, distracting at worst. */
   activate() {
     if (this.active || !this.screenMesh) return;
     this.active = true;
     this._panelClosed = false;
     this.panel.open(this.lastAppId);
     this.engine.input?.exitPointerLock();
+    this.deps.audioSystem?.playInteractionSound("chairCreak", { pitch: 1.05 });
   }
 
   deactivate() {
@@ -108,6 +118,7 @@ export class ComputerSystem {
     // rejected by the browser if it falls outside a user-gesture window, in
     // which case clicking the canvas (already wired in main.js) covers it.
     this.engine.input?.requestPointerLock();
+    this.deps.audioSystem?.playInteractionSound("chairCreak", { pitch: 0.9 });
   }
 
   update(dt) {
