@@ -128,7 +128,7 @@ function overrideSliderRow(labelText, currentValue, onChange) {
   return row;
 }
 
-export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySystem, environmentSystem, musicSystem, dangerZoneActions, aiConnectionManager, residentProfileStore, residentBehaviour, cameraSystem, interiorSystem, hostManager, atmosphereProfileStore }) {
+export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySystem, environmentSystem, musicSystem, dangerZoneActions, aiConnectionManager, residentProfileStore, residentBehaviour, cameraSystem, interiorSystem, hostManager, atmosphereProfileStore, persistenceSystem }) {
   const engine = musicSystem.engine; // same trick MediaApp.js uses — avoids a dedicated engine dependency just for this
 
   const TABS = [
@@ -189,6 +189,47 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         hint.className = "app-subtitle";
         hint.textContent = "Weather, time, and everything else about the Workshop's own environment now lives in the Atmosphere tab.";
         el.appendChild(hint);
+
+        // Workshop Workflow phase — "the primary Import/Export controls
+        // for the entire Workshop are located on the main HUD... these
+        // controls should instead become part of the Settings
+        // application." Moved here from HUD.js, unchanged underneath
+        // (still PersistenceSystem.exportBackup()/importBackup()) — only
+        // where they live changed. Deliberately in General, not Danger
+        // Zone: exporting never touches anything, and importing already
+        // asks its own clear questions before doing anything destructive
+        // (see PersistenceSystem.importBackup()'s own comment) — this
+        // isn't a reset action, it's ordinary data management, the same
+        // category General's own room-lights toggle already lives in.
+        el.appendChild(sectionHeading("Workshop Data"));
+        const dataHint = document.createElement("p");
+        dataHint.className = "app-subtitle";
+        dataHint.textContent = "Back up everything you've made \u2014 every project, object, outfit, setting, and your music library's own preferences \u2014 as a single file, or restore from one.";
+        el.appendChild(dataHint);
+        const dataActions = document.createElement("div");
+        dataActions.className = "builder-inline-row";
+        const exportBtn = document.createElement("button");
+        exportBtn.type = "button";
+        exportBtn.className = "settings-action-button";
+        exportBtn.textContent = "Export Backup";
+        exportBtn.addEventListener("click", () => persistenceSystem.exportBackup());
+        dataActions.appendChild(exportBtn);
+        const importBtn = document.createElement("button");
+        importBtn.type = "button";
+        importBtn.className = "settings-action-button";
+        importBtn.textContent = "Import Backup\u2026";
+        importBtn.addEventListener("click", async () => {
+          try {
+            await persistenceSystem.importBackup();
+          } catch (err) {
+            if (err.message === "No file selected") return; // cancelled the file picker — not a real error
+            console.error(err);
+            window.alert(err.message || "Couldn't read that backup file.");
+          }
+        });
+        dataActions.appendChild(importBtn);
+        el.appendChild(dataActions);
+
         return null;
       }
 

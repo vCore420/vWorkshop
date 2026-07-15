@@ -6,6 +6,8 @@ import { AI_PROVIDERS, getProvider } from "../../ai/ProviderRegistry.js";
 import { composeSystemPrompt } from "../../ai/PromptComposer.js";
 import { buildConversationContext } from "../../resident/ResidentContext.js";
 import { getIdleLocation } from "../../resident/ResidentMovement.js";
+import { StorageUtils } from "../../utils/StorageUtils.js";
+import { EXPRESSION_TYPES, EXPRESSION_GRID_SIZE } from "../../resident/ExpressionTypes.js";
 
 const STATUS_LABELS = {
   connected: "Connected",
@@ -39,6 +41,7 @@ export function createAIApp({
   aiConnectionManager,
   modelRegistry,
   residentProfileStore,
+  expressionSetStore = null,
   residentBehaviour = null,
   residentConnection = null,
   residentState = null,
@@ -75,6 +78,16 @@ export function createAIApp({
       // typed here ever reaches Bubble in the room. See buildSandboxSection().
       let sandboxHistory = [];
       let sandboxThinking = false;
+
+      // Workshop Personality phase — Expression Creator UI state, kept
+      // outside render() the same way sandboxHistory/testState already
+      // are, so switching which expression is being edited (or which
+      // colour is loaded in the picker) survives an unrelated re-render
+      // (a model list refresh arriving mid-edit, say) rather than
+      // silently resetting back to "Neutral" every time.
+      let editingExpressionId = "neutral";
+      let editingColor = "#1c2a28"; // matches the procedural drawing's own ink colour, so a first custom stroke starts from a familiar tone
+      let editingTool = "pencil"; // "pencil" | "eraser"
 
       function activeProfile() {
         return residentProfileStore.getActive();
@@ -124,6 +137,7 @@ export function createAIApp({
           form.appendChild(buildBehaviourDialsSection(profile));
           form.appendChild(buildMemorySection(profile));
           form.appendChild(buildEmbodimentSection(profile));
+          form.appendChild(buildExpressionsSection(profile));
           form.appendChild(buildSandboxSection(profile));
           form.appendChild(buildAdvancedSection(profile));
           form.appendChild(buildTestSection(profile));
@@ -322,6 +336,28 @@ export function createAIApp({
           if (name) residentProfileStore.create(name);
         });
         actions.appendChild(newBtn);
+
+        // "AI Profile Import... profile sharing." The exact counterpart
+        // to each profile row's own "Export" button below — a plain
+        // JSON file, validated and normalised by
+        // `ResidentProfileStore.importProfile()` itself (see that
+        // method's own comment), always added as a genuinely new
+        // profile rather than overwriting anything.
+        const importBtn = document.createElement("button");
+        importBtn.type = "button";
+        importBtn.className = "builder-icon-button";
+        importBtn.textContent = "Import Profile\u2026";
+        importBtn.addEventListener("click", async () => {
+          try {
+            const data = await StorageUtils.uploadJSON();
+            residentProfileStore.importProfile(data);
+          } catch (err) {
+            if (err.message === "No file selected") return; // cancelled the file picker — not a real error
+            console.error(err);
+            window.alert(err.message || "Couldn't import that profile.");
+          }
+        });
+        actions.appendChild(importBtn);
         section.appendChild(actions);
 
         const list = document.createElement("ul");
@@ -391,6 +427,18 @@ export function createAIApp({
         dupBtn.textContent = "Duplicate";
         dupBtn.addEventListener("click", () => residentProfileStore.duplicate(profile.id));
         actions.appendChild(dupBtn);
+
+        const exportBtn = document.createElement("button");
+        exportBtn.type = "button";
+        exportBtn.className = "builder-icon-button";
+        exportBtn.textContent = "Export";
+        exportBtn.addEventListener("click", () => {
+          const data = residentProfileStore.exportProfile(profile.id);
+          if (!data) return;
+          const safeName = profile.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "resident";
+          StorageUtils.downloadJSON(`workshop-ai-profile-${safeName}.json`, data);
+        });
+        actions.appendChild(exportBtn);
 
         if (residentProfileStore.all().length > 1) {
           const delBtn = document.createElement("button");
@@ -598,6 +646,316 @@ export function createAIApp({
         section.appendChild(sliderRow("Scale", e.scale, 0.3, 2, 0.05, (v) => updateActive({ embodiment: { scale: v } }), (v) => v.toFixed(2)));
         section.appendChild(selectRow("Idle Behaviour", e.idleBehaviour, IDLE_BEHAVIOUR_OPTIONS, (v) => updateActive({ embodiment: { idleBehaviour: v } })));
         return section;
+      }
+
+      /** "Allow players to customise Bubble's expressions... expression
+       *  collections should become Workshop Assets... future residents
+       *  should naturally use the same architecture." Two layers: which
+       *  Expression Set is *active* for this profile (a plain dropdown,
+       *  the exact same "id, resolved elsewhere" shape Model/Provider
+       *  above already use — see `ResidentProfileStore.js`'s own
+       *  `expressionSetId`), and, only once a real custom set is
+       *  selected, the pixel editor itself for whichever of the eight
+       *  expressions is currently being drawn. "Default (built-in)"
+       *  intentionally has nothing to edit below it — there's no pixel
+       *  data behind the procedural drawing to edit; see
+       *  `ResidentRenderer._drawProceduralFace()`'s own comment. */
+      function buildExpressionsSection(profile) {
+        const section = document.createElement("div");
+        section.className = "builder-section builder-library";
+        section.appendChild(sectionHeading("Expressions"));
+
+        if (!expressionSetStore) {
+          const note = document.createElement("p");
+          note.className = "app-subtitle";
+          note.textContent = "Expression Sets aren't available in this session.";
+          section.appendChild(note);
+          return section;
+        }
+
+        const hint = document.createElement("p");
+        hint.className = "app-subtitle";
+        hint.textContent = "Bubble's own face, drawn expression by expression \u2014 or leave this on Default for the built-in look.";
+        section.appendChild(hint);
+
+        const sets = expressionSetStore.all();
+        const setOptions = [{ id: "default", label: "Default (built-in)" }, ...sets.map((s) => ({ id: s.id, label: s.name }))];
+        const activeSetId = profile.expressionSetId ?? "default";
+        section.appendChild(
+          selectRow("Expression Set", activeSetId, setOptions, (v) => {
+            updateActive({ expressionSetId: v });
+          })
+        );
+
+        const setActions = document.createElement("div");
+        setActions.className = "builder-inline-row";
+        const newBtn = document.createElement("button");
+        newBtn.type = "button";
+        newBtn.className = "builder-icon-button";
+        newBtn.textContent = "New Set\u2026";
+        newBtn.addEventListener("click", () => {
+          const name = window.prompt("Name this expression set:", "Bubble's Expressions");
+          if (!name) return;
+          const set = expressionSetStore.create(name);
+          updateActive({ expressionSetId: set.id });
+        });
+        setActions.appendChild(newBtn);
+
+        if (activeSetId !== "default") {
+          const activeSet = expressionSetStore.get(activeSetId);
+          if (activeSet) {
+            const dupBtn = document.createElement("button");
+            dupBtn.type = "button";
+            dupBtn.className = "builder-icon-button";
+            dupBtn.textContent = "Duplicate";
+            dupBtn.addEventListener("click", () => {
+              const copy = expressionSetStore.duplicate(activeSetId);
+              if (copy) updateActive({ expressionSetId: copy.id });
+            });
+            setActions.appendChild(dupBtn);
+
+            const renameBtn = document.createElement("button");
+            renameBtn.type = "button";
+            renameBtn.className = "builder-icon-button";
+            renameBtn.textContent = "Rename";
+            renameBtn.addEventListener("click", () => {
+              const name = window.prompt("Rename this expression set:", activeSet.name);
+              if (name) expressionSetStore.rename(activeSetId, name);
+            });
+            setActions.appendChild(renameBtn);
+
+            const exportBtn = document.createElement("button");
+            exportBtn.type = "button";
+            exportBtn.className = "builder-icon-button";
+            exportBtn.textContent = "Export";
+            exportBtn.addEventListener("click", () => {
+              const data = expressionSetStore.exportSet(activeSetId);
+              if (!data) return;
+              const safeName = activeSet.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "expressions";
+              StorageUtils.downloadJSON(`workshop-expression-pack-${safeName}.json`, data);
+            });
+            setActions.appendChild(exportBtn);
+
+            const deleteBtn = document.createElement("button");
+            deleteBtn.type = "button";
+            deleteBtn.className = "builder-icon-button";
+            deleteBtn.textContent = "Delete";
+            deleteBtn.addEventListener("click", () => {
+              if (!window.confirm(`Delete "${activeSet.name}"? Any resident using it falls back to the built-in expressions. This can't be undone.`)) return;
+              expressionSetStore.remove(activeSetId);
+              updateActive({ expressionSetId: "default" });
+            });
+            setActions.appendChild(deleteBtn);
+          }
+        }
+
+        const importBtn = document.createElement("button");
+        importBtn.type = "button";
+        importBtn.className = "builder-icon-button";
+        importBtn.textContent = "Import Pack\u2026";
+        importBtn.addEventListener("click", async () => {
+          try {
+            const data = await StorageUtils.uploadJSON();
+            const set = expressionSetStore.importSet(data);
+            updateActive({ expressionSetId: set.id });
+          } catch (err) {
+            if (err.message === "No file selected") return;
+            console.error(err);
+            window.alert(err.message || "Couldn't import that expression pack.");
+          }
+        });
+        setActions.appendChild(importBtn);
+        section.appendChild(setActions);
+
+        if (activeSetId === "default") {
+          const note = document.createElement("p");
+          note.className = "app-subtitle";
+          note.textContent = "Create or choose a set above to start drawing custom expressions.";
+          section.appendChild(note);
+          return section;
+        }
+
+        const activeSet = expressionSetStore.get(activeSetId);
+        if (!activeSet) return section; // the referenced set no longer exists — the dropdown above will settle back to Default on the next change
+
+        section.appendChild(buildExpressionEditor(activeSet));
+        return section;
+      }
+
+      /** The pixel editor itself \u2014 one expression at a time, chosen from
+       *  the row of eight along the top. "Simple pixel drawing tools.
+       *  Basic paint tools. Importing images." A `<canvas>` rather than
+       *  256 individual DOM cells \u2014 cheap to redraw whole (the grid is
+       *  tiny), and treats a whole drag as a single continuous paint
+       *  stroke the same natural way `TerrainSystem.js`'s own brush does. */
+      function buildExpressionEditor(set) {
+        const wrap = document.createElement("div");
+        const gridSize = set.gridSize ?? EXPRESSION_GRID_SIZE;
+
+        const exprRow = document.createElement("div");
+        exprRow.className = "ai-expression-tabs";
+        for (const type of EXPRESSION_TYPES) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.textContent = type.label;
+          btn.className = type.id === editingExpressionId ? "active" : "";
+          btn.title = type.description;
+          btn.addEventListener("click", () => {
+            editingExpressionId = type.id;
+            render();
+          });
+          exprRow.appendChild(btn);
+        }
+        wrap.appendChild(exprRow);
+
+        const currentPixels = (set.expressions[editingExpressionId] ?? new Array(gridSize * gridSize).fill(null)).slice();
+
+        const canvas = document.createElement("canvas");
+        const displaySize = 256;
+        canvas.width = displaySize;
+        canvas.height = displaySize;
+        canvas.className = "ai-expression-canvas";
+        const ctx = canvas.getContext("2d");
+        const cell = displaySize / gridSize;
+
+        function redraw() {
+          ctx.clearRect(0, 0, displaySize, displaySize);
+          // A soft chequerboard so a transparent cell reads as
+          // "genuinely empty," not just "black" or "white" \u2014 the same
+          // idea any ordinary image editor's own transparency grid uses.
+          for (let gy = 0; gy < gridSize; gy++) {
+            for (let gx = 0; gx < gridSize; gx++) {
+              const color = currentPixels[gy * gridSize + gx];
+              ctx.fillStyle = color ?? ((gx + gy) % 2 === 0 ? "#e8e2d4" : "#d8d0bc");
+              ctx.fillRect(gx * cell, gy * cell, cell, cell);
+            }
+          }
+        }
+        redraw();
+
+        let painting = false;
+        function paintAt(clientX, clientY) {
+          const rect = canvas.getBoundingClientRect();
+          const gx = Math.floor(((clientX - rect.left) / rect.width) * gridSize);
+          const gy = Math.floor(((clientY - rect.top) / rect.height) * gridSize);
+          if (gx < 0 || gy < 0 || gx >= gridSize || gy >= gridSize) return;
+          currentPixels[gy * gridSize + gx] = editingTool === "eraser" ? null : editingColor;
+          redraw();
+        }
+        canvas.addEventListener("pointerdown", (e) => {
+          painting = true;
+          canvas.setPointerCapture(e.pointerId);
+          paintAt(e.clientX, e.clientY);
+        });
+        canvas.addEventListener("pointermove", (e) => {
+          if (painting) paintAt(e.clientX, e.clientY);
+        });
+        const commit = () => {
+          if (!painting) return;
+          painting = false;
+          expressionSetStore.setExpressionPixels(set.id, editingExpressionId, currentPixels);
+        };
+        canvas.addEventListener("pointerup", commit);
+        canvas.addEventListener("pointercancel", commit);
+        wrap.appendChild(canvas);
+
+        const toolRow = document.createElement("div");
+        toolRow.className = "builder-inline-row";
+        const pencilBtn = document.createElement("button");
+        pencilBtn.type = "button";
+        pencilBtn.className = editingTool === "pencil" ? "builder-icon-button active" : "builder-icon-button";
+        pencilBtn.textContent = "Pencil";
+        pencilBtn.addEventListener("click", () => { editingTool = "pencil"; render(); });
+        toolRow.appendChild(pencilBtn);
+        const eraserBtn = document.createElement("button");
+        eraserBtn.type = "button";
+        eraserBtn.className = editingTool === "eraser" ? "builder-icon-button active" : "builder-icon-button";
+        eraserBtn.textContent = "Eraser";
+        eraserBtn.addEventListener("click", () => { editingTool = "eraser"; render(); });
+        toolRow.appendChild(eraserBtn);
+
+        const colorInput = document.createElement("input");
+        colorInput.type = "color";
+        colorInput.value = editingColor;
+        colorInput.addEventListener("input", () => {
+          editingColor = colorInput.value;
+          editingTool = "pencil";
+        });
+        toolRow.appendChild(colorInput);
+
+        for (const swatch of ["#1c2a28", "#eafaf5", "#e8829c", "#8fc8e8", "#ffd27a", "#7a8ca0"]) {
+          const swatchBtn = document.createElement("button");
+          swatchBtn.type = "button";
+          swatchBtn.className = "ai-expression-swatch";
+          swatchBtn.style.background = swatch;
+          swatchBtn.addEventListener("click", () => {
+            editingColor = swatch;
+            editingTool = "pencil";
+            render();
+          });
+          toolRow.appendChild(swatchBtn);
+        }
+        wrap.appendChild(toolRow);
+
+        const actionRow = document.createElement("div");
+        actionRow.className = "builder-inline-row";
+        const clearBtn = document.createElement("button");
+        clearBtn.type = "button";
+        clearBtn.className = "builder-icon-button";
+        clearBtn.textContent = "Clear";
+        clearBtn.addEventListener("click", () => {
+          currentPixels.fill(null);
+          redraw();
+          expressionSetStore.setExpressionPixels(set.id, editingExpressionId, currentPixels);
+        });
+        actionRow.appendChild(clearBtn);
+
+        const resetBtn = document.createElement("button");
+        resetBtn.type = "button";
+        resetBtn.className = "builder-icon-button";
+        resetBtn.textContent = "Reset to Default";
+        resetBtn.addEventListener("click", () => {
+          expressionSetStore.setExpressionPixels(set.id, editingExpressionId, null);
+        });
+        actionRow.appendChild(resetBtn);
+
+        const importImgBtn = document.createElement("button");
+        importImgBtn.type = "button";
+        importImgBtn.className = "builder-icon-button";
+        importImgBtn.textContent = "Import Image\u2026";
+        const importImgInput = document.createElement("input");
+        importImgInput.type = "file";
+        importImgInput.accept = "image/*";
+        importImgInput.style.display = "none";
+        importImgInput.addEventListener("change", () => {
+          const file = importImgInput.files?.[0];
+          if (!file) return;
+          const url = URL.createObjectURL(file);
+          const img = new Image();
+          img.addEventListener("load", () => {
+            const offscreen = document.createElement("canvas");
+            offscreen.width = gridSize;
+            offscreen.height = gridSize;
+            const octx = offscreen.getContext("2d");
+            octx.drawImage(img, 0, 0, gridSize, gridSize); // the browser's own downsampling — good enough for a small pixel-art face
+            const data = octx.getImageData(0, 0, gridSize, gridSize).data;
+            const imported = [];
+            for (let i = 0; i < gridSize * gridSize; i++) {
+              const alpha = data[i * 4 + 3];
+              imported.push(alpha < 32 ? null : `#${[0, 1, 2].map((c) => data[i * 4 + c].toString(16).padStart(2, "0")).join("")}`);
+            }
+            URL.revokeObjectURL(url);
+            expressionSetStore.setExpressionPixels(set.id, editingExpressionId, imported);
+          });
+          img.src = url;
+          importImgInput.value = "";
+        });
+        importImgBtn.addEventListener("click", () => importImgInput.click());
+        actionRow.appendChild(importImgBtn);
+        actionRow.appendChild(importImgInput);
+        wrap.appendChild(actionRow);
+
+        return wrap;
       }
 
       /** "A dedicated testing environment inside Mission Control... allow
@@ -914,6 +1272,7 @@ export function createAIApp({
       const offConnection = aiConnectionManager.events.on("connection:changed", render);
       const offModels = modelRegistry.events.on("models:changed", render);
       const offResidents = residentProfileStore.events.on("residents:changed", render);
+      const offExpressionSets = expressionSetStore?.events.on("expressionSets:changed", render);
       // "Resident Health" fields (current activity, mood, location) don't
       // have their own change events to listen for \u2014 they drift
       // continuously as Bubble goes about its day, not in discrete steps
@@ -933,6 +1292,7 @@ export function createAIApp({
         offConnection();
         offModels();
         offResidents();
+        offExpressionSets?.();
         clearInterval(healthTimer);
       };
     },

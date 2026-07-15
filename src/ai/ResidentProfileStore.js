@@ -76,6 +76,14 @@ export class ResidentProfileStore {
       traits: defaultTraitConfig(),
       memory: defaultMemoryConfig(),
       embodiment: defaultEmbodimentConfig(),
+      // Workshop Personality phase — "future residents may have
+      // different expression sets." The identical "a plain id, resolved
+      // against a separate store elsewhere" shape `provider`/`model`
+      // already use — "default" is a reserved sentinel meaning "the
+      // built-in procedural drawing," never a real id
+      // `ExpressionSetStore.js` would ever hand out (see that file's own
+      // `expr-<n>` id format).
+      expressionSetId: "default",
       createdAt: now,
       updatedAt: now,
     };
@@ -100,6 +108,7 @@ export class ResidentProfileStore {
     copy.traits = { ...source.traits, selected: [...source.traits.selected] };
     copy.memory = { ...source.memory, categories: { ...source.memory.categories } };
     copy.embodiment = { ...source.embodiment };
+    copy.expressionSetId = source.expressionSetId ?? "default";
     this.profiles[copy.id] = copy;
     this.activeProfileId = copy.id;
     this._emitChanged();
@@ -179,6 +188,75 @@ export class ResidentProfileStore {
     this.events.emit("persistence:saveRequested");
   }
 
+  /** "AI Profile Export... Profile sharing." A single profile, wrapped
+   *  in a small envelope of its own — distinct from
+   *  `PersistenceSystem`'s own whole-Workshop backup envelope (both are
+   *  just JSON files on disk; the `type` field is what lets
+   *  `importProfile()` below, and `PersistenceSystem.importBackup()`,
+   *  each tell the other's export apart from their own and say so
+   *  plainly instead of failing to parse it silently). Genuinely
+   *  shareable — nothing about a profile *embeds* anything else from
+   *  this specific Workshop's own save data, so the resulting file means
+   *  exactly as much on a different computer as it does on this one.
+   *  One honest exception: `expressionSetId` is a plain *reference* to a
+   *  separate `ExpressionSetStore.js` entry (see that file's own
+   *  "Exporting expression packs") — it travels with the profile, but
+   *  the actual pixel data doesn't, the same way an outfit's own custom
+   *  textures don't travel with a whole-Workshop backup either. A
+   *  missing reference falls back to the built-in procedural face
+   *  automatically, never a broken or blank one. */
+  exportProfile(id) {
+    const profile = this.get(id);
+    if (!profile) return null;
+    return { type: "workshop-ai-profile", version: 1, exportedAt: new Date().toISOString(), profile };
+  }
+
+  /** The counterpart — validated and normalised the exact same way
+   *  `load()` above already normalises a profile restored from a whole-
+   *  Workshop backup, so a profile exported from an older Workshop
+   *  version (missing a field this version later added), or shared by
+   *  someone else's Workshop entirely, still imports as a complete,
+   *  sensible profile rather than one with `undefined` scattered through
+   *  its settings. Always creates a *new* profile with a fresh id rather
+   *  than overwriting anything by id — importing is additive, never
+   *  destructive, the same instinct `duplicate()` above already follows.
+   *  Throws with a specific, human-readable message on anything that
+   *  doesn't look like a real profile export, for `AIApp.js`'s own
+   *  try/catch to show directly. */
+  importProfile(data) {
+    if (!data || typeof data !== "object") throw new Error("That file doesn't look like a Workshop AI profile.");
+    if (data.type && data.type !== "workshop-ai-profile") {
+      throw new Error(data.type === "workshop-backup" ? "That's a whole Workshop backup file, not an AI profile \u2014 import it from Settings instead." : "That file doesn't look like a Workshop AI profile.");
+    }
+    const source = data.profile ?? data; // tolerate a bare profile object too, not only the wrapped envelope
+    if (!source || typeof source !== "object" || (!source.identity && !source.traits && !source.behaviourConfig)) {
+      throw new Error("That file doesn't look like a Workshop AI profile.");
+    }
+
+    const profile = this._buildProfile(source.name ? `${source.name} (imported)` : "Imported Resident");
+    profile.model = source.model ?? null;
+    profile.provider = normalizeProviderId(source.provider);
+    profile.identity = { ...DEFAULT_IDENTITY, ...source.identity };
+    profile.behaviourConfig = { ...DEFAULT_BEHAVIOUR_CONFIG, ...source.behaviourConfig, dials: normalizeDialsConfig(source.behaviourConfig?.dials) };
+    profile.traits = normalizeTraitConfig(source.traits);
+    profile.memory = normalizeMemoryConfig(source.memory);
+    profile.embodiment = normalizeEmbodimentConfig(source.embodiment);
+    // Carried over honestly, not resolved against anything here — this
+    // store has no reference to ExpressionSetStore.js, and shouldn't
+    // need one just to import a profile. If the referenced set doesn't
+    // actually exist wherever this profile lands (a different Workshop,
+    // or this same one after that set was since deleted),
+    // ResidentController.js's own resolution already falls back to the
+    // built-in procedural face automatically — see ResidentRenderer
+    // .setExpressionSet()'s own comment.
+    profile.expressionSetId = typeof source.expressionSetId === "string" ? source.expressionSetId : "default";
+
+    this.profiles[profile.id] = profile;
+    this.activeProfileId = profile.id;
+    this._emitChanged();
+    return profile;
+  }
+
   // ---- persistence contract, read by PersistenceSystem ----
   save() {
     return { profiles: this.profiles, activeProfileId: this.activeProfileId };
@@ -198,6 +276,7 @@ export class ResidentProfileStore {
       profile.provider = normalizeProviderId(profile.provider);
       profile.identity = { ...DEFAULT_IDENTITY, ...profile.identity };
       profile.behaviourConfig = { ...DEFAULT_BEHAVIOUR_CONFIG, ...profile.behaviourConfig, dials: normalizeDialsConfig(profile.behaviourConfig?.dials) };
+      profile.expressionSetId = profile.expressionSetId ?? "default";
     }
     this.activeProfileId = data.activeProfileId && this.profiles[data.activeProfileId] ? data.activeProfileId : Object.keys(this.profiles)[0];
     this.events.emit("residents:changed");
