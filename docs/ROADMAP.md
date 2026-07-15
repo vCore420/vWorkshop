@@ -2759,6 +2759,63 @@ callers anywhere in the project, and its actual implementation
 geometry whose faces already carry separate per-face normals — removed
 cleanly, the same way `Materials.ground()` was removed last phase.
 
+## Version 2 — Phase 17 — The Workshop Interior (v2.1.7)
+
+**Goal:** "It is time to refine the Workshop itself... by the end of
+this phase, the Workshop should feel like a real building that has
+existed for years and continues to be cared for every day." The
+Workbench and Desk phases' own template, scaled from one piece of
+furniture up to the room shell: no new systems, no repositioned walls
+or fixtures. See `docs/WORLD.md`'s own "Craftsmanship" section for the
+full account.
+
+**Baseboards on all four walls** — the single largest gap this phase
+found, resolved by reusing `buildWallWithOpenings()`'s own
+opening-slicing rather than a second, hand-tuned gap: the south wall's
+baseboard is given the identical door opening the wall itself was built
+with, so it can never drift out of sync with the real doorway.
+
+**A protruding interior sill under each window**, real hinge plates on
+the front doors, and a ceiling canopy plate where each pendant's cord
+meets the ceiling — three small hardware/trim details in the same
+family as the Desk phase's monitor hinge and the Workbench's vice
+crank: the kind of detail that makes an object read as genuinely built,
+not modelled.
+
+**The Workshop's first wall-mounted lights** — sconces flanking the
+front doors, built exactly like the existing ceiling sockets and
+attached through the identical `LightingSystem.registerPracticalLight`
+mechanism every other practical fixture already uses. No new lighting
+system; one more pair of fixtures through the one that already existed.
+
+**The light switch now switches** — a real toggle nub, physically
+tilting between on and off, driven by the same `lightsOn` state
+everything else already reacts to; the plate itself is genuinely
+`Materials.plastic()` now rather than sharing `matte()`'s numbers.
+
+**The Workshop's third interaction sound effect** — a soft creak on
+opening and closing the front doors, lower and slower than the Desk
+phase's chair creak, routed through the same `playInteractionSound()`
+entry point via a third `kind`.
+
+**Two real findings, resolved.** `ToolStorage.js`'s screwdriver handle
+was sharing `matte()`'s numbers for something that's always plastic or
+rubber in real life. And in `Shelving.js`: a genuinely varied colour
+palette (`placeholderColors`) sat completely unused behind a `void`
+statement while a near-identical set of wood browns did double duty as
+the book/box colours instead — rather than deleting the orphaned array,
+each one got a real, distinct purpose: the varied palette now colours
+the books and boxes, and the wood-tone array now varies each shelf
+board's own tint.
+
+**Environmental audio reviewed, not expanded** — room ambience, rain
+response, and indoor/outdoor muffling were already substantially built
+out in the Atmosphere phase and confirmed still correct. An ambient
+"building creak" independent of any interaction was considered and
+deliberately deferred: every existing interaction sound in the Workshop
+has a clear cause a player can connect it to, and this would be the
+first without one.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

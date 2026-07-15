@@ -159,6 +159,48 @@ one (make it actually work), and I think that was the right call under
 this phase's own "refine, don't redesign" instruction, but it's real,
 deferred work, not a closed question.
 
+## Reflecting — Version 2, Phase 17 (The Workshop Interior)
+
+**What had the greatest impact on how the space feels:** the
+baseboards, by a wide margin, and it wasn't close. That's a strange
+thing to report given how much more visually interesting the wall
+sconces or the door hardware are — but a room without a baseboard reads
+as "geometry that happens to form a box" in a way that's hard to name
+until you see the fix. The line where a wall meets a floor is something
+every real room has and almost nobody consciously notices; the Workshop
+was quietly missing it in all four corners of the building at once, and
+adding it did more for "this is a real, built place" than any single
+fixture did.
+
+**What made the Workshop feel cared-for rather than just built:** the
+light switch actually switching. It's a tiny detail — a toggle that
+tilts a few degrees — but a static plate that's clearly supposed to be
+a switch and doesn't visibly do anything is the kind of thing that,
+once you notice it, makes you start doubting everything else in the
+room too. Fixing it fixed more than the switch.
+
+**A genuine surprise:** how much more there was to find just by reading
+files I assumed were finished. `Shelving.js` had been sitting with a
+fully-built, genuinely nicer colour palette right next to the one
+actually in use, silenced by a single `void` statement — not broken,
+not wrong, just never connected to anything. I went looking for
+baseboards and hinges and came back with that instead. I'm increasingly
+convinced this project's own advice ("read the file you're about to
+change before trusting your memory of what it does") undersells itself
+slightly — it's not just about avoiding mistakes, it's that the reading
+itself is where most of the real finds come from.
+
+**Where I'd continue, given another week on just the interior:** crown
+moulding, as the ceiling's own equivalent of this phase's baseboard —
+I considered it and left it out specifically because one universal
+trim gap felt like the honest, provable finding, and two at once starts
+to blur into "we redecorated," which this phase's own brief was clear
+about avoiding. I'd also want to actually build the ambient building-
+creak I talked myself out of this time; I still think it needs a
+better-justified trigger than "just because" before it earns a place
+next to sounds that all currently have one, but "the building should
+sound alive" is a real, still-open brief, not a closed one.
+
 ## Changelog
 
 <details>
@@ -575,5 +617,24 @@ already uses. One more real architectural finding: `PlaceholderFactory
 .softBox()`, promised in its own docstring to fake a bevel it never
 actually produced, with no callers anywhere in the project — removed.
 See `docs/ROADMAP.md`'s own Phase 16 account for the complete list.
+
+**Version 2, Phase 17 — The Workshop Interior (v2.1.7)** — the same
+craftsmanship treatment, scaled up from one piece of furniture to the
+room shell itself: baseboards on all four walls (the single largest
+gap found, sliced around the south wall's own doorway the same way the
+wall itself already was), a protruding sill under each window, real
+hinge plates on the front doors, a ceiling canopy plate at each pendant,
+and the Workshop's first wall-mounted lights — sconces flanking the
+front doors, through the exact same practical-light mechanism every
+other fixture already uses. The light switch finally switches: a real
+toggle nub, tilting between on and off with the actual state. A third
+interaction sound — a door creak, lower and slower than the chair's
+own — joins the paper shuffle and the chair creak through the same
+entry point. Two real findings resolved: a screwdriver handle that was
+never really matte, and a genuinely varied colour palette in the
+shelving that sat completely unused while a near-identical set of wood
+browns did its job instead — both arrays got a real purpose rather than
+one being deleted. See `docs/ROADMAP.md`'s own Phase 17 account for the
+complete list.
 
 </details>

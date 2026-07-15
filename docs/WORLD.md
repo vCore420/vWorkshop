@@ -922,3 +922,114 @@ simply replace, back when the patch was only 48m — is gone entirely.
   is still, honestly, not infinite; a determined enough walk in one
   direction would eventually reach the skirt's own outer edge.
 
+## Craftsmanship (Version 2, Phase 17) — the Workshop Interior
+
+"The Workshop is more than the objects inside it... by the end of this
+phase, the Workshop should feel like a real building that has existed
+for years and continues to be cared for every day." Following the
+Workbench and Desk phases' own template, scaled up from one piece of
+furniture to the room shell itself: no new systems, no repositioned
+walls or fixtures — every improvement is how convincingly the same
+building is built.
+
+**Baseboards, on all four walls.** The single largest gap this phase
+found: walls simply met the floor at a bare edge everywhere, with
+nothing marking the transition. `buildBaseboard()` reuses
+`buildWallWithOpenings()`'s own opening-slicing directly — the south
+wall's version is given the exact same door opening the wall itself
+was built with, so the trim skips the doorway automatically rather than
+needing a second, hand-tuned gap that could drift out of sync with the
+real one. Windows never needed slicing around at all: their sill sits
+at 0.9m, well above baseboard height, so a solid strip is honestly
+sufficient there.
+
+**A protruding interior sill under each window.** The window frame's
+own sill segment sits flush with the wall, the same thickness as the
+jambs either side of it — real sills almost always protrude a little
+further into the room than that, the one surface of a window you could
+plausibly set something on. A separate, slightly wider, slightly deeper
+ledge, sitting just below the glass.
+
+**Real hardware on the front doors.** Three small hinge plates per
+panel, on the actual hinge edge — the same "this should read as what
+it is" standard the Desk phase's monitor hinge and the Workbench's vice
+crank already set. Purely cosmetic: the panel's actual rotation still
+happens around its own pivot group, entirely unaffected by hinges
+attached to the mesh itself.
+
+**Lighting fixtures, twice over.** A small ceiling canopy plate where
+each pendant's cord meets the ceiling — the cord used to simply emerge
+from the ceiling plane with nothing marking where it actually mounts.
+And a genuinely new pair of fixtures: wall sconces flanking the front
+doors, the Workshop's first wall-mounted light. Built exactly like the
+existing ceiling sockets — geometry in `WorkshopRoom.js`, a plain array
+of positions (`wallLightSockets`) returned alongside `ceilingLightSockets`,
+and `LightingSystem._attachPracticalLights()` reading a second array the
+same way it already reads the first. No new lighting mechanism; one
+more pair of fixtures through the one that already existed.
+
+**The light switch, finally switches.** The plate was sharing
+`matte()`'s own numbers for a surface that's moulded plastic in
+practically every real building — genuinely `Materials.plastic()` now —
+and gained a small toggle nub that physically tilts between an on and
+off position, driven by `LightingSystem._applySwitchToggle()` from the
+exact same `lightsOn` state everything else already reacts to. A flat,
+static plate implying a switch existed somewhere unseen was itself a
+small inconsistency this phase resolved.
+
+**The Workshop's third interaction sound effect.** A soft creak on
+opening and closing the front doors (`AudioSynth.playDoorCreak()`,
+lower and slower than the Desk phase's chair creak — a door is a
+bigger, heavier object) — the third `kind` in
+`AudioSystem.playInteractionSound()`'s own switch, looked up from
+`RoomLayoutSystem.toggleDoor()` on demand rather than threaded through
+a constructor, since `RoomLayoutSystem` registers before `AudioSystem`
+exists but the door is never toggled that early.
+
+**Two real material/architectural findings, resolved.** `ToolStorage.js`'s
+own screwdriver handle was sharing `matte()`'s numbers for something
+that's always a moulded plastic or rubber grip in real life — genuinely
+`Materials.plastic()` now, the same finding the last two phases each
+made about their own fixtures. And in `Shelving.js`: `shelfColors` (four
+near-identical wood browns) was already doing double duty as the book/box
+item palette, while a second, genuinely varied array — `placeholderColors`,
+clearly meant for exactly that — sat completely unused behind a `void`
+statement. Rather than deleting the orphaned array (there was nothing
+wrong with it, unlike `softBox()` last phase), each array got a real,
+distinct purpose: the varied palette now colours the books and boxes,
+and the wood-tone array now varies each shelf board's own tint, a small,
+believable "assembled from whatever timber was on hand" detail neither
+array was doing before.
+
+**Environmental audio, reviewed rather than expanded.** Room ambience,
+window rain response, indoor/outdoor muffling, and wind through trees
+were all already built out substantially in the Atmosphere phase (see
+this document's own Environmental Audio section) — confirmed still
+correct, not re-built. A genuinely ambient "building creak" (the
+structure settling, independent of any interaction) was considered and
+deliberately left for a future pass: every existing interaction sound in
+the Workshop is triggered by a specific action, and an unprompted
+ambient creak would be the first sound in the project with no clear
+cause a player could ever connect it to.
+
+**What stayed exactly as it was, reviewed and confirmed rather than
+touched.** The roof remains a simple flat shell with no gable or hip
+caps, and the exterior siding/interior wall materials are unchanged —
+both already correctly documented as deliberate simplifications above,
+and neither needed revisiting to make the interior feel more lived-in.
+Every material on every new addition this phase uses correct PBR
+properties and already responds properly to the day/night cycle and the
+new sconces' own light, the same "verified, not altered" standard the
+last two phases already held their own new geometry to.
+
+**Future craftsmanship philosophy.** Three phases in (the Workbench, the
+Desk, now the room itself), the pattern holds at a bigger scale too:
+keep structure and position fixed, spend the budget on trim, hardware,
+and material accuracy, add fixtures through mechanisms that already
+exist rather than new ones, and treat a real dead-code or dead-setting
+finding as worth resolving on the spot. The Music Cabinet and the
+Wardrobe remain the natural next candidates for the Workbench/Desk
+treatment specifically; a second interior pass (crown moulding, a
+ceiling beam, more built-in storage) is the natural next candidate at
+the room scale, whenever it's time to return to it.
+
