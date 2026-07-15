@@ -275,13 +275,20 @@ Workshop Asset" section for how a plugin joins in exactly the same way.
 
 ## Resident Service, Diagnostics Service
 
-Both new this phase, both genuinely real, both the identical shape as
-Asset Service: a Host-level view over something that already,
+Both new in an earlier phase, both genuinely real, both the identical
+shape as Asset Service: a Host-level view over something that already,
 independently, exists (`docs/RESIDENT.md`'s resident system;
 `workshop://diagnostics`'s own Workshop-wide health check, now formalised
 into one reusable `DiagnosticsService.getReport()` that both
 `workshop://diagnostics` and `host://services` read, rather than two
 slowly-diverging copies of the same computation).
+
+**Deepened substantially in the Workshop Diagnostics phase** — real
+computed health levels (not just raw counts), performance/AI/resident/
+plugin/asset diagnostics, a new technical Workshop Event Log, self-checks,
+and suggested fixes, all layered onto exactly this same service and
+exactly this same page. See `docs/DIAGNOSTICS.md` for the full account;
+this section stays the original introduction.
 
 ## Plugin Service
 
@@ -298,6 +305,12 @@ carrying a manifest, live status, and permission grants along with it.
 `PluginService.js` is still the one place that can answer "what plugins
 currently exist, and what does each one provide" without a caller
 needing to know any of these mechanisms exist separately.
+
+**Workshop Diagnostics phase** — `PluginManager._safeCall()` now emits a
+real `"plugin:error"` event the moment any plugin's own code throws, not
+just recording it silently in `_status`. `WorkshopEventLog.js` listens
+for exactly this, so a plugin failure becomes a real, timestamped entry
+in the Workshop's own Event Log — see `docs/DIAGNOSTICS.md`.
 
 **Discovery, metadata, and permissions are now genuinely real** — a
 plugin's manifest (`id`, `name`, `version`, `description`, `author`),

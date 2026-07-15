@@ -2565,6 +2565,66 @@ excited); corrected asset-kind counts in `docs/ASSETS.md` that would
 have gone stale again next phase, rephrased to describe the pattern
 rather than a brittle exact count.
 
+## Version 2 — Phase 14 — Diagnostics (v2.1.4)
+
+**Goal:** "Not a traditional developer debug menu... a Workshop Control
+Centre. By the end of this phase the Workshop should be capable of
+monitoring, explaining and diagnosing its own health. The player should
+no longer need to rely on browser developer tools to understand what
+the Workshop is doing." See `docs/DIAGNOSTICS.md` for the full account.
+
+**Real, computed Workshop Health**, not manually assigned. Every
+subsystem in `DiagnosticsService.getReport()` now derives its own
+health level (`healthy`/`warning`/`error`/`unavailable`) from an actual
+check against real state — a failed save, a plugin in an error state, a
+genuinely broken asset reference, a disconnected optional AI/Host
+connection. The overall banner is the worst of all of them, with one
+deliberate exception: `unavailable` (an optional feature simply not in
+use) never drags the overall colour down on its own.
+
+**Two real gaps found and fixed while building this.** A failed
+`PersistenceSystem.save()` used to be entirely silent — now tracked
+(`lastSaveFailedAt`) and announced (`"persistence:saveFailed"`).
+`PluginManager._safeCall()` used to record a plugin's own failure only
+in a private status map — now also emits a real `"plugin:error"` event,
+the first genuinely new signal this phase's own Workshop Event Log
+listens for.
+
+**A new technical Workshop Event Log** (`WorkshopEventLog.js`), the
+deliberate technical counterpart to the existing world-flavoured
+`WorldEventLog.js`, not a merge of the two — plugin errors, connection
+changes, save failures, with real filtering, searching, and export.
+Kept separate specifically so Bubble's own curiosity never has to
+filter technical noise back out of its own context.
+
+**Expanded diagnostics across the board** — `AIConnectionManager.js`
+gained `lastSuccessAt`/`lastFailureAt`; `ResidentController
+.getDiagnostics()` gathers behaviour/mood/conversation/navigation state
+into one flat object, the identical shape `WorldAwareness.snapshot()`
+already established, ready for a future second resident; `AssetService
+.validateAll()` finds genuinely broken references and duplicates across
+the whole Library in one pass, deliberately not counting the ordinary
+"no thumbnail" gap nearly every asset already has as a health problem.
+
+**`workshop://diagnostics` rebuilt as the real Control Centre** — one
+colour-coded overall banner, a plain-language line per subsystem, and
+every deeper technical detail behind a native `<details>` element,
+closed by default. "A casual user should immediately understand whether
+the Workshop is healthy. An advanced user should be capable of
+expanding sections" is true by construction, one page, not two. A real
+"Run Workshop Health Check" button actively re-checks AI/Host
+connections before rebuilding the report; Suggested Fixes name the
+exact plugin, asset, or cause rather than a generic failure message; a
+small, honest, hand-authored Dependency Awareness section explains how
+systems rely on each other.
+
+**Settings' own Diagnostics tab simplified**, not duplicated — what's
+left is specifically what's useful *while adjusting Settings itself*
+(live FPS/frame time/memory, next to the Graphics/Performance controls
+that affect them) plus one health line and a pointer to the real
+Control Centre, replacing what used to be a second, independently
+computed copy of Environment/Player/Resident/Connection status.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

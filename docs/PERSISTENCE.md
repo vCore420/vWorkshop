@@ -181,6 +181,14 @@ every open panel reflects the newly imported state consistently, rather
 than trusting each one to notice a full-state swap happening underneath
 it live.
 
+**One deliberate exception**: `WorkshopEventLog.exportLog()` (Workshop
+Diagnostics phase) follows the identical `type`-tagged envelope shape
+but is export-only — there's no `importLog()`, since a log recording
+what happened in *this* Workshop session has no meaningful way to import
+into another one. Unlike a profile or expression pack, nothing in an
+event log is meant to be reused elsewhere; it's a record, not a
+shareable creation.
+
 ## Workshop Projects — architecture only
 
 "Please begin preparing for long-running Workshop activities... this

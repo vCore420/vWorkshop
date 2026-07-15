@@ -461,4 +461,22 @@ changes cross-fade now instead of swapping instantly. See
 including which of the three new expressions has a real behavioural
 trigger and which are honestly still waiting for one.
 
+**Version 2, Phase 14 — Diagnostics (v2.1.4)** — the Workshop learns to
+understand itself. `workshop://diagnostics` rebuilt into a real Control
+Centre: one colour-coded overall health banner, computed live from
+actual subsystem state (a failed save, a plugin in error, a genuinely
+broken asset reference), never manually assigned, with a plain-language
+line per subsystem and every deeper technical detail tucked behind a
+native, closed-by-default `<details>` element — one page for both a
+casual glance and a deep investigation. A new technical Workshop Event
+Log, deliberately separate from the existing world-flavoured one, gives
+plugin errors and connection changes a real, searchable, exportable
+home. Two genuinely silent failure modes were found and fixed along the
+way: a failed Workshop save used to announce nothing at all, and a
+plugin's own crash was never actually broadcast anywhere. Suggested
+Fixes name the exact plugin or asset responsible rather than a generic
+error; a small Dependency Awareness section explains how Workshop
+systems actually rely on each other. See `docs/ROADMAP.md`'s own Phase
+14 account for the complete list.
+
 </details>

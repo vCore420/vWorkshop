@@ -58,7 +58,7 @@ src/
   plugins/                   PluginManifest.js, PluginPermissions.js, PluginStorage.js, WorkshopSDK.js, PluginLoader.js — the Plugin SDK, see docs/PLUGIN_SDK.md
     examples/                dustMotesPlugin.js (engine.plugins contract), examplePagePlugin.js + calculatorPlugin.js (Browser-page contract, still fully supported — see docs/PLUGIN_GUIDE.md), workshopToolkitPlugin.js (the SDK's own reference example — see docs/PLUGIN_SDK.md)
   main.js                    wiring only — construct, register, start. No behaviour here.
-docs/                        this file, SETUP.md, HISTORY.md, COMPUTER.md, WORKBENCH.md, WORLDBUILDER.md, WORLD.md, ATMOSPHERE.md, POLISH.md, MUSIC.md, PERFORMANCE.md, PLAYER.md, ANIMATION.md, BROWSER.md, AI.md, RESIDENT.md, HOST.md, ASSETS.md, BEINGS.md, PHONE.md, PERSISTENCE.md, RESPONSIVE.md, REFINEMENT.md, ROADMAP.md, PLUGIN_GUIDE.md, PLUGIN_SDK.md
+docs/                        this file, SETUP.md, HISTORY.md, COMPUTER.md, WORKBENCH.md, WORLDBUILDER.md, WORLD.md, ATMOSPHERE.md, POLISH.md, MUSIC.md, PERFORMANCE.md, PLAYER.md, ANIMATION.md, BROWSER.md, AI.md, RESIDENT.md, HOST.md, ASSETS.md, BEINGS.md, PHONE.md, PERSISTENCE.md, RESPONSIVE.md, REFINEMENT.md, ROADMAP.md, PLUGIN_GUIDE.md, PLUGIN_SDK.md, DIAGNOSTICS.md
 assets/                      README explaining the "no shipped binary assets yet" decision
 host-companion/              a real, optional, zero-dependency local server the Workshop Host can talk to — NOT part of the browser bundle; see docs/HOST.md's own "The Workshop Host Companion" section and host-companion/README.md
 ```

@@ -218,6 +218,78 @@ body {
 .workshop-diagnostics-label { color: var(--ink-soft); }
 .workshop-diagnostics-value { font-family: var(--font-mono); }
 
+/* Workshop Diagnostics phase — health colour vocabulary, shared by the
+   overall banner, each per-section row, and event-log severity. */
+.workshop-diagnostics-health-healthy { --health-color: #5a8f5a; }
+.workshop-diagnostics-health-warning { --health-color: #b8863b; }
+.workshop-diagnostics-health-error { --health-color: #b85c4a; }
+.workshop-diagnostics-health-unavailable { --health-color: #9a948a; }
+
+.workshop-diagnostics-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--health-color);
+  background: color-mix(in srgb, var(--health-color) 12%, transparent);
+  margin: 10px 0 6px;
+  font-size: 1.05rem;
+}
+.workshop-diagnostics-health-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--health-color);
+  flex-shrink: 0;
+}
+.workshop-diagnostics-health-rows { margin-bottom: 10px; }
+.workshop-diagnostics-health-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--paper-dark);
+  font-size: 0.9rem;
+}
+.workshop-diagnostics-health-row strong { min-width: 160px; }
+.workshop-diagnostics-health-row span:last-child { color: var(--ink-soft); }
+
+.workshop-diagnostics-suggestions {
+  background: rgba(184, 134, 59, 0.1);
+  border: 1px solid rgba(184, 134, 59, 0.35);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+.workshop-diagnostics-suggestions h2 { margin-top: 0; font-size: 0.95rem; }
+.workshop-diagnostics-suggestions p { margin: 4px 0; font-size: 0.9rem; }
+
+.workshop-diagnostics-detail {
+  border: 1px solid var(--paper-dark);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+.workshop-diagnostics-detail summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 4px 0;
+}
+.workshop-diagnostics-detail[open] summary { margin-bottom: 6px; }
+
+.workshop-diagnostics-event {
+  display: flex;
+  gap: 12px;
+  padding: 4px 6px;
+  font-size: 0.85rem;
+  border-left: 3px solid var(--paper-dark);
+}
+.workshop-diagnostics-event span:first-child { font-family: var(--font-mono); color: var(--ink-soft); flex-shrink: 0; }
+.workshop-diagnostics-event-warning { border-left-color: #b8863b; }
+.workshop-diagnostics-event-error { border-left-color: #b85c4a; }
+
 /* asset detail pages */
 .workshop-asset-preview {
   display: flex;
