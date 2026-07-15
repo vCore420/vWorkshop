@@ -104,7 +104,7 @@ export class SettingsSystem {
   }
 
   _applyAudio(audio) {
-    this._audioSystem?.setVolumeMultipliers({ master: audio.masterVolume, music: audio.musicVolume, ambient: audio.ambientVolume });
+    this._audioSystem?.setVolumeMultipliers({ master: audio.masterVolume, music: audio.musicVolume, ambient: audio.ambientVolume, effects: audio.effectsVolume });
     this._musicSystem?.setSettingsMultiplier(audio.masterVolume * audio.musicVolume);
     // Effects volume is stored and ready for the moment a discrete
     // "effect" sound (as opposed to music or ambience) actually exists —

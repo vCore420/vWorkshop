@@ -18,19 +18,33 @@ function makeCanvas(size = 256) {
   return canvas;
 }
 
-export function woodGrainTexture(baseColor = "#6b4a34", grainColor = "#4a3120") {
-  const canvas = makeCanvas(256);
+/** Workshop Workbench phase — `size`/`grainLines`/`step` are new,
+ *  optional, and default to the exact original values (256px, 40 lines,
+ *  a point every 16px) — every existing call site across the Workshop
+ *  is completely unaffected. `Materials.wood()` itself still only ever
+ *  calls this with the defaults; a *caller* wanting a more detailed
+ *  grain for one specific, prominent, closely-viewed surface (the
+ *  Workbench's own top — see Workbench.js) can ask for one directly,
+ *  without needing `Materials.wood()` itself to grow a size parameter
+ *  of its own or risk a `.repeat` tiling seam this generator was never
+ *  designed to hide (the grain lines' own sine wave doesn't complete a
+ *  whole number of cycles across the canvas, so repeating the texture
+ *  at anything other than 1x tends to show a visible seam at the
+ *  wrap — more canvas detail avoids that entirely, rather than fighting
+ *  it). */
+export function woodGrainTexture(baseColor = "#6b4a34", grainColor = "#4a3120", { size = 256, grainLines = 40, step = 16 } = {}) {
+  const canvas = makeCanvas(size);
   const ctx = canvas.getContext("2d");
   ctx.fillStyle = baseColor;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.strokeStyle = grainColor;
   ctx.globalAlpha = 0.35;
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < grainLines; i++) {
     const y = Math.random() * canvas.height;
     ctx.lineWidth = 0.6 + Math.random() * 1.6;
     ctx.beginPath();
     ctx.moveTo(0, y);
-    for (let x = 0; x <= canvas.width; x += 16) {
+    for (let x = 0; x <= canvas.width; x += step) {
       ctx.lineTo(x, y + Math.sin(x * 0.05 + i) * 4);
     }
     ctx.stroke();
@@ -249,35 +263,6 @@ export function metalBrushedTexture(base = "#9a978f") {
   }
   const texture = new THREE.CanvasTexture(canvas);
   configureFlatTexture(texture);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}
-
-/**
- * Mottled ground cover for the outdoor world — deliberately plain (a speckled
- * green/brown, nothing resembling grass blades or path detail). The world
- * outside the workshop is intentionally empty; this texture's only job is to
- * keep a flat plane from reading as a solid, sterile color. Heavily repeated
- * (see WorldEnvironmentSystem.js) across the "effectively infinite" ground.
- */
-export function groundTexture() {
-  const canvas = makeCanvas(256);
-  const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#5c6b45";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  for (let i = 0; i < 900; i++) {
-    const shade = Math.random();
-    ctx.fillStyle = shade > 0.5 ? "rgba(70,84,50,0.35)" : "rgba(110,120,80,0.3)";
-    const x = Math.random() * canvas.width;
-    const y = Math.random() * canvas.height;
-    const r = 1 + Math.random() * 2.5;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  const texture = new THREE.CanvasTexture(canvas);
-  configureFlatTexture(texture);
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
 }

@@ -100,6 +100,71 @@ export function createNoiseSource(audioContext) {
 }
 
 /**
+ * The Workbench phase's own "interaction sounds... audio should remain
+ * understated and believable" — the first interaction sound effect
+ * anywhere in the Workshop (every door, drawer, and switch before this
+ * stayed silent; see `docs/WORKBENCH.md`'s own "Audio" section for why
+ * this phase scoped itself to just the Workbench rather than
+ * retrofitting all of them at once). A short burst of filtered noise —
+ * the exact same `createNoiseSource()` above already uses for weather
+ * ambience — through a narrow bandpass filter and a fast decay, rather
+ * than a synthesised "paper" sample that doesn't exist. `pitch` (a
+ * small multiplier around 1) lets two calls of the same function read
+ * as subtly different moments (leaning in versus standing back up)
+ * without needing a second, near-identical function.
+ */
+export function playPaperShuffle(audioContext, destinationNode, { pitch = 1 } = {}) {
+  const source = createNoiseSource(audioContext);
+  const filter = audioContext.createBiquadFilter();
+  filter.type = "bandpass";
+  filter.frequency.value = 3200 * pitch;
+  filter.Q.value = 0.6;
+  const gain = audioContext.createGain();
+  const now = audioContext.currentTime;
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.linearRampToValueAtTime(0.5, now + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(destinationNode);
+  source.start(now);
+  source.stop(now + 0.25);
+}
+
+/**
+ * The Desk phase's own interaction sound — a soft chair creak on sitting
+ * down and standing back up, the second entry in `AudioSystem
+ * .playInteractionSound()`'s own `kind` switch (see `playPaperShuffle()`
+ * above for the first). Built the same way: `createNoiseSource()` through
+ * a filter and a short gain envelope, not a recorded sample that doesn't
+ * exist. What actually reads as "creak" rather than "shuffle" is the
+ * filter itself — narrower (`Q` of 4 rather than 0.6, a resonant sweep
+ * rather than a flat hiss) and *sliding* from a higher frequency down to
+ * a lower one over the sound's own short life, the way a real creak's
+ * pitch settles as whatever was flexing stops moving. `pitch` still lets
+ * the same two calls (sitting, standing) read as distinct moments without
+ * a second function, exactly like `playPaperShuffle()`'s own parameter.
+ */
+export function playChairCreak(audioContext, destinationNode, { pitch = 1 } = {}) {
+  const source = createNoiseSource(audioContext);
+  const filter = audioContext.createBiquadFilter();
+  filter.type = "bandpass";
+  filter.Q.value = 4;
+  const now = audioContext.currentTime;
+  filter.frequency.setValueAtTime(520 * pitch, now);
+  filter.frequency.linearRampToValueAtTime(300 * pitch, now + 0.28);
+  const gain = audioContext.createGain();
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.linearRampToValueAtTime(0.32, now + 0.05);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(destinationNode);
+  source.start(now);
+  source.stop(now + 0.34);
+}
+
+/**
  * A self-scheduling nature ambience — four phases across the day, not
  * just day/night: a brighter, denser dawn chorus; the original, sparser
  * daytime bird chirp; a warmer dusk mix of evening insects and lower,

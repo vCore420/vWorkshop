@@ -1,4 +1,4 @@
-import { playAmbientTrack, createNoiseSource, createNatureAmbience, getTrackList } from "../utils/AudioSynth.js";
+import { playAmbientTrack, createNoiseSource, createNatureAmbience, playPaperShuffle, playChairCreak, getTrackList } from "../utils/AudioSynth.js";
 import { CameraSystem } from "./CameraSystem.js";
 import { InteriorSystem } from "./InteriorSystem.js";
 import { EnvironmentSystem } from "./EnvironmentSystem.js";
@@ -82,6 +82,7 @@ export class AudioSystem {
     this._masterMultiplier = 1;
     this._musicMultiplier = 1;
     this._ambientMultiplier = 1;
+    this._effectsMultiplier = 1;
     this._ambiencePeak = 0; // the current ambience's own target level (storm/rain/wind) — remembered so a multiplier change can rescale a fade already in progress
   }
 
@@ -192,11 +193,15 @@ export class AudioSystem {
 
   /** Called by SettingsSystem whenever the Audio tab changes. Layered on
    *  top of this system's own volume/balance values (see the constructor
-   *  comment) rather than replacing them. */
-  setVolumeMultipliers({ master, music, ambient }) {
+   *  comment) rather than replacing them. `effects` (Settings' own
+   *  "Effects Volume" slider) genuinely does something as of the
+   *  Workbench phase — see `playInteractionSound()`'s own comment for
+   *  why it was inert before this. */
+  setVolumeMultipliers({ master, music, ambient, effects }) {
     this._masterMultiplier = master;
     this._musicMultiplier = music;
     this._ambientMultiplier = ambient;
+    this._effectsMultiplier = effects ?? this._effectsMultiplier;
     if (!this.context) return;
     this.masterGain.gain.linearRampToValueAtTime(this.volume * this._masterMultiplier, this.context.currentTime + 0.1);
     this.musicGain.gain.linearRampToValueAtTime(this._musicMultiplier, this.context.currentTime + 0.1);
@@ -302,6 +307,32 @@ export class AudioSystem {
    *     its own `environment:changed` event, which only fires on a
    *     state *change*, not on every frame's own gust wobble.
    */
+  /** Workshop Workbench phase — "interaction sounds... audio should
+   *  remain understated and believable." The one entry point for every
+   *  short, one-shot sound effect in the Workshop — `kind` selects which
+   *  (today, only `"paperShuffle"`), rather than a dedicated method per
+   *  sound, so a future door or drawer reaches for this same method
+   *  with a new `kind` instead of building its own audio graph from
+   *  scratch. Routes through `masterGain` (so the Master Volume slider
+   *  still applies, the same as every other sound this system makes)
+   *  scaled by `_effectsMultiplier` — Settings' own "Effects Volume"
+   *  slider existed since early in Version 2 but had nothing to control
+   *  until this phase gave the Workshop its first real sound effect.
+   *  Silently does nothing before the AudioContext exists (the same
+   *  "resumeContext() hasn't happened yet" case every other sound in
+   *  this file already tolerates) — missing a one-shot effect before the
+   *  very first click has even resumed audio is inaudible regardless.
+   *  The Desk phase adds a second `kind` ("chairCreak") rather than a
+   *  second method — exactly the reuse this entry point was built for. */
+  playInteractionSound(kind, options = {}) {
+    if (!this.context) return;
+    const gain = this.context.createGain();
+    gain.gain.value = this._effectsMultiplier;
+    gain.connect(this.masterGain);
+    if (kind === "paperShuffle") playPaperShuffle(this.context, gain, options);
+    if (kind === "chairCreak") playChairCreak(this.context, gain, options);
+  }
+
   update(dt) {
     if (!this.context) return;
 

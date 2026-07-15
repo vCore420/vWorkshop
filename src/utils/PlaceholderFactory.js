@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { woodGrainTexture, metalBrushedTexture, paperTexture, blueprintTexture, sketchTexture, groundTexture, sidingTexture } from "./ProceduralTexture.js";
+import { woodGrainTexture, metalBrushedTexture, paperTexture, blueprintTexture, sketchTexture, sidingTexture } from "./ProceduralTexture.js";
 
 /**
  * PlaceholderFactory
@@ -70,12 +70,20 @@ export const Materials = {
   matte(color = "#888888") {
     return cached(`matte:${color}`, () => new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0.05 }));
   },
-  ground() {
-    return cached("ground", () => {
-      const map = groundTexture();
-      map.repeat.set(120, 120);
-      return new THREE.MeshStandardMaterial({ map, roughness: 1, metalness: 0 });
-    });
+  // Workshop Workbench phase — "material quality... plastic, rubber."
+  // Two real gaps, not previously distinguishable from `matte()` at
+  // all — every plastic clipboard, fan housing, or tool handle in the
+  // Workshop was using the exact same numbers as a painted metal
+  // switch plate. Genuinely different surface behaviour, not just a
+  // different name: plastic reads as smooth and a little glossy
+  // (lower roughness, a faint highlight); rubber reads as soft and
+  // completely non-reflective (roughness pushed close to 1, no
+  // highlight at all). Neither is metallic.
+  plastic(color = "#3a3a3a") {
+    return cached(`plastic:${color}`, () => new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0 }));
+  },
+  rubber(color = "#232323") {
+    return cached(`rubber:${color}`, () => new THREE.MeshStandardMaterial({ color, roughness: 0.98, metalness: 0 }));
   },
   siding(color = "#5a4a3d") {
     return cached(`siding:${color}`, () => new THREE.MeshStandardMaterial({
@@ -157,13 +165,6 @@ export function plane(material) {
   const mesh = new THREE.Mesh(geometry, material);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  return mesh;
-}
-
-/** A box with the top edges nudged down slightly to fake a light bevel/rounding without extra geometry cost. */
-export function softBox(width, height, depth, material) {
-  const mesh = box(width, height, depth, material);
-  mesh.geometry = mesh.geometry.toNonIndexed();
   return mesh;
 }
 
