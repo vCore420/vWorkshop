@@ -5,6 +5,7 @@ import { Entity } from "../core/Entity.js";
 import { InteractableComponent } from "../core/components/InteractableComponent.js";
 import { damp } from "../utils/MathUtils.js";
 import { InteriorSystem } from "./InteriorSystem.js";
+import { AudioSystem } from "./AudioSystem.js";
 
 /**
  * RoomLayoutSystem
@@ -121,11 +122,19 @@ export class RoomLayoutSystem {
     });
   }
 
+  /** Workshop Interior phase — "door sounds... substantial and
+   *  believable." `AudioSystem` is looked up here, not cached at
+   *  `init()` — this system is registered before `AudioSystem` exists
+   *  (see main.js's own registration order comments), but the door is
+   *  never toggled that early, so a lazy, on-demand lookup the moment
+   *  it's actually needed is simpler than threading a dependency through
+   *  the constructor for a system this system never otherwise needs. */
   toggleDoor() {
     this.doorOpen = !this.doorOpen;
     this._doorTargetAngle = this.doorOpen ? this.room.doorOpenAngle : 0;
     const interactable = this.doorEntity.getComponent(InteractableComponent);
     interactable.prompt = this.doorOpen ? "Close the front doors" : "Open the front doors";
+    this.engine.getSystem(AudioSystem)?.playInteractionSound("doorCreak", { pitch: this.doorOpen ? 1.1 : 0.85 });
   }
 
   getBounds() {

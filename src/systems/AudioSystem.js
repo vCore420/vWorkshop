@@ -1,4 +1,4 @@
-import { playAmbientTrack, createNoiseSource, createNatureAmbience, playPaperShuffle, playChairCreak, getTrackList } from "../utils/AudioSynth.js";
+import { playAmbientTrack, createNoiseSource, createNatureAmbience, playPaperShuffle, playChairCreak, playDoorCreak, getTrackList } from "../utils/AudioSynth.js";
 import { CameraSystem } from "./CameraSystem.js";
 import { InteriorSystem } from "./InteriorSystem.js";
 import { EnvironmentSystem } from "./EnvironmentSystem.js";
@@ -322,8 +322,8 @@ export class AudioSystem {
    *  "resumeContext() hasn't happened yet" case every other sound in
    *  this file already tolerates) — missing a one-shot effect before the
    *  very first click has even resumed audio is inaudible regardless.
-   *  The Desk phase adds a second `kind` ("chairCreak") rather than a
-   *  second method — exactly the reuse this entry point was built for. */
+   *  The Desk phase added a second `kind` ("chairCreak"); the Workshop
+   *  Interior phase adds a third ("doorCreak") the same way. */
   playInteractionSound(kind, options = {}) {
     if (!this.context) return;
     const gain = this.context.createGain();
@@ -331,6 +331,7 @@ export class AudioSystem {
     gain.connect(this.masterGain);
     if (kind === "paperShuffle") playPaperShuffle(this.context, gain, options);
     if (kind === "chairCreak") playChairCreak(this.context, gain, options);
+    if (kind === "doorCreak") playDoorCreak(this.context, gain, options);
   }
 
   update(dt) {

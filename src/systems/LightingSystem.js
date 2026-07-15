@@ -131,6 +131,20 @@ export class LightingSystem {
       this.practicalLights.push(light);
     }
 
+    // Workshop Interior phase — "wall lights." Exactly the same shape as
+    // the ceiling sockets above, just a second array from the room and a
+    // slightly warmer, gentler fixture (a sconce sits close to head
+    // height, not up at the ceiling — a pendant's own intensity would
+    // read as glaring this close).
+    const wallSockets = roomSystem?.room?.wallLightSockets ?? [];
+    for (const pos of wallSockets) {
+      const light = new THREE.PointLight("#ffcf9c", 0.5, 3.5, 2);
+      light.position.copy(pos);
+      light.userData.baseIntensity = 0.5;
+      this.engine.scene.add(light);
+      this.practicalLights.push(light);
+    }
+
     const furnitureSystem = this.engine.getSystem(FurnitureSystem);
     const workbench = furnitureSystem?.getPiece("workbench");
     const lampSocket = workbench?.entity?.object3D?.userData?.lampSocket;
@@ -149,7 +163,10 @@ export class LightingSystem {
 
   _buildLightSwitch() {
     const switchEntity = new Entity("lightSwitch").tag("structural");
-    const plate = box(0.08, 0.12, 0.02, Materials.matte("#e7e2d6"));
+    // Workshop Interior phase — "material quality... plastic." A light
+    // switch plate is moulded plastic in practically every real building;
+    // this one was sharing matte()'s numbers since phase 1.
+    const plate = box(0.08, 0.12, 0.02, Materials.plastic("#e7e2d6"));
     // On the south wall, on the far side of the front doors from where it
     // used to sit — the doors sit at x=0, spanning ±1.3 (see
     // WORKSHOP_DOOR in layoutDefault.js), and a doorway genuinely splits
@@ -159,6 +176,17 @@ export class LightingSystem {
     // interior face (~2.85) than before, sitting flush against it rather
     // than with a small, noticeable gap, while still avoiding z-fighting.
     plate.position.set(1.5, 1.3, 2.935);
+
+    // Workshop Interior phase — "small interaction sounds... a switch
+    // that actually does something." A real rocker toggle, physically
+    // flipped by setLightsOn() rather than a flat plate implying a switch
+    // exists somewhere unseen. Parented to the plate so it inherits the
+    // plate's own world transform for free.
+    this.switchToggle = box(0.03, 0.06, 0.015, Materials.plastic("#2c2c2c"));
+    this.switchToggle.position.set(0, 0.02, 0.017);
+    plate.add(this.switchToggle);
+    this._applySwitchToggle();
+
     switchEntity.addComponent(new MeshComponent(plate, this.engine.scene));
     switchEntity.addComponent(
       new InteractableComponent({
@@ -168,6 +196,15 @@ export class LightingSystem {
       })
     );
     this.engine.entities.create(switchEntity);
+  }
+
+  /** The toggle rocks between a small up/down tilt and vertical offset —
+   *  cheap enough to just set outright rather than damp, since a light
+   *  switch flips instantly in reality, unlike the fixtures it controls. */
+  _applySwitchToggle() {
+    if (!this.switchToggle) return;
+    this.switchToggle.position.y = this.lightsOn ? 0.02 : -0.02;
+    this.switchToggle.rotation.x = this.lightsOn ? 0.25 : -0.25;
   }
 
   setLightsOn(on) {
@@ -180,6 +217,7 @@ export class LightingSystem {
       const skippedForQuality = this._lightingQuality === "low" && light.userData.isLampLight;
       light.intensity = this.lightsOn && !skippedForQuality ? light.userData.baseIntensity : 0;
     }
+    this._applySwitchToggle();
   }
 
   /** "low" | "medium" | "high" — resolution of the sun's shadow map, plus
