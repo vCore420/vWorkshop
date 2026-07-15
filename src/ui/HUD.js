@@ -1,4 +1,3 @@
-import { PersistenceSystem } from "../systems/PersistenceSystem.js";
 import { CameraSystem } from "../systems/CameraSystem.js";
 import { EmoteWheelSystem } from "../systems/EmoteWheelSystem.js";
 
@@ -42,23 +41,15 @@ export class HUD {
     this.saveIndicator.className = "hud-save-indicator";
     this.root.appendChild(this.saveIndicator);
 
-    this.backupControls = document.createElement("div");
-    this.backupControls.className = "hud-backup-controls";
-    const exportBtn = document.createElement("button");
-    exportBtn.type = "button";
-    exportBtn.textContent = "Export backup";
-    exportBtn.addEventListener("click", () => engine.getSystem(PersistenceSystem)?.exportBackup());
-    const importBtn = document.createElement("button");
-    importBtn.type = "button";
-    importBtn.textContent = "Import backup";
-    importBtn.addEventListener("click", async () => {
-      try {
-        await engine.getSystem(PersistenceSystem)?.importBackup();
-      } catch (err) {
-        console.error(err);
-        alert("Couldn't read that backup file.");
-      }
-    });
+    this.cornerControls = document.createElement("div");
+    this.cornerControls.className = "hud-corner-controls";
+    // Workshop Workflow phase — "the primary Import/Export controls for
+    // the entire Workshop are located on the main HUD. These controls
+    // should instead become part of the Settings application." Moved to
+    // Settings' own General tab ("Workshop Data") — see SettingsApp.js.
+    // Everything left here is a mode toggle or quick-navigation button,
+    // not data management — a meaningfully different category that
+    // still earns a permanent, always-visible spot.
     const buildModeBtn = document.createElement("button");
     buildModeBtn.type = "button";
     buildModeBtn.textContent = "Phone (B)";
@@ -76,8 +67,8 @@ export class HUD {
     emoteBtn.type = "button";
     emoteBtn.textContent = "Emotes (G)";
     emoteBtn.addEventListener("click", () => engine.getSystem(EmoteWheelSystem)?.toggle());
-    this.backupControls.append(exportBtn, importBtn, buildModeBtn, viewModeBtn, emoteBtn, lostBtn);
-    this.root.appendChild(this.backupControls);
+    this.cornerControls.append(buildModeBtn, viewModeBtn, emoteBtn, lostBtn);
+    this.root.appendChild(this.cornerControls);
 
     this.touchControls = document.getElementById("touch-controls");
 

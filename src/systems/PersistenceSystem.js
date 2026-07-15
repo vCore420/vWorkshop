@@ -73,6 +73,7 @@ export class PersistenceSystem {
     for (const [key, provider] of this.providers) providerData[key] = provider.save();
 
     return {
+      type: "workshop-backup", // Workshop Workflow phase — lets importBackup() (and, by the same convention, ResidentProfileStore.importProfile()) tell a whole-Workshop backup apart from any other kind of exported file with a specific, helpful message rather than a generic parse failure
       version: CURRENT_SAVE_VERSION,
       savedAt: new Date().toISOString(),
       systems: bag,
@@ -130,12 +131,40 @@ export class PersistenceSystem {
     StorageUtils.downloadJSON(`workshop-backup-${date}.json`, envelope);
   }
 
+  /** Workshop Workflow phase — "validation... version compatibility...
+   *  better error handling." Three real, specific failure/warning cases,
+   *  each with its own message, rather than one generic "couldn't read
+   *  that file":
+   *   - Not a Workshop file at all (`version` missing entirely).
+   *   - A different *kind* of Workshop export (an AI profile, say —
+   *     see `ResidentProfileStore.exportProfile()`'s own matching
+   *     `type`) — a clear redirect rather than a confusing failure.
+   *   - A **newer** backup than this Workshop build understands —
+   *     `SaveMigrations.js` only ever migrates forward, so there's
+   *     nothing to safely convert; this asks for explicit confirmation
+   *     rather than silently importing a shape parts of this Workshop
+   *     might not fully recognise.
+   *  Reloads the page on success — the simplest way to guarantee every
+   *  open panel, not just the underlying stores, reflects the newly
+   *  imported state consistently, rather than trusting every live UI to
+   *  notice a full-state swap happening underneath it. */
   async importBackup() {
     const envelope = await StorageUtils.uploadJSON();
-    if (!envelope?.version) throw new Error("That file doesn't look like a workshop backup.");
+    if (!envelope || typeof envelope.version !== "number") throw new Error("That file doesn't look like a Workshop backup.");
+    if (envelope.type && envelope.type !== "workshop-backup") {
+      throw new Error(envelope.type === "workshop-ai-profile" ? "That's an AI profile export, not a Workshop backup \u2014 import it from AI Control instead." : "That file doesn't look like a Workshop backup.");
+    }
+    if (envelope.version > CURRENT_SAVE_VERSION) {
+      const proceed = window.confirm(
+        "This backup was made with a newer version of the Workshop than you're currently running. " +
+          "Importing it anyway may not restore everything correctly. Import it anyway?"
+      );
+      if (!proceed) return;
+    }
     const migrated = migrateEnvelope(envelope);
     StorageUtils.set(SAVE_KEY, migrated);
-    this._applyEnvelope(migrated);
+    window.alert("Workshop imported \u2014 reloading now.");
+    window.location.reload();
   }
 
   /** Settings app's Danger Zone — "Reset Workshop Settings" and "Reset

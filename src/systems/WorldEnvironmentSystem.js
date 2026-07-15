@@ -1,12 +1,8 @@
 import * as THREE from "three";
-import { Materials } from "../utils/PlaceholderFactory.js";
 import { radialGlowTexture, cloudBlobTexture, starSpriteTexture } from "../utils/ProceduralTexture.js";
 import { CameraSystem } from "./CameraSystem.js";
 import { InteriorSystem } from "./InteriorSystem.js";
 
-const GROUND_SIZE = 400; // metres — one tile of the "effectively infinite" ground
-const RECENTER_THRESHOLD = 120; // recentre once the camera is this far from the tile's own centre
-const RECENTER_GRID = 20; // snap recentring to this grid so the texture never visibly "swims"
 // Kept comfortably inside every Render Distance option (55/100/160/200m —
 // see SettingsStore.js) so the sky is never clipped by the camera's own
 // far plane, even on "Short". Positioned relative to the *camera*, not
@@ -47,17 +43,20 @@ const HIGH_CLOUD_COUNT = 7; // a second, higher, thinner layer — cirrus-like, 
  * WorldEnvironmentSystem
  * -------------------------
  * The one system responsible for rendering everything TimeOfDaySystem and
- * EnvironmentSystem *compute*: the ground, the sky colour and fog, the sun
- * and moon discs, the stars, and a small field of drifting clouds. Neither
- * of those two systems touches the scene directly — this is deliberately
- * the only place `scene.background`/`scene.fog`/any of these meshes get
- * created or changed, the same "compute state, emit an event, let one
- * dedicated renderer react" split the whole environment stack uses (see
- * docs/WORLD.md's Environment System section).
+ * EnvironmentSystem *compute*: the sky colour and fog, the sun and moon
+ * discs, the stars, and two layers of drifting clouds. Neither of those
+ * two systems touches the scene directly — this is deliberately the only
+ * place `scene.background`/`scene.fog`/any of these meshes get created
+ * or changed, the same "compute state, emit an event, let one dedicated
+ * renderer react" split the whole environment stack uses (see
+ * docs/WORLD.md's Environment System section). The Workshop's actual
+ * ground is `TerrainSystem.js`'s own job entirely, since the Workshop
+ * Reliability phase — see that file's own top comment for why one
+ * system, not two, now owns it.
  *
  * Nothing here is aware that a Workshop, or any other building, exists —
- * the ground, sky, and every effect below apply to the *scene*, not to any
- * one structure in it. That's what makes "Builder compatibility... without
+ * the sky and every effect below apply to the *scene*, not to any one
+ * structure in it. That's what makes "Builder compatibility... without
  * requiring special cases" true for free: a wall someone builds sits under
  * the same sky and in the same fog as the workshop itself, automatically.
  *
@@ -96,13 +95,14 @@ export class WorldEnvironmentSystem {
     this._cameraSystem = engine.getSystem(CameraSystem); // resolved once — see CameraSystem.js's own init() comment on why this is safe regardless of registration order
     this._interiorSystem = engine.getSystem(InteriorSystem);
 
-    const groundMat = Materials.ground();
-    const geometry = new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE);
-    this.groundMesh = new THREE.Mesh(geometry, groundMat);
-    this.groundMesh.rotation.x = -Math.PI / 2;
-    this.groundMesh.position.set(0, -0.03, 0); // just under the interior floor's surface — avoids z-fighting at the threshold
-    this.groundMesh.receiveShadow = true;
-    engine.scene.add(this.groundMesh);
+    // Workshop Reliability phase — "there should no longer be two
+    // separate ground layers." The flat, infinitely-recentring outdoor
+    // ground that used to be built here is gone; `TerrainSystem.js` is
+    // now the Workshop's one and only ground (a large editable patch
+    // plus a much larger non-editable skirt, both owned by that one
+    // class — see its own top comment). This system still owns the sky,
+    // fog, sun/moon/stars, clouds, and rain, exactly as before; it just
+    // no longer also draws a second ground underneath all of it.
 
     engine.scene.fog = new THREE.Fog("#bfe6ff", this._baseFogNear, this._baseFogFar);
 
@@ -297,11 +297,6 @@ export class WorldEnvironmentSystem {
     }
   }
 
-  /** Used by BuildModeSystem so outdoor placement works the same way indoor placement does. */
-  getGroundMesh() {
-    return this.groundMesh;
-  }
-
   /** Driven by the Settings app's "Render Distance" — scales both the
    *  camera's far plane and the fog's far distance together, so the world
    *  fades into the sky at roughly the same point it actually stops being
@@ -431,15 +426,6 @@ export class WorldEnvironmentSystem {
   update(dt) {
     const camera = this._cameraSystem;
     const camPos = camera?.position;
-
-    if (camera) {
-      const dx = camera.position.x - this.groundMesh.position.x;
-      const dz = camera.position.z - this.groundMesh.position.z;
-      if (dx * dx + dz * dz > RECENTER_THRESHOLD * RECENTER_THRESHOLD) {
-        this.groundMesh.position.x = Math.round(camera.position.x / RECENTER_GRID) * RECENTER_GRID;
-        this.groundMesh.position.z = Math.round(camera.position.z / RECENTER_GRID) * RECENTER_GRID;
-      }
-    }
 
     // Sun, moon, and stars are all positioned relative to the camera every
     // frame, not the world origin — see SKY_RADIUS's own comment. Distance

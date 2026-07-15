@@ -260,6 +260,17 @@ export class CameraSystem {
     return Math.min(rigHeight, MAX_STANDING_EYE_HEIGHT);
   }
 
+  /** The *current* eye height — standing or eased partway/fully into a
+   *  crouch, whichever this frame's own `_currentEyeHeight` actually is.
+   *  Distinct from `_getStandingEyeHeight()` (always the standing value,
+   *  used to compute where a crouch even eases *from*). See
+   *  `PlayerCharacterSystem.update()`'s own comment for why this one
+   *  specifically — not the standing height — is what the rig's own
+   *  root position needs to subtract. */
+  getCurrentEyeHeight() {
+    return this._currentEyeHeight;
+  }
+
   toggleViewMode() {
     if (this.mode === "focus") return;
     this.viewMode = this.viewMode === "first" ? "third" : "first";
@@ -465,11 +476,34 @@ export class CameraSystem {
     this._footY += this._verticalVelocity * dt;
 
     const groundHeight = this._computeGroundHeight(this.position.x, this.position.z);
-    if (this._footY <= groundHeight) {
+    const belowGround = this._footY - groundHeight;
+
+    if (belowGround <= 0) {
+      // At or above the ground surface after this frame's own vertical
+      // movement — resting exactly on it, or a rising slope carried the
+      // foot up to meet it (unconditional — an upward step, however
+      // steep, was never the reported problem).
       this._footY = groundHeight;
       this._verticalVelocity = 0;
       this._grounded = true;
       if (!wasGrounded) this._landTimer = LAND_STATE_DURATION;
+    } else if (wasGrounded && belowGround <= STEP_TOLERANCE) {
+      // "Walking down gentle slopes or edited terrain should not enter a
+      // falling state." `_footY` only ever integrates gravity — it
+      // doesn't automatically track a *descending* ground height as the
+      // player moves horizontally across it, so the ground can end up
+      // very slightly below last frame's foot position on any downhill
+      // slope, purely as an artefact of this frame's own horizontal
+      // step, with no actual falling involved. Reusing STEP_TOLERANCE
+      // (already the "how big a ledge can be stepped up onto" budget)
+      // for "how big a drop still counts as walking, not falling" keeps
+      // both directions of the same ordinary terrain-following behaviour
+      // governed by one shared, already-tuned distance. Only real
+      // freefall — a jump already in progress (`wasGrounded` false), or
+      // a drop bigger than this — reaches the `else` below.
+      this._footY = groundHeight;
+      this._verticalVelocity = 0;
+      this._grounded = true;
     } else {
       this._grounded = false;
     }

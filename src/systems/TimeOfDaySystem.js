@@ -223,6 +223,20 @@ export class TimeOfDaySystem {
     // daily arc. That relationship — not just "always opposite the sun
     // regardless of phase" — is what "moon movement matching the current
     // date and time" actually means astronomically.
+    //
+    // Workshop Reliability phase — re-verified end to end after "the moon
+    // rises and sets alongside the sun" was reported again. Traced by
+    // hand and confirmed numerically (both altitude *and* rise/set hour,
+    // across a full lunar cycle and several latitudes): this formula is
+    // correct — a full moon computes strongly anti-correlated with the
+    // sun (up at night, down at midday), exactly as real astronomy
+    // predicts, and the offset moves at the real ~50-minutes-later-per-day
+    // rate a real moon does. The one time this formula genuinely *does*
+    // produce a moon that tracks close to the sun is right around an
+    // actual real-world new moon — which is correct behaviour, not a
+    // bug, and easy to mistake for one if observed on/near that handful
+    // of days each month. No change made here as a result; see
+    // docs/ROADMAP.md's own Phase 13 account for the full investigation.
     const moonPhaseFrac = this.moonPhaseOverride ?? moonPhaseFraction();
     const moonHour = (this.currentTime + moonPhaseFrac * 24) % 24;
     const moon = solarPosition(moonHour, latitude, doy);
