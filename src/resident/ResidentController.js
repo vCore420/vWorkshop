@@ -17,7 +17,7 @@ const DRAG_DISTANCE = 1.4; // metres in front of the camera Bubble is held at wh
 const PATTERN_SAMPLE_INTERVAL = 25; // seconds — how often player-position/preference affinity samples are taken; deliberately infrequent, this is about long-run patterns, not a live tracker
 const MOOD_DRIFT_MIN_SECONDS = 120; // "medium-term emotional state" — mood reconsiders itself every couple of minutes, not every frame
 const MOOD_DRIFT_MAX_SECONDS = 300;
-const MOOD_CANDIDATES = ["content", "curious", "happy"]; // "sleeping"/"thinking" are always situational, never a resting mood; see ResidentBehaviour.computeExpression's own priority order
+const MOOD_CANDIDATES = ["neutral", "curious", "happy", "excited"]; // "sleeping"/"thinking" are always situational, never a resting mood; see ResidentBehaviour.computeExpression's own priority order. "excited"'s own base weight is deliberately small (see _maybeDriftMood()) — rare by default, more common only when a resident's own dials actually lean that way.
 const BEING_AWARENESS_RADIUS = 4; // metres — "who they spend time near," not "who is anywhere in the Workshop" — roughly the same generous, comfortable radius PlayerPatternMemory.js's own zones already use
 
 /**
@@ -79,11 +79,12 @@ const BEING_AWARENESS_RADIUS = 4; // metres — "who they spend time near," not 
  * current position exactly like any other time.
  */
 export class ResidentController {
-  constructor({ residentState, residentBehaviour, residentConnection, residentProfileStore, residentPreferences = null, playerPatternMemory = null, musicSystem = null }) {
+  constructor({ residentState, residentBehaviour, residentConnection, residentProfileStore, expressionSetStore = null, residentPreferences = null, playerPatternMemory = null, musicSystem = null }) {
     this.residentState = residentState;
     this.residentBehaviour = residentBehaviour;
     this.residentConnection = residentConnection;
     this.residentProfileStore = residentProfileStore;
+    this.expressionSetStore = expressionSetStore;
     this.residentPreferences = residentPreferences;
     this.playerPatternMemory = playerPatternMemory;
     this.musicSystem = musicSystem;
@@ -130,6 +131,14 @@ export class ResidentController {
     // and embodiment both live on the active profile, so both need
     // refreshing whenever it changes, not just once at startup.
     this._offResidentsChanged = this.residentProfileStore.events.on("residents:changed", () => this._onProfileChanged());
+    // Workshop Personality phase — editing the *contents* of the
+    // currently-active Expression Set (drawing a new pixel expression in
+    // the Expression Creator, say) doesn't change which profile is
+    // active, so it wouldn't otherwise trigger "residents:changed" at
+    // all — this is the one further place a live update needs to come
+    // from, reusing the identical "just recompute _onProfileChanged()"
+    // response either event already gets.
+    this._offExpressionSetsChanged = this.expressionSetStore?.events.on("expressionSets:changed", () => this._onProfileChanged());
     this._onProfileChanged();
 
     // "Bubble should begin feeling like an independent resident...
@@ -157,6 +166,16 @@ export class ResidentController {
     this.movement?.setMovementSpeedMultiplier(this._traitModifiers.movementSpeedMultiplier);
     this.movement?.setMotionDamping(this._traitModifiers.motionDamping);
     this.renderer?.setEmbodiment(profile.embodiment);
+    // Workshop Personality phase — "future residents may have different
+    // expression sets." "default" (or a set id that no longer resolves
+    // to anything real — see ExpressionSetStore.js's own comment on why
+    // that's an honest, expected possibility, not an error) both
+    // correctly resolve to `null` here, which
+    // `ResidentRenderer.setExpressionSet()` already treats as "use the
+    // built-in procedural drawing" — no special-casing needed on this
+    // side for either case.
+    const expressionSet = profile.expressionSetId && profile.expressionSetId !== "default" ? this.expressionSetStore?.get(profile.expressionSetId) ?? null : null;
+    this.renderer?.setExpressionSet(expressionSet);
   }
 
   /** "What should I have been doing while the player was away?" — not a
@@ -317,13 +336,13 @@ export class ResidentController {
    *  selected traits' own `expressionBias`, and by whether the resident's
    *  own accumulated favourite weather/time-of-day happens to match right
    *  now (a resident actually getting to enjoy a preference it's formed
-   *  reads as content, not neutral). */
+   *  reads as happy, not merely neutral). */
   _maybeDriftMood(dt) {
     this._moodTimer -= dt;
     if (this._moodTimer > 0) return;
     this._moodTimer = MOOD_DRIFT_MIN_SECONDS + Math.random() * (MOOD_DRIFT_MAX_SECONDS - MOOD_DRIFT_MIN_SECONDS);
 
-    const weights = { content: 2, curious: 1, happy: 1 };
+    const weights = { neutral: 2, curious: 1, happy: 1, excited: 0.4 };
     for (const [expr, bias] of Object.entries(this._traitModifiers.expressionBias)) {
       if (weights[expr] !== undefined) weights[expr] *= bias;
     }
@@ -498,6 +517,7 @@ export class ResidentController {
     this.engine.canvas.removeEventListener("pointerdown", this._onPointerDown);
     window.removeEventListener("pointerup", this._onPointerUp);
     this._offResidentsChanged?.();
+    this._offExpressionSetsChanged?.();
   }
 }
 
@@ -516,5 +536,5 @@ function weightedPick(weights) {
     roll -= w;
     if (roll <= 0) return key;
   }
-  return entries[entries.length - 1]?.[0] ?? "content";
+  return entries[entries.length - 1]?.[0] ?? "neutral";
 }

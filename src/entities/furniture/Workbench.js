@@ -56,13 +56,28 @@ export const WorkbenchDefinition = {
 
     // A shallow tray holding a couple of tool placeholders — enough to read
     // as "tools live here" without turning into decorative clutter.
+    //
+    // Workshop Reliability phase — "behind the notebook, a cylindrical
+    // object currently appears with overlapping colours and visual
+    // clipping." Root cause, found by tracing exact positions: these
+    // three handles (0.28m long, spaced only 0.14m apart — half their
+    // own length) already overlapped *each other*, and the tray itself
+    // reached to z=0.34, well inside the standalone Notebook prop's own
+    // footprint (bench-local x=-0.45, z=0.4 — see slots.js's own
+    // comment on that placement) — three different-coloured cylinders
+    // intersecting both their neighbours and the notebook mesh is
+    // exactly "overlapping colours and visual clipping." Still needed —
+    // "tools live here" is the entire point of a tray — so repaired,
+    // not removed: shorter handles that clear each other, moved back
+    // (lower z) to clear the notebook by a genuine margin instead of
+    // reaching underneath it.
     const tray = box(0.5, 0.03, 0.28, Materials.matte("#2f2a24"));
-    tray.position.set(-0.55, topY + 0.03, 0.2);
+    tray.position.set(-0.55, topY + 0.03, 0.05);
     g.add(tray);
     for (let i = 0; i < 3; i++) {
-      const handle = cylinder(0.015, 0.015, 0.28, Materials.matte(["#b8863b", "#8d8577", "#6b4a34"][i]));
+      const handle = cylinder(0.015, 0.015, 0.16, Materials.matte(["#b8863b", "#8d8577", "#6b4a34"][i]));
       handle.rotation.z = Math.PI / 2;
-      handle.position.set(-0.7 + i * 0.14, topY + 0.06, 0.2);
+      handle.position.set(-0.68 + i * 0.18, topY + 0.06, 0.05);
       g.add(handle);
     }
 

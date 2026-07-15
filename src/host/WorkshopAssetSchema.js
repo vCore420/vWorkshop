@@ -95,3 +95,27 @@ export function buildSwatchThumbnail(colors) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${rects}</svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
+
+/** Workshop Personality phase — the pixel-art equivalent of
+ *  `buildSwatchThumbnail()` above, for Expression Sets
+ *  (`ExpressionSetStore.js`). Renders the actual drawn pixels as small
+ *  SVG rectangles, transparent cells simply omitted — a real thumbnail
+ *  of what was actually drawn, not an abstract colour summary, the same
+ *  "genuinely real, if simple" standard the swatch thumbnail already
+ *  holds itself to. `null` for a set with nothing drawn for the
+ *  requested expression yet, same as the empty-colour-list case above. */
+export function buildPixelThumbnail(pixels, gridSize) {
+  if (!pixels || pixels.every((p) => !p)) return null;
+  const size = 64;
+  const cell = size / gridSize;
+  const rects = [];
+  for (let gy = 0; gy < gridSize; gy++) {
+    for (let gx = 0; gx < gridSize; gx++) {
+      const color = pixels[gy * gridSize + gx];
+      if (!color) continue;
+      rects.push(`<rect x="${(gx * cell).toFixed(1)}" y="${(gy * cell).toFixed(1)}" width="${cell.toFixed(1)}" height="${cell.toFixed(1)}" fill="${color}" />`);
+    }
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${rects.join("")}</svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}

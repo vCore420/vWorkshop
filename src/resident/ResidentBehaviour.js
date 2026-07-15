@@ -1,9 +1,25 @@
 import { damp } from "../utils/MathUtils.js";
+import { EXPRESSION_TYPES } from "./ExpressionTypes.js";
 
 const AWARENESS_RADIUS = 3.2; // metres — inside this, the resident starts turning to look at the player
 const AWARENESS_FULL_RADIUS = 1.6; // fully attentive within this distance
 
-export const EXPRESSIONS = ["sleeping", "content", "curious", "happy", "thinking"];
+// Workshop Personality phase — "Neutral. Happy. Curious. Thinking.
+// Sleeping. Excited. Sad. Surprised... future expressions should
+// naturally be supported." Derived from `ExpressionTypes.js`'s own
+// canonical list rather than a second, parallel array that could drift
+// out of sync with it — this file only ever needs the plain ids, not
+// the labels/descriptions the Expression Creator's own UI also reads
+// from that file. ("content" renamed "neutral" to match the brief's own
+// naming — see `computeExpression()`'s own fallback below, which
+// absorbs any existing save still holding the old name harmlessly, the
+// same "an unrecognised value just falls through to the default" safety
+// net this array's own membership check already provided before the
+// rename.) See `docs/RESIDENT.md`'s own "Expression System" section for
+// which of the three new ones has a real behavioural trigger today
+// (`excited`, via `ResidentDials.js`) and which are honestly available
+// but not yet automatically triggered (`sad`, `surprised`).
+export const EXPRESSIONS = EXPRESSION_TYPES.map((e) => e.id);
 
 /**
  * ResidentBehaviour
@@ -40,7 +56,7 @@ export const EXPRESSIONS = ["sleeping", "content", "curious", "happy", "thinking
  *     overlay set by `triggerEmotion()` (conversation start noticing
  *     something, say), decaying back to nothing on its own timer, never
  *     persisted. `computeExpression()`'s own priority order —
- *     sleeping > thinking > emotion > mood > "content" — is exactly
+ *     sleeping > thinking > emotion > mood > "neutral" — is exactly
  *     "short-term overrides medium-term overrides long-term default."
  */
 export class ResidentBehaviour {
@@ -112,6 +128,6 @@ export class ResidentBehaviour {
     if (!isAwake) return "sleeping";
     if (this.isThinking) return "thinking";
     if (this.emotion) return this.emotion;
-    return EXPRESSIONS.includes(mood) ? mood : "content";
+    return EXPRESSIONS.includes(mood) ? mood : "neutral";
   }
 }

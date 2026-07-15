@@ -149,7 +149,25 @@ export class PlayerCharacterSystem {
     if (!this._current) return;
     const cam = this._cameraSystem;
     if (!cam) return;
-    this._current.root.position.set(cam.position.x, cam.position.y - this._current.eyeHeight, cam.position.z);
+    // Workshop Reliability phase — "first-person crouching allows the
+    // player's head/model to clip into the camera." Root cause: this
+    // line used to subtract the rig's own *standing* eye height
+    // unconditionally, even while crouched — but `cam.position.y` itself
+    // already reflects the camera's live, crouch-*reduced* height (see
+    // CameraSystem's own `_currentEyeHeight`). Subtracting the bigger
+    // (standing) number from the smaller (crouched) camera height left
+    // the rig's own root sitting below the player's actual feet by
+    // however much the crouch had reduced it — the exact same "feet
+    // pushed below the floor" class of bug `_getStandingEyeHeight()`'s
+    // own comment already documents fixing once, for the spawn/load
+    // case specifically; this was the same mistake surfacing again for
+    // the crouch case. With the root sitting too low, the crouch pose's
+    // own forward torso lean (see AnimationClips.js's own CROUCH_CLIP)
+    // then swung the chest/head up and into the camera instead of
+    // staying behind it. Using the *live* eye height keeps the root
+    // exactly at the real foot position regardless of crouch state, the
+    // same way it already always has while standing.
+    this._current.root.position.set(cam.position.x, cam.position.y - cam.getCurrentEyeHeight(), cam.position.z);
     // "The player model is currently facing the wrong direction" — root
     // cause: an unrotated rig's own local +Z (the plain, ordinary "front"
     // a symmetric box-built rig naturally has, with no explicit face or

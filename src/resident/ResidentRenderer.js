@@ -1,18 +1,27 @@
 import * as THREE from "three";
 import { configureFlatTexture } from "../utils/TextureUtils.js";
 import { defaultEmbodimentConfig, normalizeEmbodimentConfig } from "../ai/EmbodimentConfiguration.js";
+import { EXPRESSION_GRID_SIZE } from "./ExpressionTypes.js";
 
 const RADIUS = 0.13; // "increase Bubble's size very slightly. It should still feel like a companion rather than the focal point of the room." Nudged up again (0.16 → 0.11 → 0.13) — still small, just a touch less easy to lose track of. Every embodiment shape below is built at roughly this same scale, so switching type never makes the resident suddenly loom or vanish.
 const FACE_TEXTURE_SIZE = 128;
 const BASE_GLOW_OPACITY = 0.8; // reproduced exactly when embodiment.glow is at its default (0.5) — see _applyGlow()
 const BASE_LIGHT_INTENSITY = 0.35;
+const TRANSITION_DURATION = 0.16; // seconds — see setExpression()'s own comment
 
 const MOOD_COLORS = {
   sleeping: "#4a6a72",
-  content: "#7fd8c4",
+  neutral: "#7fd8c4",
   curious: "#8fc8e8",
   happy: "#a8e8b8",
   thinking: "#c8a8e8",
+  // Workshop Personality phase — three new expressions, three new
+  // glow colours, each chosen to sit in the same soft, "digital, not
+  // magical" family the original five already established rather than
+  // introducing a jarringly saturated or dark outlier.
+  excited: "#ffd27a", // warm gold — noticeably brighter/warmer than "happy"'s green, the same way the expression itself reads as more energetic
+  sad: "#7a8ca0", // a cooler, more muted blue-grey — subdued, not stark
+  surprised: "#f0a8d8", // a bright, light pink-magenta — stands out momentarily, matching a brief, sudden reaction rather than a settled mood
 };
 
 /**
@@ -82,6 +91,7 @@ export class ResidentRenderer {
     this.root.name = "resident";
     this._embodiment = normalizeEmbodimentConfig(embodiment ?? defaultEmbodimentConfig());
     this._outerType = null; // forces the very first _applyEmbodiment() to build geometry rather than skipping it as "unchanged"
+    this._expressionSet = null; // a custom Expression Set from ExpressionSetStore.js, or null for the built-in procedural drawing — see setExpressionSet()
 
     this._buildBubble();
     this._buildInnerGlow();
@@ -91,6 +101,8 @@ export class ResidentRenderer {
     this._applyEmbodiment(this._embodiment);
 
     this._lastExpression = null;
+    this._pendingExpression = null; // the expression a transition is currently fading toward — see setExpression()
+    this._transitionTimer = 0;
     this._sparklePulsePhase = Math.random() * Math.PI * 2;
     this._localLookTarget = new THREE.Vector3();
   }
@@ -152,7 +164,7 @@ export class ResidentRenderer {
       transmission: 0.6, // real refraction, not faked — "slight refraction"
       thickness: RADIUS,
       ior: 1.15,
-      emissive: new THREE.Color(MOOD_COLORS.content),
+      emissive: new THREE.Color(MOOD_COLORS.neutral),
       emissiveIntensity: 0.18,
       clearcoat: 0.4,
       clearcoatRoughness: 0.3,
@@ -166,7 +178,7 @@ export class ResidentRenderer {
   _buildInnerGlow() {
     // Always a sphere regardless of outer shape — see the class comment.
     const geometry = new THREE.SphereGeometry(RADIUS * 0.45, 12, 10);
-    this.glowMaterial = new THREE.MeshBasicMaterial({ color: MOOD_COLORS.content, transparent: true, opacity: BASE_GLOW_OPACITY });
+    this.glowMaterial = new THREE.MeshBasicMaterial({ color: MOOD_COLORS.neutral, transparent: true, opacity: BASE_GLOW_OPACITY });
     this.glowMesh = new THREE.Mesh(geometry, this.glowMaterial);
     this.root.add(this.glowMesh);
   }
@@ -187,7 +199,7 @@ export class ResidentRenderer {
     this.faceMesh.renderOrder = 1;
     this.root.add(this.faceMesh);
 
-    this._drawFace("content");
+    this._drawFace("neutral");
   }
 
   _buildSparkles() {
@@ -212,7 +224,7 @@ export class ResidentRenderer {
     // "Soft ambient lighting" of its own — a very small point light so the
     // bubble genuinely casts a little warmth onto whatever it's near,
     // rather than only ever looking lit from outside itself.
-    this.light = new THREE.PointLight(MOOD_COLORS.content, BASE_LIGHT_INTENSITY, 1.4, 2);
+    this.light = new THREE.PointLight(MOOD_COLORS.neutral, BASE_LIGHT_INTENSITY, 1.4, 2);
     this.light.position.set(0, 0, 0);
     this.root.add(this.light);
   }
@@ -251,18 +263,84 @@ export class ResidentRenderer {
     this.light.intensity = BASE_LIGHT_INTENSITY * factor;
   }
 
-  /** Redraws the face only when the expression actually changed. */
+  /** Workshop Personality phase — "expressions should transition
+   *  smoothly and feel subtle rather than exaggerated." Previously an
+   *  instant swap — the new face texture simply appeared the same frame
+   *  the expression changed. Now a brief cross-fade: the face mesh eases
+   *  to fully transparent, the texture underneath is swapped while
+   *  genuinely invisible (see `update()`'s own handling of
+   *  `_pendingExpression`), then eases back in — the same "a change in
+   *  state should read as a transition, not a cut" instinct
+   *  `ResidentMovement.js`'s own eased turns and `EnvironmentSystem.js`'s
+   *  own weather easing already hold themselves to, just applied to a
+   *  2D face for the first time. `TRANSITION_DURATION` (160ms) is
+   *  deliberately quick — long enough to read as a change, nowhere near
+   *  long enough to feel like Bubble is fading in and out. */
   setExpression(expression) {
-    if (expression === this._lastExpression) return;
-    this._lastExpression = expression;
-    this._drawFace(expression);
-    const color = MOOD_COLORS[expression] ?? MOOD_COLORS.content;
-    this.glowMaterial.color.set(color);
-    this.light.color.set(color);
-    this.material.emissive.set(color);
+    if (expression === this._lastExpression || expression === this._pendingExpression) return;
+    this._pendingExpression = expression;
+    this._transitionTimer = TRANSITION_DURATION;
   }
 
+  /** Workshop Personality phase — "future residents should naturally use
+   *  the same architecture." A resident's active Expression Set (see
+   *  `ExpressionSetStore.js`) is resolved by whoever owns this renderer
+   *  (`ResidentController.js`, from the active profile's own
+   *  `expressionSetId` — the identical "a plain id on the profile,
+   *  resolved elsewhere" shape `provider`/`model` already use) and
+   *  handed in here as either a real set object or `null` ("use the
+   *  built-in procedural drawing," the only behaviour that existed
+   *  before this phase). Redraws immediately with whatever the current
+   *  expression already is, so switching sets is visible right away
+   *  rather than waiting for the next expression change — a set switch
+   *  itself doesn't need the cross-fade `setExpression()` uses; it's a
+   *  configuration change, not a felt emotional beat. */
+  setExpressionSet(expressionSet) {
+    this._expressionSet = expressionSet ?? null;
+    if (this._lastExpression) this._drawFace(this._lastExpression);
+  }
+
+  /** The one place that decides *how* an expression gets drawn — a
+   *  custom pixel image from the active Expression Set if one exists for
+   *  this specific expression, otherwise the original built-in
+   *  procedural drawing (`_drawProceduralFace()`). A set doesn't need to
+   *  define all eight expressions to be usable — anything it leaves
+   *  blank quietly falls back to the built-in look for just that one
+   *  expression, never a blank or broken face. */
   _drawFace(expression) {
+    const pixels = this._expressionSet?.expressions?.[expression];
+    if (pixels) this._drawPixelFace(pixels, this._expressionSet.gridSize ?? EXPRESSION_GRID_SIZE);
+    else this._drawProceduralFace(expression);
+  }
+
+  /** A custom Expression Creator drawing — `pixels` is a flat array of
+   *  `gridSize * gridSize` entries, each either a CSS colour string or
+   *  `null` (transparent, showing the bubble's own glow through it,
+   *  exactly like the procedural drawing's own unpainted background).
+   *  Drawn as plain filled squares, not smoothed or interpolated — "simple
+   *  pixel drawing tools" should look like pixel art once it's actually
+   *  on the resident's own face, not silently blurred away. */
+  _drawPixelFace(pixels, gridSize) {
+    const ctx = this._faceCtx;
+    const s = FACE_TEXTURE_SIZE;
+    ctx.clearRect(0, 0, s, s);
+    const cell = s / gridSize;
+    for (let gy = 0; gy < gridSize; gy++) {
+      for (let gx = 0; gx < gridSize; gx++) {
+        const color = pixels[gy * gridSize + gx];
+        if (!color) continue;
+        ctx.fillStyle = color;
+        ctx.fillRect(gx * cell, gy * cell, cell, cell);
+      }
+    }
+  }
+
+  /** The original built-in expression drawing — a handful of simple
+   *  curves per expression, never a sprite sheet. "The expressions
+   *  should remain subtle. Avoid exaggerated cartoon animation." Always
+   *  available regardless of which Expression Set is active, since any
+   *  expression a set doesn't define falls back to this. */
+  _drawProceduralFace(expression) {
     const ctx = this._faceCtx;
     const s = FACE_TEXTURE_SIZE;
     ctx.clearRect(0, 0, s, s);
@@ -319,7 +397,51 @@ export class ResidentRenderer {
       return;
     }
 
-    // "content" — the default resting expression.
+    // Workshop Personality phase — three new expressions, held to the
+    // same "a handful of simple curves" standard as the original five.
+    if (expression === "excited") {
+      // Bigger, rounder eyes than "happy" (wide with energy, not just
+      // pleased) and a fully open, filled smile rather than a stroked
+      // arc — the one expression here that reads as genuinely bright
+      // rather than gently pleased, without tipping into a cartoon grin.
+      dot(ctx, s / 2 - eyeDX, eyeY, s * 0.075);
+      dot(ctx, s / 2 + eyeDX, eyeY, s * 0.075);
+      ctx.beginPath();
+      ctx.ellipse(s / 2, s * 0.6, s * 0.1, s * 0.075, 0, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+
+    if (expression === "sad") {
+      // The exact mirror of "happy"'s own eyes (positive curve instead
+      // of negative — droops instead of arching) and a frown built from
+      // the top half of a circle, the mirror of "happy"'s own smile arc
+      // (see that arc's own angles, reflected through the centre).
+      drawCurve(ctx, s / 2 - eyeDX, eyeY, s * 0.07, 0.6);
+      drawCurve(ctx, s / 2 + eyeDX, eyeY, s * 0.07, 0.6);
+      ctx.beginPath();
+      ctx.arc(s / 2, s * 0.7, s * 0.09, 1.15 * Math.PI, 1.85 * Math.PI);
+      ctx.stroke();
+      return;
+    }
+
+    if (expression === "surprised") {
+      // Wide, open ring-shaped eyes (a stroked circle, not a filled dot
+      // — "wide-eyed") and a small round open mouth, the classic honest
+      // reading for a sudden, brief reaction rather than a settled mood.
+      ctx.beginPath();
+      ctx.arc(s / 2 - eyeDX, eyeY, s * 0.055, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(s / 2 + eyeDX, eyeY, s * 0.055, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(s / 2, s * 0.62, s * 0.045, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+
+    // "neutral" — the default resting expression.
     dot(ctx, s / 2 - eyeDX, eyeY, s * 0.055);
     dot(ctx, s / 2 + eyeDX, eyeY, s * 0.055);
     ctx.beginPath();
@@ -337,6 +459,8 @@ export class ResidentRenderer {
     this.root.rotation.y = idleRotationY;
     this.mesh.scale.copy(scale);
     this.glowMesh.scale.copy(scale);
+
+    this._updateExpressionTransition(dt);
 
     if (lookTarget) {
       // Object3D.lookAt() expects its target in the *parent's* own local
@@ -366,6 +490,36 @@ export class ResidentRenderer {
 
     this._sparklePulsePhase += dt * 0.5;
     this.sparkles.material.opacity = 0.55 + 0.2 * Math.sin(this._sparklePulsePhase); // "occasional sparkle pulses" — a slow, gentle breathing
+  }
+
+  /** The face mesh eases to fully transparent, swaps its texture (and
+   *  the mood colour driving the glow/light/emissive) at the exact
+   *  moment it's genuinely invisible, then eases back in — see
+   *  `setExpression()`'s own comment for why. A resident with no
+   *  transition in progress (the overwhelmingly common case, most
+   *  frames) costs one cheap comparison and returns immediately. */
+  _updateExpressionTransition(dt) {
+    if (this._transitionTimer <= 0) return;
+    const wasInSecondHalf = this._transitionTimer <= TRANSITION_DURATION / 2;
+    this._transitionTimer = Math.max(0, this._transitionTimer - dt);
+    const isInSecondHalf = this._transitionTimer <= TRANSITION_DURATION / 2;
+
+    if (!wasInSecondHalf && isInSecondHalf) {
+      // The invisible midpoint — swap what's actually drawn while
+      // nothing can see it happen.
+      this._lastExpression = this._pendingExpression;
+      this._pendingExpression = null;
+      this._drawFace(this._lastExpression);
+      const color = MOOD_COLORS[this._lastExpression] ?? MOOD_COLORS.neutral;
+      this.glowMaterial.color.set(color);
+      this.light.color.set(color);
+      this.material.emissive.set(color);
+    }
+
+    // 1 at both ends of the transition (fully visible before it starts
+    // and after it ends), dipping to 0 exactly at the midpoint swap.
+    const progress = 1 - this._transitionTimer / TRANSITION_DURATION;
+    this.faceMesh.material.opacity = Math.abs(progress - 0.5) * 2;
   }
 
   /** "Glow becomes softer... idle movement slows" while offline —

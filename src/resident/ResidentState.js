@@ -24,7 +24,7 @@ export class ResidentState {
   constructor() {
     this.events = new EventBus();
     this.idleLocationId = null; // the resident's current destination — see ResidentMovement.js's own "idleLocationId is set the moment travel starts" behaviour
-    this.mood = "content"; // a plain label ResidentBehaviour.js/ResidentRenderer.js both read — see ResidentBehaviour.js's own MOOD list
+    this.mood = "neutral"; // a plain label ResidentBehaviour.js/ResidentRenderer.js both read — see ResidentBehaviour.js's own MOOD list
     // "Current position... current idle destination... current movement
     // state... current facing direction... current expression... current
     // connection state." currentPosition is genuinely restored on load —
@@ -43,7 +43,7 @@ export class ResidentState {
     // value from last session.
     this.currentPosition = null; // {x, y, z} | null — null only before the very first frame ever runs
     this.facingDirection = 0; // radians (rotation.y) — last known only, see comment above
-    this.expression = "content"; // last known only — see comment above
+    this.expression = "neutral"; // last known only — see comment above
     this.connectionState = "connecting"; // last known only — see comment above
   }
 
@@ -79,10 +79,10 @@ export class ResidentState {
   load(data) {
     if (!data) return;
     this.idleLocationId = data.idleLocationId ?? null;
-    this.mood = data.mood ?? "content";
+    this.mood = data.mood ?? "neutral";
     this.currentPosition = data.currentPosition ?? null;
     this.facingDirection = data.facingDirection ?? 0;
-    this.expression = data.expression ?? "content";
+    this.expression = data.expression ?? "neutral";
     this.connectionState = data.connectionState ?? "connecting";
     this.events.emit("state:changed");
   }

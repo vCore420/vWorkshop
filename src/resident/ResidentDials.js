@@ -52,6 +52,17 @@ export function getDialModifiers(dials) {
     bumpExpression("happy", 1 + playfulness * 0.7);
     bumpExpression("curious", 1 + playfulness * 0.3);
   }
+  // Workshop Personality phase — "excited" joins the resting-mood
+  // candidates (see ResidentController.js's own MOOD_CANDIDATES), but
+  // only ever becomes genuinely likely when *both* Playfulness and
+  // Energy lean high together — a playful-but-low-energy resident stays
+  // "happy," not "excited"; energy alone, with ordinary playfulness,
+  // isn't enough either. Multiplying the two deviations (rather than
+  // adding them) is what enforces "both," not "either" — either alone
+  // near zero keeps the product near zero.
+  if (playfulness > 0 && energy > 0) {
+    bumpExpression("excited", 1 + playfulness * energy * 3);
+  }
   // Reflection: reads as thoughtful/curious, lingers longer.
   if (reflection !== 0) {
     bumpExpression("thinking", 1 + Math.max(0, reflection) * 0.5); // only a *reflective* resident leans thinking; the low end doesn't lean "unreflective" toward anything specific
