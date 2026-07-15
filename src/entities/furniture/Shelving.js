@@ -30,12 +30,15 @@ export const ShelvingDefinition = {
     g.add(back);
 
     const shelfColors = ["#7a5c3e", "#6b4a34", "#8d6a45", "#5a3d29"];
-    const placeholderColors = ["#b8863b", "#3c5a53", "#8d8577", "#6b9c8e", "#a9764f", "#2a231d"];
+    const itemColors = ["#b8863b", "#3c5a53", "#8d8577", "#6b9c8e", "#a9764f", "#2a231d"];
     let colorIndex = 0;
 
     for (let i = 0; i < shelfCount; i++) {
       const y = 0.15 + i * ((height - 0.3) / (shelfCount - 1));
-      const shelf = box(width, 0.03, depth, frameMat);
+      // Each board a subtly different wood tone rather than one uniform
+      // Materials.wood() call — a shelf assembled over time from whatever
+      // timber was on hand rarely matches board-for-board.
+      const shelf = box(width, 0.03, depth, Materials.wood(shelfColors[i % shelfColors.length]));
       shelf.position.set(0, y, 0);
       g.add(shelf);
 
@@ -47,14 +50,13 @@ export const ShelvingDefinition = {
         const w = 0.06 + ((i + j) % 3) * 0.02;
         const h = 0.18 + ((i * 3 + j) % 3) * 0.03;
         const d = depth * 0.7;
-        const item = box(w, h, d, Materials.matte(shelfColors[colorIndex % shelfColors.length]));
+        const item = box(w, h, d, Materials.matte(itemColors[colorIndex % itemColors.length]));
         colorIndex++;
         item.position.set(cursor + w / 2, y + 0.015 + h / 2, 0);
         item.rotation.y = (Math.random() - 0.5) * 0.05;
         g.add(item);
         cursor += w + 0.03;
       }
-      void placeholderColors;
     }
 
     return g;

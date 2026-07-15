@@ -36,7 +36,7 @@ export const ToolStorageDefinition = {
     wrench.position.set(0.05, 1.65, 0.03);
     g.add(wrench);
 
-    const screwdriver = cylinder(0.012, 0.012, 0.22, Materials.matte("#b8863b"));
+    const screwdriver = cylinder(0.012, 0.012, 0.22, Materials.plastic("#b8863b"));
     screwdriver.position.set(0.28, 1.65, 0.03);
     g.add(screwdriver);
 

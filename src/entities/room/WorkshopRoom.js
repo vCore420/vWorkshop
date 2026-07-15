@@ -83,6 +83,33 @@ function buildWallWithOpenings({ length, height, thickness, openings, exteriorFa
 }
 
 /**
+ * buildBaseboard
+ * --------------
+ * Workshop Interior phase — "trim... corners... nothing should feel left
+ * behind." A skirting board along a wall's interior base is one of the
+ * most universal signs of "a real, finished room," and the Workshop had
+ * none anywhere — walls simply met the floor at a bare edge. Reuses
+ * `buildWallWithOpenings`'s own slicing rather than a second, hand-rolled
+ * way to leave a gap: given the exact same `openings` a wall was already
+ * built with, a baseboard skips them automatically (a door reaches the
+ * floor and must have a real gap in its own trim too; a window's sill
+ * sits well above baseboard height, so in practice only the door ever
+ * actually needs one). Single material — a baseboard is only ever seen
+ * from the room side, unlike a wall itself.
+ */
+function buildBaseboard({ length, openings, height, depth, material }) {
+  return buildWallWithOpenings({
+    length,
+    height,
+    thickness: depth,
+    openings,
+    exteriorFacesPositiveZ: true,
+    interiorMaterial: material,
+    exteriorMaterial: material,
+  }).group;
+}
+
+/**
  * buildRoom
  * ---------
  * Builds the workshop as a real, walk-through-able structure: floor,
@@ -246,6 +273,17 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
     muntin.position.copy(pane.position);
     root.add(muntin);
 
+    // Workshop Interior phase — "window frame materials... trim." The
+    // frame's own sill segment (built by buildWallWithOpenings above) sits
+    // flush with the wall, the same thickness as the jambs either side of
+    // it — real windows almost always have a sill that actually protrudes
+    // a little into the room, the one surface of a window you could
+    // plausibly set something on. A separate, slightly wider, slightly
+    // deeper ledge, sitting just below the glass and proud of the wall.
+    const sillLedge = box(w.width + 0.14, 0.03, 0.12, Materials.wood("#6b4a34"));
+    sillLedge.position.set(w.position[0], w.position[1] - w.height / 2 - 0.015, northInteriorZ + 0.06);
+    root.add(sillLedge);
+
     windowPanes.push({ mesh: pane, material: paneMat, def: w });
   }
 
@@ -326,6 +364,19 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
     handle.position.set(-hingeSide * (panelWidth / 2 - 0.12), 0, -0.05);
     mesh.add(handle);
 
+    // Workshop Interior phase — "door materials... visual consistency."
+    // Three small hinge plates on the actual hinge edge (the opposite
+    // edge from the handle above) — a real French door's hinges are
+    // visible hardware, not an implied, invisible pivot. Purely cosmetic:
+    // the panel's actual rotation still happens around `pivot`, exactly as
+    // before, unaffected by these being attached to `mesh`.
+    const hingeMat = Materials.metal("#6f6c64");
+    for (const hy of [-doorDef.height * 0.36, 0, doorDef.height * 0.36]) {
+      const hinge = box(0.03, 0.1, 0.012, hingeMat, { castShadow: false });
+      hinge.position.set(hingeSide * (panelWidth / 2 - 0.015), hy, -0.036);
+      mesh.add(hinge);
+    }
+
     return pivot;
   }
 
@@ -336,6 +387,36 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
   root.add(doorPanelLeft);
   root.add(doorPanelRight);
   const doorOpenAngle = 1.9; // ~109° — flung outward, past perpendicular, the way a real French door rests open rather than stopping exactly at 90°
+
+  // --- Baseboard trim, all four walls. Windows never reach low enough to
+  // need slicing around (their sill sits at 0.9m, well above baseboard
+  // height) — only the south wall's door genuinely needs its own gap,
+  // built the same way the wall itself already was.
+  const baseboardMat = Materials.wood("#3d2a1c"); // the same dark trim tone the door frame already established
+  const BASEBOARD_HEIGHT = 0.1;
+  const BASEBOARD_DEPTH = 0.03;
+
+  const northBaseboard = box(width, BASEBOARD_HEIGHT, BASEBOARD_DEPTH, baseboardMat);
+  northBaseboard.position.set(0, BASEBOARD_HEIGHT / 2, northInteriorZ + BASEBOARD_DEPTH / 2);
+  root.add(northBaseboard);
+
+  const southBaseboard = buildBaseboard({
+    length: width,
+    openings: [{ center: doorDef.position[0], width: doorDef.width, bottomHeight: 0, topHeight: BASEBOARD_HEIGHT }],
+    height: BASEBOARD_HEIGHT,
+    depth: BASEBOARD_DEPTH,
+    material: baseboardMat,
+  });
+  southBaseboard.position.set(0, 0, southInteriorZ - BASEBOARD_DEPTH / 2);
+  root.add(southBaseboard);
+
+  const eastBaseboard = box(BASEBOARD_DEPTH, BASEBOARD_HEIGHT, sideWallDepth, baseboardMat);
+  eastBaseboard.position.set(eastCenterX - WALL_THICKNESS / 2 - BASEBOARD_DEPTH / 2, BASEBOARD_HEIGHT / 2, 0);
+  root.add(eastBaseboard);
+
+  const westBaseboard = box(BASEBOARD_DEPTH, BASEBOARD_HEIGHT, sideWallDepth, baseboardMat);
+  westBaseboard.position.set(westCenterX + WALL_THICKNESS / 2 + BASEBOARD_DEPTH / 2, BASEBOARD_HEIGHT / 2, 0);
+  root.add(westBaseboard);
 
   // --- Roof: a simple flat shell with a slight overhang — "believable", not "beautiful" ---
   const roofOverhang = 0.45;
@@ -370,6 +451,13 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
   const ceilingLightSockets = [];
   const socketOffsets = [[-1.8, -0.5], [1.8, 0.8]];
   for (const [x, z] of socketOffsets) {
+    // Workshop Interior phase — "ceiling lights... fixture appearance."
+    // The cord used to simply emerge from the ceiling plane with nothing
+    // marking where it actually mounts — a small canopy plate is the
+    // universal real-world detail that was missing.
+    const canopy = cylinder(0.06, 0.07, 0.02, Materials.matte("#1c1a17"), 16);
+    canopy.position.set(x, height - 0.01, z);
+    root.add(canopy);
     const cord = cylinder(0.01, 0.01, 0.5, Materials.matte("#1c1a17"), 6);
     cord.position.set(x, height - 0.25, z);
     root.add(cord);
@@ -377,6 +465,32 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
     shade.position.set(x, height - 0.55, z);
     root.add(shade);
     ceilingLightSockets.push(new THREE.Vector3(x, height - 0.6, z));
+  }
+
+  // --- Wall sconces, flanking the front doors. Workshop Interior phase —
+  // "wall lights... the Workshop should feel welcoming." The Workshop had
+  // ceiling pendants and a handful of task lamps, but nothing at all on a
+  // wall — an entryway is the one place a real building almost always
+  // lights from the wall rather than the ceiling. Built exactly like the
+  // ceiling sockets above: geometry only here, with LightingSystem
+  // attaching the real PointLight through the same registerPracticalLight
+  // path every other practical fixture already goes through — no new
+  // lighting mechanism, just one more pair of fixtures using it.
+  const wallLightSockets = [];
+  const sconceMat = Materials.metal("#6f6c64");
+  for (const sx of [-1, 1]) {
+    const bracketX = doorDef.position[0] + sx * (doorDef.width / 2 + 0.6);
+    const bracket = box(0.05, 0.08, 0.1, sconceMat);
+    // Back face flush with the wall's own interior plane (southInteriorZ),
+    // extending into the room from there — not centred on it, which would
+    // leave half the bracket floating in front of the wall with a gap.
+    bracket.position.set(bracketX, 1.75, southInteriorZ - 0.05);
+    root.add(bracket);
+    const shade = cylinder(0.06, 0.08, 0.14, Materials.glass("#fbe8c2"));
+    shade.rotation.x = Math.PI / 2;
+    shade.position.set(bracketX, 1.75, southInteriorZ - 0.15);
+    root.add(shade);
+    wallLightSockets.push(new THREE.Vector3(bracketX, 1.75, southInteriorZ - 0.15));
   }
 
   // "Collision geometry should accurately match the visible doors" — one
@@ -397,6 +511,7 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
     doorOpenAngle,
     doorColliderBox,
     ceilingLightSockets,
+    wallLightSockets,
     bounds: { width, depth, height },
     floorMesh: floor,
     wallColliders,
