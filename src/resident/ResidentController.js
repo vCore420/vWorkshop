@@ -513,6 +513,34 @@ export class ResidentController {
     return this._playerPos.distanceTo(this.movement.currentPosition);
   }
 
+  /** Workshop Diagnostics phase — "residents should expose diagnostic
+   *  information... future residents should naturally inherit this
+   *  architecture." One flat, plain object, read by
+   *  `DiagnosticsService.js`'s own `getReport()` — every field already
+   *  lived somewhere real (`residentBehaviour`/`residentState`
+   *  /`residentConnection`/`movement`/the active profile); this is the
+   *  first place anything asks for all of it together, the identical
+   *  "nothing new computed, just gathered" shape
+   *  `WorldAwareness.snapshot()` already established for "what does the
+   *  world look like right now." A future second resident's own
+   *  `ResidentController` instance would return the same shape from the
+   *  same method — nothing here assumes there's only ever one. */
+  getDiagnostics() {
+    const profile = this.residentProfileStore.getActive();
+    return {
+      name: profile?.name ?? "Unknown",
+      behaviourMode: this.residentBehaviour.mode, // "idle" | "conversing"
+      isThinking: this.residentBehaviour.isThinking,
+      mood: this.residentState.mood,
+      expression: this.residentState.expression,
+      isAwake: this.residentConnection.isAwake,
+      connectionState: this.residentConnection.status,
+      idleLocationId: this.residentState.idleLocationId,
+      position: this.movement?.currentPosition ? { x: this.movement.currentPosition.x, y: this.movement.currentPosition.y, z: this.movement.currentPosition.z } : null,
+      playerDistance: this._computePlayerDistance(),
+    };
+  }
+
   dispose() {
     this.engine.canvas.removeEventListener("pointerdown", this._onPointerDown);
     window.removeEventListener("pointerup", this._onPointerUp);

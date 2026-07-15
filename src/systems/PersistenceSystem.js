@@ -31,6 +31,7 @@ export class PersistenceSystem {
     /** @type {Map<string, {save: () => any, load: (data: any) => void}>} */
     this.providers = new Map();
     this.lastSavedAt = null;
+    this.lastSaveFailedAt = null;
   }
 
   init(engine) {
@@ -81,12 +82,25 @@ export class PersistenceSystem {
     };
   }
 
+  /** Workshop Diagnostics phase — a failed save used to be entirely
+   *  silent: `StorageUtils.set()` returning `false` (most commonly
+   *  `localStorage`'s own quota exceeded) meant nothing happened at
+   *  all — no error, no event, nothing for a person to notice until
+   *  they eventually lost work and had no idea why. Now tracked
+   *  (`lastSaveFailedAt`) and announced (`"persistence:saveFailed"`) the
+   *  same honest way a successful save already announces itself via
+   *  `"persistence:saved"` — see `DiagnosticsService.js`'s own health
+   *  computation for where this actually surfaces to a person. */
   save() {
     const envelope = this._buildEnvelope();
     const ok = StorageUtils.set(SAVE_KEY, envelope);
     if (ok) {
       this.lastSavedAt = envelope.savedAt;
+      this.lastSaveFailedAt = null;
       this.engine.events.emit("persistence:saved", { savedAt: this.lastSavedAt });
+    } else {
+      this.lastSaveFailedAt = new Date().toISOString();
+      this.engine.events.emit("persistence:saveFailed", { at: this.lastSaveFailedAt });
     }
     return envelope;
   }
