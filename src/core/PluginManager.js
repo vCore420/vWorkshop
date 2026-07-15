@@ -123,13 +123,22 @@ export class PluginManager {
    *  class's own top comment. Returns whatever `fn()` returned, or
    *  `undefined` if it threw (the caller — `save()` below, mainly —
    *  already treats a missing value as "nothing to persist this round,"
-   *  the same as if the plugin had no `save()` at all). */
+   *  the same as if the plugin had no `save()` at all).
+   *
+   *  Workshop Diagnostics phase — also emits `"plugin:error"`, real and
+   *  specific (`id`, the actual error message), the one new signal this
+   *  class contributes to the Workshop Event Log
+   *  (`src/host/WorkshopEventLog.js`) — that file listens for this
+   *  itself rather than this class needing to know a diagnostics log
+   *  exists at all. */
   _safeCall(id, fn) {
     try {
       return fn();
     } catch (err) {
+      const message = err?.message ?? String(err);
       console.error(`[PluginManager] "${id}" failed:`, err);
-      this._status.set(id, { state: "error", error: err?.message ?? String(err) });
+      this._status.set(id, { state: "error", error: message });
+      this.engine?.events.emit("plugin:error", { id, error: message });
       return undefined;
     }
   }

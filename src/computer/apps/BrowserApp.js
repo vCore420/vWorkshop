@@ -1,5 +1,6 @@
 import { wrapPage } from "../../browser/PageShell.js";
 import { isInternalUrl, INTERNAL_SCHEMES } from "../../browser/PageRegistry.js";
+import { StorageUtils } from "../../utils/StorageUtils.js";
 
 /**
  * createBrowserApp
@@ -303,7 +304,7 @@ export function createBrowserApp({ browserStore, pageRegistry, hostManager }) {
       });
 
       // ---- workshop:// page interactivity (link clicks, Settings' "clear data", Bookmarks' "remove", Permissions' checkboxes) ----
-      const onMessage = (event) => {
+      const onMessage = async (event) => {
         if (event.data?.type === "workshop-browser-navigate" && event.data.url) {
           browserStore.navigate(activeTabId(), event.data.url);
         } else if (event.data?.type === "workshop-browser-clear-data") {
@@ -360,6 +361,22 @@ export function createBrowserApp({ browserStore, pageRegistry, hostManager }) {
           else pluginService?.revokePermission(event.data.pluginId, event.data.capabilityId);
           const tabId = activeTabId();
           if (frames.has(tabId)) loadIntoFrame(tabId, browserStore.getCurrentUrl(tabId));
+        } else if (event.data?.type === "workshop-browser-run-health-check") {
+          // workshop://diagnostics' own "Run Workshop Health Check"
+          // button — see DiagnosticsService.js's own runHealthCheck()
+          // comment for what "genuinely fresh" means here.
+          const diagnosticsService = hostManager?.services.get("diagnostics");
+          await diagnosticsService?.runHealthCheck();
+          const tabId = activeTabId();
+          if (frames.has(tabId)) loadIntoFrame(tabId, browserStore.getCurrentUrl(tabId));
+        } else if (event.data?.type === "workshop-browser-export-event-log") {
+          // workshop://diagnostics' own "Export Event Log" button —
+          // WorkshopEventLog.js's own exportLog(), the identical
+          // StorageUtils.downloadJSON() shape every other export in the
+          // Workshop already uses.
+          const workshopEventLog = hostManager?.services.get("workshopEventLog");
+          const data = workshopEventLog?.exportLog();
+          if (data) StorageUtils.downloadJSON(`workshop-event-log-${new Date().toISOString().slice(0, 10)}.json`, data);
         }
       };
       window.addEventListener("message", onMessage);

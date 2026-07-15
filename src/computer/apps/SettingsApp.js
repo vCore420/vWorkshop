@@ -593,36 +593,45 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
        *  ResidentConnection — nothing here is a second copy of anything,
        *  the same "app renders a store, doesn't duplicate it" shape every
        *  other Workshop app already follows. */
+      /** Workshop Diagnostics phase — "avoid overwhelming the user with
+       *  technical details... duplicate diagnostics" (architectural
+       *  review). This tab used to independently re-derive Environment/
+       *  Player/Resident/Connection status the same `workshop://
+       *  diagnostics` now computes once, properly, with real health
+       *  levels and suggested fixes — a second, slowly-diverging copy of
+       *  the same information serves nobody. What's left here is
+       *  specifically what's *useful while adjusting Settings itself*
+       *  (live FPS/frame time/memory, right next to the Graphics/
+       *  Performance tabs that actually affect them) plus one clear
+       *  overall health line and a pointer to the real Control Centre
+       *  for everything else. */
       function renderDiagnostics(el) {
         const perf = document.createElement("div");
         el.appendChild(sectionHeading("Performance"));
         el.appendChild(perf);
 
-        el.appendChild(sectionHeading("Environment"));
-        const envState = WEATHER_STATES[environmentSystem.current]?.label ?? environmentSystem.current;
-        el.appendChild(infoRow("Current weather", envState));
-        el.appendChild(infoRow("Time & date", `${formatClockTime(timeOfDaySystem.currentTime)} \u00b7 ${new Date().toLocaleDateString()}`));
-        el.appendChild(infoRow("Shadow quality", capitalize(lightingSystem.getShadowQuality())));
-
-        el.appendChild(sectionHeading("Player"));
-        const pos = cameraSystem?.position;
-        el.appendChild(infoRow("Player position", pos ? `${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}` : "Unavailable"));
-        el.appendChild(infoRow("Current interior", interiorSystem?.isInside(pos) ? "Indoors" : "Outdoors"));
-
-        el.appendChild(sectionHeading("Resident"));
-        const activeProfile = residentProfileStore?.getActive();
-        el.appendChild(infoRow("Resident status", residentBehaviour ? (aiConnectionManager?.status === "connected" ? "Awake" : "Sleeping \u2014 waiting for Ollama") : "Unavailable"));
-        el.appendChild(infoRow("Active profile", activeProfile?.name ?? "None"));
-
-        el.appendChild(sectionHeading("Connections"));
-        const hostStatus = hostManager?.getOverviewStatus();
-        el.appendChild(infoRow("Workshop Platform status", hostStatus ? `Running \u00b7 v${hostStatus.version} \u00b7 ${hostStatus.availableCapabilities.length} capabilities available` : "Unavailable"));
-        el.appendChild(infoRow("Ollama connection", { connected: "Connected", connecting: "Connecting\u2026", disconnected: "Waiting for Ollama\u2026" }[aiConnectionManager?.status] ?? "Unavailable"));
+        el.appendChild(sectionHeading("Workshop Health"));
+        const diagnosticsService = hostManager?.services.get("diagnostics");
+        const report = diagnosticsService?.getReport();
+        if (report) {
+          const overallLabel = { healthy: "Healthy", warning: "Needs attention", error: "Something's wrong" }[report.health.overall] ?? "Unknown";
+          el.appendChild(infoRow("Overall status", overallLabel));
+          for (const section of report.health.sections) {
+            if (section.health !== "healthy") el.appendChild(infoRow(section.name, section.summary));
+          }
+        } else {
+          el.appendChild(infoRow("Overall status", "Unavailable"));
+        }
+        const pointer = document.createElement("p");
+        pointer.className = "app-subtitle";
+        pointer.textContent = "The full Workshop Control Centre — every subsystem, suggested fixes, the Event Log, and how systems depend on each other — is at workshop://diagnostics in the Browser.";
+        el.appendChild(pointer);
 
         const renderPerf = ({ fps, frameTimeMs } = {}) => {
           perf.innerHTML = "";
           perf.appendChild(infoRow("FPS", fps ? String(Math.round(fps)) : "measuring\u2026"));
           perf.appendChild(infoRow("Frame time", frameTimeMs ? `${frameTimeMs.toFixed(1)} ms` : "measuring\u2026"));
+          if (report?.performance.memory) perf.appendChild(infoRow("Memory (JS heap)", `${report.performance.memory.usedMB} MB / ${report.performance.memory.limitMB} MB`));
         };
         renderPerf();
         const offSample = engine.events.on("engine:performanceSample", renderPerf);

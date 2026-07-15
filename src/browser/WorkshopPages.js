@@ -321,60 +321,123 @@ function missionControlPage({ residentProfileStore, aiConnectionManager }) {
  *  source of truth, rather than recomputing the same numbers here a
  *  second time — this page and `host://services` both read the one real
  *  report, so neither can quietly drift from the other. */
+/** Workshop Diagnostics phase — "not a traditional developer debug
+ *  menu... a Workshop Control Centre." Reads `DiagnosticsService
+ *  .getReport()` (`main.js`'s own Workshop Platform wiring block) as
+ *  its single source of truth, rather than recomputing the same numbers
+ *  here a second time — this page and `host://services` both read the
+ *  one real report, so neither can quietly drift from the other.
+ *
+ *  **Progressive disclosure, not a wall of numbers.** One clear overall
+ *  health banner at the top, a plain-language line per subsystem right
+ *  below it, and every subsystem's own deeper technical detail sits
+ *  inside a native `<details>` — closed by default, one click to open,
+ *  no JavaScript required to make that work. "A casual user should
+ *  immediately understand whether the Workshop is healthy. An advanced
+ *  user should be capable of expanding sections" is true by construction
+ *  here, not by two different pages for two different audiences. */
 function diagnosticsPage({ hostManager }) {
-  const report = hostManager?.services.get("diagnostics")?.getReport();
+  const diagnosticsService = hostManager?.services.get("diagnostics");
+  const report = diagnosticsService?.getReport();
   if (!report) return { title: "Workshop Diagnostics", html: wrapPage("Workshop Diagnostics", "<h1>Workshop Diagnostics</h1><p class=\"workshop-page-empty\">Diagnostics aren't available yet.</p>") };
 
+  const overall = report.health.overall;
+  const overallCopy = { healthy: "The Workshop is healthy.", warning: "The Workshop is running, but something could use attention.", error: "Something is genuinely wrong \u2014 see below." }[overall] ?? "The Workshop's status is unclear.";
+
+  const suggestionsHtml = report.health.suggestions.length
+    ? `<div class="workshop-diagnostics-suggestions">
+         <h2>Suggested next steps</h2>
+         ${report.health.suggestions.map((s) => `<p>\u2192 ${escapeHtml(s.suggestion)}</p>`).join("")}
+       </div>`
+    : "";
+
+  const sectionRows = report.health.sections
+    .map((s) => `<div class="workshop-diagnostics-health-row workshop-diagnostics-health-${s.health}"><span class="workshop-diagnostics-health-dot"></span><strong>${escapeHtml(s.name)}</strong><span>${escapeHtml(s.summary)}</span></div>`)
+    .join("");
+
   const html = `
+    <span class="workshop-page-badge">Workshop Control Centre</span>
     <h1>Workshop Diagnostics</h1>
-    <p class="workshop-page-subtitle">A calm status check \u2014 what's running, what's connected, and how much the Workshop currently holds.</p>
+    <p class="workshop-page-subtitle">Monitoring, explaining, and helping diagnose the Workshop's own health \u2014 generated ${new Date(report.generatedAt).toLocaleTimeString()}.</p>
 
-    <div class="workshop-home-section">
-      <h2>Engine</h2>
-      <div class="workshop-diagnostics-grid">
-        ${metaRow("Systems running", String(report.engine.systemNames.length))}
-        ${metaRow("Engine plugins registered", String(report.engine.pluginCount))}
-      </div>
-      <p class="workshop-page-subtitle" style="margin-top:8px;">${report.engine.systemNames.map(escapeHtml).join(", ")}</p>
+    <div class="workshop-diagnostics-banner workshop-diagnostics-health-${overall}">
+      <span class="workshop-diagnostics-health-dot"></span>
+      <strong>${escapeHtml(overallCopy)}</strong>
     </div>
+    <div class="workshop-diagnostics-health-rows">${sectionRows}</div>
+    ${suggestionsHtml}
 
-    <div class="workshop-home-section">
-      <h2>Persistence</h2>
-      <div class="workshop-diagnostics-grid">
-        ${metaRow("Save format version", String(report.persistence.saveFormatVersion))}
-        ${metaRow("Registered providers", String(report.persistence.registeredProviders))}
-      </div>
-    </div>
+    <p><button id="workshop-diagnostics-recheck" class="workshop-favourite-button">Run Workshop Health Check</button></p>
 
-    <div class="workshop-home-section">
-      <h2>AI Connection</h2>
+    <details class="workshop-diagnostics-detail">
+      <summary>AI Connection</summary>
       <div class="workshop-diagnostics-grid">
         ${metaRow("Status", report.aiConnection.status)}
         ${metaRow("Latency", report.aiConnection.latencyMs != null ? `${report.aiConnection.latencyMs} ms` : "\u2014")}
+        ${metaRow("Last successful response", formatRelativeTime(report.aiConnection.lastSuccessAt))}
+        ${metaRow("Last failure", formatRelativeTime(report.aiConnection.lastFailureAt))}
+        ${metaRow("Endpoint", report.aiConnection.baseUrl ?? "\u2014")}
       </div>
-    </div>
+      <p class="workshop-page-subtitle">Model, provider, and per-resident detail live in <a href="workshop://mission-control">AI Mission Control</a>.</p>
+    </details>
 
-    <div class="workshop-home-section">
-      <h2>Workshop Host</h2>
+    <details class="workshop-diagnostics-detail">
+      <summary>Resident System</summary>
+      <div class="workshop-diagnostics-grid">
+        ${report.residents.residents.length ? report.residents.residents.map((r) => `
+          ${metaRow("Name", r.name)}
+          ${metaRow("Behaviour", r.behaviourMode)}
+          ${metaRow("Mood / expression", `${r.mood} / ${r.expression}`)}
+          ${metaRow("Awake", r.isAwake ? "Yes" : "No \u2014 sleeping")}
+          ${metaRow("Thinking", r.isThinking ? "Yes, waiting on a reply" : "No")}
+          ${metaRow("Idle location", r.idleLocationId ?? "\u2014")}
+          ${metaRow("Distance to player", r.playerDistance != null ? `${r.playerDistance.toFixed(1)}m` : "\u2014")}
+        `).join("") : `<p class="workshop-page-empty">No resident currently embodied.</p>`}
+      </div>
+    </details>
+
+    <details class="workshop-diagnostics-detail">
+      <summary>Plugin System (${report.plugins.count})</summary>
+      <div class="workshop-diagnostics-grid">${metaRow("Loaded", String(report.plugins.count))}${metaRow("Errored", String(report.plugins.errored.length))}</div>
+      ${report.plugins.plugins.map((p) => `<div class="workshop-home-tile" style="cursor:default;"><span class="workshop-home-tile-title">${escapeHtml(p.name)} \u2014 ${escapeHtml(p.state ?? "active")}</span>${p.error ? `<span class="workshop-home-tile-meta">${escapeHtml(p.error)}</span>` : ""}</div>`).join("")}
+      <p><a href="host://plugins">Full Plugin Manager \u2192</a></p>
+    </details>
+
+    <details class="workshop-diagnostics-detail">
+      <summary>Shared Asset Library</summary>
+      <div class="workshop-diagnostics-grid">
+        ${metaRow("Asset kinds registered", String(report.assets.kindsRegistered))}
+        ${metaRow("Total assets", String(report.assets.totalAssets))}
+        ${metaRow("Favourited", String(report.assets.favourites))}
+        ${metaRow("Broken references", String(report.assets.brokenReferences.length))}
+        ${metaRow("Possible duplicates", String(report.assets.duplicates.length))}
+      </div>
+      ${report.assets.brokenReferences.length ? `<p class="workshop-page-subtitle">${report.assets.brokenReferences.map((b) => escapeHtml(`${b.name}: ${b.issue}`)).join("<br>")}</p>` : ""}
+      <p><a href="asset://">Browse the Asset Library \u2192</a></p>
+    </details>
+
+    <details class="workshop-diagnostics-detail">
+      <summary>Persistence</summary>
+      <div class="workshop-diagnostics-grid">
+        ${metaRow("Save format version", String(report.persistence.saveFormatVersion))}
+        ${metaRow("Registered providers", String(report.persistence.registeredProviders))}
+        ${metaRow("Last saved", formatRelativeTime(report.persistence.lastSavedAt))}
+      </div>
+    </details>
+
+    <details class="workshop-diagnostics-detail">
+      <summary>Workshop Host</summary>
       <div class="workshop-diagnostics-grid">
         ${metaRow("Services registered", String(report.host.servicesRegistered))}
         ${metaRow("Services available", String(report.host.servicesAvailable))}
         ${metaRow("Plugins contributing pages", String(report.host.pagePlugins))}
         ${metaRow("Workshop Host Companion", report.hostCompanion.status)}
       </div>
-    </div>
+      <p><a href="host://services">Full Host Dashboard \u2192</a></p>
+    </details>
 
-    <div class="workshop-home-section">
-      <h2>Shared Asset Library</h2>
-      <div class="workshop-diagnostics-grid">
-        ${metaRow("Asset kinds registered", String(report.assets.kindsRegistered))}
-        ${metaRow("Total assets", String(report.assets.totalAssets))}
-        ${metaRow("Favourited", String(report.assets.favourites))}
-      </div>
-    </div>
-
-    <div class="workshop-home-section">
-      <h2>Browser</h2>
+    <details class="workshop-diagnostics-detail">
+      <summary>Browser</summary>
       <div class="workshop-diagnostics-grid">
         ${metaRow("Open tabs", String(report.browser.openTabs))}
         ${metaRow("Bookmarks", String(report.browser.bookmarks))}
@@ -386,9 +449,47 @@ function diagnosticsPage({ hostManager }) {
         ${metaRow("Registered project:// pages", String(report.browser.projectPages))}
         ${metaRow("Searchable entries", String(report.browser.searchableEntries))}
       </div>
-    </div>
+    </details>
+
+    <details class="workshop-diagnostics-detail">
+      <summary>Recent Activity</summary>
+      <p class="workshop-page-subtitle">Technical and world events together, most recent first \u2014 the full technical log (${report.events.totalTechnical} entries) is exportable from here.</p>
+      ${report.events.recent.map((e) => `<div class="workshop-diagnostics-event workshop-diagnostics-event-${e.level ?? "info"}"><span>${new Date(e.at).toLocaleTimeString()}</span><span>${escapeHtml(e.summary)}</span></div>`).join("")}
+      <p><button id="workshop-diagnostics-export-log" class="workshop-favourite-button">Export Event Log</button></p>
+    </details>
+
+    <details class="workshop-diagnostics-detail">
+      <summary>How Workshop systems depend on each other</summary>
+      ${report.dependencies.map((d) => `<div class="workshop-home-tile" style="cursor:default;"><span class="workshop-home-tile-title">${escapeHtml(d.from)} \u2192 ${escapeHtml(d.to)}</span><span class="workshop-home-tile-meta">${escapeHtml(d.note)}</span></div>`).join("")}
+    </details>
+
+    <script>
+      document.getElementById("workshop-diagnostics-recheck")?.addEventListener("click", (event) => {
+        event.target.textContent = "Checking\\u2026";
+        window.parent.postMessage({ type: "workshop-browser-run-health-check" }, "*");
+      });
+      document.getElementById("workshop-diagnostics-export-log")?.addEventListener("click", () => {
+        window.parent.postMessage({ type: "workshop-browser-export-event-log" }, "*");
+      });
+    </script>
   `;
   return { title: "Workshop Diagnostics", html: wrapPage("Workshop Diagnostics", html) };
+}
+
+/** A short, honest "how long ago" — `null`/invalid input reads as
+ *  "\u2014", never "just now" or a fabricated guess. */
+function formatRelativeTime(isoString) {
+  if (!isoString) return "\u2014";
+  const then = new Date(isoString).getTime();
+  if (Number.isNaN(then)) return "\u2014";
+  const seconds = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (seconds < 5) return "just now";
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return new Date(isoString).toLocaleDateString();
 }
 
 /** "Bookmarks... continue improving the browsing experience." The same

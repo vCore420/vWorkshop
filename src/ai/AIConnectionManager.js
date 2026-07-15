@@ -48,6 +48,12 @@ export class AIConnectionManager {
     this.baseUrl = DEFAULT_BASE_URL;
     this.status = "connecting"; // "connecting" | "connected" | "disconnected"
     this.lastLatencyMs = null; // "Resident Health" (AI Intelligence phase) — round-trip time of the most recent successful connection check, or null before the first one / after a failure
+    // Diagnostics phase — "last successful response. Last failure." Two
+    // plain timestamps, updated in the same one place `lastLatencyMs`
+    // already is, so AI Diagnostics has something honest to show beyond
+    // just the current instantaneous status.
+    this.lastSuccessAt = null;
+    this.lastFailureAt = null;
     this._pollTimer = null;
     this._disposed = false;
   }
@@ -104,10 +110,12 @@ export class AIConnectionManager {
       if (!response.ok) throw new Error(`Ollama responded with ${response.status}`);
       const data = await response.json();
       this.lastLatencyMs = Math.round(performance.now() - startedAt);
+      this.lastSuccessAt = new Date().toISOString();
       this._setStatus("connected");
       return data.models ?? [];
     } catch {
       this.lastLatencyMs = null;
+      this.lastFailureAt = new Date().toISOString();
       this._setStatus("disconnected");
       return null;
     }
