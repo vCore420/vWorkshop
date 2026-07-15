@@ -34,13 +34,18 @@ export const NotebookDefinition = {
 
   build() {
     const g = group();
-    const cover = box(0.18, 0.02, 0.24, Materials.matte("#3c5a53"));
+    // Workbench phase — "Workshop Objects... Notebook... material
+    // quality... investigate whether each object... looks intentional."
+    // A cloth-bound cover and an elastic closure band are both real,
+    // specific materials — `fabric()`/`rubber()` — not the same generic
+    // `matte()` a metal switch plate would also use.
+    const cover = box(0.18, 0.02, 0.24, Materials.fabric("#3c5a53"));
     cover.position.set(0, 0, 0);
     g.add(cover);
     const pages = box(0.17, 0.015, 0.23, Materials.paper());
     pages.position.set(0, 0.012, 0);
     g.add(pages);
-    const band = box(0.02, 0.022, 0.24, Materials.matte("#2a231d"));
+    const band = box(0.02, 0.022, 0.24, Materials.rubber("#2a231d"));
     band.position.set(0.06, 0, 0);
     g.add(band);
     return g;
