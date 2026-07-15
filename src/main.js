@@ -76,6 +76,7 @@ import { ResidentConnection } from "./resident/ResidentConnection.js";
 import { ResidentController } from "./resident/ResidentController.js";
 import { WorldAwareness } from "./world/WorldAwareness.js";
 import { WorldEventLog } from "./world/WorldEventLog.js";
+import { WorkshopEventLog } from "./host/WorkshopEventLog.js";
 import { createResidentConversationOverlay } from "./resident/ResidentConversation.js";
 import { ResidentPreferences } from "./resident/ResidentPreferences.js";
 import { PlayerPatternMemory } from "./resident/PlayerPatternMemory.js";
@@ -427,6 +428,36 @@ residentController.worldAwareness = worldAwareness;
     wasMusicPlaying = musicSystem.isPlaying;
   });
 }
+
+// Workshop Diagnostics phase — the technical counterpart to
+// WorldEventLog above; see WorkshopEventLog.js's own comment on why
+// they're two separate stores, not one merged log. Same discipline:
+// every listener below only records a genuine transition it's told
+// about by an event that already exists, never a new signal invented
+// for this.
+const workshopEventLog = new WorkshopEventLog();
+{
+  engine.events.on("plugin:error", ({ id, error }) => {
+    workshopEventLog.record("pluginError", `Plugin "${id}" failed: ${error}`, "error");
+  });
+  let lastAiStatus = null;
+  aiConnectionManager.events.on("connection:changed", () => {
+    if (lastAiStatus !== null && aiConnectionManager.status !== lastAiStatus) {
+      workshopEventLog.record("aiConnection", `AI connection ${aiConnectionManager.status}.`, aiConnectionManager.status === "disconnected" ? "warning" : "info");
+    }
+    lastAiStatus = aiConnectionManager.status;
+  });
+  let lastHostStatus = null;
+  hostConnectionManager.events.on("hostConnection:changed", () => {
+    if (lastHostStatus !== null && hostConnectionManager.status !== lastHostStatus) {
+      workshopEventLog.record("hostConnection", `Workshop Host Companion ${hostConnectionManager.status}.`, "info");
+    }
+    lastHostStatus = hostConnectionManager.status;
+  });
+  engine.events.on("persistence:saveFailed", () => {
+    workshopEventLog.record("saveFailed", "A Workshop save attempt failed.", "error");
+  });
+}
 // "Interaction: Talk, Wave, Inspect, None." Deliberately not a chat
 // interface — a Being isn't connected to Ollama the way the Workshop's
 // own resident is (see docs/AI.md/docs/RESIDENT.md) — a brief, honest
@@ -561,7 +592,7 @@ const buildModeSystem = engine.addSystem(new BuildModeSystem({ objectLibraryStor
 // `calculatorPlugin`, registered later via `hostManager.pluginRegistry`
 // directly) are untouched — this is a new, additional way to load a
 // plugin, not a replacement for the contracts they already use.
-const WORKSHOP_VERSION = "2.1.3c";
+const WORKSHOP_VERSION = "2.1.4";
 const pluginContext = {
   engine,
   pageRegistry,
@@ -659,6 +690,7 @@ persistenceSystem.registerProvider("hostProjects", hostManager.services.get("pro
 persistenceSystem.registerProvider("assetLibrary", assetService);
 persistenceSystem.registerProvider("terrain", terrainSystem);
 persistenceSystem.registerProvider("worldEventLog", worldEventLog);
+persistenceSystem.registerProvider("workshopEventLog", workshopEventLog);
 
 // --- Overlays: one registration per physical object that opens a panel ---
 // (The computer and the workbench no longer work this way — see
@@ -704,13 +736,14 @@ hostManager.services.register("plugins", new PluginService({ engine, pluginRegis
 hostManager.services.register("pluginPermissions", pluginPermissions);
 hostManager.services.register("pluginStorage", pluginStorage);
 hostManager.services.register("expressionSets", expressionSetStore);
+hostManager.services.register("workshopEventLog", workshopEventLog);
 hostManager.services.register(
   "residents",
   new ResidentService({ residentProfileStore, residentState, residentBehaviour, conversationMemory })
 );
 hostManager.services.register(
   "diagnostics",
-  new DiagnosticsService({ engine, persistenceSystem, aiConnectionManager, hostConnectionManager, hostManager, pageRegistry, browserStore, searchIndex })
+  new DiagnosticsService({ engine, persistenceSystem, aiConnectionManager, hostConnectionManager, hostManager, pageRegistry, browserStore, searchIndex, residentController, workshopEventLog, worldEventLog })
 );
 // "The Host should understand assets independently of the Builder or
 // Browser... assets should be capable of registering themselves with the
