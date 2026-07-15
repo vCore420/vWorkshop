@@ -180,6 +180,11 @@
   color: var(--paper);
   padding: 6px 8px;
 }
+/* Same fix, same reason as .builder-shape-select's own option rule below it in this file. */
+.builder-field select option {
+  color: var(--ink);
+  background: var(--paper);
+}
 .builder-field-narrow { flex: 1; min-width: 0; }
 
 .builder-inline-row {
@@ -287,6 +292,23 @@
   font-family: var(--font-body);
   font-size: var(--text-sm);
 }
+/* Workshop Reliability phase — "the Builder Parts dropdown text colour
+   should remain readable across browsers that force native dropdown
+   styling (particularly Firefox)." Root cause: Firefox renders an open
+   <select>'s own option list with its own native (light) popup
+   background regardless of the `background` set on the <select> itself
+   — only styling actually applied to each <option> is respected there.
+   With no explicit <option> colour, the select's own light `color:
+   var(--paper)` was inherited straight onto that native light
+   background: light text on a light popup, unreadable. Explicit dark
+   text (`--ink`) plus an explicit light background (`--paper`, matching
+   what Firefox already shows) fixes it everywhere, not just Firefox —
+   this is the exact `--ink`-on-`--paper` pairing already used for every
+   other light surface in the Workshop (see tokens.css). */
+.builder-shape-select option {
+  color: var(--ink);
+  background: var(--paper);
+}
 
 .builder-icon-button {
   background: transparent;
@@ -298,6 +320,12 @@
   border-radius: 3px;
 }
 .builder-icon-button:hover { color: var(--paper); background: rgba(255, 255, 255, 0.08); }
+/* Workshop Personality phase — the Expression Creator's own Pencil/Eraser
+   toggle is the first place two builder-icon-buttons represent mutually
+   exclusive tool state rather than one-shot actions; every other user of
+   this class (Rename, Duplicate, Export...) is unaffected, since none of
+   them ever carry this class. */
+.builder-icon-button.active { color: #7fd8c4; background: rgba(127, 216, 196, 0.16); }
 
 .builder-part-editor {
   background: rgba(255, 255, 255, 0.03);

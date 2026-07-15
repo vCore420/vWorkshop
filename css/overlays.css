@@ -232,7 +232,24 @@
   margin-bottom: var(--space-3);
 }
 .panel-row label { width: 90px; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--paper-dark); }
-.panel-row input[type="range"] { flex: 1; }
+/* Workshop Reliability phase — "resolve the horizontal scrolling
+   behaviour currently present inside the Builder phone application."
+   Root cause: a flex item's default minimum width is its own content's
+   intrinsic size (`min-width: auto`), not zero — for `<input
+   type="range">` that intrinsic size is the browser's own default
+   slider width (commonly 100-170px), which `flex: 1` alone can shrink
+   *from* but never *below*. Inside the ~268px-wide Builder Phone screen
+   (see buildmode.css's own `.builder-phone` width), a label plus that
+   un-shrinkable slider plus a value readout routinely added up to more
+   than the available width, forcing `.builder-phone-screen`'s own
+   `overflow-y: auto` to also compute an unwanted horizontal scrollbar
+   (an `auto`/`visible` pairing on the two axes forces the visible one to
+   `auto` too, per the CSS overflow spec). `min-width: 0` is the standard
+   fix — the slider can now shrink all the way down to what's actually
+   left after its label and value text, the same "reads a raw number,
+   not a pretend zero" trick `.builder-phone-row input[type="number"]`'s
+   own `width: 0` already uses one screen over. */
+.panel-row input[type="range"] { flex: 1; min-width: 0; }
 
 /* ---------- Wardrobe overlay material ---------- */
 /* Reuses the exact same createWardrobeApp() the computer's Wardrobe app
@@ -384,6 +401,14 @@
   border: 1px solid var(--wood-mid);
   background: rgba(255,255,255,0.08);
   color: var(--paper);
+}
+/* Same Firefox native-option-list fix as .builder-shape-select's own
+   comment in builder.css — this <select> shares the identical light-
+   text-on-transparent-dark styling that goes unreadable the moment
+   Firefox opens it with its own native (light) popup background. */
+.field-row select option {
+  color: var(--ink);
+  background: var(--paper);
 }
 .field-row button {
   font-family: var(--font-body);

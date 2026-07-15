@@ -128,6 +128,59 @@ based on how long they stepped away). Verified independent of
 `WorldTimeService`/`"world:continuity"` entirely; no conflict, nothing
 to wire up.
 
+## Import & Export (Workshop Workflow / Workshop Personality phases)
+
+"Importing and exporting Workshop data should feel consistent
+throughout the project." Three independent export/import pairs exist,
+all sharing one shape rather than each growing ad hoc:
+
+- **A whole-Workshop backup** — `PersistenceSystem.exportBackup()`/
+  `importBackup()`. Everything: every project, object, outfit, setting,
+  the music library's own preferences, all of it, as one JSON file. Now
+  in Settings' own "Workshop Data" section (General tab) — moved from
+  two buttons that used to sit permanently on the main HUD, since this
+  is ordinary data management, not something that needs to be
+  always-on-screen the way a mode toggle does.
+- **A single AI profile** — `ResidentProfileStore.exportProfile()`/
+  `importProfile()`, in AI Mission Control's own Profiles section. A
+  named resident's entire configuration — identity, model/provider,
+  behaviour tuning, traits, memory and embodiment settings — as its own
+  small, genuinely shareable file, independent of anything else in a
+  given Workshop's save data.
+- **A single Expression Set** (Workshop Personality phase) —
+  `ExpressionSetStore.exportSet()`/`importSet()`, in AI Mission
+  Control's own new Expressions section — a "pack" of hand-drawn pixel
+  expressions, exportable and shareable the identical way a profile is.
+
+**Every envelope carries a `type` field** (`"workshop-backup"` /
+`"workshop-ai-profile"` / `"workshop-expression-pack"`) specifically so
+each importer can recognise the *other two* exports and say so plainly
+— "that's an AI profile export, not a Workshop backup" — rather than
+failing to parse an otherwise well-formed JSON file with a generic
+error. **All three validate before touching anything**: a missing/
+non-numeric version, an unrecognised `type`, or (backup only) a
+`version` newer than `CURRENT_SAVE_VERSION` (see `SaveMigrations.js`,
+which only ever migrates *forward*) all refuse with a specific message
+rather than silently importing a shape parts of this Workshop version
+might not fully understand — a newer-than-current backup asks for
+explicit confirmation instead of an outright refusal, since it may
+still import perfectly well. **All three normalise on import** using
+the exact same functions `load()` already trusts for a save restored
+from `localStorage` — a profile or expression pack exported from an
+older Workshop version, or shared by someone else's Workshop entirely,
+still imports as something complete and sensible rather than one with
+fields quietly `undefined` (an expression pack's own unknown expression
+ids, from a hypothetical future ninth expression, are simply dropped
+rather than kept as data this version has no use for). **A profile or
+expression-set import is always additive** — a fresh id, never
+overwriting anything already there, the same "Duplicate," never
+"Replace" instinct `ResidentProfileStore.duplicate()`/`ExpressionSetStore
+.duplicate()` already follow. A backup import reloads the page on
+success, the simplest way to guarantee
+every open panel reflects the newly imported state consistently, rather
+than trusting each one to notice a full-state swap happening underneath
+it live.
+
 ## Workshop Projects — architecture only
 
 "Please begin preparing for long-running Workshop activities... this

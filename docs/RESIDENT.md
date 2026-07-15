@@ -638,6 +638,142 @@ updated embodiment to the renderer — subscribed to
 in Mission Control while Bubble is already alive in the room takes effect
 immediately, not just on next load.
 
+## Expression System (Workshop Personality phase)
+
+"Bubble has now become the Workshop's first true resident... the current
+placeholder appearance has served its purpose but no longer matches the
+quality of the Workshop." Two things changed together: the expression
+*vocabulary* grew from five to eight, and — the bigger shift —
+expressions stopped being something only this codebase could draw.
+
+**Eight expressions, one canonical list.** `ExpressionTypes.js` is now
+the single source of truth — id, label, and a short description of when
+each is actually used — that everything else reads from rather than
+keeping a second, parallel list: `ResidentBehaviour.EXPRESSIONS` (the
+mood/emotion system's own plain-id array) derives from it directly. The
+original five (`sleeping`, `curious`, `happy`, `thinking`, and `content`
+— renamed `neutral` to match the brief's own naming) are joined by
+`excited`, `sad`, and `surprised`.
+
+**Not every new expression has an automatic trigger, and that's said
+plainly rather than faked.** `excited` genuinely does — see
+`ResidentDials.js`'s own comment: it only becomes a likely resting mood
+when a resident's Playfulness *and* Energy dials are both tuned high
+together (the two deviations are multiplied, not added, specifically so
+either alone isn't enough). `sad` and `surprised` have no dial, mood, or
+event wired to them yet — inventing a forced trigger to make three
+"complete" would have meant a dial combination or a life event that
+doesn't actually mean what it claims to. Both are fully real everywhere
+else — drawable in the Expression Creator, previewable, exportable — just
+honestly waiting for a future phase's own well-motivated trigger. See
+"Known simplifications" below.
+
+**The built-in look is unchanged, on purpose.** Every original
+expression's own hand-tuned procedural drawing (`ResidentRenderer
+._drawProceduralFace()`, renamed from the original `_drawFace()` but
+otherwise byte-for-byte the same curves/dots/arcs) still exists and is
+still what a resident with no custom Expression Set shows — "Default
+(built-in)" in Mission Control's own Expression Set dropdown. The three
+new expressions got their own procedural drawings in the identical
+style (a handful of simple curves each, described in that method's own
+comments) so the built-in look stays complete and consistent even
+without anyone drawing anything custom.
+
+### Expression Sets — genuinely custom, pixel by pixel
+
+"Simple pixel drawing tools. Basic paint tools. Importing images...
+saving/loading expression sets... exporting expression packs." An
+Expression Set (`ExpressionSetStore.js`) is a small, named collection —
+one 16×16 pixel grid per expression a person has actually drawn for it.
+A set doesn't need all eight filled in: `ResidentRenderer._drawFace()`
+checks the active set for the expression currently being shown, and
+falls back to the built-in procedural drawing for just that one
+expression if the set has nothing for it — never a blank or broken
+face, and never a reason a set has to feel "incomplete" to be usable.
+
+**The Expression Creator lives inside AI Mission Control** (a new
+"Expressions" section, between Embodiment and the Resident Sandbox) —
+deliberately not a new Computer app or Phone app; this is one more
+resident-configuration surface among several already there, not a
+separate destination. A `<canvas>`-based pixel grid (pointer-drag
+painting, treated as one continuous stroke the same way `TerrainSystem
+.js`'s own brush is), a small preset colour palette plus a full colour
+picker, a Pencil/Eraser toggle, Clear and Reset-to-Default actions, and
+a genuine "Import Image…" that downsamples any picked image to the
+grid size and reads its pixels back directly — a real, working way to
+turn an existing picture into pixel art, not just a placeholder button.
+
+**Which set is active lives on the resident profile itself**
+(`ResidentProfileStore.js`'s own `expressionSetId`, defaulting to the
+reserved sentinel `"default"`) — the identical "a plain id, resolved
+against a separate store elsewhere" shape `provider`/`model` already
+use, and exactly why this is "the reference implementation for [the]
+shared [resident] architecture": a future second resident's own profile
+would carry its own `expressionSetId` the same way, no new mechanism
+required. `ResidentController._onProfileChanged()` resolves it (falling
+back to `null`/built-in for `"default"` *or* for a set id that no
+longer resolves to anything real — see `ExpressionSetStore.js`'s own
+comment on why a missing reference is an expected, honestly-handled
+case, not an error) and hands the result to `ResidentRenderer
+.setExpressionSet()`; a second listener on `ExpressionSetStore`'s own
+`"expressionSets:changed"` event means editing the *contents* of the
+currently-active set (drawing a new pixel expression, say) updates
+Bubble live, not just switching which set is active.
+
+### Expression Assets — Workshop Assets like any other
+
+"Expressions should integrate with the Shared Asset Library... behave
+just like every other Workshop asset." Registered as the `"expressions"`
+`AssetService` kind, alongside Objects, Models, Animations, and
+everything else — real search, favouriting, categories, and tags (every
+expression a set has actually drawn becomes one of its own tags). The
+one genuinely new piece is the **thumbnail**: `buildPixelThumbnail()`
+(`WorkshopAssetSchema.js`, alongside the existing `buildSwatchThumbnail()`
+it's modelled on) renders the set's own `neutral` expression — or
+whichever expression it does have drawn — as a small real SVG of its
+actual pixels, not an abstract colour summary. What you see in the
+Asset Library is what the set actually looks like.
+
+**Export/Import** (`ExpressionSetStore.exportSet()`/`importSet()`)
+follows the identical `type`-tagged envelope shape
+`ResidentProfileStore.exportProfile()`/`PersistenceSystem.exportBackup()`
+already established (`"workshop-expression-pack"`), validated and
+cross-recognising the other two export kinds by name rather than
+failing to parse them silently, and — like a profile import — always
+additive: a fresh id, never overwriting anything already present. See
+`docs/PERSISTENCE.md`'s own "Import & Export" section for the complete,
+shared account.
+
+**Versioning** is honestly minimal: an export carries its own
+`version: 1` and the set's own `gridSize`, so a future Workshop version
+that changed the grid size (unlikely, but not impossible) could still
+tell an older pack apart and choose how to handle it, rather than
+silently misreading pixel data at the wrong resolution. There's no
+per-expression edit history or rollback within a set — drawing over an
+expression replaces it outright, the same "whole array, not a diff"
+simplicity `TerrainSystem.js`'s own undo snapshots already accept for a
+similarly small amount of data.
+
+### A note on the face's own visual quality
+
+"Better expression transitions... cleaner face rendering." Two real,
+contained changes to `ResidentRenderer.js`, neither touching how any
+individual expression actually looks:
+
+- **Expression changes now cross-fade** rather than swapping instantly —
+  the face mesh eases to fully transparent, the new texture (and its
+  matching mood colour, glow, and light) is swapped in at the exact
+  invisible midpoint, then it eases back in. 160ms total — long enough
+  to read as a genuine transition, nowhere near long enough to feel like
+  Bubble's face is fading in and out. Switching *sets* in Mission
+  Control redraws immediately, deliberately without the cross-fade — a
+  configuration change, not a felt emotional beat.
+- **"Thinking" indicators** were already distinct from "curious" (an
+  earlier phase's own fix, still intact) and remain the resident's own
+  honest way of showing it's waiting on a real AI reply — unchanged
+  this phase, mentioned here only because the brief asked after it
+  directly and the honest answer is "already solid, nothing to add."
+
 ## Mission Control Integration
 
 "Behaviour settings should now genuinely influence Bubble... Conversation
@@ -832,10 +968,24 @@ own brief asks for.
   preference or goal in an unusual phrasing simply isn't noticed; this is
   the deliberate "simple continuity is sufficient" trade-off, not an
   oversight.
-- **Mood only ever picks among `content`/`curious`/`happy`** —
+- **Mood only ever picks among `neutral`/`curious`/`happy`/`excited`** —
   `sleeping`/`thinking` stay purely situational (offline, mid-reply), on
   purpose; a resting mood drifting into either would misrepresent what's
-  actually happening.
+  actually happening. `excited` joined this phase with a deliberately
+  small base weight — see `ResidentDials.js`'s own comment.
+- **`sad` and `surprised` have no automatic behavioural trigger yet** —
+  fully real everywhere else (drawable, previewable, exportable), but
+  honestly waiting for a future phase's own well-motivated dial
+  combination or event, rather than a forced one invented to make the
+  set of eight look complete. See "Expression System" above.
+- **Expression Sets have no per-pixel edit history** — drawing over an
+  expression replaces it outright; there's no undo within the
+  Expression Creator itself, only Clear (blank the current expression)
+  and Reset to Default (remove the override entirely).
+- **A profile's own `expressionSetId` doesn't travel with a profile
+  export** in any resolvable sense — the id itself is included
+  honestly, but the actual pixel data lives in a separate Expression
+  Pack export; see `ResidentProfileStore.exportProfile()`'s own comment.
 - **Preferences and behaviour memory are coarse, count-based affinities**,
   not a real model of the player or the resident — exactly as
   `docs/PERSISTENCE.md`'s own "simple continuity is sufficient" standard
@@ -874,7 +1024,20 @@ own brief asks for.
   this phase's own new files (`ResidentTraits`, `ResidentPreferences`,
   `ResidentCuriosity`) already takes a profile/instance as an argument
   rather than assuming a singleton, which is what would make this
-  tractable.
+  tractable. The Workshop Personality phase's own `expressionSetId`
+  joins this list — already a plain per-profile reference, resolved
+  fresh by whoever renders that profile, exactly the shape a second
+  simultaneously-embodied resident would need.
+- **Real triggers for `sad` and `surprised`** — both fully exist in the
+  vocabulary and the Expression Creator today; what's missing is an
+  honest, well-motivated *reason* for either to appear automatically
+  (a dial combination, a specific world event) rather than a forced one
+  invented to complete the set.
+- **A shared Expression Set across multiple residents** — today a set is
+  drawn with one resident in mind but nothing technically ties it to
+  one; a future phase could make that intentional (a "Workshop House
+  Style" pack meant to be reused) rather than merely possible by
+  accident.
 - **A truly custom embodiment** — `custom` currently falls back to the
   same sphere `floatingOrb` uses; a future phase giving it a genuinely
   different construction path (an imported model, perhaps reusing

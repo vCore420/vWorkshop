@@ -234,17 +234,19 @@ a real import pipeline (see "Import Pipeline" below).
 ## Thumbnails
 
 "Thumbnail generation... begin preparing the Workshop for future asset
-optimisation." Genuinely real for two kinds, not a placeholder image:
-`buildSwatchThumbnail()` (`WorkshopAssetSchema.js`) builds a small inline
-SVG data URI from a handful of real colours — an Object's own part
-colours, or the first colour of each distinct piece in a Blueprint. It
-renders as an ordinary `<img>` anywhere a thumbnail is wanted, the
-portable form of the same real swatch data `AssetPages.js`'s own detail
-pages already render directly as coloured `<div>`s.
+optimisation." Genuinely real for two shapes of asset, not a
+placeholder image, both living in `WorkshopAssetSchema.js`:
+`buildSwatchThumbnail()` builds a small inline SVG data URI from a
+handful of real colours — an Object's own part colours, or the first
+colour of each distinct piece in a Blueprint — and, since the Workshop
+Personality phase, `buildPixelThumbnail()` does the pixel-art
+equivalent for Expression Sets, rendering the actual drawn pixels as
+small SVG rectangles rather than an abstract colour summary. Both
+render as an ordinary `<img>` anywhere a thumbnail is wanted.
 
 Every other kind (Animations, Models, Images, Music, and any
-plugin-registered kind that doesn't call `buildSwatchThumbnail()` itself)
-has `thumbnail: null` — honestly, since there's no real visual data to
+plugin-registered kind that doesn't call one of these two itself) has
+`thumbnail: null` — honestly, since there's no real visual data to
 build one from without an actual rendering step, which stays a future
 extension point (see "Optimisation" below).
 
@@ -295,13 +297,15 @@ shows up, exactly like a native Object or Blueprint would.
 The short version: **register a kind, don't reinvent one.** Any future
 creative system — Materials, Textures, Particles, Sounds, Behaviours, a
 future Being Creator 2.0, a future AI-generated asset pipeline — should
-reach for `assetService.registerKind()` the same six calls in `main.js`
-already demonstrate, rather than building its own parallel notion of
-"browse what exists," "search for something," or "show me a detail
-page." The four functions a kind can provide
-(`toDescriptor`/`getDependencies`/`validateItem`, plus the pre-existing
-`all`/`get`) are the entire contract; a kind that only implements `all`/
-`get` still works everywhere, just with a minimal descriptor.
+reach for `assetService.registerKind()` the same way every kind already
+in `main.js` does (Objects, Blueprints, Animations, Models, Images,
+Music, Poses, Beings, Expression Sets, and counting), rather than
+building its own parallel notion of "browse what exists," "search for
+something," or "show me a detail page." The four functions a kind can
+provide (`toDescriptor`/`getDependencies`/`validateItem`, plus the
+pre-existing `all`/`get`) are the entire contract; a kind that only
+implements `all`/`get` still works everywhere, just with a minimal
+descriptor.
 
 ## Known simplifications (by design, for this phase)
 
@@ -315,8 +319,11 @@ page." The four functions a kind can provide
   unimplemented, not fabricated.
 - **Version numbers never change** — every asset reports version `1`;
   nothing increments it on edit yet.
-- **Thumbnails are real for three kinds, `null` for the rest** — see
-  "Thumbnails" above.
+- **Thumbnails are real for four kinds** (Objects, Blueprints, Beings
+  built from primitives — all three via `buildSwatchThumbnail()`'s own
+  colour swatches — and, since the Workshop Personality phase,
+  Expression Sets via `buildPixelThumbnail()`'s own real pixel
+  rendering), `null` for the rest — see "Thumbnails" above.
 - **No real import/export/optimisation** — all three throw honest,
   named errors; see their own sections above for exactly what a future
   implementation would need to fill in.

@@ -56,6 +56,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden; /* belt-and-braces alongside the real min-width:0 fixes above — this screen was never meant to scroll sideways at all */
   background: var(--paper);
   color: var(--ink);
   padding: var(--space-3);
@@ -203,7 +204,7 @@
   font-family: var(--font-mono);
   font-size: 10px;
 }
-.builder-phone-row input[type="range"] { flex: 1; }
+.builder-phone-row input[type="range"] { flex: 1; min-width: 0; }
 .builder-phone-row input[type="color"] {
   width: 30px;
   height: 22px;

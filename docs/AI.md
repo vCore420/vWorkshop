@@ -366,6 +366,22 @@ actually helps a profile read as *someone*, not a row in a list.
 Always at least one profile — a fresh Workshop seeds one named "Workshop
 Resident," and `remove()` refuses to delete the last remaining one.
 
+**Export/Import (Workshop Workflow phase)** — "AI Profile Export. AI
+Profile Import. Profile sharing." Each profile row gained an "Export"
+button (`ResidentProfileStore.exportProfile()`, a small self-contained
+JSON file — `{type: "workshop-ai-profile", version, profile}`) and the
+Profiles section gained an "Import Profile…" button
+(`importProfile()`). Genuinely shareable — nothing about the exported
+file references anything else in a specific Workshop's own save data, so
+it means exactly as much on a different computer as this one. Import is
+validated and normalised the same way loading a whole-Workshop backup
+already normalises every profile inside it (see `ResidentProfileStore
+.load()`), and always creates a *new* profile rather than overwriting
+anything by id — sharing a profile with someone, or with your own future
+self, never risks clobbering whatever's already there. See
+`docs/PERSISTENCE.md`'s own "Import & Export" section for how this
+relates to the separate whole-Workshop backup.
+
 ## Connection Testing
 
 Unchanged — one button, one fixed prompt ("Hello."), one response shown

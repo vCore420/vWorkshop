@@ -736,10 +736,11 @@ stays exactly as it was.
 
 **The Emote Wheel gained a touch button**, matching the Build Mode and
 Third Person View buttons' own design philosophy exactly — the same
-`.hud-backup-controls` row, same styling, calling
-`EmoteWheelSystem.toggle()`. Nothing new needed for the reveal/hide
-mechanics touch already relies on; a plain HTML button already responds
-to a tap the same way it responds to a click.
+corner-controls row (`.hud-corner-controls` as of the Workshop Workflow
+phase's own rename — see `docs/HISTORY.md`'s Phase 13b account for why),
+same styling, calling `EmoteWheelSystem.toggle()`. Nothing new needed
+for the reveal/hide mechanics touch already relies on; a plain HTML
+button already responds to a tap the same way it responds to a click.
 
 **The "intermittent beeping," investigated to an actual root cause.**
 Traced to `AudioSynth.js`'s cricket ambience: a single, isolated

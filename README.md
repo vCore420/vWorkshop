@@ -53,30 +53,19 @@ moves on, Bubble wanders, time keeps its own pace.
 
 ## Quick start
 
+Plain ES modules — no build step, nothing to install — but it needs to
+be served over HTTP, not opened as a bare `file://` URL (browsers block
+module imports from those). Any static file server works:
+
 ```bash
 git clone <this repo>
 cd workshop
-python3 -m http.server 8000   # or: npx serve
-# open http://localhost:8000
+python3 -m http.server 8000   # or: npx serve .
 ```
 
-No build step, no dependencies to install — see "Running it locally"
-below for more detail, including GitHub Pages deployment and the
-optional local-AI setup.
-
-## Running it locally
-
-Because the code is plain ES modules, it needs to be served over HTTP (not
-opened as a `file://` URL — browsers block module imports from `file://`).
-Any static file server works:
-
-```bash
-npx serve .
-# or
-python3 -m http.server 8080
-```
-
-Then open the printed local URL. Click **Step inside**, and you're in.
+Open the printed local URL, click **Step inside**, and you're in. See
+`docs/SETUP.md` for the complete setup guide, including the optional
+local-AI setup.
 
 ## Installing it
 
@@ -99,21 +88,14 @@ way.
 
 Entirely optional — the Workshop works fully without this. Bubble, and
 AI Mission Control on the computer, can talk to a real local language
-model through [Ollama](https://ollama.com) running on your own machine.
-By default, Ollama's own CORS policy blocks the browser from reaching it
-at all, which is what `start-ollama-for-workshop.ps1` (in this repo's
-root) fixes.
+model through [Ollama](https://ollama.com) running on your own machine,
+nothing sent anywhere else.
 
-**When to use it:** if you're on Windows, have Ollama installed and a
-model pulled (`ollama pull llama3.2`, or any model you like), and want
-Bubble/AI Mission Control to actually connect instead of showing
-"disconnected." Right-click the script and choose "Run with PowerShell,"
-or run `.\start-ollama-for-workshop.ps1` from a PowerShell window in this
-folder, and leave that window open while you use the Workshop. See the
-comments at the top of the script itself for what it actually does and
-what to do if Windows blocks it from running at all. On macOS/Linux, the
-equivalent is simply `OLLAMA_ORIGINS="*" ollama serve` from a terminal —
-see `docs/AI.md` for the full explanation of why this is needed at all.
+**See `docs/SETUP.md` for the complete guide** — installing Ollama,
+recommended models, starting it so the Workshop can actually reach it
+(the one genuinely non-obvious step, and what the included
+`start-ollama-for-workshop.ps1` launcher script is for), and
+troubleshooting if AI Mission Control shows "disconnected."
 
 ## Controls
 
@@ -191,7 +173,7 @@ it's meant to feel like it belongs to the object. Ten tabs live on it:
   materials, and textures, with a live preview — see "Player identity" below
 - **Animation Editor** — pose and choreograph custom animation clips
 - **Being Creator** — design a Workshop Being (see `docs/BEINGS.md`)
-- **Settings** — the Workshop's full configuration: room lights and clock mode, plus Graphics, Performance, Display, Controls, and Audio — see "Settings" below
+- **Settings** — the Workshop's full configuration, and Workshop Data export/import — see "Settings" below
 
 Whichever tab you had open is exactly where you'll land next time — see
 `docs/COMPUTER.md` for how that "waking from sleep" feeling works, and how
@@ -224,11 +206,11 @@ physical presence without the workbench itself ever changing.
 
 ## The world creation system
 
-The computer has a seventh app now: **Builder**. It's a simple in-world
+**Builder**, one of the computer's apps. It's a simple in-world
 modelling tool, not a Blender competitor — an even split, a large live
 preview always visible on one side (drag to orbit, scroll to zoom) and
 every editing control on the other. Assemble primitives — thirteen of
-them now, from simple boxes and cylinders through pyramids, wedges,
+them, from simple boxes and cylinders through pyramids, wedges,
 rounded cubes, pipes, rings, and arches, chosen for what's actually useful
 to build furniture and architecture with, not for sheer variety — into an
 object, position/rotate/scale/colour each one (selecting a part highlights
@@ -237,21 +219,25 @@ description, and attach behaviour (Interactable, Light Source, Seat,
 Storage, Door, Computer, Decoration, Trigger, Audio Source, Music Player,
 Reflective Surface)
 purely through properties — no code. Save it, and it joins your permanent
-object library.
+object library. An imported `.glb`/`.gltf` model can be used the exact
+same way as something you designed from primitives — see "Importing
+models" below.
 
 Then press **B** anywhere in the room to enter **Build Mode**: the camera
 freezes right where you're standing, the cursor comes free, and a
 **Builder Phone** slides up from the lower-right corner — a small device
 you've taken out, not a separate editor screen; the room keeps rendering
-behind it the whole time. Tap something from its Construction Library or
-Saved Objects tabs and a transparent, rotatable preview follows your
-pointer (or your drag, on touch) until you confirm or cancel it. Click any
-placed object — or any piece of Workshop furniture — to select it,
-adjust its position/rotation/scale/colour precisely, or hit Move to pick
-it up and set it back down somewhere else, through that exact same
-transparent-preview mechanic. Furniture keeps tracking the Workshop's own
-layout unless you've actually moved it; only what you've personally
-repositioned is remembered as yours.
+behind it the whole time. Tap something from its Construction Library,
+Saved Objects, or Imported Models tabs and a transparent, rotatable
+preview follows your pointer (or your drag, on touch) until you confirm
+or cancel it. Click any placed object — or any piece of Workshop
+furniture — to select it, adjust its position/rotation/scale/colour
+precisely, or hit Move to pick it up and set it back down somewhere
+else, through that exact same transparent-preview mechanic. Furniture
+keeps tracking the Workshop's own layout unless you've actually moved
+it; only what you've personally repositioned is remembered as yours. A
+fifth tab, Terrain, sculpts and paints the ground itself — see "The
+world" below.
 
 Objects you design and place are permanent, save automatically, and reuse
 the same interaction pipeline every hand-built piece of furniture in the
@@ -262,37 +248,51 @@ piece of furniture. See `docs/WORLDBUILDER.md` for the full architecture,
 including why it was built to generalise to future rooms and buildings
 without needing to change.
 
-Alongside your own designs, a permanent **Construction Library** of 30
-pieces — Structural (Wall, Half Wall, Floor, Ceiling, Roof, Pillar, Beam,
-Stairs, Ladder...), Openings (Door, Double Door, Window, Large Window,
-Archway...), Workshop (Table, Bench, Shelf, Cabinet, Storage Crate), and
-Utilities (Light, Switch, Sign, Fence, Gate) — is always available in
-Build Mode — the alphabet everything else gets built from. The Door piece
-already swings open on its own, Cabinet and Storage Crate already hold
-things, Light already lights up its surroundings; these are real, if
-plain, building blocks, not mockups.
+Alongside your own designs, a permanent **Construction Library** of
+around fifty pieces — Structural (Wall, Half Wall, Floor, Ceiling, Roof,
+Pillar, Beam, Stairs, Ladder...), Openings (Door, Double Door, Window,
+Large Window, Archway...), Nature (Tree, Bush, Flower, Rock, Log, Grass
+Patch, Garden Bed), Paths (Stone, Gravel, Dirt, Timber, Concrete),
+Lighting (Garden Light, Street Light...), Workshop (Table, Bench, Shelf,
+Cabinet, Storage Crate), and Utilities (Light, Switch, Sign, Fence,
+Gate) — is always available in Build Mode — the alphabet everything else
+gets built from. The Door piece already swings open on its own, Cabinet
+and Storage Crate already hold things, Light already lights up its
+surroundings, and every Nature piece genuinely sways in the wind; these
+are real, working building blocks, not mockups.
+
+### Importing models
+
+Alongside building from primitives, the Builder Phone's own Imported
+Models tab can bring in a real `.glb`/`.gltf` model and place it exactly
+like anything else — the same import your character or a custom Being
+can use, so a model imported once is available everywhere in the
+Workshop that can use one, saved and reloaded automatically like
+everything else. See `docs/WORLDBUILDER.md` for the full account.
 
 ## The world
 
-The workshop's doors and windows now lead somewhere real. Open the door,
-and it opens onto an actual, continuous outdoor world — no loading, no
-fade, no separate scene. Walk outside, turn around, and the workshop is
+The workshop's doors and windows lead somewhere real. Open the door, and
+it opens onto an actual, continuous outdoor world — no loading, no fade,
+no separate scene. Walk outside, turn around, and the workshop is
 standing right there behind you, with a plain exterior shell and a roof.
-Walk back in and everything is exactly where you left it, because it never
-stopped existing.
+Walk back in and everything is exactly where you left it, because it
+never stopped existing.
 
-Outside is deliberately close to empty: flat ground as far as you can see,
-the same sky, weather, and time-of-day the interior already had (they were
-always scene-wide, so nothing needed to change there), and nothing else —
-no trees, no scenery, no other buildings. That's on purpose. This is meant
-to be a world you build into over time using the Builder and the
-Construction Library, not a landscape someone generated for you before you
-arrived. Build Mode places objects on the outdoor ground exactly the same
-way it places them on the workshop floor.
+The ground itself is real and editable — a genuine heightmap, sculptable
+right from Build Mode's own Terrain tab (raise, lower, flatten, smooth,
+terrace, and paint grass/dirt/rock/sand/gravel/mud/path), the same
+ground the whole Workshop actually walks and builds on, not a separate
+overlay. Beyond it, deliberately close to empty: the same sky, weather,
+and time-of-day the interior already had (they're scene-wide), and
+otherwise nothing you didn't put there yourself. This is meant to be a
+world you build into over time using the Builder, the Construction
+Library's Nature and Paths pieces, and the terrain tools — not a
+landscape someone generated for you before you arrived. Build Mode
+places objects on the outdoor ground exactly the same way it places them
+on the workshop floor.
 
-See `docs/WORLD.md` for the full write-up, including what turned out to be
-an actual bug behind the old doorway (a wall with no real opening in it,
-not just a cosmetic simplification) and how it was fixed.
+See `docs/WORLD.md` for the full write-up.
 
 ## The reading and listening corner
 
@@ -346,34 +346,41 @@ updates as you go.
 
 Save as many outfits as you like (rename, duplicate, delete, wear
 instantly); whatever you're currently wearing is remembered between visits
-the same way everything else in the Workshop is. The Workshop stays
-strictly first-person — you're not meant to see yourself constantly, only
-the way you naturally would in real life (looking down at your own hands
-or feet). Clothing, accessories, mirrors, and animation are all explicitly
-future work the rig was built to support without a redesign — see
-`docs/PLAYER.md` for the full architecture, including a design approach
-that didn't survive contact with the computer's existing panel system and
-what replaced it.
+the same way everything else in the Workshop is. The Workshop is
+primarily first-person — you're not meant to see yourself constantly,
+only the way you naturally would in real life (looking down at your own
+hands or feet) — but a full mirror (the wardrobe's own) and a
+first/third-person toggle (**V**) both exist for actually seeing an
+outfit, or a Builder creation, from outside yourself. A full keyframe
+Animation System and Emote Wheel let you pose and trigger custom
+animation clips too — see "Controls" above. Clothing and accessories
+remain future work the rig was built to support without a redesign —
+see `docs/PLAYER.md` for the full architecture, including a design
+approach that didn't survive contact with the computer's existing panel
+system and what replaced it.
 
 ## Settings
 
 The computer's Settings app is the Workshop's one central place to
-configure itself, rather than a browser menu or a hidden default: Graphics
+configure itself, rather than a browser menu or a hidden default:
+General (room lights, and Workshop Data export/import), Atmosphere (live
+weather, sky, wind, sun/moon/stars, and saved atmosphere profiles —
+"the central place for controlling environmental conditions"), Graphics
 (render distance, shadow quality, lighting quality, anti-aliasing, frame
 rate limit), Performance (Performance/Balanced/Quality presets, "Optimise
 For This Device", and a plain-language performance summary — current
 performance, current preset, approximate FPS, nothing more technical than
 that), Display (field of view, UI scale), Controls (mouse/touch
 sensitivity, invert look), Audio (master/music/effects/ambient volume),
-and a Danger Zone for long-term maintenance (clear the Workshop's cache,
-reset settings, reset your character, or a full factory reset back to a
-fresh first-launch state — every action confirms before doing anything,
-and factory reset asks twice). Everything except the Danger Zone is
-opt-in — the Workshop looks exactly as it always has until you change
-something, and every value you do change persists like everything else.
-See `docs/PERFORMANCE.md` for the graphics/performance write-up and
-`docs/REFINEMENT.md` for the Danger Zone and the save-versioning system
-behind "Factory Reset."
+Diagnostics, and a Danger Zone for long-term maintenance (clear the
+Workshop's cache, reset settings, reset your character, or a full
+factory reset back to a fresh first-launch state — every action
+confirms before doing anything, and factory reset asks twice).
+Everything except the Danger Zone is opt-in — the Workshop looks exactly
+as it always has until you change something, and every value you do
+change persists like everything else. See `docs/PERFORMANCE.md` for the
+graphics/performance write-up and `docs/REFINEMENT.md` for the Danger
+Zone and the save-versioning system behind "Factory Reset."
 
 ## What persists
 
@@ -387,14 +394,15 @@ physical presence on the bench) and note, every object you've designed and
 every copy you've placed in the room, which computer app and which bench
 project you last had active, and where you were standing — all saved
 automatically (on an interval, on tab-hide, and before the page closes) to
-`localStorage` (plus IndexedDB for the music library's folder access and
-your saved texture images — see `docs/MUSIC.md` / `docs/PLAYER.md`), and
-restored exactly on your next visit. Two small buttons in the top-left
-corner export/import that same save data as a plain JSON file, for manual
-backup or moving to another browser (texture images, being in IndexedDB
-rather than the save file itself, don't travel with that export — moving
-to another browser would bring outfits and proportions across, but
-custom-painted or imported textures would need re-adding).
+`localStorage` (plus IndexedDB for the music library's folder access, your
+saved texture images, and imported models — see `docs/MUSIC.md` /
+`docs/PLAYER.md`), and restored exactly on your next visit. Settings' own
+"Workshop Data" section (General tab) exports/imports that same save data
+as a plain JSON file, for manual backup or moving to another browser
+(texture images and imported models, being in IndexedDB rather than the
+save file itself, don't travel with that export). AI Mission Control has
+its own, separate Export/Import for a single resident profile, shareable
+on its own — see `docs/AI.md`.
 
 ## Project structure
 
@@ -406,19 +414,22 @@ manifest.json    PWA manifest
 service-worker.js  offline caching (stale-while-revalidate) — see docs/POLISH.md
 assets/icons/    generated app icons (see docs/POLISH.md)
 src/core/        engine primitives (Engine, EventBus, ECS-lite, PluginManager)
-src/systems/     one file per system (lighting, weather, camera, world environment, persistence...)
+src/systems/     one file per system (lighting, weather, camera, world environment, terrain, persistence...)
 src/entities/    furniture + room-shell builders (real openings + exterior shell), all placeholder geometry
 src/computer/    the computer as one self-contained object — see docs/COMPUTER.md
 src/workbench/   the workbench + Project Presence system — see docs/WORKBENCH.md
-src/worldbuilder/ the world creation system (Builder + Build Mode + Construction Library) — see docs/WORLDBUILDER.md, docs/WORLD.md
+src/worldbuilder/ the world creation system (Builder + Build Mode + Construction Library + terrain) — see docs/WORLDBUILDER.md, docs/WORLD.md
 src/music/       the real music library + player — see docs/MUSIC.md
 src/settings/    Workshop Settings (persisted data + the system that applies it) — see docs/PERFORMANCE.md
 src/player/      the player character rig + appearance/outfit/texture persistence — see docs/PLAYER.md
+src/ai/          AI Mission Control's own configuration (identity, traits, behaviour, memory, providers) — see docs/AI.md
+src/resident/    Bubble — behaviour, movement, world awareness — see docs/RESIDENT.md
+src/host/        the Workshop Host (Browser-facing local services, permissions, plugins) — see docs/HOST.md
 src/data/        room layout data, project/notes stores
 src/ui/          overlays (the diegetic panels) + the minimal HUD
 src/utils/       placeholder factories, procedural textures/audio, input abstraction (touch + mouse + keyboard)
-src/plugins/     the extension system + a working example plugin
-docs/            architecture, roadmap, plugin guide (read these before extending)
+src/plugins/     the Plugin SDK + three working example plugins — see docs/PLUGIN_SDK.md
+docs/            architecture, setup, roadmap, plugin guide, and history (read these before extending)
 assets/          currently empty of artwork on purpose — see assets/README.md
 ```
 
@@ -443,408 +454,11 @@ exception being the music library, which plays whatever real files you
 point it at from your own device (see `docs/MUSIC.md`); nothing is bundled
 with the project itself.
 
-## One contribution
+## Development history
 
-Version 2.0's own phase asked for something different from every other
-one before it — not a spec to implement, but one small thing chosen
-because it genuinely felt like it belonged, after living inside this
-project rather than being told to build it. This section is that answer,
-written honestly rather than as another feature announcement.
-
-**What I added:** Bubble is now a little more likely to wander to the
-window specifically while it's raining, or during a warm sunrise/sunset
-sky, than to any other idle spot at that same moment. Nothing new was
-built to make this true — `ResidentController.js` gained one small
-method, `_windowWatchWeights()`, that nudges the odds on the exact same
-random idle-location pick that already existed, using two signals
-(current precipitation, and the same golden-hour time window the sun's
-own colour already shifts warm during) that were already true and
-already meaningful elsewhere in the Workshop. See `docs/RESIDENT.md`'s
-own "A quiet habit" section for the technical account.
-
-**Why this, out of everything it could have been:** I kept returning to
-one instruction in particular — "what has this place quietly been
-missing all along?" — and the honest answer wasn't a missing object or a
-missing screen. Every major system already exists. What's easy to build
-and forget about is whether the systems that already exist ever actually
-*notice each other*. Weather, time of day, and Bubble's own wandering
-have coexisted since early phases without ever once acknowledging one
-another. This is the smallest possible thread tying three already-built
-systems together, rather than a fourth new one sitting beside them.
-
-**How it fits the philosophy:** "The world should continue naturally
-whether the player is watching or not" was this project's own central
-idea by the time Persistent World (phase 29) existed — but continuing
-isn't the same as *caring* about what's actually happening around you.
-An independent resident that's a little more drawn to a window during
-weather worth watching reads as attention, not animation. It's also
-never guaranteed and never announced — the Workshop doesn't tell you
-Bubble likes rain; you'd only ever notice by actually being there enough
-times that it stopped looking like coincidence. That's the same standard
-`docs/PERSISTENCE.md`'s own "believable, not scripted" language already
-holds everything else in this project to.
-
-**How it might influence what comes next:** the weighted-pick mechanism
-this needed (`randomIdleLocationId()`'s new optional `weights` argument)
-is now sitting there for any future Being, or any future resident, to
-use the same way — a Being that prefers shade on a hot day, one drawn to
-a fireplace in winter, anything where "usually random, occasionally
-shaped by something real" is the right texture for a behaviour. I didn't
-build any of those; I only made sure the next person who wants one
-doesn't have to invent the mechanism from scratch.
-
-## Reflecting, after thirty-one phases
-
-Asked to, and without touching the roadmap — a few honest thoughts as
-the thing's own maintainer, not as a summary of what was built.
-
-**What proved most valuable, architecturally:** the shape that showed up
-again and again — a plain store holding data, a system applying it to
-the 3D scene, a UI reading and writing through events, never through a
-direct reference back — made almost everything added after phase 10 or
-so slot in without a fight. The clearest proof isn't a design document,
-it's this exact phase: a genuinely new idea (weighted idle picks shaped
-by weather) needed one new optional parameter on one existing function,
-not a new system. When an architecture is right, small additions cost
-what they should cost.
-
-**What surprised me:** how often the right fix turned out to be smaller,
-and more embarrassing, than the bug looked. A field named `hour` being
-read as `currentTime`. A title string doing double duty as a visibility
-check. An outer element's own background nobody remembered was separate
-from the panel fading in front of it. None of these needed clever
-engineering — they needed someone to actually trace the data instead of
-guessing at the shape of the problem from its symptoms. I'd like to
-think I got better at reaching for the trace instead of the guess as the
-phases went on.
-
-**What philosophy emerged, rather than being declared upfront:** "avoid
-letting a fix look more impressive than the bug was." The natural pull,
-especially under real time pressure, is to solve a one-line bug with a
-satisfying rewrite. The Workshop's own calm, unhurried character only
-stayed intact because most fixes here were genuinely boring — a wrong
-field name, a missing null check, a duplicated computation finally
-shared. Boring fixes are the ones that don't introduce a new bug while
-solving the old one.
-
-**Advice to whoever continues this, including a future version of me:**
-read the file you're about to change before trusting your memory of what
-it does — this project is large enough now that memory is frequently
-close but wrong in a small, costly way. When a system already exists
-that does almost what you need, extend it with an optional argument
-before reaching for a new file; `weights = null` cost less than a
-`WindowPreferenceSystem.js` would have, and did the same job. And when a
-phase explicitly asks you to slow down, actually slow down — the best
-idea in this whole project arrived only after sitting with "what does
-this place actually need" for longer than felt efficient.
-
-## Changelog
-
-<details>
-<summary>Full phase-by-phase history (thirty phases so far)</summary>
-
-This project has gone through thirty phases (with one dedicated
-refinement pass in between): an architectural foundation and
-one believable room (phase 1), turning the computer into a real,
-self-contained creative workstation with a physical sit-down/stand-up
-transition (phase 2), turning the workbench into the workshop's visual
-storyteller via a Project Presence system (phase 3), giving the workshop a
-way to create its own new objects at runtime via a Builder app and a
-physical Build Mode (phase 4), fixing the workshop's doorway and turning it
-into the first building in a real, seamless, walkable world (phase 5),
-touch support, installability as a Progressive Web App, and a stability
-pass across everything built so far (phase 6), a real personal music
-library replacing the stereo's placeholder track (phase 7), giving that
-library a proper physical home: the reading and listening corner redesigned
-as one intentional area alongside the computer desk (phase 8), a
-performance audit and a full Settings app, making everything feel smoother,
-especially on tablets, without turning down the visual quality (phase 9), a
-player identity system: a modular procedural character and a Wardrobe app
-to gradually become whoever you want to be (phase 10), a maintenance pass:
-two real bugs properly root-caused (a stuck-key movement bug, a
-music-library WebMediaPlayer exhaustion bug), a genuine save-versioning and
-migration framework, a Settings Danger Zone, and a
-round of interior/lighting refinement (phase 11), the Builder Phone:
-redesigning how building feels rather than adding new
-Builder functionality, with Workshop furniture now movable through the
-exact same mechanic as Builder objects, and Builder-placed objects now
-genuinely part of the physical world through real collision (phase 12),
-an even-split Builder workspace, a curated expansion
-of both the primitive shape set and the Construction Library, and a real
-bug fix for the front doors (phase 13), and — this phase — a full
-Environment System: ten weather states instead of three, three modes
-(Manual, Live Weather via a real free weather API, and a genuinely
-evolving Workshop Dynamic), a real sky with moving clouds, sun, moon, and
-stars, and weather that now reaches indoor lighting, outdoor atmosphere,
-and ambient sound alike (phase 14), and — this phase — a generic
-reflection capability (mirrors and polished surfaces, not a special
-"mirror object"), a physical wardrobe and mirror that open the exact same
-Wardrobe app the computer does, and a smooth first/third-person camera
-toggle for viewing outfits and Builder creations (phase 15), and — this
-phase — a quality pass rather than a feature one: real bugs found through
-actual everyday use (a backwards third-person camera and sitting pose,
-an unreachable wardrobe and notebook, dark mirror reflections, and a real
-performance cause behind occasional choppiness), each root-caused and
-fixed rather than patched around, plus falling rain, distinct weather
-sky tints, and a hidden-but-functional scrollbar throughout the computer
-(phase 16), and — this pass — mirrors that no longer chase the player
-around the room: a fixed viewpoint replaced a camera that reflected the
-player's own position every frame, fixing both the "reflections show
-areas outside the Workshop" bug this caused and a real chunk of the
-performance cost mirrors carried (phase 16.5), and — most recently — a
-complete movement and expression system: running, crouching, jumping,
-and real vertical collision including climbable ladders; a second,
-independently-customisable body model; and a full keyframe Animation
-System with its own frame-by-frame editor, a shared library of default
-and player-created animations, import/export, and a lightweight Emote
-Wheel to trigger them (phase 17), and — most recently — helping you
-actually understand the world around you: a toggleable compass, real
-solar/lunar astronomy driven by your own location, a Workshop Time
-control that eases the sun and moon to wherever you set it rather than
-jumping, rain that correctly recognises when you're indoors, and an
-"I'm Lost!" button for exactly what it sounds like (phase 18) — and, most
-recently, a round of everyday comfort fixes: placing a Builder object is
-now a left-click in the world instead of a Phone button, a new Display
-Surface behaviour lets any chosen part show an uploaded image, and a
-handful of real bugs (a taller character sinking into the floor, the
-mirror's own left-right flip, an "intermittent beeping" that turned out
-to be an over-electronic cricket sound) got root-caused and fixed rather
-than patched over (phase 19) — and, most recently, a real Workshop
-Browser: tabs, an address bar, and persistent sessions that survive
-closing and reopening the Workshop, a `workshop://` protocol serving real,
-live pages (the actual documentation, your actual project list), and an
-architecture — `PageRegistry` — built so a future Workshop Host can slot
-in its own pages without the Browser itself ever needing to change
-(phase 20) — and, most recently, AI Mission Control: a calm, honest place
-to prepare a future Workshop resident's connection to a local Ollama
-server, its identity (in plain words, not raw prompt text), behaviour
-tuning, and multiple saved profiles, with memory and embodiment settings
-already shaped for phases still to come (phase 21) — and, most recently,
-the Workshop's first resident: a small, semi-transparent floating bubble
-that simply lives there, gently aware of you when you're nearby, willing
-to talk when you walk up to it, and quietly waiting rather than
-disappearing whenever Ollama happens to be offline (phase 22) — and, most
-recently, the Workshop Host: a lightweight, purely architectural
-companion with no window or interface of its own, preparing the
-Workshop's eventual bridge to your local machine (applications, projects,
-files, plugins) entirely through ordinary Browser pages, alongside a real
-fix for a Browser page-refresh bug that had been quietly there since it
-was first built (phase 23) — and, most recently, a dedicated quality
-pass: fixing the player model's own facing direction at its actual root
-cause, French door handle placement, a genuinely non-cosmetic Quiet
-Corner overlay fix, new Atmosphere and Diagnostics tabs in Settings,
-honest cross-browser error handling for music playback, and a resident
-whose position now survives a reload even mid-journey (phase 24) — and,
-most recently, Beings: a complete, general-purpose system for designing,
-saving, placing and managing creatures, animals, robots, or any other
-character as ordinary Workshop assets, with its own Being Creator (a real
-GLB/GLTF model import pipeline shared across the whole Workshop), Being
-Spawner, and Being Manager (phase 25) — and, most recently, a consistency
-and immersion pass across the whole Workshop: a root-caused fix for an
-inverted crouch animation, Bubble now requiring a direct look before
-interacting (and gaining a gentle drag-to-reposition), a genuinely fixed
-Notebook close behaviour, per-property manual Atmosphere overrides, and
-imported models now usable as Builder shapes and optional player bodies
-(phase 26) — and, most recently, World Expansion: the Builder growing
-into a true World Builder, automatically recognising any enclosed
-structure a player builds as a real interior (the same systems the
-Workshop's own room already uses, no manual marking required), a
-substantially larger construction catalogue organised into clear
-categories, reusable multi-object Blueprints, and optional grid/rotation
-snapping with true multi-axis rotation (phase 27) — and, most recently,
-the Workshop Phone: a proper personal device carried everywhere,
-replacing the old Builder Phone with a modular app framework (Builder,
-Beings, Wardrobe, Bubble, Browser, Workshop, Emotes, Settings) that never
-freezes the player while it's open (phase 28) — and, most recently, a
-Persistent World: a shared time service so Bubble, Beings, and the
-environment all answer "what should I have been doing while the player
-was away?" from the same elapsed-time calculation, rather than resuming
-frozen exactly as they were left (phase 29) — and, most recently, a
-Universal Experience pass: the Computer and Workbench's own 3D-projected
-screens gained a comfortable-size floor so no interface built on them
-ever becomes unreadably small, the shared editing workspace and the
-Phone both reorganise on a narrow screen, and touch targets, focus
-states, and first-launch performance detection now apply consistently
-across the whole Workshop (phase 30).
-See `docs/ROADMAP.md` for what's next, `docs/ARCHITECTURE.md`
-for how the workshop as a whole is put together, and `docs/COMPUTER.md` /
-`docs/WORKBENCH.md` / `docs/WORLDBUILDER.md` / `docs/WORLD.md` /
-`docs/POLISH.md` / `docs/MUSIC.md` / `docs/PERFORMANCE.md` / `docs/PLAYER.md` / `docs/REFINEMENT.md` for how those specifically work.
-
-Phase 31A followed: a dedicated Workshop Polish pass and the final
-milestone of Version 1 — a real root-caused fix for the computer clock's
-own "NaN : NaN" display and a Phone Home-button visibility bug, a subtle
-thinking indicator while Bubble is generating a reply, a held-key camera
-zoom, the Quiet Corner's own darkened-screen bug fixed at its actual
-cause (plus a genuine look-around-while-seated capability it never had),
-Emotes rebuilt as a real Phone app instead of an immediate wheel-trigger,
-and the dust motes proof of concept evolved into a permanent, two-window
-atmospheric effect. See `docs/ROADMAP.md`'s own Phase 31A entry for the
-complete account.
-
-**Version 2, Phase 1 — Workshop Residents (v2.0.1)** — a deepening pass,
-not a new system: Bubble gained long-term Personality Traits (a small,
-named set alongside the existing free-text identity fields), a genuine
-three-timescale Mood/Emotion/Personality distinction, emergent
-Preferences and Behaviour Memory (both gated on "is there actually a
-pattern here yet"), conversation-time Curiosity about what's changed in
-the Workshop, a real (if deliberately modest) Conversation Memory
-distinct from ordinary chat history, and five real Resident Embodiments
-(Floating Orb, Cube, Prism, Lantern, Wisp) with genuinely active colour,
-glow, scale, and idle-behaviour settings in place of what were previously
-inert Mission Control fields. See `docs/RESIDENT.md` and `docs/AI.md` for
-the full account.
-
-**Version 2, Phase 2 — AI Intelligence (v2.0.2)** — Mission Control
-deepened further: architecture for additional AI providers (LM Studio,
-OpenAI, Anthropic, a Custom Endpoint — Ollama remains the only functional
-one, every other choice says so honestly), seven continuous Behaviour
-Dials complementing the previous phase's discrete Personality Traits,
-Memory Configuration's categories and lifetimes both genuinely activated
-(what Bubble remembers, and for how long), a genuinely isolated Resident
-Sandbox for testing configuration changes without touching Bubble in the
-room, and a calm Resident Health status display. See `docs/AI.md` and
-`docs/RESIDENT.md` for the full account.
-
-**Version 2, Phase 3 — Browser Ecosystem (v2.0.3)** — the Browser grew
-into the Workshop's universal interface: a real multi-scheme
-`PageRegistry` (`workshop://`, `host://`, `plugin://`, all treated
-identically), six new Workshop pages including a Shared Asset Library
-with genuine per-item file pages (real previews, metadata, and
-cross-referenced relationships for Objects, Blueprints, and Animations),
-every Host page migrated to its own `host://` scheme alongside two brand
-new services (Documents, Downloads), two real working example plugins
-(`plugin://example-plugin`, `plugin://calculator`) proving the
-plugin-page mechanism end-to-end, the foundations of Unified Search, and
-bookmarks reaching the full Browser's own toolbar. See `docs/BROWSER.md`
-and `docs/HOST.md` for the full account.
-
-**Version 2, Phase 4 — Workshop Platform (v2.0.4)** — the Workshop Host
-completed its own nine-service architecture (Application, File, Project,
-Plugin, Asset, Resident, Automation, Hardware, Diagnostics), four of them
-— Asset, Resident, Diagnostics, Plugin — genuinely real Host-level views
-over systems that already existed. A real, optional, zero-dependency
-local companion server (`host-companion/`) and a matching
-`HostConnectionManager` bring one genuine local-machine capability
-(sandboxed, read-only folder listing) to life, gated by a real, persisted
-Permissions architecture. Three new Local Protocols (`asset://`,
-`resident://`, `project://`) joined `workshop://`/`host://`/`plugin://`,
-each a new canonical scheme for something that already existed. See
-`docs/HOST.md` and `docs/BROWSER.md` for the full account.
-
-**Version 2, Phase 5 — Workshop Asset System (v2.0.5)** — a shared
-language for everything the Workshop already creates: one common
-Workshop Asset envelope (name, stable id, author, dates, version,
-categories, tags, thumbnail, dependencies, validation status) computed
-around Objects, Blueprints, Animations, Models, Images, and Music's own
-real, unchanged internal shapes. Real, working: Favourites and Recently
-Viewed (both persisted), unified search across every individual asset,
-real Blueprint→Object dependencies and their reverse, real validation,
-and genuine swatch thumbnails. Plugins can now register their own
-Workshop Assets the same way they register pages — proven with three
-small, real "sticker" assets contributed by the reference example
-plugin. See `docs/ASSETS.md` for the full account.
-
-**Version 2, Phase 6 — Advanced Animation (v2.0.6)** — movement became a
-shared language: frame advancement and pose blending extracted into
-reusable pure functions, a real, tested skeleton-mapping heuristic
-(Mixamo's own naming quirks included) letting imported rigs join the same
-animation vocabulary the Player rig always spoke, and real rest-pose-aware
-retargeting. Beings genuinely play Workshop animations for the first
-time. A real two-bone IK solver, procedural animation layering ("walking
-while waving"), animation events, and a working shared Pose Library all
-arrived alongside a genuinely retargeted Animation Editor preview. A
-related, previously-theoretical `ModelLoader.js` bug (shared skeletons
-across cloned models) was found and fixed once animated models actually
-needed it to be correct. See `docs/ANIMATION.md` for the full account.
-
-**Version 2, Phase 7 — Being Creator (v2.0.7)** — a complete, working
-body-construction workflow: beings can now be built entirely from
-primitive shapes (Cube, Sphere, Cylinder, Capsule) in a genuine
-parent-child hierarchy, with rig creation kept deliberately simple —
-tagging a part with a Workshop skeleton joint name directly, rather than
-a second bones system. A real hierarchy editor (selection, re-parenting,
-duplication, and a genuine Mirror tool reflecting an entire limb at
-once), live animation preview inside the Creator itself, and full
-Workshop Asset System integration (real metadata, thumbnails,
-dependencies, validation, and a Browser detail page) round it out. A
-real, unrelated bug in `AnimationLibraryStore` lookups — silently
-breaking every default animation clip's own Asset System integration —
-was found and fixed along the way. See `docs/BEINGS.md` for the full
-account.
-
-**Version 2, Phase 8 — Builder Evolution (v2.0.8)** — the Builder became
-a genuinely professional creative tool: real multi-selection (shift-
-click, and a true screen-space drag-select rectangle), object grouping
-(select, and now move, an entire group as one unit), a generic undo/redo
-system covering every mutating Build Mode action, alignment and
-distribution tools, real measurement (dimensions and inter-object
-distance, reusing already-computed collision data), and transform copy/
-paste/reset. Blueprint capture now works from an exact multi-selection
-rather than only a radius guess, and blueprints can be updated in place
-for the first time. All of it layered on top of the existing single-
-selection mechanics without changing them. See `docs/WORLDBUILDER.md`
-for the full account.
-
-**Version 2, Phase 9 — World Builder (v2.0.9)** — the Workshop grew real
-grounds: a genuine, bounded, editable terrain heightmap (raise, lower,
-flatten, smooth, terrace, all real tested algorithms, plus vertex-colour
-painting for grass/dirt/rock/sand/gravel/mud/path), walkable for real via
-`CameraSystem`'s own ground-height query. Seven real Nature pieces
-(trees that genuinely sway in the wind) and five real Path tiles filled a
-gap this phase discovered — `docs/WORLD.md` had documented these as
-already existing from an earlier phase when only their category
-reservations did; corrected alongside the real implementation.
-Construction Library pieces (walls, doors, and the new Nature/Paths ones
-alike) joined the Shared Asset Library for real. See `docs/WORLD.md`'s
-own "World Builder (Version 2, Phase 9)" section for the full account.
-
-**Version 2, Phase 10 — Living World 2.0 (v2.1.0)** — the Workshop's
-systems began quietly observing one another. A shared World Awareness
-layer (`WorldAwareness.js`) answers "what does the world look like right
-now" — time, weather, music, player, active projects, nearby Beings,
-resident mood, recent events — as one consistent snapshot any system can
-query, alongside a real, bounded World Event Log recording genuine
-transitions (a weather change, a sunrise, a song starting). Bubble
-gained three new believable behaviours (watching the player work,
-remaining near ongoing projects, becoming quieter at night), a
-lightweight awareness of the Workshop's own Beings, and "usual working
-hours" distinct from ordinary visiting patterns — all layered onto
-existing mechanisms rather than a new decision system built on top. See
-`docs/RESIDENT.md`'s own "World Awareness" section for the full account.
-
-**Version 2, Phase 11 — Atmosphere (v2.1.1)** — teaching the Workshop
-how to breathe, not adding more weather effects. A real, altitude-driven
-sky gradient (night through blue hour, dawn, golden hour, and day, correct
-for sunrise and sunset at any latitude), two cloud layers that pick up
-the sky's own colour instead of staying flat white, and cloud cover that
-now genuinely dims the stars and moon. A real indoor/outdoor audio
-split — rain stays close and present through a roof, wind is heavily
-buried through a wall — and four-phase nature audio (a brighter dawn
-chorus, a warmer dusk insect mix, the original untouched night crickets).
-Season Foundations: a real `getSeason()`, surfaced but deliberately
-inert. Atmosphere Profiles: six built-in presets (Sunny Morning, Golden
-Evening, Storm, Fog, Winter Morning, Summer Afternoon) plus anything
-saved by hand, applied in one click from a reorganised Atmosphere tab.
-Bubble now also watches a windy window and shelters from a storm, using
-the exact mechanism Living World 2.0 already established. See
-`docs/ATMOSPHERE.md` for the full account.
-
-**Version 2, Phase 12 — Plugin SDK (v2.1.2)** — the Workshop becomes a
-real platform, not just extensible in theory. A unified `Workshop`
-facade (manifest + `setup(Workshop)`) built entirely on top of the
-registries that already existed — pages, assets, Phone/Computer apps,
-Host services, the Construction Library — none of which changed shape.
-Real per-plugin permissions (auto-granted, genuinely revocable, since
-there's no real sandbox to gate same-origin code behind), isolated
-per-plugin storage, and error isolation strong enough that a throwing
-plugin marks itself `"error"` rather than taking the Workshop down.
-`host://plugins` is now a genuine Plugin Manager — live status,
-manifest metadata, permission checkboxes, and real Enable/Disable/
-Reload. One new reference plugin, `workshopToolkitPlugin.js`, touches
-every capability at once (a page, a Builder asset, a Phone app with
-real persisted storage, a Host service); the original two example
-plugins are untouched, still demonstrating the contracts the SDK sits
-on top of. See `docs/PLUGIN_SDK.md` for the full account.
-
-</details>
+This project has been built across many phases, each with its own goal
+and its own honest account of what was built, what was deferred, and
+what was learned. That full story — including the maintainer's own
+periodic reflections — is preserved in full in **`docs/HISTORY.md`**
+rather than cluttering this page. Worth reading if you're curious how
+the Workshop got here; not required reading to actually use it.

@@ -141,7 +141,7 @@ html, body {
 }
 .hud-save-indicator.visible { opacity: 1; }
 
-.hud-backup-controls {
+.hud-corner-controls {
   position: absolute;
   top: var(--space-3);
   left: var(--space-3);
@@ -149,7 +149,7 @@ html, body {
   gap: var(--space-1);
   pointer-events: auto;
 }
-.hud-backup-controls button {
+.hud-corner-controls button {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   background: var(--surface-glass);
@@ -159,7 +159,7 @@ html, body {
   padding: var(--space-1) var(--space-2);
   cursor: pointer;
 }
-.hud-backup-controls button:hover { border-color: var(--brass); color: var(--paper); }
+.hud-corner-controls button:hover { border-color: var(--brass); color: var(--paper); }
 
 .hud-toast {
   position: absolute;

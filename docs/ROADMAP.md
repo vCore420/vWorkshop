@@ -2350,6 +2350,221 @@ matching their Host-level equivalents' own honest status. All named
 explicitly in `docs/PLUGIN_SDK.md`'s own "Known simplifications" rather
 than silently absent.
 
+## Version 2 — Phase 13 — Workshop Reliability (v2.1.3a)
+
+**Goal:** "A polished Workshop is not measured by how many features it
+has. It is measured by how confidently those features work... prefer
+fixing existing systems over introducing replacements." No new features
+this phase — every entry below is a genuine bug traced to a real root
+cause, or an honest "investigated, found correct" finding, never a
+guess.
+
+**Ladders, actually fixed this time.** An earlier phase correctly fixed
+the climbing input-direction math — but the Construction Library's own
+"Ladder" piece never carried the `ladder` *behaviour* at all, so
+`LadderSystem.registerLadder()` was never called for one. The math was
+never wrong; it simply had nothing to run against.
+
+**The fall animation no longer fires on ordinary slopes.**
+`CameraSystem`'s own ground-check only ever integrated gravity into the
+foot position — it never accounted for the ground height itself
+*descending* as the player moved horizontally across a downhill slope,
+so any slope at all could read as "the ground fell away" for a frame.
+Reuses the existing `STEP_TOLERANCE` budget (already governing how big a
+ledge can be stepped *up* onto) for how big a drop still counts as
+walking, not falling.
+
+**First-person crouching no longer clips the camera into the player's
+own head.** `PlayerCharacterSystem`'s rig-root tracking subtracted the
+character's *standing* eye height even while crouched, sinking the rig's
+own root below the real foot position by the crouch amount — the same
+"feet pushed below the floor" class of bug this project had already
+fixed once, for the spawn/load case specifically. Now uses the camera's
+live, crouch-aware eye height instead.
+
+**The moon/sun timing was investigated, not "fixed"** — traced by hand
+and verified numerically (altitude and rise/set hour, across a full
+lunar cycle and several latitudes): the existing phase-based offset
+formula is correct. The one time it genuinely does produce a moon
+tracking close to the sun is right around an actual real-world new moon,
+which is correct behaviour, not a bug. No code changed; the verification
+itself is now a comment future maintainers can trust instead of
+re-investigating.
+
+**Factory Reset now genuinely resets everything.** Two IndexedDB
+databases (`workshop-models`, imported 3D models; `workshop-display-images`,
+Display Surface photos) had been silently surviving every "Factory
+Reset" since their own systems were added — the reset's own database
+list was never updated alongside them.
+
+**Builder reliability**: the Parts dropdown's light-on-transparent
+styling went unreadable the moment Firefox opened it with its own native
+(light) popup background — fixed with explicit `<option>` colours, and
+the identical latent bug fixed in the two other places it existed. The
+Builder Phone's own horizontal scrollbar traced to `<input
+type="range">`'s un-shrinkable default width inside narrow flex rows —
+`min-width: 0` is the standard fix, applied everywhere the pattern
+existed, plus `overflow-x: hidden` as defense in depth.
+
+**The workbench's mystery cylinder** — the tool tray's own handles,
+overlapping both each other and the standalone Notebook prop's exact
+footprint. Repaired (shortened, repositioned), not removed — "tools live
+here" is a real, still-wanted detail.
+
+**Terrain: one system, one ground, at last.** The biggest single change
+this phase — `WorldEnvironmentSystem`'s separate flat, infinitely-
+recentring ground is gone entirely. `TerrainSystem.js` is now the
+Workshop's one and only ground: the editable patch grew from 48m to
+200m (resolution eased from 1m to 2m to keep the vertex count
+reasonable), a large non-editable "skirt" (a `THREE.Shape` with a
+same-sized hole cut out, zero overlap, zero z-fighting) fills everything
+beyond it, and the mismatched height offset between the old patch and
+the old ground is gone — the only offset left is the small, legitimate
+one keeping the outdoor ground from z-fighting the interior floor.
+Object placement (`BuildModeSystem._gatherSurfaces()`) now raycasts the
+real terrain instead of the old flat ground, so a ghost placed over a
+sculpted hill finally lands on it. Existing saves migrate automatically
+— a save's old 49×49 heightmap is bilinearly resampled onto the new
+101×101 grid at the exact real-world positions it always occupied.
+
+**Architectural review: a real dead-code bug found and fixed.** Twelve
+Construction Library piece ids (every Nature and Paths piece) had been
+defined *twice* in the same array — an older, plainer, non-wind-swaying
+set that was never removed when a richer, wind-animated set replaced it.
+`getConstructionPiece()`'s `.find()` always resolved to the older set,
+meaning the wind-sway work from the World Builder phase had been
+completely unreachable, silently, ever since. The older set is now
+gone; every Tree, Bush, Flower, and Path tile placed from the
+Construction Library finally uses the intended, richer version.
+
+## Version 2 — Phase 13b — Workshop Workflow (v2.1.3b)
+
+**Goal:** "Good software is not measured by how many features it
+contains. It is measured by how naturally those features fit together...
+players should spend their time creating rather than searching for
+settings or remembering where features are located." Documentation,
+import/export, one completed Builder capability, terrain usability, and
+consistency — no new systems, no redesigned architecture.
+
+**The README, genuinely simplified.** 869 lines down to under 470 — the
+full phase-by-phase changelog, the "One contribution" essay, and the
+"Reflecting, after thirty-one phases" reflection all moved to a new
+`docs/HISTORY.md`, preserved in full rather than deleted. A real,
+previously-undocumented duplication (near-identical "Quick start" and
+"Running it locally" sections) merged into one. Several genuinely
+outdated claims corrected — a Construction Library piece count last
+accurate at 30 pieces (now around fifty, with three groups — Nature,
+Paths, Lighting — added since and never mentioned), "no trees, no
+scenery" outside (the World Builder phase's real terrain and Nature
+pieces existed for phases already), "mirrors and animation are all
+explicitly future work" (both existed too), and the HUD's own
+Export/Import buttons still being described in their old location.
+
+**A complete Workshop setup guide**, `docs/SETUP.md` — installing
+Ollama, a real recommended-models table, what the PowerShell launcher
+script actually does and why it's needed (Ollama's own CORS policy, not
+a Workshop limitation), how the entirely separate Workshop Host
+Companion relates to it, and a genuine troubleshooting section for the
+handful of ways a local AI connection actually fails in practice.
+
+**Import/export, made consistent throughout.** Both the whole-Workshop
+backup and a new single-AI-profile export/import (`ResidentProfileStore
+.exportProfile()`/`importProfile()`, entirely new this phase — "AI
+Profile Export. AI Profile Import. Profile sharing") now share one
+shape: a `type` field so each importer recognises the *other* kind of
+export by name instead of failing to parse it, validation before
+touching anything, a version-compatibility warning for a backup newer
+than the running Workshop understands, and profile import normalising
+through the exact same functions a save's own restore path already
+trusts. See `docs/PERSISTENCE.md`'s own "Import & Export" section.
+
+**Settings reorganisation.** The Workshop-wide Export/Import Backup
+controls moved from two permanent buttons on the main HUD into Settings'
+own new "Workshop Data" section (General tab) — ordinary data
+management, not something that needs to be always on screen. The HUD's
+remaining corner buttons (mode toggles, not data controls) were renamed
+`.hud-corner-controls`, accurately, from the now-inaccurate
+`.hud-backup-controls`.
+
+**The Builder can import its own models now.** The one remaining
+capability named for this phase: `BuildModeSystem.importModel()`, the
+identical `.glb`/`.gltf` handling the Being Creator's own Model section
+already used, reached from a new "Import Model" button directly in the
+Builder Phone's own Imported Models tab — no more detour through a
+different app for a capability that was always meant to be shared
+Workshop-wide. See `docs/WORLDBUILDER.md`'s own "A third source:
+Imported Models" section.
+
+**Terrain, more approachable — usability, not architecture.** A live
+brush preview ring now follows the cursor the moment a terrain tool is
+armed, sized to the real brush radius and tinted to the active paint
+material, well before a stroke actually begins — there was previously no
+way to see where a brush would land or how large an area it covered
+until committing to a drag.
+
+**Architectural review: real findings, fixed within scope.** A stale
+"49×49 vertices... under 5,000 numbers" comment (already 101×101 since
+the Reliability phase) corrected; the HUD's own container renamed for
+accuracy; a genuinely redundant pair of README sections merged; several
+outdated documentation claims (see above) corrected at the source rather
+than left to compound further.
+
+## Version 2 — Phase 13c — Workshop Personality (v2.1.3c)
+
+**Goal:** "Bubble has now become the Workshop's first true resident. It
+deserves a visual identity that reflects that role... by the end of this
+phase, Bubble should no longer feel like the Workshop's first AI... it
+should feel like the Workshop's first resident."
+
+**Eight expressions, one canonical source.** `ExpressionTypes.js` —
+id, label, description — is now what `ResidentBehaviour.EXPRESSIONS`
+derives from, rather than a second, parallel list. The original five
+(`content` renamed `neutral`, matching the brief's own naming) are
+joined by `excited` (a real trigger: `ResidentDials.js`'s own
+Playfulness × Energy bump), and `sad`/`surprised` (available
+everywhere — drawable, previewable, exportable — but honestly left
+without a forced, unmotivated automatic trigger).
+
+**A genuine Expression Creator**, inside AI Mission Control's own
+Expressions section: a `<canvas>` pixel grid, pointer-drag painting
+treated as one continuous stroke, a colour picker plus preset swatches,
+Pencil/Eraser, Clear, Reset to Default, and a real "Import Image…" that
+downsamples any picked image into pixel art. `ExpressionSetStore.js`
+holds what gets drawn — a named collection, one 16×16 grid per
+expression actually drawn, needing none of the eight to be complete
+(anything left blank quietly falls back to the original built-in
+procedural drawing for just that one expression).
+
+**Expression Sets are real Workshop Assets** — registered as the
+`"expressions"` `AssetService` kind, with a genuinely new kind of
+thumbnail (`buildPixelThumbnail()`, rendering a set's own actual
+drawn pixels as small SVG rectangles, not an abstract colour swatch)
+and export/import following the identical `type`-tagged, validated,
+always-additive shape the Workshop Workflow phase's own AI Profile
+export already established — see `docs/PERSISTENCE.md`'s own "Import &
+Export" section, now covering all three kinds together.
+
+**The reference implementation for shared resident architecture.**
+`ResidentProfileStore.js` gained `expressionSetId` — a plain per-profile
+reference, resolved by `ResidentController._onProfileChanged()` the
+identical way `provider`/`model` already are, falling back cleanly to
+the built-in look for `"default"` or for a reference that no longer
+resolves to anything real. A future second resident's own profile needs
+nothing new to carry its own expression set the same way.
+
+**A real, contained rendering improvement.** Expression changes now
+cross-fade (160ms, the face mesh easing to invisible, swapping texture
+and mood colour together at the exact midpoint, easing back in) instead
+of swapping instantly — "expressions should transition smoothly and
+feel subtle rather than exaggerated," true for the first time at the
+rendering level, not just in how each expression is individually drawn.
+
+**Architectural review**: fixed a stale "mood only ever picks among
+content/curious/happy" documentation claim (now neutral/curious/happy/
+excited); corrected asset-kind counts in `docs/ASSETS.md` that would
+have gone stale again next phase, rephrased to describe the pattern
+rather than a brittle exact count.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

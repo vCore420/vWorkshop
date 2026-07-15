@@ -686,6 +686,17 @@ first real thing to visibly affect.
 
 ### Terrain, a real bounded heightmap
 
+**Superseded by the Workshop Reliability phase — see below.** This
+section is kept as the original historical record of how terrain
+editing first arrived; `src/systems/TerrainSystem.js`'s own top comment
+is the accurate, current description of the architecture. The short
+version: the "layered a few centimetres above a separate flat ground"
+design described just below is gone — `TerrainSystem` is now the
+Workshop's *only* ground, real and non-editable-skirt combined, at 200m
+(not 48m) across. Everything else on this page about *how* sculpting
+itself works (the five brush operations, bilinear height queries, vertex
+colour painting) is unchanged.
+
 `src/systems/TerrainSystem.js` — a genuine, editable 48m×48m patch of
 ground, layered a few centimetres above `WorldEnvironmentSystem`'s own
 flat, infinitely-recentring ground rather than replacing it. That
@@ -726,9 +737,11 @@ interpolation already holds itself to.
 **Walking on it is real, not just visual.** `CameraSystem.
 _computeGroundHeight()` now queries `TerrainSystem.getHeightAt()` as its
 base height (falling back to the flat `0` it always used outside the
-terrain patch or with no TerrainSystem registered), before the existing
-footprint loop still lets a player stand on top of something placed on
-that terrain, unchanged.
+terrain patch or with no TerrainSystem registered — now a 200m patch
+plus a much larger non-editable skirt, both the *same* mesh's own
+territory; see the Workshop Reliability phase account below), before the
+existing footprint loop still lets a player stand on top of something
+placed on that terrain, unchanged.
 
 ### Roads & Paths — tiles, not curves
 
@@ -766,6 +779,20 @@ influencing vegetation" is genuinely real today, not only a prepared
 hook — amplitude scales with wind speed, so a still day is visibly still
 and a storm visibly tosses the branches.
 
+**Workshop Reliability phase — this wind-sway was invisible until now.**
+An older, simpler placeholder set of the same twelve Nature/Paths ids
+(no wind-sway, plainer geometry, 2m path tiles instead of this phase's
+own 1m) had never actually been removed from `CONSTRUCTION_PIECES` when
+this richer set was added — both existed in the same array under the
+identical ids, and `getConstructionPiece()`'s `.find()` always resolved
+to whichever came *first*, which was the older set. Every Tree, Bush,
+Flower, Rock, Log, Grass Patch, Garden Bed, and every Path tile placed
+from the Construction Library had silently been the plainer, non-
+swaying originals this whole time — genuine, real dead code sitting
+right next to the code that actually ran. Removed during the
+architectural review pass of the Reliability phase; the wind-sway
+described above was always correctly implemented, just never reachable.
+
 ### Asset System Integration — Construction pieces join for real
 
 Construction Library pieces (every wall, door, and — new this phase —
@@ -785,10 +812,22 @@ material immediately arms it; sculpting itself happens by clicking and
 dragging directly in the 3D world, the identical interaction gesture
 placing and moving objects already use, not a separate mode with its own
 different feel. A full stroke (from pointerdown to pointerup) is one
-undo entry, snapshotting the whole 49×49 heightmap and colour map before
-and after — small enough (under 5,000 numbers each) that a whole-array
-snapshot per stroke is simpler and safer than tracking exactly which
-vertices a stroke touched.
+undo entry, snapshotting the whole heightmap and colour map before and
+after (101×101 as of the Workshop Reliability phase, up from the
+original 49×49 — still small enough, at roughly 20,000 numbers each,
+that a whole-array snapshot per stroke stays simpler and safer than
+tracking exactly which vertices a stroke touched).
+
+**Workshop Workflow phase — a live brush preview.** Before this phase,
+there was no way to see where a brush would actually land, or how large
+an area it covered, before committing to a drag. `BuildModeSystem.js`
+now raycasts the terrain on every pointer move while a terrain tool is
+armed (not only while actively dragging) and positions a simple ring —
+`_buildTerrainBrushPreview()` — at the hit point, scaled to the current
+brush radius and tinted to the active paint material (or plain white for
+a sculpt tool). One ring, built once and reused, not rebuilt per frame —
+the same "build once, mutate" instinct every other frequently-updated
+visual in this project already follows.
 
 ### Known simplifications (by design, for this phase)
 
@@ -804,15 +843,65 @@ vertices a stroke touched.
 - **Lighting fixtures remain reserved, still unpopulated** — see
   "Builder Library" above; `gardenLight`/`streetLight`/`lantern`/
   `floodlight`/`campfire` stay ids without real pieces behind them yet.
-- **One bounded terrain patch, not a whole editable world** — 48m
-  square, fixed size and position, centred on the Workshop. Consistent
-  with "the goal is not creating a huge world."
+- **One bounded terrain patch, not a whole editable world** — 200m
+  square (grown from the original 48m in the Workshop Reliability phase
+  — see below), fixed size and position, centred on the Workshop, plus a
+  much larger flat, non-editable skirt beyond it. Consistent with "the
+  goal is not creating a huge world" — a very large, generous, but still
+  ultimately bounded world, not literally infinite terrain.
 - **No terrain-aware collision beyond height** — a very steep raised
   cliff doesn't stop horizontal movement the way a wall does; only the
   vertical foot-height calculation changed.
 - **Imported structures don't yet get automatic terrain integration**
   (footprint-shaped terrain flattening on import, say) — still placed
   exactly as before, on whatever height the terrain already has there.
+
+### Terrain: one system, one ground (Workshop Reliability phase)
+
+"There should no longer be two separate ground layers. The Workshop
+should have one terrain system that both renders the world and supports
+editing... the goal is to retire the proof-of-concept implementation and
+replace it with the Workshop's permanent terrain architecture." Exactly
+that: `WorldEnvironmentSystem.js`'s own separate flat, infinitely-
+recentring ground — the thing the "Terrain, a real bounded heightmap"
+section above spent a whole paragraph explaining terrain *couldn't*
+simply replace, back when the patch was only 48m — is gone entirely.
+`TerrainSystem.js` is now the Workshop's one and only ground:
+
+- **The editable patch grew from 48m to 200m** (100m half-width) —
+  comfortably covering the default render distance and most render
+  distance settings, not a patch smaller than even the shortest one.
+  Resolution eased from 1m to 2m per grid cell to keep the vertex count
+  (2,401 → 10,201) reasonable for a mesh whose positions and normals get
+  rewritten every dirty frame during active sculpting; the Builder's own
+  minimum brush size grew from 1m to 2m to match.
+- **A large (2km), coarse, non-editable "skirt"** fills everything
+  outside that patch — a `THREE.Shape` with a same-sized rectangular
+  hole cut out, so the editable patch and the skirt meet with no overlap
+  and nothing to z-fight over, both owned by the identical
+  `TerrainSystem` class. See that file's own top comment for why this
+  still counts as "one terrain system," not a second one in disguise.
+- **The height offset between the old patch and the old flat ground is
+  gone** — there's only one outdoor mesh now, nothing left to be offset
+  from for that reason. A small, different, and still legitimate offset
+  from the *interior floor* remains (so the indoor floor still visibly
+  wins the depth test at the doorway threshold).
+- **Object placement now raycasts the real terrain.**
+  `BuildModeSystem._gatherSurfaces()` used to raycast
+  `WorldEnvironmentSystem`'s own flat ground for outdoor placement —
+  meaning a ghost placed over a sculpted hill silently ignored it and
+  landed on flat ground regardless. It now raycasts
+  `TerrainSystem.mesh` directly, the same real surface
+  `CameraSystem.getHeightAt()`-driven movement already walks on —
+  "player movement, collision, and object placement all reference the
+  same terrain surface" by construction, not by three independent
+  systems happening to agree.
+- **Existing terrain sculpting survives the migration.** A save from
+  before this phase (the old 49×49 grid) is bilinearly resampled onto
+  the new 101×101 grid at the exact real-world positions it always
+  occupied, the first time it loads — see `TerrainSystem
+  .js`'s own `_migrateFromOldTerrain()`. Anything outside the old 48m
+  patch was never edited, so it simply stays the new grid's own default.
 
 ### Future extension points
 
@@ -825,9 +914,11 @@ vertices a stroke touched.
 - **Lighting fixtures**, completing the reserved category with the same
   `lightSource` behaviour the original ceiling light already uses.
 - **Terrain-aware collision** for steep slopes, not just height.
-- **Multiple terrain patches**, or a larger single one, if "the grounds"
-  ever needs to grow substantially beyond a single 48m square.
 - **Manual terrain-brush falloff curves** (smoothstep instead of linear)
   for an even softer edge, if the current linear falloff ever reads as
   too mechanical in practice.
+- **A genuinely unbounded world** — the 200m patch plus 2km skirt (see
+  above) is enormous relative to anything the Workshop needs today, but
+  is still, honestly, not infinite; a determined enough walk in one
+  direction would eventually reach the skirt's own outer edge.
 

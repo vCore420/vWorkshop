@@ -613,9 +613,9 @@ Objects. See `docs/WORLD.md` for the full reasoning — the short version
 is that a construction piece is "a definition from a different source",
 not a different kind of thing.
 
-Grown from an original 16 pieces to 30, organised into four groups —
-"enough to begin constructing meaningful spaces without relying entirely
-on custom objects":
+Grown from an original 16 pieces to around fifty, organised into seven
+groups — "enough to begin constructing meaningful spaces without relying
+entirely on custom objects":
 
 - **Structural** — Wall, Half Wall, Corner Wall, Floor, Ceiling, Roof,
   Roof Corner, Pillar, Beam, Stairs, Ladder, plus the original Cube and
@@ -623,6 +623,16 @@ on custom objects":
 - **Openings** — Doorway, Door, Double Door, Window, Large Window,
   Archway (the first construction piece built from the new Arch
   primitive — see "Preset shapes" above).
+- **Nature** — Tree, Bush, Flower, Rock, Log, Grass Patch, Garden Bed —
+  added in the World Builder phase; see `docs/WORLD.md`'s own "Landscape
+  Assets" section, including a real dead-code bug (an older, duplicate,
+  non-wind-swaying set of the same seven ids) found and removed in the
+  Workshop Reliability phase.
+- **Paths** — Stone, Gravel, Dirt, Timber, and Concrete tiles, 1m square
+  — also from the World Builder phase.
+- **Lighting** — Garden Light, Street Light, and other fixtures, each
+  carrying the same Light Source behaviour the original ceiling Light
+  does.
 - **Workshop** — Table, Bench, Shelf, Cabinet, Storage Crate. Cabinet and
   Storage Crate both carry the Storage behaviour out of the box —
   genuinely usable the moment they're placed, not just decoration.
@@ -642,6 +652,29 @@ real "hinge offset" property on the behaviour itself — a reasonable
 future enhancement (see "Future extension points" below), not attempted
 here for the sake of staying inside the existing behaviour system rather
 than special-casing one construction piece.
+
+## A third source: Imported Models (Workshop Workflow phase)
+
+A `.glb`/`.gltf` model, imported and placed exactly like anything else —
+the Builder Phone's own third library tab. Models were already
+placeable this way before this phase; the genuine gap was *importing*
+one at all without leaving the Builder first — the tab's own empty
+state used to read "import one in the Being Creator's own Model
+section," sending a Builder-only session to a different app entirely
+for a capability that belongs here just as much.
+
+`BuildModeSystem.importModel(file)` is the fix — the identical
+`.glb`/`.gltf` handling `BeingCreatorApp.js`'s own Model section already
+used (`modelLibrary.add()` for the library entry, `modelAssetStore.put()`
+for the actual bytes), called from a new "Import Model" button at the
+top of the Imported Models tab (`BuilderPhoneUI.js`'s own
+`_buildImportModelRow()`). Nothing about *how* an imported model behaves
+changed — it was already a real `AssetService` kind (`modelLibrary`
+itself, registered once in `main.js`), already saved and loaded through
+the ordinary `PersistenceSystem` provider contract, and already usable
+by a Being as much as by the Builder. Importing from within the Builder
+just means a Builder-only session never needs to detour through a
+different app to reach a capability that was always meant to be shared.
 
 ## Known simplifications (by design, for this phase)
 
