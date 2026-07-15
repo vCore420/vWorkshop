@@ -210,6 +210,37 @@ export class AssetService {
     return this.describe(assetId)?.validationStatus ?? { valid: false, issues: ["Asset not found."] };
   }
 
+  /** Workshop Diagnostics phase — "validation failures. Missing
+   *  references. Duplicate assets." Every asset across every kind,
+   *  checked in one pass, for `DiagnosticsService.js`'s own health
+   *  computation. Deliberately narrower than "every issue
+   *  `validate()` would report for anything" — a missing thumbnail is
+   *  real (`_validateDescriptor()` above still flags it for anyone
+   *  looking at one specific asset) but not a *health* problem; nearly
+   *  every asset in the Workshop honestly has no thumbnail at all (see
+   *  `docs/ASSETS.md`'s own "Thumbnails" section), and counting all of
+   *  them as "failures" would make the Workshop's overall health look
+   *  alarming for something that was never broken, just unfinished-
+   *  looking. Only genuinely broken dependency references, and
+   *  same-kind/same-name duplicates, count here. */
+  validateAll() {
+    const descriptors = this.allDescriptorsAcrossKinds();
+    const brokenReferences = [];
+    const byNameWithinKind = new Map(); // "kind:lowercased name" -> [assetId, ...]
+
+    for (const d of descriptors) {
+      for (const issue of d.validationStatus?.issues ?? []) {
+        if (issue.startsWith("Missing dependency")) brokenReferences.push({ assetId: d.assetId, name: d.name, issue });
+      }
+      const key = `${d.type}:${(d.name ?? "").trim().toLowerCase()}`;
+      if (!byNameWithinKind.has(key)) byNameWithinKind.set(key, []);
+      byNameWithinKind.get(key).push(d.assetId);
+    }
+
+    const duplicates = [...byNameWithinKind.values()].filter((ids) => ids.length > 1);
+    return { totalAssets: descriptors.length, brokenReferences, duplicates };
+  }
+
   // ---- Favourites ----
 
   toggleFavourite(assetId) {
