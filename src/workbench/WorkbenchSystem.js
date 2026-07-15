@@ -32,7 +32,7 @@ const OUT_TO_IN_DELAY_MS = (OUT_DURATION + 0.05) * 1000;
  */
 export class WorkbenchSystem {
   constructor(deps) {
-    this.deps = deps; // { projectsStore }
+    this.deps = deps; // { projectsStore, audioSystem }
     this.active = false;
     this.currentProjectId = null;
     this._panelProgress = 0;
@@ -104,12 +104,20 @@ export class WorkbenchSystem {
     this._rebuildPresence(project, { instant: true });
   }
 
+  /** Workshop Workbench phase — "interaction sounds." A soft paper
+   *  shuffle on leaning in (as if pulling the clipboard toward you) and
+   *  a slightly lower-pitched one standing back up — the same sound,
+   *  not two different ones, since the actual physical gesture (paper
+   *  and hands moving briefly) is genuinely the same either direction;
+   *  only the pitch varies, enough to read as two distinct moments
+   *  without needing a second sound design. */
   activate() {
     if (this.active || !this.clipboardMesh) return;
     this.active = true;
     this.panel.setInteractive(true);
     this._refreshPanel();
     this.engine.input?.exitPointerLock();
+    this.deps.audioSystem?.playInteractionSound("paperShuffle", { pitch: 1.1 });
   }
 
   deactivate() {
@@ -117,6 +125,7 @@ export class WorkbenchSystem {
     this.active = false;
     this.panel.setInteractive(false);
     this.engine.input?.requestPointerLock();
+    this.deps.audioSystem?.playInteractionSound("paperShuffle", { pitch: 0.85 });
   }
 
   setCurrentProject(projectId) {

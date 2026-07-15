@@ -564,6 +564,7 @@ const computerSystem = engine.addSystem(
     beingController,
     beingSpawnerSystem,
     dangerZoneActions,
+    audioSystem,
   })
 );
 void computerSystem;
@@ -571,7 +572,7 @@ void computerSystem;
 // Same reasoning as ComputerSystem, for the same two reasons (finding the
 // bench, projecting the clipboard against this frame's camera). See
 // src/workbench/WorkbenchSystem.js.
-const workbenchSystem = engine.addSystem(new WorkbenchSystem({ projectsStore }));
+const workbenchSystem = engine.addSystem(new WorkbenchSystem({ projectsStore, audioSystem }));
 
 const interactionSystem = engine.addSystem(new InteractionSystem());
 
@@ -592,7 +593,7 @@ const buildModeSystem = engine.addSystem(new BuildModeSystem({ objectLibraryStor
 // `calculatorPlugin`, registered later via `hostManager.pluginRegistry`
 // directly) are untouched — this is a new, additional way to load a
 // plugin, not a replacement for the contracts they already use.
-const WORKSHOP_VERSION = "2.1.4";
+const WORKSHOP_VERSION = "2.1.5";
 const pluginContext = {
   engine,
   pageRegistry,
