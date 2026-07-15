@@ -103,6 +103,62 @@ phase explicitly asks you to slow down, actually slow down — the best
 idea in this whole project arrived only after sitting with "what does
 this place actually need" for longer than felt efficient.
 
+## Reflecting — Version 2, Phase 16 (The Desk)
+
+Asked, at the end of this phase, to keep writing these down after every
+one from now on — a few honest thoughts as the thing's own maintainer.
+
+**What made the biggest difference to how it feels:** not the part I
+expected going in. I assumed the monitor bezel would be the headline —
+it's the most visually obvious change, screen-on-a-stick to an actual
+monitor — but sitting back and looking at the whole thing, the chair's
+five-point base did more work. A flat disc under a pole reads as "a
+seat," full stop; the same pole on a five-point base with castors reads
+as "somebody's office chair," specifically, immediately, without a
+single other change needed. It's the same lesson the Workbench's own
+vice crank already taught, just louder this time: an object's *category*
+is often decided by one small, correct detail, not by its overall mass
+or its material quality.
+
+**What actually transformed a collection of objects into a workspace:**
+the pairing of the pen holder and the lamp, more than either alone.
+Neither one is doing much individually — a cup with two pens in it, a
+lamp that was already there — but putting one deliberately in each back
+corner is what stopped the desk from reading as "a monitor and some
+accessories arranged in front of it" and started it reading as "a desk
+with things on two sides of it, the way a real one ends up looking after
+a few months of actual use." Symmetry (or a deliberate near-symmetry)
+turned out to matter more here than any single prop's own detail level.
+
+**A genuine surprise:** how much the bezel *didn't* need touching to get
+right. I'd expected to have to adjust `ComputerSystem`'s hardcoded
+screen-projection rectangle to make room for a frame, the same way the
+Workbench's own clipboard fix needed real coordinate surgery. It didn't
+— the glass mesh that rectangle actually describes never moved, so the
+bezel could simply exist as a second, larger, mesh sitting just behind
+it. The lesson isn't new (`docs/ARCHITECTURE.md` already says systems
+should stay decoupled), but it's satisfying to watch it pay off in
+practice: the projection code only ever cared about one mesh's own
+transform, so adding a completely different-looking monitor around that
+mesh cost nothing in the file that would have been riskiest to touch.
+
+**What I'd continue with, given another week on just this desk:** the
+keyboard. It's still a single flat plastic slab — genuinely fine at a
+glance, the thing every other piece of desk furniture in this project
+also is, but it's the one object here somebody's hands would actually
+rest on for hours, and it currently gives nothing back for that. A
+subtle keycap suggestion (even just a shallow grid of colour variation,
+not real geometry) feels like the next honest "one surface deserves
+more than `matte()`'s own numbers" finding, in the same family as this
+phase's own bezel and mousepad. I'd also want to actually test whether
+`softBox()`'s original intent — a real, cheap faked bevel via smoothed
+corner normals rather than a stripped index buffer — is worth building
+properly rather than removing outright; I chose the safer, more
+honest fix this time (delete what doesn't work) over the more ambitious
+one (make it actually work), and I think that was the right call under
+this phase's own "refine, don't redesign" instruction, but it's real,
+deferred work, not a closed question.
+
 ## Changelog
 
 <details>
@@ -478,5 +534,46 @@ Fixes name the exact plugin or asset responsible rather than a generic
 error; a small Dependency Awareness section explains how Workshop
 systems actually rely on each other. See `docs/ROADMAP.md`'s own Phase
 14 account for the complete list.
+
+**Version 2, Phase 15 — The Workbench (v2.1.5)** — a craftsmanship pass,
+not a redesign: the same vice, tray, lamp, clipboard, notebook, and fan,
+at the exact same positions, built with genuinely more care. A richer
+wood grain on the one surface a player actually leans over; two real
+material gaps filled (`Materials.plastic()`/`rubber()`, reusable
+everywhere, not one-off) and applied wherever the bench had been using
+generic `matte()` for something that was always plastic or rubber; a
+structural stretcher between the legs; a crank that finally makes the
+vice read as a vice; one deliberately restrained pencil, resting on the
+clipboard, as the phase's entire environmental-storytelling addition. A
+real 7cm geometric overhang on the clipboard, quietly present since the
+feature was built, found and fixed. The Workshop's first interaction
+sound effect — a soft paper shuffle on leaning in and standing up — and
+with it, a real dead setting (Effects Volume, present since early in
+Version 2 with nothing to control) finally doing something. A follow-up
+review pass found one more: `Materials.ground()`, orphaned since the
+Reliability phase's terrain migration, quietly dead in the exact file
+this phase's own new materials live in — removed. See
+`docs/ROADMAP.md`'s own Phase 15 account for the complete list.
+
+**Version 2, Phase 16 — The Desk (v2.1.6)** — the same craftsmanship
+treatment, turned on the Workshop's other hero prop: the desk, the
+monitor, and the chair, all at the exact same position and footprint.
+A richer wood grain on the desk's own top, built the identical way the
+Workbench's own top was; a monitor that finally has a real bezel and a
+hinge instead of reading as a flat glowing rectangle; four more
+`matte()` surfaces (the monitor stand, the keyboard, the mouse, the
+lamp shade) that were always plastic in real life, now genuinely
+`Materials.plastic()`, plus a new rubber mousepad. Two metal stretcher
+rails under the desk; on the chair, a real five-point swivel base with
+castors in place of a flat disc — the chair's own equivalent of the
+vice's crank — an armrest pair, a mechanism plate, a thicker seat, and
+a slight recline. One small, deliberately restrained addition: a pen
+holder with two pens, placed to balance the lamp on the desk's other
+corner. A second interaction sound effect — a soft chair creak on
+sitting and standing, sharing the same entry point the paper shuffle
+already uses. One more real architectural finding: `PlaceholderFactory
+.softBox()`, promised in its own docstring to fake a bevel it never
+actually produced, with no callers anywhere in the project — removed.
+See `docs/ROADMAP.md`'s own Phase 16 account for the complete list.
 
 </details>

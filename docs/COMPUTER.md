@@ -129,6 +129,103 @@ Deliberately not persisted: whether the computer was "on". Reloading the
 page always starts with the computer off and the player standing — you
 weren't literally sitting there when you reopened the browser tab.
 
+## Craftsmanship (Version 2, Phase 16)
+
+"The Desk should feel comfortable. Purposeful. Lived in... refine, do
+not redesign." Every permanent fixture below kept its exact position
+and purpose from before this phase — the same desk, the same monitor,
+the same chair, at the same footprint and height, in the same spot in
+the room. What changed is craftsmanship, following the Workbench
+phase's own template almost exactly.
+
+**A genuinely higher-detail wood grain on the desk's own top.**
+`ComputerDesk.js` gained a `deskTopMaterial()` following the identical
+pattern `Workbench.js`'s own `benchTopMaterial()` established last
+phase: the same `woodGrainTexture()` optional `size`/`grainLines`/
+`step` parameters, a different tuning (512px, 60 lines), cached once at
+module scope. Every other wood surface in the Workshop — including the
+bench's own top, on its own separate cache — is completely unaffected.
+
+**The monitor finally reads as a monitor.** A real bezel
+(`Materials.plastic()`, dark) now sits just behind the glass, larger on
+every side so it reads as a frame rather than a flat glowing rectangle,
+plus a small hinge block where the stand's neck meets it. The glass
+itself — the actual `screenGlowMesh` `ComputerSystem.js` attaches its
+light to and hardcodes a projection rectangle for — kept its exact
+original size and local position throughout; the bezel sits *behind*
+it as a second, independent mesh, so nothing about `ComputerSystem
+._screenCorners` needed to change.
+
+**Real material gaps filled, the same finding the Workbench phase made
+about its own fixtures.** The monitor stand, the keyboard, the mouse,
+and the lamp shade were all sharing `matte()`'s own numbers for
+surfaces that are always moulded plastic in real life — all four are
+genuinely `Materials.plastic()` now. A new rubber mousepad sits under
+the mouse, which is lifted by exactly the pad's own thickness to rest
+on top of it rather than inside it.
+
+**Two real structural additions to the desk itself.** Two metal
+stretcher rails, spanning the desk's long axis on each side (the exact
+same "four independent legs never quite read as one solid piece of
+furniture" finding the Workbench phase made about its own legs,
+reoriented to this desk's own proportions rather than copied at the
+bench's own numbers) — and, on the chair, a genuine five-point swivel
+base with castors in place of a single flat disc, the chair's own
+equivalent of the Workbench vice's crank: the one addition that makes
+it read unmistakably as "an office chair" rather than "a stool on a
+pole." A mechanism plate between the post and the seat, armrests, a
+slightly thicker seat cushion, and a few degrees of recline on the
+backrest round out the chair — every one of these sits directly above
+the same floor space the old parts already occupied.
+
+**One small, deliberately restrained environmental-storytelling
+addition.** A small pen holder with two pens, in the desk's back-left
+corner — specifically chosen to balance the lamp's own back-right
+corner, "better visual balance" made concrete, and the desk's entire
+storytelling addition this phase, the same restraint the Workbench
+phase held its own single pencil to.
+
+**The Workshop's second interaction sound effect.** A soft chair creak
+on sitting down and standing back up — `AudioSynth.playChairCreak()`, a
+narrower, sweeping bandpass filter on the same noise-burst technique
+`playPaperShuffle()` already established, not a recorded sample.
+Routed through the same `AudioSystem.playInteractionSound()` entry
+point the Workbench phase built for exactly this kind of reuse —
+`kind: "chairCreak"` joins `"paperShuffle"` rather than a second
+method. Keyboard and mouse sounds were considered and deliberately left
+out: the player's own real, physical keyboard already makes that sound
+while they type into this panel's own text fields, and a synthesised
+one under it would be redundant rather than additive.
+
+**Lighting response and interaction pose, both reviewed rather than
+changed.** Every material on the desk already used
+`MeshStandardMaterial`/PBR properties, which already respond correctly
+to the desk lamp's own light and the day/night cycle — confirmed, not
+altered, beyond the accuracy the new plastic/rubber materials already
+bring. The existing sit-down focus pose was checked against every
+geometry change (the raised seat, the reclined back, the new monitor
+bezel) and found to already read naturally: the camera's fixed point
+is aimed at the screen, which never moved, not at the chair, which
+moved a few centimetres.
+
+**One real architectural finding, resolved.** `PlaceholderFactory
+.softBox()` — a helper whose own docstring promised a faked bevel "to
+fake a light bevel/rounding without extra geometry cost" — turned out
+to have zero callers anywhere in the Workshop, and its actual
+implementation (stripping a `BoxGeometry`'s index buffer) does nothing
+visible at all: a box's faces already carry separate per-face vertices
+and normals, so there was never a bevel to see. Removed cleanly, the
+same way `Materials.ground()` was removed last phase.
+
+**Future craftsmanship philosophy.** With the Workbench and now the
+Desk both carrying this treatment, the pattern is holding: keep
+position and purpose fixed, spend the budget on how convincingly each
+part is built, add at most one or two small storytelling details, and
+treat a real bug found along the way as worth fixing on the spot. The
+Music Cabinet, the Wardrobe, or any future object that earns "hero
+prop" status is the natural next candidate — not a lesser pass than
+this one or the Workbench's.
+
 ## Known simplifications (by design, for this phase)
 
 - **Axis-aligned screen projection**, not perspective-correct — see above.

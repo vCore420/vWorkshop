@@ -169,7 +169,125 @@ bench never looks accidentally empty on a first visit — it looks lived-in
 immediately, the same way the rest of phase 1's room avoided empty
 placeholders wherever a believable default was cheap to provide.
 
-## Known simplifications (by design, for this phase)
+## Craftsmanship (Version 2, Phase 15)
+
+"The Workbench is the heart of the Workshop... it should become the
+Workshop's hero prop... refine, do not redesign." Every permanent
+fixture kept its exact position and purpose from before this phase —
+this section is entirely about *how* those same fixtures are built, not
+what they are or where they sit.
+
+**A genuinely higher-detail wood grain, on exactly one surface.**
+`Materials.wood()`'s own shared, cached texture (256px canvas, 40 grain
+lines) is tuned to look right on everything from a chair leg to a wall
+panel — reasonable for most wood in the Workshop, but the bench's own
+top is the one surface a player leans directly over and looks straight
+down at for as long as they're at the bench at all. `woodGrainTexture()`
+gained optional `size`/`grainLines`/`step` parameters (defaulting to the
+original values — every other wood object in the Workshop is
+byte-for-byte unaffected) so `Workbench.js` could ask for a genuinely
+richer one (512px, 70 lines) for its own top specifically, cached once
+at module scope rather than sharing `Materials.wood()`'s own cache keyed
+only by colour. Deliberately *not* achieved by increasing the texture's
+own `.repeat` — the grain lines' sine wave doesn't complete a whole
+number of cycles across the canvas, so tiling it at anything other than
+1× tends to show a visible seam at the wrap; more baked-in detail avoids
+that risk entirely rather than fighting it.
+
+**Two real material gaps filled**, not just applied here — `Materials
+.plastic()` and `Materials.rubber()` join `wood()`/`metal()`/`fabric()`/
+`matte()` in `PlaceholderFactory.js` itself, reusable by any future
+furniture, not a one-off. Genuinely different surface behaviour from
+`matte()`, not just a new name: plastic reads smoother and a touch
+glossy (lower roughness, no metalness); rubber reads soft and completely
+non-reflective (roughness pushed close to 1). Applied wherever the
+Workbench already had something that was always plastic or rubber in
+real life but had been sharing `matte()`'s own numbers regardless — the
+fan's base/housing/blades (plastic), the clipboard's own board
+(plastic), and the standalone Notebook's own elastic closure band
+(rubber; its cloth cover became genuine `fabric()` at the same time).
+
+**A stretcher between the legs.** Four independent posts with nothing
+low down connecting them never quite read as one solid, load-bearing
+piece of furniture — a real workbench built to take real force almost
+always has one. Two rails, spanning the long axis on each side, sized to
+genuinely reach and overlap the legs rather than floating with a gap
+between them.
+
+**A crank on the vice.** Two abstract metal boxes read as "a vice" only
+abstractly; a small T-shaped crank on the screw side is the one addition
+that makes it unmistakable, without changing its footprint, position, or
+the rest of its geometry at all.
+
+**One small, deliberately restrained sign of daily use.** A single
+pencil, resting across the clipboard — not a cup of them, not a scatter
+of other stationery, which would read as staged clutter rather than a
+genuine, momentary pause in someone's work. "Without introducing
+unnecessary clutter" was taken as seriously as "the story of someone who
+creates things every day" was.
+
+**A real, if small, geometric bug found and fixed.** The clipboard
+assembly (board, clip, page) sat at a Z position that put its own front
+edge 7cm past the bench's actual front edge — quietly overhanging thin
+air the entire time. Pulled back as one unit (every part keeping its
+exact relative offset to the others, so `WorkbenchSystem`'s own panel
+projection — which only ever reads `clipboardMesh`'s current world
+transform fresh each frame, never a remembered position — needed no
+changes at all) to sit fully on the surface.
+
+**The Workshop's first interaction sound effect.** A soft, brief paper
+shuffle (`AudioSynth.playPaperShuffle()` — filtered noise through a
+bandpass filter and a fast decay, not a sample that doesn't exist) plays
+on leaning in and on standing back up, at two slightly different
+pitches so the same sound reads as two distinct moments rather than one
+repeated one. Routed through `AudioSystem.playInteractionSound()` — one
+small, reusable entry point (`kind`, not a dedicated method per sound)
+so a future door or drawer reaches for the same method rather than
+building its own audio graph. **A real dead setting fixed along the
+way**: Settings' own "Effects Volume" slider had existed since early in
+Version 2 with nothing in the entire Workshop for it to actually
+control — every door, drawer, and switch stayed silent. It now
+genuinely scales this sound, and any future one.
+
+**Lighting response, verified rather than changed.** Every material on
+the bench already used `MeshStandardMaterial`/PBR properties, which
+already respond correctly to the Workshop's own lighting — the lamp's
+real `PointLight`, the sun/moon's changing colour and angle across the
+day/night cycle, indoor artificial light. Reviewed specifically for this
+phase and found already correct by construction; nothing needed
+changing here beyond the general roughness/metalness accuracy the new
+plastic/rubber materials already bring.
+
+**Interaction pose left alone.** The existing lean-in camera position
+and look-at point were reviewed against the clipboard's own corrected
+position and found to already read naturally — if anything, slightly
+better aligned than before, since the clipboard moved closer to the
+existing look-at point rather than further from it. No change was the
+right call here; "existing functionality should continue working
+naturally" is exactly what happened.
+
+**A second dead-code finding, in the same file the new materials live
+in.** `Materials.ground()` and its own `groundTexture()` — the flat,
+speckled ground `WorldEnvironmentSystem.js` used to draw before the
+Workshop Reliability phase's terrain migration replaced it with
+`TerrainSystem.js`'s own single ground mesh — had no callers left at
+all, silently orphaned since that phase. Found while reviewing
+`PlaceholderFactory.js` for this one (every furniture builder's shared
+home, including `Workbench.js`'s own new `plastic()`/`rubber()`), and
+removed cleanly rather than left to linger a second time.
+
+**Future craftsmanship philosophy.** This phase's own restraint is
+itself the template for whichever object gets this treatment next: keep
+position and purpose fixed, spend the entire budget on how convincingly
+each one is built, add at most one or two small storytelling details per
+pass (never a scattershot of them), and treat "I found a real geometric
+or material bug while I was in here anyway" as worth fixing on the spot
+rather than filing away for later. A hero prop earns this kind of
+attention by being where a player's eyes actually go first; the Computer
+and any future object that becomes equally central deserves the exact
+same pass eventually, not a lesser one.
+
+
 
 - **One project on the bench at a time.** Multiple projects can be
   `"active"` at once (tracked in `ProjectsStore`), but only one physically

@@ -291,9 +291,13 @@ of it.
   own player volume slider and `AudioSystem`'s own existing volume/balance
   choices stay exactly as they were, multiplied by these settings the same
   way a device's system volume sits on top of an individual app's own
-  volume control. Effects Volume is stored and applied nowhere yet — there
-  is no discrete "effect" sound (as opposed to music or ambience) anywhere
-  in the workshop today; the channel exists ready for the first one.
+  volume control. **Effects Volume genuinely controls something as of the
+  Workbench phase** — `AudioSystem.playInteractionSound()`, the one entry
+  point for every short, one-shot sound effect in the Workshop (today:
+  `WorkbenchSystem`'s own soft paper-shuffle on leaning in/standing up —
+  see docs/WORKBENCH.md's own "Craftsmanship" section). Before that phase,
+  there was no discrete "effect" sound anywhere in the Workshop at all —
+  the channel existed, stored and persisted, with nothing plugged into it.
 
 ## Persistence
 
@@ -309,7 +313,6 @@ gets that field's default rather than breaking.
 - **"Optimise For This Device" is a heuristic, not a benchmark** — see
   above. It won't be right for every device, only a reasonable guess for
   most.
-- **Effects Volume has nothing to control yet** — see above.
 - **UI Scale depends on CSS `zoom`** — unsupported in a handful of older
   or non-Chromium-family browsers, in which case the setting simply has no
   visible effect rather than causing any layout problem.
