@@ -165,6 +165,34 @@ export function playChairCreak(audioContext, destinationNode, { pitch = 1 } = {}
 }
 
 /**
+ * The Workshop Interior phase's own interaction sound — a soft creak on
+ * opening and closing the front doors, the third `kind` in `AudioSystem
+ * .playInteractionSound()`'s own switch (see `playPaperShuffle()` and
+ * `playChairCreak()` above for the first two). Same shape again — noise
+ * through a filter through a short envelope — tuned lower and a little
+ * longer than the chair's own creak: a door is a bigger, heavier object,
+ * and a real hinge creak settles more slowly than a seat cushion does.
+ */
+export function playDoorCreak(audioContext, destinationNode, { pitch = 1 } = {}) {
+  const source = createNoiseSource(audioContext);
+  const filter = audioContext.createBiquadFilter();
+  filter.type = "bandpass";
+  filter.Q.value = 3;
+  const now = audioContext.currentTime;
+  filter.frequency.setValueAtTime(340 * pitch, now);
+  filter.frequency.linearRampToValueAtTime(220 * pitch, now + 0.4);
+  const gain = audioContext.createGain();
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.linearRampToValueAtTime(0.28, now + 0.06);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(destinationNode);
+  source.start(now);
+  source.stop(now + 0.48);
+}
+
+/**
  * A self-scheduling nature ambience — four phases across the day, not
  * just day/night: a brighter, denser dawn chorus; the original, sparser
  * daytime bird chirp; a warmer dusk mix of evening insects and lower,
