@@ -162,7 +162,7 @@ export const CONSTRUCTION_PIECES = [
   piece({
     id: "ladder",
     name: "Ladder",
-    description: "Two rails and six rungs, 2.4m tall — climbs, doesn't carry a behaviour of its own.",
+    description: "Two rails and six rungs, 2.4m tall \u2014 genuinely climbable, through the same Climbable (Ladder) behaviour a Builder-designed object would carry.",
     parts: [
       { id: "railL", type: "box", position: [-0.28, 1.2, 0], rotationY: 0, scale: [0.06, 2.4, 0.06], color: WOOD_COLOR },
       { id: "railR", type: "box", position: [0.28, 1.2, 0], rotationY: 0, scale: [0.06, 2.4, 0.06], color: WOOD_COLOR },
@@ -176,6 +176,16 @@ export const CONSTRUCTION_PIECES = [
         color: WOOD_COLOR,
       })),
     ],
+    // Workshop Reliability phase — "ladders still do not function
+    // correctly." Root cause: this piece never actually carried the
+    // "ladder" behaviour at all, so LadderSystem.registerLadder() was
+    // never called for one — the earlier climbing-input-direction fix
+    // (see docs/ROADMAP.md's own Phase 18 account) was entirely correct,
+    // it just had nothing to ever run against. `LadderBehaviour.js`'s
+    // own `propsSchema: []` needs no properties, matching the door
+    // piece's own `{ type: "door", properties: {...} }` shape one line
+    // up in spirit.
+    behaviours: [{ type: "ladder", properties: {} }],
   }),
 
   // ============================================================
@@ -391,107 +401,6 @@ export const CONSTRUCTION_PIECES = [
       { id: "postD", type: "box", position: [0.95, 0.45, 0], rotationY: 0, scale: [0.06, 0.9, 0.06], color: WOOD_COLOR },
       { id: "rail", type: "box", position: [0, 0.87, 0], rotationY: 0, scale: [2.0, 0.06, 0.06], color: WOOD_COLOR },
     ],
-  }),
-
-  // ============================================================
-  // Nature — "if something naturally exists within the Workshop world,
-  // it should also exist as a Builder asset" applies to the grounds
-  // around it just as much as to furniture
-  // ============================================================
-  piece({
-    id: "tree",
-    name: "Tree",
-    description: "A simple trunk and rounded canopy.",
-    parts: [
-      { id: "trunk", type: "cylinder", position: [0, 1.2, 0], rotationY: 0, scale: [0.18, 2.4, 0.18], color: BARK_COLOR, segments: 8 },
-      { id: "canopy", type: "sphere", position: [0, 3.0, 0], rotationY: 0, scale: [1.4, 1.3, 1.4], color: FOLIAGE_COLOR, segments: 10 },
-    ],
-  }),
-  piece({
-    id: "bush",
-    name: "Bush",
-    description: "A low, rounded shrub.",
-    parts: [{ id: "a", type: "sphere", position: [0, 0.35, 0], rotationY: 0, scale: [0.7, 0.6, 0.7], color: FOLIAGE_COLOR_LIGHT, segments: 8 }],
-  }),
-  piece({
-    id: "flower",
-    name: "Flower",
-    description: "A thin stem with a small bloom.",
-    parts: [
-      { id: "stem", type: "cylinder", position: [0, 0.15, 0], rotationY: 0, scale: [0.015, 0.3, 0.015], color: FOLIAGE_COLOR, segments: 6 },
-      { id: "bloom", type: "sphere", position: [0, 0.32, 0], rotationY: 0, scale: [0.08, 0.08, 0.08], color: "#d888a8", segments: 8 },
-    ],
-  }),
-  piece({
-    id: "rock",
-    name: "Rock",
-    description: "A weathered boulder — two overlapping forms for a less perfectly round silhouette.",
-    parts: [
-      { id: "a", type: "sphere", position: [0, 0.25, 0], rotationY: 0, scale: [0.6, 0.45, 0.5], color: STONE_COLOR, segments: 7 },
-      { id: "b", type: "sphere", position: [0.2, 0.18, 0.1], rotationY: 0.6, scale: [0.35, 0.3, 0.4], color: STONE_COLOR, segments: 7 },
-    ],
-  }),
-  piece({
-    id: "log",
-    name: "Log",
-    description: "A fallen log, resting on its side.",
-    parts: [{ id: "a", type: "cylinder", position: [0, 0.22, 0], rotationX: Math.PI / 2, rotationY: 0, rotationZ: 0, scale: [0.22, 1.8, 0.22], color: BARK_COLOR, segments: 10 }],
-  }),
-  piece({
-    id: "grassPatch",
-    name: "Grass Patch",
-    description: "A low, flat patch of ground cover.",
-    parts: [{ id: "a", type: "box", position: [0, 0.02, 0], rotationY: 0, scale: [2.0, 0.04, 2.0], color: FOLIAGE_COLOR_LIGHT }],
-  }),
-  piece({
-    id: "gardenBed",
-    name: "Garden Bed",
-    description: "A timber-edged bed of soil, ready for flowers.",
-    parts: [
-      { id: "edgeN", type: "box", position: [0, 0.1, 0.95], rotationY: 0, scale: [2.0, 0.2, 0.1], color: WOOD_COLOR },
-      { id: "edgeS", type: "box", position: [0, 0.1, -0.95], rotationY: 0, scale: [2.0, 0.2, 0.1], color: WOOD_COLOR },
-      { id: "edgeE", type: "box", position: [0.95, 0.1, 0], rotationY: 0, scale: [0.1, 0.2, 2.0], color: WOOD_COLOR },
-      { id: "edgeW", type: "box", position: [-0.95, 0.1, 0], rotationY: 0, scale: [0.1, 0.2, 2.0], color: WOOD_COLOR },
-      { id: "soil", type: "box", position: [0, 0.06, 0], rotationY: 0, scale: [1.8, 0.1, 1.8], color: SOIL_COLOR },
-    ],
-  }),
-
-  // ============================================================
-  // Paths — flat, walkable tiles in a few common materials
-  // ============================================================
-  piece({
-    id: "stonePath",
-    name: "Stone Path",
-    description: "A flat paving tile.",
-    parts: [{ id: "a", type: "box", position: [0, 0.03, 0], rotationY: 0, scale: [2.0, 0.06, 2.0], color: STONE_COLOR }],
-  }),
-  piece({
-    id: "gravelPath",
-    name: "Gravel Path",
-    description: "A flat gravel tile.",
-    parts: [{ id: "a", type: "box", position: [0, 0.03, 0], rotationY: 0, scale: [2.0, 0.06, 2.0], color: GRAVEL_COLOR }],
-  }),
-  piece({
-    id: "dirtPath",
-    name: "Dirt Path",
-    description: "A flat worn-earth tile.",
-    parts: [{ id: "a", type: "box", position: [0, 0.03, 0], rotationY: 0, scale: [2.0, 0.06, 2.0], color: DIRT_COLOR }],
-  }),
-  piece({
-    id: "timberPath",
-    name: "Timber Path",
-    description: "A boardwalk-style tile of three planks.",
-    parts: [
-      { id: "plankA", type: "box", position: [-0.67, 0.04, 0], rotationY: 0, scale: [0.6, 0.08, 2.0], color: WOOD_COLOR },
-      { id: "plankB", type: "box", position: [0, 0.04, 0], rotationY: 0, scale: [0.6, 0.08, 2.0], color: WOOD_COLOR },
-      { id: "plankC", type: "box", position: [0.67, 0.04, 0], rotationY: 0, scale: [0.6, 0.08, 2.0], color: WOOD_COLOR },
-    ],
-  }),
-  piece({
-    id: "concretePath",
-    name: "Concrete Path",
-    description: "A flat concrete tile.",
-    parts: [{ id: "a", type: "box", position: [0, 0.03, 0], rotationY: 0, scale: [2.0, 0.06, 2.0], color: CONCRETE_COLOR }],
   }),
 
   // ============================================================

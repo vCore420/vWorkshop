@@ -2,7 +2,6 @@ import * as THREE from "three";
 import { CameraSystem } from "../systems/CameraSystem.js";
 import { InteractionSystem } from "../systems/InteractionSystem.js";
 import { RoomLayoutSystem } from "../systems/RoomLayoutSystem.js";
-import { WorldEnvironmentSystem } from "../systems/WorldEnvironmentSystem.js";
 import { FurnitureSystem } from "../systems/FurnitureSystem.js";
 import { WorldObjectsSystem } from "./WorldObjectsSystem.js";
 import { CURRENT_ROOM_ID } from "./WorldObjectsStore.js";
@@ -12,6 +11,7 @@ import { BuilderPhoneUI } from "./BuilderPhoneUI.js";
 import { makeTransparent, restoreMaterials, disposeGhostMaterials, defaultGhostPoint } from "./GhostPreview.js";
 import { EditHistory } from "./EditHistory.js";
 import { alignPositions, distributeEvenly } from "./AlignmentTools.js";
+import { TERRAIN_MATERIALS } from "../systems/TerrainSystem.js";
 
 const ROTATE_STEP = Math.PI / 4; // 45° per press — coarse enough to feel deliberate, fine enough to square something up
 const WHEEL_ROTATE_STEP = Math.PI / 36; // 5° per tick — fine, continuous control matching common 3D editing workflows, not the button's own coarse step
@@ -92,11 +92,12 @@ function nextGroupId() {
  * comment further down this file.
  */
 export class BuildModeSystem {
-  constructor({ objectLibraryStore, worldObjectsStore, modelLibrary, modelLoader, blueprintStore, terrainSystem }) {
+  constructor({ objectLibraryStore, worldObjectsStore, modelLibrary, modelLoader, modelAssetStore, blueprintStore, terrainSystem }) {
     this.objectLibraryStore = objectLibraryStore;
     this.worldObjectsStore = worldObjectsStore;
     this.modelLibrary = modelLibrary;
     this.modelLoader = modelLoader;
+    this.modelAssetStore = modelAssetStore;
     this.blueprintStore = blueprintStore;
     this.terrainSystem = terrainSystem;
     this.active = false;
@@ -142,6 +143,7 @@ export class BuildModeSystem {
     // the ground instead of selecting something.
     this._terrainTool = null;
     this._terrainStrokeSnapshot = null; // {heights, materialIndex} captured once at the start of a stroke — see _beginTerrainStroke()
+    this._terrainBrushPreview = null; // a ring mesh following the cursor while a terrain tool is active — see _buildTerrainBrushPreview()/setTerrainTool()
 
     /**
      * The one piece of live placement/movement state. Shape:
@@ -188,6 +190,30 @@ export class BuildModeSystem {
     engine.events.on("persistence:save", (bag) => {
       bag.buildMode = {}; // nothing session-specific worth persisting — see docs/WORLDBUILDER.md
     });
+
+    this._buildTerrainBrushPreview();
+  }
+
+  /** Workshop Workflow phase — "better visual feedback" for terrain
+   *  editing. A simple ring, flat on the ground, following the cursor
+   *  the moment a terrain tool is armed — not just while a stroke is
+   *  already in progress. Previously there was no way to see where a
+   *  brush would actually land, or how large an area it would cover,
+   *  before committing to a drag. Built once and reused (shown/hidden,
+   *  repositioned, resized) rather than rebuilt per frame — the same
+   *  "build once, mutate" instinct every other frequently-updated visual
+   *  in this project already follows. `MeshBasicMaterial` (unlit) so it
+   *  reads clearly as an interface element regardless of the Workshop's
+   *  own time of day or weather, the same reasoning a selection outline
+   *  or a placement ghost already would. */
+  _buildTerrainBrushPreview() {
+    const geometry = new THREE.RingGeometry(0.9, 1, 48);
+    geometry.rotateX(-Math.PI / 2);
+    const material = new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide });
+    this._terrainBrushPreview = new THREE.Mesh(geometry, material);
+    this._terrainBrushPreview.visible = false;
+    this._terrainBrushPreview.renderOrder = 10; // draws after the terrain itself, so it never flickers against it at grazing angles
+    this.engine.scene.add(this._terrainBrushPreview);
   }
 
   /** Called by BuilderPhoneApp.js's own mount() — deliberately no longer
@@ -240,6 +266,7 @@ export class BuildModeSystem {
       canRedo: () => this.editHistory.canRedo(),
       getMeasurement: () => this._measureSelection(),
       onSetTerrainTool: (tool) => this.setTerrainTool(tool),
+      onImportModel: (file) => this.importModel(file),
     });
     this.enter();
   }
@@ -288,6 +315,7 @@ export class BuildModeSystem {
     if (this._terrainPointerDown) this._finishTerrainStroke();
     this._terrainTool = null;
     this._terrainPointerDown = false;
+    if (this._terrainBrushPreview) this._terrainBrushPreview.visible = false;
     this._cancelGhost();
     this._select(null);
     this.active = false;
@@ -296,6 +324,35 @@ export class BuildModeSystem {
 
   _renderLibrary() {
     this.ui.renderLibrary(CONSTRUCTION_PIECES, this.objectLibraryStore.all(), this.modelLibrary?.all() ?? [], this.blueprintStore?.all() ?? []);
+  }
+
+  /** Workshop Workflow phase — "players can create custom Builder blocks
+   *  using primitive shapes, however they cannot import external models
+   *  for use as Builder shapes... extend the Builder so imported models
+   *  can be used as Builder shapes alongside Workshop-created shapes."
+   *  Models were already placeable from the "Imported Models" tab — the
+   *  only genuine gap was *getting* one in without a detour through the
+   *  Being Creator's own Model section first. This is the identical
+   *  import path that section already uses
+   *  (`modelLibrary.add()`/`modelAssetStore.put()`, the same `.glb`/
+   *  `.gltf` handling — see `BeingCreatorApp.js`'s own `buildModelSection()`)
+   *  so an imported model behaves identically everywhere it can be used,
+   *  regardless of which app it was imported from. Newly imported models
+   *  are immediately real Workshop Assets (see `modelLibrary`'s own
+   *  `AssetService` registration in main.js) and immediately available
+   *  to every Being and every future Builder session too, not something
+   *  private to this one. Called by `BuilderPhoneUI.js`'s own "Import
+   *  Model" button; throws with a specific message that UI already knows
+   *  how to show directly, the same "not a valid file" case Being
+   *  Creator's own import already handles. */
+  async importModel(file) {
+    if (!this.modelAssetStore || !this.modelLibrary) throw new Error("Models aren't available right now.");
+    const isGltf = file.name.toLowerCase().endsWith(".gltf");
+    const data = isGltf ? await file.text() : await file.arrayBuffer();
+    const modelId = this.modelLibrary.add(file.name.replace(/\.(glb|gltf)$/i, ""), isGltf ? "gltf" : "glb");
+    await this.modelAssetStore.put(modelId, data);
+    this._renderLibrary();
+    return modelId;
   }
 
   _resolveDefinition(definitionId, source) {
@@ -779,7 +836,12 @@ export class BuildModeSystem {
     if (!this.active) return;
     if (this._terrainTool) {
       this._updatePointerNDC(event);
-      if (this._terrainPointerDown) this._applyTerrainToolAtPointer();
+      const point = this._raycastTerrain();
+      if (this._terrainBrushPreview) {
+        this._terrainBrushPreview.visible = !!point;
+        if (point) this._terrainBrushPreview.position.set(point.x, point.y + 0.03, point.z);
+      }
+      if (this._terrainPointerDown && point) this._applyTerrainToolAt(point.x, point.z);
       return;
     }
     if (this._ghost) {
@@ -830,7 +892,8 @@ export class BuildModeSystem {
       if (event.button !== 0) return;
       this._beginTerrainStroke();
       this._terrainPointerDown = true;
-      this._applyTerrainToolAtPointer();
+      const point = this._raycastTerrain();
+      if (point) this._applyTerrainToolAt(point.x, point.z);
       return;
     }
     if (this._ghost) {
@@ -948,10 +1011,20 @@ export class BuildModeSystem {
    *  as naturally as on the floor. Excludes the ghost's own object(s)
    *  when moving something that already exists, so it never collides
    *  with itself while dragging — a `moveMultiple` ghost excludes every
-   *  one of its own members, not just a single object3D. */
+   *  one of its own members, not just a single object3D.
+   *
+   *  Workshop Reliability phase — "player movement, collision, and
+   *  object placement should all reference the same terrain surface."
+   *  This used to raycast against `WorldEnvironmentSystem`'s own flat,
+   *  purely-visual ground — meaning a ghost placed outdoors always
+   *  landed on flat ground even when hovering directly over a sculpted
+   *  hill, silently ignoring it. `TerrainSystem.js` is now the
+   *  Workshop's one real ground (see that file's own top comment); this
+   *  raycasts its actual mesh, the exact one `getHeightAt()`-driven
+   *  player movement already walks on. */
   _gatherSurfaces() {
     const floorMesh = this.engine.getSystem(RoomLayoutSystem)?.getFloorMesh();
-    const groundMesh = this.engine.getSystem(WorldEnvironmentSystem)?.getGroundMesh();
+    const groundMesh = this.terrainSystem?.mesh;
     const surfaces = [floorMesh, groundMesh].filter(Boolean);
     const objects = [...(this._worldObjectsSystem?.getAllLiveObjects() ?? []), ...this._furnitureObjects()];
     const excluding = this._ghost?.kind === "moveMultiple" ? new Set(this._ghost.members.map((m) => m.object3D)) : new Set([this._ghost?.object3D].filter(Boolean));
@@ -1578,13 +1651,34 @@ export class BuildModeSystem {
     if (this.selection || this.additionalSelection.length) this._select(null);
     this._terrainTool = tool;
     this._terrainPointerDown = false;
+    this._updateTerrainBrushPreview();
+  }
+
+  /** Ring radius/colour always tracks the *current* tool exactly —
+   *  called from `setTerrainTool()` (a new tool, size, or material) so
+   *  the ring is never stale even for a change made mid-hover, before
+   *  the cursor itself moves again. Visibility alone is also toggled
+   *  from `_handlePointerMove()` each frame the terrain mesh is or isn't
+   *  actually under the cursor, so the ring never floats disconnected
+   *  from real ground. */
+  _updateTerrainBrushPreview() {
+    if (!this._terrainBrushPreview) return;
+    if (!this._terrainTool) {
+      this._terrainBrushPreview.visible = false;
+      return;
+    }
+    const radius = this._terrainTool.radius ?? 1;
+    this._terrainBrushPreview.scale.set(radius, 1, radius);
+    const color = this._terrainTool.type === "paint" ? TERRAIN_MATERIALS.find((m) => m.id === this._terrainTool.materialId)?.color ?? "#ffffff" : "#ffffff";
+    this._terrainBrushPreview.material.color.set(color);
   }
 
   _beginTerrainStroke() {
     if (!this.terrainSystem) return;
-    // A full snapshot, not a diff — 49x49 vertices is small enough
-    // (under 5,000 numbers each) that copying both arrays whole is
-    // simpler and safer than tracking exactly which vertices a stroke
+    // A full snapshot, not a diff — 101x101 vertices (grown from the
+    // original 48m patch's 49x49 in the Workshop Reliability phase) is
+    // still small enough (roughly 10,000 numbers each) that copying both
+    // arrays whole is simpler and safer than tracking exactly which vertices a stroke
     // touched, and still cheap enough to do on every single stroke.
     this._terrainStrokeSnapshot = {
       heights: Float32Array.from(this.terrainSystem.heights),
@@ -1614,13 +1708,18 @@ export class BuildModeSystem {
     );
   }
 
-  _applyTerrainToolAtPointer() {
-    if (!this.terrainSystem || !this._terrainTool) return;
+  /** Just the raycast — shared by the brush preview ring (every hover)
+   *  and the actual sculpt/paint application (only while the pointer is
+   *  down). Kept as one function so there's exactly one place that
+   *  decides what "under the cursor, on the terrain" means. */
+  _raycastTerrain() {
+    if (!this.terrainSystem?.mesh) return null;
     this._raycaster.setFromCamera(this._pointerNDC, this.engine.camera);
-    const hits = this._raycaster.intersectObject(this.terrainSystem.mesh, false);
-    const hit = hits[0];
-    if (!hit) return;
-    const { x, z } = hit.point;
+    return this._raycaster.intersectObject(this.terrainSystem.mesh, false)[0]?.point ?? null;
+  }
+
+  _applyTerrainToolAt(x, z) {
+    if (!this.terrainSystem || !this._terrainTool) return;
     const { type, radius, strength, materialId } = this._terrainTool;
     if (type === "paint") this.terrainSystem.paint(x, z, radius, materialId, strength);
     else if (typeof this.terrainSystem[type] === "function") this.terrainSystem[type](x, z, radius, strength);

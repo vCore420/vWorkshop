@@ -130,6 +130,8 @@ export class BuilderPhoneUI {
       return;
     }
 
+    if (this._activeTab === "models") this.screen.appendChild(this._buildImportModelRow());
+
     const grid = document.createElement("div");
     grid.className = "builder-phone-grid";
     const { constructionPieces, libraryDefinitions, importedModels, blueprints } = this._libraryData;
@@ -141,7 +143,7 @@ export class BuilderPhoneUI {
       empty.className = "builder-phone-empty";
       empty.textContent =
         this._activeTab === "models"
-          ? "No models imported yet \u2014 import one in the Being Creator's own Model section."
+          ? "No models imported yet \u2014 import one above (.glb or .gltf)."
           : this._activeTab === "blueprints"
             ? "No Blueprints yet \u2014 select something you've built and choose \u201cSave as Blueprint.\u201d"
             : "Nothing designed yet — build one in the computer's Builder app.";
@@ -201,6 +203,47 @@ export class BuilderPhoneUI {
     card.append(swatch, name, category);
     card.addEventListener("click", () => this.callbacks.onArmDefinition(def.id, source));
     return card;
+  }
+
+  /** Workshop Workflow phase — "extend the Builder so imported models can
+   *  be used as Builder shapes." A model imported here uses the exact
+   *  same `.glb`/`.gltf` handling the Being Creator's own Model section
+   *  already does (see `BuildModeSystem.importModel()`'s own comment) —
+   *  this is just the missing front door for it, directly where a
+   *  Builder-only session already is, rather than a detour through a
+   *  different app. */
+  _buildImportModelRow() {
+    const row = document.createElement("div");
+    row.className = "builder-phone-history-bar";
+
+    const importBtn = document.createElement("button");
+    importBtn.type = "button";
+    importBtn.className = "builder-phone-small-button";
+    importBtn.textContent = "Import Model (.glb/.gltf)\u2026";
+
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".glb,.gltf,model/gltf-binary,model/gltf+json";
+    input.style.display = "none";
+    input.addEventListener("change", async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      importBtn.disabled = true;
+      importBtn.textContent = "Importing\u2026";
+      try {
+        await this.callbacks.onImportModel(file);
+      } catch (err) {
+        console.error(err);
+        window.alert("Couldn't import that file \u2014 make sure it's a valid .glb or .gltf model.");
+      }
+      importBtn.disabled = false;
+      importBtn.textContent = "Import Model (.glb/.gltf)\u2026";
+      input.value = "";
+    });
+    importBtn.addEventListener("click", () => input.click());
+
+    row.append(importBtn, input);
+    return row;
   }
 
   // -----------------------------------------------------------------
@@ -676,7 +719,14 @@ export class BuilderPhoneUI {
     brushHeading.className = "builder-phone-group-heading";
     brushHeading.textContent = "Brush";
     wrap.appendChild(brushHeading);
-    wrap.appendChild(this._terrainSliderRow("Size", this._terrainRadius, 1, 12, 0.5, (v) => (v.toFixed(1) + "m"), (v) => { this._terrainRadius = v; this._pushTerrainTool(); }));
+    // Workshop Reliability phase — the terrain grid eased from 1m to 2m
+    // resolution (see TerrainSystem.js's own top comment on why) as part
+    // of retiring the old small, separately-layered patch. A brush
+    // radius below the grid's own spacing could miss every vertex
+    // entirely depending on exactly where its centre landed — the
+    // minimum here moved from 1m to 2m to match, so "Size" always does
+    // something visible at every value on the slider.
+    wrap.appendChild(this._terrainSliderRow("Size", this._terrainRadius, 2, 12, 0.5, (v) => (v.toFixed(1) + "m"), (v) => { this._terrainRadius = v; this._pushTerrainTool(); }));
     wrap.appendChild(this._terrainSliderRow("Strength", this._terrainStrength, 0.05, 1.5, 0.05, (v) => v.toFixed(2), (v) => { this._terrainStrength = v; this._pushTerrainTool(); }));
 
     // Activating the panel always (re)pushes the currently-configured

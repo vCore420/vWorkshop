@@ -56,7 +56,7 @@ import { HostConnectionManager } from "./host/HostConnectionManager.js";
 import { PluginService } from "./host/PluginService.js";
 import { ResidentService } from "./host/ResidentService.js";
 import { DiagnosticsService } from "./host/DiagnosticsService.js";
-import { buildSwatchThumbnail } from "./host/WorkshopAssetSchema.js";
+import { buildSwatchThumbnail, buildPixelThumbnail } from "./host/WorkshopAssetSchema.js";
 import { registerHostPages } from "./host/HostPages.js";
 import { examplePagePlugin } from "./plugins/examples/examplePagePlugin.js";
 import { calculatorPlugin } from "./plugins/examples/calculatorPlugin.js";
@@ -69,6 +69,7 @@ import { registerPhoneAppFactory } from "./phone/apps/registry.js";
 import { AIConnectionManager } from "./ai/AIConnectionManager.js";
 import { ModelRegistry } from "./ai/ModelRegistry.js";
 import { ResidentProfileStore } from "./ai/ResidentProfileStore.js";
+import { ExpressionSetStore } from "./resident/ExpressionSetStore.js";
 import { ResidentState } from "./resident/ResidentState.js";
 import { ResidentBehaviour } from "./resident/ResidentBehaviour.js";
 import { ResidentConnection } from "./resident/ResidentConnection.js";
@@ -238,6 +239,10 @@ const assetService = hostManager.services.get("assets");
 const aiConnectionManager = new AIConnectionManager();
 const modelRegistry = new ModelRegistry();
 const residentProfileStore = new ResidentProfileStore();
+// Workshop Personality phase — constructed here, alongside
+// residentProfileStore, since both are needed together the moment
+// ResidentController resolves a profile's own expressionSetId.
+const expressionSetStore = new ExpressionSetStore();
 aiConnectionManager.init();
 hostConnectionManager.init();
 // "workshop://models... live from the same connection AI Mission Control
@@ -346,7 +351,7 @@ void emoteWheelSystem;
 const compassSystem = engine.addSystem(new CompassSystem());
 void compassSystem;
 const residentController = engine.addSystem(
-  new ResidentController({ residentState, residentBehaviour, residentConnection, residentProfileStore, residentPreferences, playerPatternMemory, musicSystem })
+  new ResidentController({ residentState, residentBehaviour, residentConnection, residentProfileStore, expressionSetStore, residentPreferences, playerPatternMemory, musicSystem })
 );
 void residentController;
 
@@ -467,7 +472,15 @@ const dangerZoneActions = {
     outfitStore.resetToDefaults();
     for (const id of textureIds) await textureStore.remove(id);
   },
-  factoryReset: () => persistenceSystem.factoryReset(["workshop-player-textures", "workshop-music-handles"]),
+  // Workshop Reliability phase — "Factory Reset no longer resets every
+  // supported Workshop system." Root cause: this list was never updated
+  // as new IndexedDB-backed stores were added after it was first
+  // written — `workshop-models` (ModelAssetStore.js, imported 3D models)
+  // and `workshop-display-images` (ImageAssetStore.js, Display Surface
+  // photos) both silently survived a "Factory Reset" ever since. Every
+  // real `indexedDB.open(DB_NAME, ...)` call in the project is now
+  // listed here — see each store's own `DB_NAME` constant.
+  factoryReset: () => persistenceSystem.factoryReset(["workshop-player-textures", "workshop-music-handles", "workshop-models", "workshop-display-images"]),
 };
 
 // ComputerSystem needs FurnitureSystem (already registered, above) to have
@@ -501,6 +514,7 @@ const computerSystem = engine.addSystem(
     aiConnectionManager,
     modelRegistry,
     residentProfileStore,
+    expressionSetStore,
     residentBehaviour,
     residentConnection,
     residentState,
@@ -535,7 +549,7 @@ const interactionSystem = engine.addSystem(new InteractionSystem());
 // WorldObjectsSystem at the moment it needs them, not at init() time, so it
 // has no strict ordering requirement beyond "after the systems it looks up
 // already exist in the list" (they do, above).
-const buildModeSystem = engine.addSystem(new BuildModeSystem({ objectLibraryStore, worldObjectsStore, modelLibrary, modelLoader, blueprintStore, terrainSystem }));
+const buildModeSystem = engine.addSystem(new BuildModeSystem({ objectLibraryStore, worldObjectsStore, modelLibrary, modelLoader, modelAssetStore, blueprintStore, terrainSystem }));
 
 // "Plugin SDK" phase — every SDK-style plugin (`{manifest, setup(Workshop)}`)
 // loads here, through `loadWorkshopPlugin()`, before the Phone (below)
@@ -547,7 +561,7 @@ const buildModeSystem = engine.addSystem(new BuildModeSystem({ objectLibraryStor
 // `calculatorPlugin`, registered later via `hostManager.pluginRegistry`
 // directly) are untouched — this is a new, additional way to load a
 // plugin, not a replacement for the contracts they already use.
-const WORKSHOP_VERSION = "2.1.2";
+const WORKSHOP_VERSION = "2.1.3c";
 const pluginContext = {
   engine,
   pageRegistry,
@@ -598,6 +612,15 @@ const phoneSystem = engine.addSystem(new PhoneSystem(phoneApps));
 // that fires — see WorldTimeService.js's own comment.
 const worldTimeService = engine.addSystem(new WorldTimeService());
 const persistenceSystem = engine.addSystem(new PersistenceSystem()); // last: loads after everyone has registered listeners
+// Workshop Workflow phase — SettingsApp.js's own "Workshop Data" section
+// (Export/Import Backup, moved here from HUD.js) needs persistenceSystem,
+// which doesn't exist yet when ComputerSystem itself is constructed
+// above — mutating its already-captured `deps` object (the same one
+// `buildApps()` reads from, deferred until `engine.init()` much later)
+// is the same pattern this file already uses wherever a dependency's
+// own "last, by design" position would otherwise create a chicken-and-
+// egg problem.
+computerSystem.deps.persistenceSystem = persistenceSystem;
 
 void interactionSystem;
 
@@ -612,6 +635,7 @@ persistenceSystem.registerProvider("musicLibrary", musicLibraryStore);
 persistenceSystem.registerProvider("playlists", playlistStore);
 persistenceSystem.registerProvider("settings", settingsStore);
 persistenceSystem.registerProvider("atmosphereProfiles", atmosphereProfileStore);
+persistenceSystem.registerProvider("expressionSets", expressionSetStore);
 persistenceSystem.registerProvider("pluginPermissions", pluginPermissions);
 persistenceSystem.registerProvider("pluginStorage", pluginStorage);
 persistenceSystem.registerProvider("playerAppearance", appearanceStore);
@@ -679,6 +703,7 @@ engine.plugins.register(dustMotesPlugin());
 hostManager.services.register("plugins", new PluginService({ engine, pluginRegistry: hostManager.pluginRegistry, pluginPermissions }));
 hostManager.services.register("pluginPermissions", pluginPermissions);
 hostManager.services.register("pluginStorage", pluginStorage);
+hostManager.services.register("expressionSets", expressionSetStore);
 hostManager.services.register(
   "residents",
   new ResidentService({ residentProfileStore, residentState, residentBehaviour, conversationMemory })
@@ -791,6 +816,31 @@ assetService.registerKind("models", {
   all: () => modelLibrary.all(),
   get: (id) => modelLibrary.get(id),
   toDescriptor: (m) => ({ name: m.name, categories: ["Workshop"], tags: [m.format], createdAt: new Date(m.addedAt).toISOString() }),
+});
+// Workshop Personality phase — "expression collections should become
+// Workshop Assets... metadata, categories, tags, thumbnails, import,
+// export, versioning, sharing." The identical pattern every other kind
+// here already follows; only the thumbnail is genuinely new — a real
+// small rendering of what was actually drawn (`buildPixelThumbnail()`),
+// not a placeholder. Prefers "neutral" for the thumbnail since it's the
+// resting expression every set is most likely to have actually drawn
+// first, falling back to whichever expression the set does have
+// something for.
+assetService.registerKind("expressions", {
+  label: "Expression Sets",
+  all: () => expressionSetStore.all(),
+  get: (id) => expressionSetStore.get(id),
+  toDescriptor: (set) => {
+    const firstDrawn = set.expressions.neutral ? "neutral" : Object.keys(set.expressions)[0];
+    const thumbnail = firstDrawn ? buildPixelThumbnail(set.expressions[firstDrawn], set.gridSize) : null;
+    return {
+      name: set.name,
+      categories: ["Workshop"],
+      tags: Object.keys(set.expressions),
+      thumbnail,
+      createdAt: set.createdAt,
+    };
+  },
 });
 assetService.registerKind("images", {
   label: "Images",
