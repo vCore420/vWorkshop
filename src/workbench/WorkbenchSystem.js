@@ -64,6 +64,11 @@ export class WorkbenchSystem {
       onCancelNew: () => this._refreshPanel(),
       onSwitch: (id) => this.setCurrentProject(id),
       onStandUp: () => engine.events.emit("interaction:exitRequested"),
+      // Workshop Tools phase — "pinning commonly used tools to the
+      // Workbench... quickly reopening previous calculations." Opens the
+      // exact same toolbox the tool cabinet does, rather than a second,
+      // smaller implementation squeezed into this small clipboard panel.
+      onOpenTools: () => engine.events.emit("interaction:trigger", { overlayId: "toolStorage" }),
     });
 
     engine.events.on("workbench:activate", () => this.activate());

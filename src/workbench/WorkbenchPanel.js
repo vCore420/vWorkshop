@@ -10,13 +10,20 @@
  * WorkbenchPanel owns no project data itself — `render(state)` is called
  * by `WorkbenchSystem` whenever something changes, and every control here
  * calls straight back into the callbacks passed to the constructor.
+ *
+ * Workshop Tools phase — "viewing project calculations directly from the
+ * Workbench." One more small, quiet addition: the last couple of
+ * calculations saved to the current project (if any), and a button to
+ * the toolbox proper. Still a clipboard — a full calculator doesn't
+ * belong in this small a space, so this only ever shows a one-line
+ * summary of what's already been saved, never a place to run a new one.
  */
 import { KIND_OPTIONS } from "./kindTemplates.js";
 
 export class WorkbenchPanel {
   /**
    * @param {HTMLElement} rootEl
-   * @param {{onTitleChange, onNotesChange, onFinish, onStartNew, onSwitch, onStandUp}} callbacks
+   * @param {{onTitleChange, onNotesChange, onFinish, onStartNew, onSwitch, onStandUp, onOpenTools}} callbacks
    */
   constructor(rootEl, callbacks) {
     this.callbacks = callbacks;
@@ -89,6 +96,8 @@ export class WorkbenchPanel {
 
     this.el.append(header, notes);
 
+    this.el.appendChild(this._buildToolsRow(project));
+
     if (activeProjects.length > 1) {
       const switchRow = document.createElement("div");
       switchRow.className = "wb-switch-row";
@@ -118,6 +127,38 @@ export class WorkbenchPanel {
     });
     actions.append(finishBtn, newBtn);
     this.el.appendChild(actions);
+  }
+
+  /** Workshop Tools phase — a one-line summary of the last couple of
+   *  calculations saved to this project (if any), and a button to the
+   *  toolbox. Deliberately not a list of every calculation ever saved —
+   *  "quickly reopening previous calculations" is the toolbox's own
+   *  Recent tab's job (see ToolsPanelView.js); this is just enough to
+   *  remind you something's already been worked out for this project. */
+  _buildToolsRow(project) {
+    const row = document.createElement("div");
+    row.className = "wb-tools-row";
+
+    const calculations = project.calculations ?? [];
+    if (calculations.length > 0) {
+      const summary = document.createElement("div");
+      summary.className = "wb-calc-summary";
+      const recent = calculations.slice(-2).reverse();
+      for (const calc of recent) {
+        const line = document.createElement("div");
+        line.className = "wb-calc-line";
+        line.textContent = `\u{1F4D0} ${calc.toolTitle}`;
+        summary.appendChild(line);
+      }
+      row.appendChild(summary);
+    }
+
+    const toolsBtn = document.createElement("button");
+    toolsBtn.textContent = "\u{1F9F0} Open Tools";
+    toolsBtn.addEventListener("click", () => this.callbacks.onOpenTools());
+    row.appendChild(toolsBtn);
+
+    return row;
   }
 
   _buildEmptyState() {

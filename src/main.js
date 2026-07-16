@@ -96,6 +96,7 @@ import { PoseLibraryStore } from "./player/PoseLibraryStore.js";
 
 import { ProjectsStore } from "./data/ProjectsStore.js";
 import { NotesStore } from "./data/NotesStore.js";
+import { ToolsStore } from "./tools/ToolsStore.js";
 
 import { OverlayManager } from "./ui/OverlayManager.js";
 import { HUD } from "./ui/HUD.js";
@@ -159,6 +160,10 @@ void furnitureSystem;
 // --- Plain data stores (not Engine systems — no scene/camera concerns) ---
 const projectsStore = new ProjectsStore();
 const notesStore = new NotesStore();
+// Workshop Tools phase — "Tool Storage... should now become one of the
+// Workshop's core systems." Custom calculators, pinned tools, and recent
+// runs — see docs/TOOLS.md.
+const toolsStore = new ToolsStore();
 const objectLibraryStore = new ObjectLibraryStore();
 const blueprintStore = new BlueprintStore();
 // "Begin preparing for long-running Workshop activities... this phase
@@ -523,6 +528,7 @@ const computerSystem = engine.addSystem(
   new ComputerSystem({
     projectsStore,
     notesStore,
+    toolsStore,
     musicSystem,
     lightingSystem,
     timeOfDaySystem,
@@ -658,6 +664,7 @@ void interactionSystem;
 
 persistenceSystem.registerProvider("projects", projectsStore);
 persistenceSystem.registerProvider("notes", notesStore);
+persistenceSystem.registerProvider("tools", toolsStore);
 persistenceSystem.registerProvider("objectLibrary", objectLibraryStore);
 persistenceSystem.registerProvider("blueprints", blueprintStore);
 persistenceSystem.registerProvider("workshopProjects", workshopProjectStore);
@@ -702,7 +709,7 @@ overlayManager.register("pinboard", createPinboardOverlay({ projectsStore }));
 overlayManager.register("notebook", createNotebookOverlay({ notesStore }));
 overlayManager.register("music", createMusicOverlay({ musicSystem, libraryStore: musicLibraryStore, playlistStore }));
 overlayManager.register("archive", createArchiveOverlay({ projectsStore }));
-overlayManager.register("toolStorage", createToolStorageOverlay());
+overlayManager.register("toolStorage", createToolStorageOverlay({ toolsStore, projectsStore, audioSystem, workbenchSystem }));
 overlayManager.register(
   "residentConversation",
   createResidentConversationOverlay({
