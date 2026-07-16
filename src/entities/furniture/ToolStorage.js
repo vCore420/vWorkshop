@@ -102,5 +102,9 @@ export const ToolStorageDefinition = {
     prompt: "Check tool storage",
     radius: 2.2, // medium furniture — see docs/WORLD.md's interaction-distance pass
     overlayId: "toolStorage",
+    // Sound & Presence phase — resolves the "Considered and deliberately
+    // left out" drawer sound from Phase 18 (see docs/FURNITURE.md), now
+    // that FurnitureSystem's own generic soundOnInteract exists.
+    soundOnInteract: "drawerSlide",
   },
 };

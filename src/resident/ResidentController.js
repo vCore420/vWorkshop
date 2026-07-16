@@ -8,6 +8,7 @@ import { createResidentEntity } from "./ResidentEntity.js";
 import { getPersonalityModifiers } from "./ResidentContext.js";
 import { isRainingNow, isGoldenHourNow, currentTimeBucket, currentWeatherId } from "./ResidentWorldSignals.js";
 import { FURNITURE_LAYOUT } from "../data/layoutDefault.js";
+import { AudioSystem } from "../systems/AudioSystem.js";
 
 const EXPRESSION_CHECK_INTERVAL = 0.5; // seconds — expression/awake checks don't need to run every single frame
 const FOLLOW_DISTANCE = 1.3; // metres — "Follow Me" stops closing the gap once this near, hovering companionably rather than stepping right up to the player's own eye position
@@ -89,6 +90,8 @@ export class ResidentController {
     this.playerPatternMemory = playerPatternMemory;
     this.musicSystem = musicSystem;
     this._wasAwake = null; // null so the very first frame always applies the correct awake/asleep visual, rather than assuming
+    // Sound & Presence phase — see _maybeAnnounceThinking()'s own comment.
+    this._wasThinking = false;
     this._expressionTimer = 0;
     this._patternTimer = PATTERN_SAMPLE_INTERVAL;
     this._moodTimer = MOOD_DRIFT_MIN_SECONDS + Math.random() * (MOOD_DRIFT_MAX_SECONDS - MOOD_DRIFT_MIN_SECONDS);
@@ -357,6 +360,26 @@ export class ResidentController {
     if (picked !== this.residentState.mood) this.residentState.setMood(picked);
   }
 
+  /** Sound & Presence phase — "Residents... Thinking... should
+   *  communicate life without becoming distracting." Bubble had no audio
+   *  at all before this phase — reviewed and found genuinely absent, not
+   *  just quiet. A single soft cue exactly on the false→true edge of
+   *  `isThinking` (never on every frame it stays true, and never on the
+   *  way back to false — thinking *ending* has no equivalent moment
+   *  worth marking) is the smallest possible presence this state could
+   *  have: enough to notice if you're already looking at Bubble, easy to
+   *  miss entirely otherwise, which is exactly the register "communicate
+   *  life without becoming distracting" asks for. Uses `motion.position`
+   *  — Bubble's own real, current position for this frame — for genuine
+   *  distance falloff via the same mechanism every other interaction
+   *  sound in the Workshop already uses. */
+  _maybeAnnounceThinking(isThinking, position) {
+    if (isThinking === this._wasThinking) return;
+    this._wasThinking = isThinking;
+    if (!isThinking) return;
+    this.engine.getSystem(AudioSystem)?.playInteractionSound("residentThinking", { position });
+  }
+
   _handlePointerDown(event) {
     if (event.button !== 0) return; // left button only
     if (!this.engine.input?.pointerLocked) return; // "using the normal interaction reticle (not mouse cursor mode)"
@@ -455,6 +478,7 @@ export class ResidentController {
 
     const activeProfile = this.residentProfileStore.getActive();
     const motion = this.movement.update(dt, { thinking: this.residentBehaviour.isThinking, idleBehaviour: activeProfile?.embodiment?.idleBehaviour });
+    this._maybeAnnounceThinking(this.residentBehaviour.isThinking, motion.position);
     const lookTarget = motion.lookAt.clone();
     if (rawPlayerDistance !== null) lookTarget.lerp(this._playerPos, this.residentBehaviour.awarenessBlend);
 

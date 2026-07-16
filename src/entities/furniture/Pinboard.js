@@ -49,5 +49,9 @@ export const PinboardDefinition = {
     prompt: "Look at the pinboard",
     radius: 2.0, // small/wall-mounted — see docs/WORLD.md's interaction-distance pass
     overlayId: "pinboard",
+    // Sound & Presence phase — the same paper-and-notes sound Shelving
+    // now uses, for the same reason: this is a paper interaction, not a
+    // new material.
+    soundOnInteract: "paperShuffle",
   },
 };

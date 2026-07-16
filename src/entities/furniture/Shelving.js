@@ -113,5 +113,10 @@ export const ShelvingDefinition = {
     prompt: "Browse the archive",
     radius: 2.4, // large furniture — see docs/WORLD.md's interaction-distance pass
     overlayId: "archive",
+    // Sound & Presence phase — "object audio... material consistency."
+    // Browsing a shelf of books and boxes is the same physical gesture
+    // the Workbench's own clipboard sound already represents; reused
+    // rather than a second, near-identical sound design.
+    soundOnInteract: "paperShuffle",
   },
 };
