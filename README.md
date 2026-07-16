@@ -129,13 +129,13 @@ There is no menu. Everything is a physical object — see the table below.
 
 | Object | What happens when you interact |
 |---|---|
-| Computer desk | Sit down — the monitor powers on, the room softly fades behind it. A real creative workstation: Projects, Journal, Browser, AI, Media, Builder, Settings, Wardrobe. See below. |
+| Computer desk | Sit down — the monitor powers on, the room softly fades behind it. A real creative workstation: Projects, Journal, Browser, AI, Media, Builder, Tools, Settings, Wardrobe. See below. |
 | Pinboard | Full project planning board — every project, any status, pinned as cork notes |
 | Workbench | Physically shows whatever project you're currently focused on — lean in for a small panel to finish it, switch to another, or start something new. See below. |
 | Notebook (on the workbench) | A page of free-form notes, saved automatically — separate from whatever project is currently on the bench |
 | Music cabinet | A proper vinyl listening setup — turntable, amplifier, bookshelf speakers, records stored below. Opens the real music library — see "Music" below |
 | Shelving | Documentation & finished-project archive (honestly empty until there's something to archive) — the reference bookshelf at the top of the reading corner |
-| Tool storage | Labelled placeholder for a future inventory system |
+| Tool storage | The Workshop's toolbox — calculators and planning tools, organised by category, pinnable, with a builder for making your own |
 | Reading chair | Part of the same reading-and-listening corner as the bookshelf and music cabinet — a quiet spot, deliberately reserved for something calmer later |
 | Wardrobe | A physical wardrobe and full-height mirror — opens the exact same Wardrobe app the computer does, just from a second, physical entry point. Stand in front of the mirror to see yourself while you change |
 | Windows | Real glass now — see the actual sky/world outside. "Look outside" opens the Environment panel: view or change the weather, wind, and mode, see the current time |
@@ -173,6 +173,10 @@ it's meant to feel like it belongs to the object. Ten tabs live on it:
   materials, and textures, with a live preview — see "Player identity" below
 - **Animation Editor** — pose and choreograph custom animation clips
 - **Being Creator** — design a Workshop Being (see `docs/BEINGS.md`)
+- **Tools** — the Workshop's toolbox: calculators and planning tools by
+  category, pinning, recent runs, saving a result to a project, and a
+  Calculator Builder for making your own — see `docs/TOOLS.md`. The
+  physical tool cabinet opens the exact same toolbox.
 - **Settings** — the Workshop's full configuration, and Workshop Data export/import — see "Settings" below
 
 Whichever tab you had open is exactly where you'll land next time — see

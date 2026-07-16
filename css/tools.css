@@ -1,0 +1,245 @@
+/* ==========================================================================
+   Workshop Tools — the toolbox shared by the tool cabinet overlay and the
+   computer's own Tools app (see src/ui/overlays/shared/toolsPanelView.js).
+   Same visual language as the rest of the computer/overlay screens:
+   --screen-glow accent, translucent panels, font-mono for small UI text.
+   ========================================================================== */
+
+.tools-top-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 4px 0 16px 0;
+}
+.tools-top-tabs button {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.7);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.tools-top-tabs button.active {
+  background: rgba(127, 216, 196, 0.15);
+  border-color: var(--screen-glow);
+  color: var(--screen-glow);
+}
+
+.tools-tab-bar { margin-top: 0; }
+
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.tools-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 14px;
+  cursor: pointer;
+  color: inherit;
+  font-family: var(--font-body);
+}
+.tools-card:hover {
+  border-color: var(--screen-glow);
+  background: rgba(127, 216, 196, 0.06);
+}
+.tools-card-icon { font-size: 1.6rem; }
+.tools-card-title { font-weight: 600; font-size: 0.9rem; }
+.tools-card-tag {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--screen-glow);
+  border: 1px solid var(--screen-glow);
+  border-radius: 4px;
+  padding: 1px 4px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.tools-card-desc {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.4;
+}
+.tools-pin-btn {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font-size: 1.1rem;
+  color: rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+}
+.tools-pin-btn.pinned { color: var(--brass-bright); }
+.tools-pin-btn:hover { color: var(--brass-bright); }
+
+.tools-back-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 12px;
+  display: block;
+}
+.tools-back-btn:hover { color: var(--screen-glow); }
+
+.tools-run-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.tools-run-icon { font-size: 2rem; line-height: 1; }
+.tools-run-header h3 { margin: 0 0 4px 0; }
+.tools-run-header p { margin: 0; font-size: 0.8rem; color: rgba(255, 255, 255, 0.55); }
+.tools-pin-toggle {
+  margin-left: auto;
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.6);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tools-pin-toggle:hover { border-color: var(--brass-bright); color: var(--brass-bright); }
+
+.tools-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.tools-field { display: flex; flex-direction: column; gap: 4px; }
+.tools-field label {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+.tools-field input[type="text"],
+.tools-field input[type="number"] {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--paper);
+  font-family: var(--font-body);
+}
+.tools-field input:focus { outline: none; border-color: var(--screen-glow); }
+
+.tools-radio-row { display: flex; flex-wrap: wrap; gap: 12px; }
+.tools-radio-option {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.tools-rows-editor { display: flex; flex-direction: column; gap: 6px; }
+.tools-rows-list { display: flex; flex-direction: column; gap: 6px; }
+.tools-row-item {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.tools-row-item input[type="number"] {
+  width: 90px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 6px 8px;
+  color: var(--paper);
+}
+.tools-row-remove {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.tools-row-remove:hover { color: #c0605a; }
+
+.tools-run-btn { margin-bottom: 16px; }
+
+.tools-result {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+.tools-result-line {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.85);
+}
+.tools-result-number { color: var(--screen-glow); font-weight: 600; }
+
+.tools-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.tools-save-row { display: flex; gap: 6px; align-items: center; }
+.tools-save-row select {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 6px 8px;
+  color: var(--paper);
+  max-width: 180px;
+}
+
+.tools-validation {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+.tools-validation-ok { background: rgba(127, 216, 196, 0.12); color: var(--screen-glow); }
+.tools-validation-error { background: rgba(192, 96, 90, 0.12); color: #e08a84; }
+
+.tools-builder-form { display: flex; flex-direction: column; gap: 8px; max-width: 640px; }
+.tools-builder-form h4 { margin: 12px 0 2px 0; }
+.tools-builder-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.tools-builder-row input, .tools-builder-row select {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 6px 8px;
+  color: var(--paper);
+  font-size: 0.82rem;
+}
+.tools-builder-output-row .tools-formula-input { flex: 1; min-width: 0; }
+.tools-builder-actions { display: flex; gap: 10px; margin-top: 12px; }
+.tools-builder-actions button:first-child {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.75);
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+}

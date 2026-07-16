@@ -323,6 +323,35 @@ up in a feature list. That's exactly the kind of maintenance this
 project's own history keeps rewarding, and I'd rather report that
 honestly than pad this reflection with the flashier additions.
 
+## Reflecting — Version 2, Phase 22 (Workshop Tools)
+
+**What stood out:** how different this phase felt from the ones right
+before it. The last several were all "look closely at something that
+already exists and make it truer to itself" — a real, satisfying kind of
+work, but a narrow one. This one was "take something genuinely external
+and give it a home," and that's a different muscle: less about noticing
+a small inconsistency, more about deciding what a whole new system
+should and shouldn't do. The decision I keep coming back to is the one
+to *not* port the source application's own job board. It would have
+been the easier path in the moment — the code was right there, already
+written — and it's the one choice this phase made that a straightforward
+port wouldn't have.
+
+**How Workshop Tools changed the Workshop as a creative workspace:** it's
+the first time the Workshop has held something *load-bearing* — real
+measurements a real business would actually get wrong without them, not
+an invented example. Every previous phase made the Workshop feel more
+like somewhere to be; this one is the first that could plausibly help
+someone actually build something outside the Workshop too, which feels
+like a genuinely different kind of "useful" than atmosphere or
+craftsmanship were ever trying to be. Watching the same three
+calculators (a bin-packing optimiser, a spring-tension lookup table, and
+a one-line percentage) all sit comfortably in the same toolbox, the same
+form renderer, the same "save this to a project" button, is what
+convinced me the shared-plumbing approach was the right one rather than
+a shortcut — a real tool library has to hold genuinely different shapes
+of problem without each one needing its own special case.
+
 ## Changelog
 
 <details>
@@ -830,5 +859,25 @@ checked against the family that grew up around it (fixed) and that four
 creak/scrape sounds were hand-copied duplicates of one graph (merged
 into a shared helper, changing nothing audible). See the new
 `docs/AUDIO.md` for the complete account.
+
+**Version 2, Phase 22 — Workshop Tools (v2.2.2)** — the Workshop's first
+real tool collection, and the first phase in a while to introduce
+genuine new capability rather than refine what already existed. Eleven
+calculators, ported with their real business logic intact from a genuine
+external application (a security/screen-door manufacturer's own
+production tool), grouped into Sales/Manufacturing/Installer. One shared
+toolbox — browse, run, build — reachable from the tool cabinet, a new
+computer app, and a small addition to the Workbench's own clipboard
+panel, all calling one implementation rather than three. Projects gained
+a real `calculations` record, distinct from the toolbox's own rolling
+"recent runs" history. The Calculator Builder's foundations: a small,
+hand-rolled arithmetic formula language (never `eval()`), six real
+templates, and custom calculators stored the same way the Builder's own
+objects already are. One deliberate architectural decision stands out:
+the source application's own job-tracking board was *not* ported, since
+the Workshop's existing project system already plays that role in its
+own idiom — building a second one would have been exactly the
+"duplicate functionality" this phase's own review was watching for. See
+the new `docs/TOOLS.md` for the complete account.
 
 </details>

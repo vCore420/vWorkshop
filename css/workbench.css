@@ -131,6 +131,44 @@
 }
 .wb-actions button:hover { background: var(--wood-dark); }
 
+/* Workshop Tools phase — the calculations summary + Open Tools button. */
+.wb-tools-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.15);
+}
+.wb-calc-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--ink-soft);
+}
+.wb-calc-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 22ch;
+}
+.wb-tools-row button {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  background: var(--wood-mid);
+  color: var(--paper);
+  border: none;
+  border-radius: 4px;
+  padding: 5px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.wb-tools-row button:hover { background: var(--wood-dark); }
+
 .wb-empty {
   text-align: center;
   padding: 10px 4px;

@@ -2997,6 +2997,59 @@ neither involves any physical motion a sound could represent, and this
 phase's own "every sound should earn its place" standard argues against
 adding one anyway.
 
+## Version 2 — Phase 22 — Workshop Tools (v2.2.2)
+
+**Goal:** "Features should begin becoming tools instead of applications."
+The Workshop's first real tool collection — eleven calculators ported
+from a genuine external application, a shared toolbox reachable from the
+tool cabinet, the computer, and the Workbench, real project integration,
+and the foundations of a Calculator Builder. See the new `docs/TOOLS.md`
+for the full account — this phase introduced genuinely new capability,
+not a craftsmanship refinement of something that already existed.
+
+**Eleven native calculators**, ported with their real business logic
+preserved exactly (`src/tools/NativeCalculators.js`, `maxRects.js`),
+grouped into Sales/Manufacturing/Installer — the same categories the
+source application's own comments already used. "Do not recreate the
+original application's interface" meant leaving behind its IndexedDB
+history store, its hand-built form DOM, and its floating quick-calculator
+bubble, replaced by one generic, schema-driven form renderer
+(`ToolsPanelView.js`) styled to match the rest of the Workshop.
+
+**One shared toolbox, three entry points** — the tool cabinet
+(`ToolStorageOverlay.js`), the computer's new Tools app (`ToolsApp.js`),
+and a small "Open Tools" button on the Workbench's own clipboard panel —
+all calling the identical `mountToolsPanel()`, the same "one
+implementation, several physical doors into it" shape `Wardrobe.js`
+already established.
+
+**Real project integration.** `ProjectsStore` gained a `calculations`
+array and `addCalculation()` — "projects should become long-term records
+of how work was completed." Distinct from `ToolsStore.recent`'s own
+rolling history of every run (for "quickly reopening previous
+calculations") the same way the source application distinguished an
+ephemeral history from a deliberate "attach to the job" action.
+
+**The Calculator Builder's foundations** — a hand-rolled arithmetic
+formula language (`ToolFormula.js`, never `eval()`/`new Function()`),
+six real templates (Basic formula, Material, Area, Percentage,
+Conversion, Time), and custom calculators stored the same way
+`ObjectLibraryStore` already stores Builder-made objects — the one
+precedent for "a Workshop asset," reused rather than reinvented.
+
+**A deliberate architectural decision: no ported Planner.** The source
+application's own Kanban job board would have duplicated
+`ProjectsStore`'s existing role in the Workshop's own idiom — exactly
+the "duplicate functionality" this phase's own Architectural Review
+section asks to watch for. Its most valuable idea (attach a calculation
+to a job) is generalised onto projects instead; see `docs/TOOLS.md`'s
+own "Why no Planner" for the full reasoning.
+
+**A real finding in the source material, not carried forward.**
+`getBuildoutSideDeductions()`, defined in the original `calculators.js`,
+had no caller anywhere in that file — dead code in the source itself,
+left out of the port rather than faithfully perpetuated.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space
