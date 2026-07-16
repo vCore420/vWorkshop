@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import { FurnitureSystem } from "../systems/FurnitureSystem.js";
 import { damp, clamp } from "../utils/MathUtils.js";
 import { makeTopDownRectCorners, projectRect, comfortableRect } from "../utils/ScreenProjector.js";
@@ -110,14 +111,16 @@ export class WorkbenchSystem {
    *  not two different ones, since the actual physical gesture (paper
    *  and hands moving briefly) is genuinely the same either direction;
    *  only the pitch varies, enough to read as two distinct moments
-   *  without needing a second sound design. */
+   *  without needing a second sound design. Sound & Presence phase — now
+   *  passes the clipboard's own real world position, so this sound gets
+   *  the same distance falloff every other interaction sound does. */
   activate() {
     if (this.active || !this.clipboardMesh) return;
     this.active = true;
     this.panel.setInteractive(true);
     this._refreshPanel();
     this.engine.input?.exitPointerLock();
-    this.deps.audioSystem?.playInteractionSound("paperShuffle", { pitch: 1.1 });
+    this.deps.audioSystem?.playInteractionSound("paperShuffle", { pitch: 1.1, position: this.clipboardMesh.getWorldPosition(new THREE.Vector3()) });
   }
 
   deactivate() {
@@ -125,7 +128,7 @@ export class WorkbenchSystem {
     this.active = false;
     this.panel.setInteractive(false);
     this.engine.input?.requestPointerLock();
-    this.deps.audioSystem?.playInteractionSound("paperShuffle", { pitch: 0.85 });
+    this.deps.audioSystem?.playInteractionSound("paperShuffle", { pitch: 0.85, position: this.clipboardMesh?.getWorldPosition(new THREE.Vector3()) });
   }
 
   setCurrentProject(projectId) {
