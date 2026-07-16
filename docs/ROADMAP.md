@@ -2816,6 +2816,98 @@ deliberately deferred: every existing interaction sound in the Workshop
 has a clear cause a player can connect it to, and this would be the
 first without one.
 
+## Version 2 — Phase 18 — Furniture & Storage (v2.1.8)
+
+**Goal:** "Every piece of furniture and storage within the Workshop
+should feel practical, intentional and genuinely useful." The fourth
+craftsmanship phase, and the first to span several objects rather than
+one — Shelving, Tool Storage, the Pinboard, the Wardrobe, the Sitting
+Area, and a material-only review of the already-redesigned Music
+Cabinet. See the new `docs/FURNITURE.md` — a dedicated doc for general
+furniture that never had one before this phase — for the full account.
+
+**Tool storage's shadow-board silhouettes** — the phase's single most
+on-theme addition: each of the three pegboard tools now hangs in front
+of a painted silhouette patch, so an empty hook would read as "the
+wrench is out" rather than just an empty hook. The middle drawer sits
+pulled open a few centimetres, as if just used.
+
+**Shelving gained a run of labelled storage bins** on the shelf at the
+easiest reach height, plus a cap trim in the same family as the
+Interior phase's own baseboards. A real dead-code finding along the
+way: `itemColors` — a genuinely varied palette — sat completely unused
+behind a `void` statement while a near-identical set of wood browns did
+its job instead; both arrays got a real, distinct purpose rather than
+one being deleted.
+
+**A new material**: `Materials.cork()` and its own `corkTexture()`,
+built the same way `concreteTexture()` already is, replace the
+pinboard's flat matte tint. Each pinned note now has a real push pin
+holding it up.
+
+**The wardrobe gained a cornice and real raised door panels** — the
+same "this reads as real, built furniture" standard the cornice trim
+and door panels apply consistently across this phase's objects.
+
+**The sitting area gained a cushion tier, a proper table foot, and one
+book** — "environmental storytelling," held to the same one-detail
+restraint the Workbench's pencil and the Desk's pen holder already set.
+
+**The music cabinet, reviewed rather than rebuilt** — already given its
+own dedicated redesign in an earlier phase; this pass found two real
+material gaps (a vinyl record and speaker cone surrounds that were
+`matte()` instead of `plastic()`/`rubber()`) and left everything else
+alone.
+
+**A drawer/cabinet interaction sound was considered and deliberately
+left out** — tool storage has no dedicated system of its own the way
+the computer, workbench, and front doors do, so adding one here would
+have meant either a new system (explicitly out of scope) or a
+furniture file reaching directly into `AudioSystem`, breaking the
+"furniture describes geometry; systems own behaviour" split every other
+object in the project respects.
+
+## Version 2 — Phase 19 — Decorative Details (v2.1.9)
+
+**Goal:** "If this object disappeared tomorrow, would the Workshop lose
+a tiny piece of its personality? If the answer is no, reconsider why it
+exists." The smallest-scoped craftsmanship phase yet, by design — three
+new additions total across the whole room, each chosen specifically to
+pass that test rather than an attempt to decorate every surface the
+brief's own examples named. See `docs/WORLD.md`'s own "Craftsmanship
+(Version 2, Phase 19)" section for the full account.
+
+**A wall clock — the Workshop's first genuinely time-driven
+decoration.** Mounted between the two north windows, its hour and
+minute hands are real pivot groups rotated by a new
+`LightingSystem._updateClockHands()`, driven by the exact same `hour`
+value `TimeOfDaySystem` already broadcasts for the sun. No new system,
+no new event — one more consumer of a value that already existed.
+
+**One small plant on one window sill** (not both — a matching pair
+reads as decorated, not lived-in) and **one small framed sketch** on
+the south wall, reusing `Materials.sketchPaper()` rather than a second
+way to suggest hand-drawn paper.
+
+**A real material gap, named directly in this phase's own brief:**
+`Materials.ceramic()` joins the Workshop's growing material set —
+every plant pot in the Workshop (the new one, and the music cabinet's
+existing one) was sharing `matte()`'s numbers for a surface that's
+almost always glazed ceramic in real life.
+
+**An architectural-review pass, confirmed rather than changed** — every
+material factory and texture function was checked for real callers;
+nothing new turned up. The Builder's own `DecorationBehaviour.js` was
+reviewed and found already exactly as honest as it should be.
+
+**A ticking clock sound was considered and deliberately left out** —
+a continuous ambient sound needs real 3D positional audio to be
+believable at different distances, which nothing in `AudioSystem`
+currently provides; every existing ambience is global (weather,
+nature) rather than tied to one object's own position. Left for
+whichever future phase actually introduces positional audio, rather
+than shipped as an always-on sound with no way to make it sound right.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

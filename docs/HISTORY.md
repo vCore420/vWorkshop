@@ -201,6 +201,76 @@ better-justified trigger than "just because" before it earns a place
 next to sounds that all currently have one, but "the building should
 sound alive" is a real, still-open brief, not a closed one.
 
+## Reflecting — Version 2, Phase 18 (Furniture & Storage)
+
+**What made the Workshop feel more believable, out of everything this
+phase touched:** the tool storage shadow-board, without much
+competition. It's a strange thing to keep reporting phase after phase —
+that the smallest, cheapest addition outperforms the more elaborate
+ones — but the pattern is consistent enough now that I trust it rather
+than treat it as a coincidence: a shadow-board silhouette is a handful
+of painted rectangles, and it did more for "someone actually organises
+this space" than the storage bins, the cork texture, and the cushion
+tier combined. I think the reason is that it's the one detail here that
+implies a *system* rather than an *object* — it says something about
+how the tools get put away, not just what they look like.
+
+**The smallest change with the biggest effect:** the ajar drawer. One
+number — a few centimetres of Z offset on a single drawer out of three
+— and the whole cabinet stops looking like a still life. I keep
+learning this same lesson in a new shape every phase (the pencil on the
+clipboard, the pen holder, now this), and I still underestimate it each
+time going in.
+
+**Where I'd focus next, given another week on everyday objects:** the
+things nobody's touched yet because they're not really "furniture" —
+the light switch got a toggle two phases ago, the front door got hinges
+last phase, but small fittings like the ceiling light pull cords, the
+music cabinet's own cabling, or the wardrobe's interior (visible only
+through its own overlay today, never physically) are exactly the kind
+of unglamorous detail this project's history keeps rewarding attention
+to. I'd also want to actually resolve the drawer-sound question I
+deferred this phase rather than left open — not by bending the
+furniture/system split, but by asking whether a small, shared
+"FurnitureSoundHook" concept is worth the one new seam it would cost,
+which felt like a real design decision rather than a phase-scoped one.
+
+## Reflecting — Version 2, Phase 19 (Decorative Details)
+
+**What surprised me most:** how much harder restraint was than
+craftsmanship. Every phase before this one had an obvious next target —
+a hero prop, a room, a category of furniture — and the work was mostly
+about doing it well. This phase's brief was, in effect, "add almost
+nothing, and make sure what you do add earns its place," and I found
+myself discarding more ideas than I kept: a coffee mug, a second framed
+piece, a stack of reference books by the workbench, a rug pattern.
+Every one of them would have been fine on its own. None of them passed
+"would the Workshop lose a piece of its personality without this," and
+I think that's the right outcome even though it made the phase feel
+smaller than the ones before it.
+
+**The tiny change with the biggest emotional impact:** the clock, and
+it isn't close. Not because of how it looks — it's four painted ticks
+and two thin rectangles — but because it's the first decorative object
+in the entire Workshop that's actually *true*. Every other detail here
+is a static, believable suggestion of a lived-in place; the clock
+genuinely tells you what time it is, using data the Workshop already
+had. Sitting with that distinction is what convinced me it was worth
+building at all, given this phase's own explicit instruction not to add
+systems — it isn't a new system, just the first *object* to actually
+listen to one that already existed.
+
+**What I hope someone would find, spending an hour just looking
+around without touching anything:** that the single plant is on the
+*left* window and not the right, and that this was clearly a choice,
+not an oversight. That the clock is a few minutes off from their own
+watch, because it's showing the Workshop's own time, not a copy of
+theirs. That the framed sketch looks like someone's own hand, not a
+print bought to fill a wall. None of these are things I'd point to in
+a list of features. They're the kind of thing you only notice once,
+and then can't stop noticing — which is exactly what this phase's own
+brief asked for.
+
 ## Changelog
 
 <details>
@@ -636,5 +706,38 @@ shelving that sat completely unused while a near-identical set of wood
 browns did its job instead — both arrays got a real purpose rather than
 one being deleted. See `docs/ROADMAP.md`'s own Phase 17 account for the
 complete list.
+
+**Version 2, Phase 18 — Furniture & Storage (v2.1.8)** — the first
+craftsmanship phase to span several objects rather than one, all
+gathered into a new dedicated `docs/FURNITURE.md`. Tool storage gained
+painted shadow-board silhouettes behind each hung tool — an empty hook
+now reads as "the wrench is out" — plus a drawer left pulled open a few
+centimetres. Shelving gained a shelf of labelled storage bins and a cap
+trim, and a real dead-code finding: a genuinely varied colour palette
+that sat unused behind a `void` statement while a near-identical set of
+browns did its job instead. A new `Materials.cork()` (with its own
+procedural texture) replaces the pinboard's flat tint, and each pinned
+note now has a real push pin. The wardrobe gained a cornice and raised
+door panels; the sitting area gained a cushion tier, a real table foot,
+and one book. The already-redesigned music cabinet got two small
+material fixes (a vinyl record and speaker cones that were never really
+matte) and nothing else. See `docs/ROADMAP.md`'s own Phase 18 account
+for the complete list.
+
+**Version 2, Phase 19 — Decorative Details (v2.1.9)** — the smallest-
+scoped craftsmanship phase yet, on purpose: three new additions to the
+whole room, each held to "if this disappeared, would the Workshop lose
+a piece of its personality?" A wall clock between the north windows —
+the Workshop's first genuinely time-driven decoration, its hands
+rotated by `LightingSystem` from the exact same hour value already
+broadcast for the sun, no new system required. One small plant on one
+window sill, deliberately not both. One small framed sketch on the
+south wall, reusing the Builder's own sketch-paper material rather
+than inventing a second one. A real material gap named directly in
+this phase's own brief: `Materials.ceramic()`, replacing `matte()` on
+every plant pot in the Workshop. A ticking clock sound was considered
+and deliberately left out — it needs real positional audio to sound
+right at different distances, which doesn't exist yet. See
+`docs/ROADMAP.md`'s own Phase 19 account for the complete list.
 
 </details>

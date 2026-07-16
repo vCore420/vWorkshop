@@ -1033,3 +1033,81 @@ treatment specifically; a second interior pass (crown moulding, a
 ceiling beam, more built-in storage) is the natural next candidate at
 the room scale, whenever it's time to return to it.
 
+## Craftsmanship (Version 2, Phase 19) — Decorative Details
+
+"Decoration should never exist simply because empty space looks
+unfinished... if this object disappeared tomorrow, would the Workshop
+lose a tiny piece of its personality? If the answer is no, reconsider
+why it exists." The smallest-scoped craftsmanship phase yet by design —
+three new room-level additions total, chosen specifically because each
+one passes that test, rather than an attempt to decorate every surface
+the brief's own examples named.
+
+**A wall clock — the Workshop's first genuinely time-driven
+decoration.** Mounted in the open wall segment between the two north
+windows. The hour and minute hands are real pivot groups
+(`clockHourHand`/`clockMinuteHand`, the exact same "a mesh offset from
+its own local origin inside a group whose origin is the true pivot"
+shape the front doors' own panels already use), rotated by
+`LightingSystem._updateClockHands()` from the same `hour` value
+`TimeOfDaySystem` already broadcasts on `timeofday:changed` for the
+sun. No new system, no new event — a fourth consumer of a value three
+other systems already read, the same architectural shape
+`docs/ARCHITECTURE.md`'s own "one state, five independent listeners"
+section already describes for weather.
+
+**One small plant, on one window sill, not both.** The Workshop Interior
+phase gave both windows a real protruding sill; this phase finally put
+something on one of them — deliberately not both, since a matching pair
+reads as decorated rather than lived-in. A compact succulent, chosen
+specifically to look different from the music cabinet's own leafier
+plant rather than repeating the same pot around the room.
+
+**One small framed sketch, south wall.** Reuses `Materials.sketchPaper()`
+— already built for the Builder's own sketch presence items — rather
+than inventing a second way to suggest hand-drawn paper on canvas. A
+sketch reads as "somebody's own work, framed," which fits a workshop's
+identity more specifically than a generic print would have.
+
+**A real material gap, named directly in this phase's own brief:**
+`Materials.ceramic()` joins `wood()`/`metal()`/`fabric()`/`plastic()`/
+`rubber()`/`cork()` in `PlaceholderFactory.js` — every plant pot in the
+Workshop (this phase's new one, and the music cabinet's existing one)
+was sharing `matte()`'s own numbers for a surface that's almost always
+glazed ceramic in real life. Smoother and very slightly reflective,
+distinct from plastic's own glossier, completely non-metallic read.
+
+**A real architectural-review pass, confirmed rather than changed.**
+Every `Materials.*` factory and every `ProceduralTexture` function was
+checked for real callers this phase (the same audit that found
+`softBox()` and `Materials.ground()` dead in earlier phases) — nothing
+new turned up. `DecorationBehaviour.js`, the Builder's own "this object
+is purely decorative" behaviour, was reviewed and found already exactly
+as honest as it should be: it does nothing at all, on purpose, and says
+so in its own comment.
+
+**What was considered and deliberately left out.** A ticking clock
+sound was the obvious pairing for a functioning clock, and didn't
+survive the same restraint test everything else in this phase did: a
+continuous ambient sound needs real 3D positional audio to be
+believable (quiet near the desk, more present standing under it),
+which nothing in `AudioSystem` currently provides — every existing
+ambience is global (weather, nature) rather than tied to a specific
+object's own position in the room. Built globally instead, a tick loud
+enough to hear near the clock would be equally, unrealistically loud
+from across the room. Left for whichever future phase actually
+introduces positional audio, rather than shipped as an always-on sound
+with no way to make it sound right. Record-player ambience (crackle,
+hiss) was also considered and left to `docs/MUSIC.md`'s own domain —
+a real audio-quality feature for the music system itself, not a
+decorative object question.
+
+## Future extension points (Decorative Details)
+
+- **Positional audio** — the clock's own deferred tick, and likely other
+  small object sounds, are waiting on this rather than on anything
+  specific to any one object.
+- **A second framed piece or two**, if a future pass ever wants the
+  walls to feel a little further along without tipping into the
+  "decorated, not lived-in" read this phase deliberately avoided.
+
