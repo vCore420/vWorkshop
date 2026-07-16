@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { woodGrainTexture, metalBrushedTexture, paperTexture, blueprintTexture, sketchTexture, sidingTexture } from "./ProceduralTexture.js";
+import { woodGrainTexture, metalBrushedTexture, paperTexture, blueprintTexture, sketchTexture, sidingTexture, corkTexture } from "./ProceduralTexture.js";
 
 /**
  * PlaceholderFactory
@@ -102,6 +102,26 @@ export const Materials = {
       transparent: true,
       opacity: 0.35,
     }));
+  },
+  // Furniture & Storage phase — "pinboard... material quality." The one
+  // real cork surface in the Workshop was sharing matte()'s flat colour;
+  // this gives it cork's own actual mottled look, the same way paper()
+  // and blueprint() already have their own texture rather than a flat
+  // tint standing in for one.
+  cork(color = "#c79a63") {
+    return cached(`cork:${color}`, () => new THREE.MeshStandardMaterial({
+      map: corkTexture(color),
+      roughness: 0.92,
+      metalness: 0,
+    }));
+  },
+  // Decorative Details phase — "materials... ceramic." Every plant pot
+  // in the Workshop was sharing matte()'s own numbers for a surface
+  // that's almost always glazed ceramic in real life — smoother and
+  // very slightly reflective, distinct from plastic's own glossier,
+  // completely non-metallic read.
+  ceramic(color = "#a9764f") {
+    return cached(`ceramic:${color}`, () => new THREE.MeshStandardMaterial({ color, roughness: 0.4, metalness: 0.05 }));
   },
   brass() {
     return cached("brass", () => new THREE.MeshStandardMaterial({ color: "#b8863b", roughness: 0.35, metalness: 0.9 }));

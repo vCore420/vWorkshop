@@ -56,6 +56,34 @@ export function woodGrainTexture(baseColor = "#6b4a34", grainColor = "#4a3120", 
   return texture;
 }
 
+/**
+ * Furniture & Storage phase — "pinboard... material quality." The cork
+ * board was a single flat matte colour with nothing suggesting cork's own
+ * characteristic mottled, blotchy surface. Built the same way
+ * `concreteTexture()` already is (randomly placed, randomly sized,
+ * randomly faint arcs) — cork's own irregular grain just needs bigger,
+ * warmer-toned blotches at a lower density than concrete's fine speckle.
+ */
+export function corkTexture(base = "#c79a63") {
+  const canvas = makeCanvas(256);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  for (let i = 0; i < 220; i++) {
+    const shade = Math.random() > 0.5 ? "0,0,0" : "255,235,200";
+    const v = 0.05 + Math.random() * 0.12;
+    ctx.fillStyle = `rgba(${shade},${v})`;
+    ctx.beginPath();
+    ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, 1.5 + Math.random() * 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  configureFlatTexture(texture);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 export function paperTexture(base = "#ede3d0") {
   const canvas = makeCanvas(256);
   const ctx = canvas.getContext("2d");
