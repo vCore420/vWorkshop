@@ -128,13 +128,15 @@ export class RoomLayoutSystem {
    *  (see main.js's own registration order comments), but the door is
    *  never toggled that early, so a lazy, on-demand lookup the moment
    *  it's actually needed is simpler than threading a dependency through
-   *  the constructor for a system this system never otherwise needs. */
+   *  the constructor for a system this system never otherwise needs.
+   *  Sound & Presence phase — now passes the door frame's own world
+   *  position for real distance falloff. */
   toggleDoor() {
     this.doorOpen = !this.doorOpen;
     this._doorTargetAngle = this.doorOpen ? this.room.doorOpenAngle : 0;
     const interactable = this.doorEntity.getComponent(InteractableComponent);
     interactable.prompt = this.doorOpen ? "Close the front doors" : "Open the front doors";
-    this.engine.getSystem(AudioSystem)?.playInteractionSound("doorCreak", { pitch: this.doorOpen ? 1.1 : 0.85 });
+    this.engine.getSystem(AudioSystem)?.playInteractionSound("doorCreak", { pitch: this.doorOpen ? 1.1 : 0.85, position: this.doorEntity.object3D.getWorldPosition(new THREE.Vector3()) });
   }
 
   getBounds() {

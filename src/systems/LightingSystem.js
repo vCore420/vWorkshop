@@ -5,6 +5,7 @@ import { InteractableComponent } from "../core/components/InteractableComponent.
 import { box, Materials } from "../utils/PlaceholderFactory.js";
 import { RoomLayoutSystem } from "./RoomLayoutSystem.js";
 import { FurnitureSystem } from "./FurnitureSystem.js";
+import { AudioSystem } from "./AudioSystem.js";
 
 /**
  * LightingSystem
@@ -36,6 +37,8 @@ export class LightingSystem {
     this._stormActive = false;
     this._lightningTimer = 0;
     this._lightningFlash = 0; // 0-1, decays after each flash — see update()
+    // Sound & Presence phase — see _checkClockChime()'s own comment.
+    this._lastChimeHour = null;
   }
 
   /** Lets another system's own light (built and owned there, since that
@@ -82,10 +85,13 @@ export class LightingSystem {
     // distance." The original ±6/far-20 frustum matched the Workshop
     // room's own footprint exactly, leaving any Builder-created structure
     // further out in the wider outdoor world with no shadow coverage at
-    // all. Expanded to ±9/far-28 — map size (see setLightingQuality) is
-    // deliberately left unchanged, so this trades a little per-pixel
-    // shadow crispness for genuinely covering more of the world, rather
-    // than also increasing GPU cost to compensate.
+    // all. Expanded in stages across later phases to the current
+    // ±13/far-34 — map size (see setLightingQuality) is deliberately left
+    // unchanged, so this trades a little per-pixel shadow crispness for
+    // genuinely covering more of the world, rather than also increasing
+    // GPU cost to compensate. (None of these expansions actually took
+    // effect until this phase — see the `updateProjectionMatrix()` call
+    // below and its own comment.)
     this.sun.shadow.camera.far = 34;
     this.sun.shadow.camera.left = -13;
     this.sun.shadow.camera.right = 13;
@@ -101,6 +107,27 @@ export class LightingSystem {
     this.sun.shadow.radius = 2;
     this.sun.shadow.bias = -0.0006;
     this.sun.shadow.normalBias = 0.02;
+    // Visual Identity phase — "the terrain correctly receives lighting but
+    // no longer receives dynamic shadows... determine why shadow reception
+    // was lost." The actual cause: every property set above
+    // (near/far/left/right/top/bottom) only ever changes the plain JS
+    // fields on `OrthographicCamera` — it does *not* recompute
+    // `projectionMatrix` itself, and three.js's own shadow-map render path
+    // (`LightShadow.updateMatrices()`) reads `camera.projectionMatrix`
+    // directly rather than deriving it fresh. Without this call, the
+    // shadow camera silently kept using the *construction-time* default
+    // projection matrix (a DirectionalLightShadow's own default camera is
+    // `±5, near 0.5, far 500`) no matter what this file set those
+    // properties to — meaning every "expand shadow coverage" pass in this
+    // system's own history (±6 → ±9 → the ±13 above) never actually took
+    // effect. That mismatch was always there, but only became this
+    // visible once the terrain grew from a small, roughly room-sized
+    // patch to a real 200m ground: a ±5 frustum pinned to the origin
+    // covers a small patch almost by accident, but leaves nearly all of a
+    // 200m terrain permanently outside the shadow camera's own view,
+    // exactly the symptom reported. One call fixes it for every future
+    // change to these properties too, not just this one.
+    this.sun.shadow.camera.updateProjectionMatrix();
     engine.scene.add(this.sun, this.sun.target);
 
     this.ambientFill = new THREE.AmbientLight("#4a3a2c", 0.18);
@@ -294,6 +321,29 @@ export class LightingSystem {
     const minuteAngle = (hour % 1) * Math.PI * 2;
     this.clockHourHand.rotation.z = -hourAngle;
     this.clockMinuteHand.rotation.z = -minuteAngle;
+    this._checkClockChime(hour);
+  }
+
+  /** Sound & Presence phase — "clock sounds." A soft chime exactly when
+   *  the clock's own hands cross into a new hour, not a continuous tick
+   *  — see `AudioSynth.playClockChime()`'s own comment for why. This
+   *  only ever runs on `_onTimeChanged`'s own throttled sample (roughly
+   *  4 times a second — see `TimeOfDaySystem.update()`), so the exact
+   *  instant an hour turns over would usually be missed entirely;
+   *  comparing the *integer* hour against the last-seen one instead
+   *  reliably catches every crossing within one sample either way, which
+   *  is more than close enough for a chime nobody's timing with a
+   *  stopwatch. `_lastChimeHour` starts `null` specifically so the very
+   *  first sample after load never chimes for simply *starting* at
+   *  whatever hour the Workshop already happens to be at — only a real
+   *  crossing counts. */
+  _checkClockChime(hour) {
+    const wholeHour = Math.floor(hour) % 24;
+    if (this._lastChimeHour !== null && this._lastChimeHour !== wholeHour) {
+      const position = this.clockHourHand.getWorldPosition(new THREE.Vector3());
+      this.engine.getSystem(AudioSystem)?.playInteractionSound("clockChime", { position });
+    }
+    this._lastChimeHour = wholeHour;
   }
 
   _onEnvironmentChanged({ lightDampening, id }) {

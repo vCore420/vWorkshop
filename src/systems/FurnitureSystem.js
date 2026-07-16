@@ -4,6 +4,7 @@ import { FURNITURE_LAYOUT } from "../data/layoutDefault.js";
 import { Entity } from "../core/Entity.js";
 import { MeshComponent } from "../core/components/MeshComponent.js";
 import { InteractableComponent } from "../core/components/InteractableComponent.js";
+import { AudioSystem } from "./AudioSystem.js";
 
 /**
  * FurnitureSystem
@@ -69,13 +70,33 @@ export class FurnitureSystem {
               });
         const onExit = cfg.onExit ? () => cfg.onExit({ engine, entity, definition }) : null;
 
+        // Sound & Presence phase — "storage... drawers." An optional
+        // `soundOnInteract` string, played (with the piece's own real
+        // world position, for genuine distance falloff) by *this*
+        // system — the one place that already owns every furniture
+        // piece's interaction wiring — rather than a furniture
+        // definition file reaching into `AudioSystem` directly. That
+        // was specifically the seam `docs/FURNITURE.md`'s own
+        // "considered and deliberately left out" note flagged for
+        // tool storage's own drawer sound last phase: adding it here,
+        // generically, resolves it for every future piece too, not
+        // just that one.
+        const wrappedOnInteract = cfg.soundOnInteract
+          ? () => {
+              engine.getSystem(AudioSystem)?.playInteractionSound(cfg.soundOnInteract, {
+                position: object3D.getWorldPosition(new THREE.Vector3()),
+              });
+              onInteract();
+            }
+          : onInteract;
+
         entity.addComponent(
           new InteractableComponent({
             prompt: cfg.prompt,
             radius: cfg.radius,
             focusPose,
             opensOverlay: cfg.overlayId ? true : !!cfg.opensOverlay,
-            onInteract,
+            onInteract: wrappedOnInteract,
             onExit,
           })
         );

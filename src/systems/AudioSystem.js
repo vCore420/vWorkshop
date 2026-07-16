@@ -1,4 +1,5 @@
-import { playAmbientTrack, createNoiseSource, createNatureAmbience, playPaperShuffle, playChairCreak, playDoorCreak, getTrackList } from "../utils/AudioSynth.js";
+import * as THREE from "three";
+import { playAmbientTrack, createNoiseSource, createNatureAmbience, playPaperShuffle, playChairCreak, playDoorCreak, playBuildingCreak, playDrawerSlide, playClockChime, playResidentThinking, getTrackList } from "../utils/AudioSynth.js";
 import { CameraSystem } from "./CameraSystem.js";
 import { InteriorSystem } from "./InteriorSystem.js";
 import { EnvironmentSystem } from "./EnvironmentSystem.js";
@@ -25,6 +26,19 @@ const INDOOR_NATURE_CUTOFF = 1100; // "distant birds" through a wall
 const INDOOR_NATURE_GAIN_MULT = 0.45;
 const LOCATION_CHECK_INTERVAL = 0.6; // seconds — indoor/outdoor doesn't need checking every frame
 const WIND_GUST_MODULATION_INTERVAL = 0.2;
+// Sound & Presence phase — "building creaks... should remain subtle and
+// infrequent." A genuinely wide, randomised window (3-7 real minutes)
+// rather than a fixed interval — a metronomic creak would read as a
+// mechanism, not a building. A few fixed, plausible spots (old wooden
+// structures creak from their joints and beams, not from mid-air) rather
+// than a random point anywhere in the room.
+const BUILDING_CREAK_MIN_INTERVAL = 180;
+const BUILDING_CREAK_MAX_INTERVAL = 420;
+const BUILDING_CREAK_POSITIONS = [
+  new THREE.Vector3(-3.35, 1.6, -0.6), // near the workbench
+  new THREE.Vector3(3.8, 1.8, -0.8), // near the shelving
+  new THREE.Vector3(0, 2.85, 0), // the ceiling, roughly overhead
+];
 
 /**
  * AudioSystem
@@ -76,6 +90,11 @@ export class AudioSystem {
     this._indoor = false;
     this._locationCheckTimer = 0;
     this._windGustTimer = 0;
+    // Sound & Presence phase — see BUILDING_CREAK_MIN/MAX_INTERVAL above
+    // and _updateBuildingPresence() below. Randomised immediately so the
+    // very first creak doesn't always land at the same, predictable
+    // moment after the Workshop loads.
+    this._buildingCreakTimer = this._randomCreakInterval();
     // Settings-driven multipliers (Settings app's Audio tab), layered on
     // top of this system's own existing volume/balance choices below,
     // rather than replacing them — see setVolumeMultipliers.
@@ -322,16 +341,88 @@ export class AudioSystem {
    *  "resumeContext() hasn't happened yet" case every other sound in
    *  this file already tolerates) — missing a one-shot effect before the
    *  very first click has even resumed audio is inaudible regardless.
+  /** Sound & Presence phase — "spatial positioning... nothing should
+   *  feel disconnected." Every interaction sound before this phase
+   *  played at one flat volume no matter where the player actually
+   *  stood relative to the object making it — a door creak from across
+   *  the room was exactly as loud as one right next to your ear. A
+   *  simple distance falloff against the same `_cameraSystem.position`
+   *  this file already reads for indoor/outdoor detection, not a new
+   *  dependency: full volume within `NEAR`, easing to a small (never
+   *  quite zero — a real sound this close by is still faintly audible,
+   *  not a hard cliff) floor by `FAR`. No `position` supplied (an
+   *  existing call site that hasn't been updated, or genuinely
+   *  position-less audio) plays at full volume, unchanged from before
+   *  this phase. */
+  _computeDistanceGain(position) {
+    if (!position || !this._cameraSystem?.position) return 1;
+    const NEAR = 3; // metres — full volume this close or closer
+    const FAR = 14; // metres — the quiet floor beyond this distance
+    const FLOOR = 0.06;
+    const dist = this._cameraSystem.position.distanceTo(position);
+    if (dist <= NEAR) return 1;
+    if (dist >= FAR) return FLOOR;
+    return 1 - ((dist - NEAR) / (FAR - NEAR)) * (1 - FLOOR);
+  }
+
+  /** Workshop Workbench phase — "interaction sounds... audio should
+   *  remain understated and believable." The one entry point for every
+   *  short, one-shot sound effect in the Workshop — `kind` selects which,
+   *  rather than a dedicated method per sound, so a future door or
+   *  drawer reaches for this same method with a new `kind` instead of
+   *  building its own audio graph from scratch. Routes through
+   *  `masterGain` (so the Master Volume slider still applies, the same
+   *  as every other sound this system makes) scaled by
+   *  `_effectsMultiplier` — Settings' own "Effects Volume" slider existed
+   *  since early in Version 2 but had nothing to control until this
+   *  phase gave the Workshop its first real sound effect. Silently does
+   *  nothing before the AudioContext exists (the same "resumeContext()
+   *  hasn't happened yet" case every other sound in this file already
+   *  tolerates) — missing a one-shot effect before the very first click
+   *  has even resumed audio is inaudible regardless.
    *  The Desk phase added a second `kind` ("chairCreak"); the Workshop
-   *  Interior phase adds a third ("doorCreak") the same way. */
+   *  Interior phase a third ("doorCreak"). Sound & Presence phase — two
+   *  more (`"buildingCreak"`, `"drawerSlide"`), a fifth
+   *  (`"clockChime"`, event-triggered rather than player-triggered —
+   *  "one-shot sound effect" never actually required a click, just a
+   *  cause, and a hand crossing an hour mark is as real a cause as a
+   *  button press), and an optional `options.position` (world-space
+   *  `THREE.Vector3`) every caller *can* now supply for real distance
+   *  falloff via `_computeDistanceGain()` above. */
   playInteractionSound(kind, options = {}) {
     if (!this.context) return;
     const gain = this.context.createGain();
-    gain.gain.value = this._effectsMultiplier;
+    gain.gain.value = this._effectsMultiplier * this._computeDistanceGain(options.position);
     gain.connect(this.masterGain);
     if (kind === "paperShuffle") playPaperShuffle(this.context, gain, options);
     if (kind === "chairCreak") playChairCreak(this.context, gain, options);
     if (kind === "doorCreak") playDoorCreak(this.context, gain, options);
+    if (kind === "buildingCreak") playBuildingCreak(this.context, gain, options);
+    if (kind === "drawerSlide") playDrawerSlide(this.context, gain, options);
+    if (kind === "clockChime") playClockChime(this.context, gain, options);
+    if (kind === "residentThinking") playResidentThinking(this.context, gain, options);
+  }
+
+  /** A fresh random wait until the next building creak — see
+   *  BUILDING_CREAK_MIN/MAX_INTERVAL's own comment for why this is wide
+   *  and randomised rather than fixed. */
+  _randomCreakInterval() {
+    return BUILDING_CREAK_MIN_INTERVAL + Math.random() * (BUILDING_CREAK_MAX_INTERVAL - BUILDING_CREAK_MIN_INTERVAL);
+  }
+
+  /** Sound & Presence phase — "the Workshop should breathe... silence
+   *  should exist naturally, sound should appear naturally." Indoors
+   *  only (a building's own joints and beams settling isn't something
+   *  you'd hear from out in the yard) — picks one of a few fixed,
+   *  plausible spots, plays a soft creak there with a little pitch
+   *  variety, and reschedules for another long, random wait. */
+  _updateBuildingPresence(dt) {
+    if (!this._indoor) return;
+    this._buildingCreakTimer -= dt;
+    if (this._buildingCreakTimer > 0) return;
+    this._buildingCreakTimer = this._randomCreakInterval();
+    const position = BUILDING_CREAK_POSITIONS[Math.floor(Math.random() * BUILDING_CREAK_POSITIONS.length)];
+    this.playInteractionSound("buildingCreak", { position, pitch: 0.85 + Math.random() * 0.3 });
   }
 
   update(dt) {
@@ -342,6 +433,8 @@ export class AudioSystem {
       this._locationCheckTimer = LOCATION_CHECK_INTERVAL;
       this._checkLocation();
     }
+
+    this._updateBuildingPresence(dt);
 
     this._windGustTimer -= dt;
     if (this._windGustTimer <= 0 && this.currentAmbience && (this.currentAmbience.id === "wind" || this.currentAmbience.id === "storm")) {

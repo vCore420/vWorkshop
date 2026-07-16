@@ -112,6 +112,14 @@ export function createNoiseSource(audioContext) {
  * small multiplier around 1) lets two calls of the same function read
  * as subtly different moments (leaning in versus standing back up)
  * without needing a second, near-identical function.
+ *
+ * Sound & Presence phase — "inconsistent volume levels." This was the
+ * very first interaction sound built, before there was any family to be
+ * consistent *with* — its own peak gain (0.5) had never been revisited
+ * against the ones that came later (chairCreak 0.32, doorCreak 0.28),
+ * and was noticeably louder than all of them. Brought down to 0.3, in
+ * line with the other two "direct object interaction" sounds of
+ * comparable prominence.
  */
 export function playPaperShuffle(audioContext, destinationNode, { pitch = 1 } = {}) {
   const source = createNoiseSource(audioContext);
@@ -122,7 +130,7 @@ export function playPaperShuffle(audioContext, destinationNode, { pitch = 1 } = 
   const gain = audioContext.createGain();
   const now = audioContext.currentTime;
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.linearRampToValueAtTime(0.5, now + 0.02);
+  gain.gain.linearRampToValueAtTime(0.3, now + 0.02);
   gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
   source.connect(filter);
   filter.connect(gain);
@@ -145,51 +153,176 @@ export function playPaperShuffle(audioContext, destinationNode, { pitch = 1 } = 
  * the same two calls (sitting, standing) read as distinct moments without
  * a second function, exactly like `playPaperShuffle()`'s own parameter.
  */
-export function playChairCreak(audioContext, destinationNode, { pitch = 1 } = {}) {
+/**
+ * Sound & Presence phase — "opportunities for better reuse." Four sounds
+ * built across four separate phases — the chair creak, the door creak,
+ * the building creak, and the drawer slide — turned out to be the exact
+ * same four operations (noise, through a bandpass sweep, through a short
+ * gain envelope) differing only in six numbers each. With three of them
+ * a shared helper felt premature; with four, the duplication stopped
+ * being debatable. Every one of those four public functions below is now
+ * a single, readable call naming its own tuning, not a fourth copy of
+ * the graph-building code to keep in sync by hand if this technique
+ * itself ever needs a change (a different rolloff, say). `stopBuffer`
+ * exists only so this refactor could preserve each original function's
+ * exact stop time — a few hundredths of a second of silent padding after
+ * the envelope's own decay, never audible either way — rather than
+ * quietly changing something nobody asked to change.
+ */
+function playFilteredNoiseBurst(audioContext, destinationNode, {
+  startFreq, endFreq, sweepDuration, q, peakGain, attackTime, decayDuration, stopBuffer, pitch = 1,
+}) {
   const source = createNoiseSource(audioContext);
   const filter = audioContext.createBiquadFilter();
   filter.type = "bandpass";
-  filter.Q.value = 4;
+  filter.Q.value = q;
   const now = audioContext.currentTime;
-  filter.frequency.setValueAtTime(520 * pitch, now);
-  filter.frequency.linearRampToValueAtTime(300 * pitch, now + 0.28);
+  filter.frequency.setValueAtTime(startFreq * pitch, now);
+  filter.frequency.linearRampToValueAtTime(endFreq * pitch, now + sweepDuration);
   const gain = audioContext.createGain();
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.linearRampToValueAtTime(0.32, now + 0.05);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+  gain.gain.linearRampToValueAtTime(peakGain, now + attackTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + decayDuration);
   source.connect(filter);
   filter.connect(gain);
   gain.connect(destinationNode);
   source.start(now);
-  source.stop(now + 0.34);
+  source.stop(now + decayDuration + stopBuffer);
+}
+
+/**
+ * The Desk phase's own interaction sound — a soft chair creak on sitting
+ * down and standing back up, the second entry in `AudioSystem
+ * .playInteractionSound()`'s own `kind` switch (see `playPaperShuffle()`
+ * above for the first). What actually reads as "creak" rather than
+ * "shuffle" is the filter itself — narrower (`Q` of 4 rather than 0.6, a
+ * resonant sweep rather than a flat hiss) and *sliding* from a higher
+ * frequency down to a lower one over the sound's own short life, the way
+ * a real creak's pitch settles as whatever was flexing stops moving.
+ * `pitch` still lets the same two calls (sitting, standing) read as
+ * distinct moments without a second function, exactly like
+ * `playPaperShuffle()`'s own parameter. Built on `playFilteredNoiseBurst()`
+ * — see that function's own comment.
+ */
+export function playChairCreak(audioContext, destinationNode, { pitch = 1 } = {}) {
+  playFilteredNoiseBurst(audioContext, destinationNode, {
+    startFreq: 520, endFreq: 300, sweepDuration: 0.28, q: 4,
+    peakGain: 0.32, attackTime: 0.05, decayDuration: 0.32, stopBuffer: 0.02, pitch,
+  });
 }
 
 /**
  * The Workshop Interior phase's own interaction sound — a soft creak on
- * opening and closing the front doors, the third `kind` in `AudioSystem
- * .playInteractionSound()`'s own switch (see `playPaperShuffle()` and
- * `playChairCreak()` above for the first two). Same shape again — noise
- * through a filter through a short envelope — tuned lower and a little
- * longer than the chair's own creak: a door is a bigger, heavier object,
- * and a real hinge creak settles more slowly than a seat cushion does.
+ * opening and closing the front doors, lower and slower than the Desk
+ * phase's chair creak — a door is a bigger, heavier object, and a real
+ * hinge creak settles more slowly than a seat cushion does. Built on
+ * `playFilteredNoiseBurst()` — see that function's own comment.
  */
 export function playDoorCreak(audioContext, destinationNode, { pitch = 1 } = {}) {
-  const source = createNoiseSource(audioContext);
-  const filter = audioContext.createBiquadFilter();
-  filter.type = "bandpass";
-  filter.Q.value = 3;
+  playFilteredNoiseBurst(audioContext, destinationNode, {
+    startFreq: 340, endFreq: 220, sweepDuration: 0.4, q: 3,
+    peakGain: 0.28, attackTime: 0.06, decayDuration: 0.45, stopBuffer: 0.03, pitch,
+  });
+}
+
+/**
+ * Sound & Presence phase — "building creaks... wooden furniture
+ * settling... should remain subtle and infrequent." The lowest, slowest
+ * of the Workshop's creak family — a bigger, more diffuse "the whole
+ * structure, somewhere" sound rather than one specific object, so it's
+ * tuned lower and slower again than even the door's own creak, and
+ * quieter at its peak: this one is meant to occasionally register at the
+ * edge of attention, not announce itself. Triggered by `AudioSystem`'s
+ * own self-scheduling timer (see `_updateBuildingPresence()`), never by
+ * a player action — the first creak-family member with no cause behind
+ * it at all beyond the building itself. Built on
+ * `playFilteredNoiseBurst()` — see that function's own comment.
+ */
+export function playBuildingCreak(audioContext, destinationNode, { pitch = 1 } = {}) {
+  playFilteredNoiseBurst(audioContext, destinationNode, {
+    startFreq: 200, endFreq: 130, sweepDuration: 0.65, q: 2.5,
+    peakGain: 0.18, attackTime: 0.1, decayDuration: 0.75, stopBuffer: 0.05, pitch,
+  });
+}
+
+/**
+ * Sound & Presence phase — "storage... drawers." Shorter and
+ * higher-pitched than the creak family — a drawer runner's own friction
+ * reads as a grainier, more metallic scrape than a wooden joint settling,
+ * so a narrower, higher-frequency bandpass rather than a lower, broader
+ * one. Played once, on interaction, through `FurnitureSystem`'s own
+ * generic `soundOnInteract` field (see that file's own comment) — no
+ * furniture definition file calls this, or any sound function, directly.
+ * Built on `playFilteredNoiseBurst()` — see that function's own comment.
+ */
+export function playDrawerSlide(audioContext, destinationNode, { pitch = 1 } = {}) {
+  playFilteredNoiseBurst(audioContext, destinationNode, {
+    startFreq: 900, endFreq: 650, sweepDuration: 0.22, q: 5,
+    peakGain: 0.22, attackTime: 0.03, decayDuration: 0.26, stopBuffer: 0.02, pitch,
+  });
+}
+
+/**
+ * Sound & Presence phase — "clock sounds." The Workshop's first *tonal*
+ * one-shot — every other interaction sound is filtered noise, honest for
+ * a scrape, a creak, a hinge, but wrong for a clock, which actually rings
+ * a pitch. Two sine oscillators a major third apart (a soft, consonant
+ * two-note chime, not a full bell peal) through one shared envelope,
+ * rather than a single tone, for a little more warmth than one sine wave
+ * alone would have. Triggered once per simulated hour the wall clock's
+ * own hands cross (see `LightingSystem._updateClockHands()`), not once a
+ * second — "avoid continuous looping audio where occasional, contextual
+ * sounds would feel more believable" ruled out a literal tick-tock
+ * entirely; a chime on the hour is the same instinct real longcase
+ * clocks already apply, marking a moment rather than narrating every
+ * second.
+ */
+export function playClockChime(audioContext, destinationNode) {
   const now = audioContext.currentTime;
-  filter.frequency.setValueAtTime(340 * pitch, now);
-  filter.frequency.linearRampToValueAtTime(220 * pitch, now + 0.4);
   const gain = audioContext.createGain();
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.linearRampToValueAtTime(0.28, now + 0.06);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
-  source.connect(filter);
-  filter.connect(gain);
+  gain.gain.linearRampToValueAtTime(0.2, now + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 1.4);
   gain.connect(destinationNode);
-  source.start(now);
-  source.stop(now + 0.48);
+  for (const [freq, level] of [[523.25, 1], [659.25, 0.55]]) {
+    const osc = audioContext.createOscillator();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    const oscGain = audioContext.createGain();
+    oscGain.gain.value = level;
+    osc.connect(oscGain);
+    oscGain.connect(gain);
+    osc.start(now);
+    osc.stop(now + 1.4);
+  }
+}
+
+/**
+ * Sound & Presence phase — "Residents... Thinking... should communicate
+ * life without becoming distracting." Bubble had no audio at all before
+ * this phase. A single soft triangle-wave tone with a quick upward pitch
+ * bend, under 200 milliseconds and quiet even at its peak — deliberately
+ * the smallest, gentlest sound in the Workshop's entire library, since
+ * it fires on its own (see `ResidentController._maybeAnnounceThinking()`),
+ * with no click or door behind it to already have primed a listener's
+ * attention. Distinct in character from `playClockChime()` (two
+ * sustained sine tones, a resonant interval) — this is a single quick
+ * flicker, reading as "a thought, passing" rather than "a bell, rung."
+ */
+export function playResidentThinking(audioContext, destinationNode) {
+  const now = audioContext.currentTime;
+  const osc = audioContext.createOscillator();
+  osc.type = "triangle";
+  osc.frequency.setValueAtTime(420, now);
+  osc.frequency.exponentialRampToValueAtTime(620, now + 0.12);
+  const gain = audioContext.createGain();
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.linearRampToValueAtTime(0.12, now + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+  osc.connect(gain);
+  gain.connect(destinationNode);
+  osc.start(now);
+  osc.stop(now + 0.2);
 }
 
 /**

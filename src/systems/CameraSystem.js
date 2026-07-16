@@ -487,7 +487,7 @@ export class CameraSystem {
       this._verticalVelocity = 0;
       this._grounded = true;
       if (!wasGrounded) this._landTimer = LAND_STATE_DURATION;
-    } else if (wasGrounded && belowGround <= STEP_TOLERANCE) {
+    } else if (this._grounded && belowGround <= STEP_TOLERANCE) {
       // "Walking down gentle slopes or edited terrain should not enter a
       // falling state." `_footY` only ever integrates gravity — it
       // doesn't automatically track a *descending* ground height as the
@@ -499,8 +499,30 @@ export class CameraSystem {
       // for "how big a drop still counts as walking, not falling" keeps
       // both directions of the same ordinary terrain-following behaviour
       // governed by one shared, already-tuned distance. Only real
-      // freefall — a jump already in progress (`wasGrounded` false), or
-      // a drop bigger than this — reaches the `else` below.
+      // freefall — a jump already in progress, or a drop bigger than
+      // this — reaches the `else` below.
+      //
+      // Visual Identity phase — "jumping has stopped functioning
+      // correctly... determine the underlying cause." This condition
+      // originally read `wasGrounded` (captured above, *before* the
+      // jump-input check runs) rather than `this._grounded` (the current
+      // value). On the exact frame a jump starts, `this._grounded` is
+      // already correctly `false` by the time execution reaches here —
+      // but `wasGrounded` was captured one line earlier and still held
+      // the pre-jump `true`. A single frame's worth of jump rise (a few
+      // centimetres) is always far smaller than STEP_TOLERANCE (0.6m),
+      // so this branch fired on every single jump's very first frame,
+      // silently snapping the foot straight back to the ground and
+      // zeroing the velocity that was just set two lines above — the
+      // jump was cancelled before it ever rendered a single frame, every
+      // time, unconditionally. This branch's own comment already
+      // described the intended behaviour correctly ("a jump already in
+      // progress" should skip this branch) — `this._grounded` is what
+      // actually delivers that; `wasGrounded` only catches up one frame
+      // too late. Ordinary walking is unaffected: nothing between the
+      // `wasGrounded` capture and here ever changes `this._grounded`
+      // except the jump check itself, so the two values are identical on
+      // every frame that isn't a jump's own first frame.
       this._footY = groundHeight;
       this._verticalVelocity = 0;
       this._grounded = true;
