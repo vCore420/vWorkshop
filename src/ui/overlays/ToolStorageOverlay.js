@@ -1,20 +1,26 @@
+import { mountToolsPanel } from "./shared/toolsPanelView.js";
+
 /**
  * createToolStorageOverlay
  * -------------------------
- * A clearly-labelled placeholder. No inventory system exists yet in this
- * phase; the overlay says so rather than faking one.
+ * Workshop Tools phase — "Tool Storage should now become one of the
+ * Workshop's core systems... rather than functioning like an inventory,
+ * Tool Storage should behave like a workshop toolbox." This is the
+ * physical entry point into that toolbox — `mountToolsPanel()` is the
+ * one shared implementation, also used by the computer's own Tools app
+ * (`ToolsApp.js`), the same "one shared view, two physical entry points"
+ * shape `Wardrobe.js` already established for the Wardrobe app.
  */
-export function createToolStorageOverlay() {
+export function createToolStorageOverlay({ toolsStore, projectsStore, audioSystem, workbenchSystem }) {
   return {
     materialClass: "panel",
     mount(panelEl) {
-      const heading = document.createElement("h2");
-      heading.textContent = "Tool storage";
-      const empty = document.createElement("div");
-      empty.className = "empty-state";
-      empty.textContent = "An inventory system will live here eventually — tracking tools and supplies. For now, this cabinet is just a placeholder with a label on it.";
-      panelEl.append(heading, empty);
-      return null;
+      return mountToolsPanel(panelEl, {
+        toolsStore,
+        projectsStore,
+        audioSystem,
+        activeProjectId: workbenchSystem?.currentProjectId ?? null,
+      });
     },
   };
 }
