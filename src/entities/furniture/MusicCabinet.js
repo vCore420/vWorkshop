@@ -21,6 +21,14 @@ import { box, cylinder, sphere, group, Materials } from "../../utils/Placeholder
  * playing animation, for instance — that would mean this furniture and
  * MusicSystem knowing about each other, which the architecture is built
  * specifically to avoid).
+ *
+ * Furniture & Storage phase — two small material fixes: the vinyl record
+ * on the turntable is genuinely `Materials.plastic()` now (real vinyl is
+ * glossy, not matte), and each speaker's cone surround is genuinely
+ * `Materials.rubber()`. Nothing else about this object changed — it was
+ * already given its own dedicated redesign pass; this phase only
+ * reviewed it for the same material-accuracy standard applied everywhere
+ * else, and found these two real, if small, gaps.
  */
 export const MusicCabinetDefinition = {
   id: "musicCabinet",
@@ -95,7 +103,7 @@ export const MusicCabinetDefinition = {
     const platter = cylinder(0.105, 0.105, 0.012, Materials.matte("#1c1a17"), 28);
     platter.position.set(turntableX, topY + 0.035 + 0.006, 0.01);
     g.add(platter);
-    const record = cylinder(0.1, 0.1, 0.003, Materials.matte("#232323"), 28);
+    const record = cylinder(0.1, 0.1, 0.003, Materials.plastic("#232323"), 28);
     record.position.set(turntableX, topY + 0.041 + 0.0015 + 0.006, 0.01);
     g.add(record);
     const recordLabel = cylinder(0.028, 0.028, 0.004, Materials.matte("#8d6a45"), 20);
@@ -134,7 +142,7 @@ export const MusicCabinetDefinition = {
       const speaker = box(0.19, 0.28, 0.17, Materials.wood("#4a3120"));
       speaker.position.set(sx, standHeight + 0.14, 0);
       g.add(speaker);
-      const cone = cylinder(0.055, 0.055, 0.015, Materials.matte("#232323"), 20);
+      const cone = cylinder(0.055, 0.055, 0.015, Materials.rubber("#232323"), 20);
       cone.rotation.x = Math.PI / 2;
       cone.position.set(sx, standHeight + 0.16, 0.09);
       g.add(cone);
@@ -147,7 +155,7 @@ export const MusicCabinetDefinition = {
     // --- A few small signs of use ---
     // A plant on the cabinet top, opposite the amp.
     const potX = 0;
-    const pot = cylinder(0.045, 0.035, 0.06, Materials.matte("#8d6a45"), 16);
+    const pot = cylinder(0.045, 0.035, 0.06, Materials.ceramic("#8d6a45"), 16);
     pot.position.set(potX, topY + 0.03, -0.1);
     g.add(pot);
     for (let i = 0; i < 5; i++) {

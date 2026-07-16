@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { box, cylinder, multiFaceBox, group, Materials } from "../../utils/PlaceholderFactory.js";
+import { box, cylinder, sphere, multiFaceBox, group, Materials } from "../../utils/PlaceholderFactory.js";
 import { concreteTexture } from "../../utils/ProceduralTexture.js";
 
 // Above this height, a wall segment can't physically intersect the player
@@ -246,7 +246,8 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
   // makes the wall's own opening real) to build the frame as a genuine
   // hollow ring — left jamb, right jamb, header, sill — around a real gap.
   const windowPanes = [];
-  for (const w of windowDefs) {
+  for (let windowIndex = 0; windowIndex < windowDefs.length; windowIndex++) {
+    const w = windowDefs[windowIndex];
     const frameOuterW = w.width + 0.08;
     const frameOuterH = w.height + 0.08;
     const frameThickness = 0.05;
@@ -284,8 +285,84 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
     sillLedge.position.set(w.position[0], w.position[1] - w.height / 2 - 0.015, northInteriorZ + 0.06);
     root.add(sillLedge);
 
+    // Decorative Details phase — "surface details... window sills...
+    // plants." One small plant, on one sill, not both — a matching pair
+    // would read as decorated; a single one reads as somebody actually
+    // put it there. A compact succulent, deliberately different from the
+    // music cabinet's own leafier plant, for a little natural variety
+    // rather than the same pot repeated around the room.
+    if (windowIndex === 0) {
+      const potX = w.position[0] + w.width / 2 - 0.12;
+      const potY = w.position[1] - w.height / 2 + 0.03;
+      const potZ = northInteriorZ + 0.1;
+      const pot = cylinder(0.045, 0.035, 0.06, Materials.ceramic("#a9764f"));
+      pot.position.set(potX, potY, potZ);
+      root.add(pot);
+      for (let i = 0; i < 6; i++) {
+        const leaf = sphere(Materials.fabric("#5c8f5c"), 6, 5);
+        const angle = (i / 6) * Math.PI * 2;
+        leaf.scale.set(0.028, 0.05, 0.028);
+        leaf.position.set(potX + Math.cos(angle) * 0.018, potY + 0.04, potZ + Math.sin(angle) * 0.018);
+        root.add(leaf);
+      }
+    }
+
     windowPanes.push({ mesh: pane, material: paneMat, def: w });
   }
+
+  // --- A wall clock, in the open wall segment between the two windows —
+  // Decorative Details phase. The Workshop's first genuinely time-driven
+  // decoration: the hour and minute hands are real pivot groups,
+  // exposed here as `clockHourHand`/`clockMinuteHand` and rotated by
+  // `LightingSystem` from the same `timeofday:changed` event it already
+  // reacts to for the sun — the exact same "a system reaches into the
+  // room's own userData for a marker it cares about" pattern LightingSystem
+  // already uses for the ceiling sockets, the wall sconces, and the
+  // workbench lamp. No new system, no new event — one more consumer of
+  // a value (`hour`) `TimeOfDaySystem` was already broadcasting.
+  const clockGroup = new THREE.Group();
+  const clockFrame = cylinder(0.19, 0.19, 0.03, Materials.metal("#2b2b2b"), 24);
+  clockFrame.rotation.x = Math.PI / 2;
+  clockGroup.add(clockFrame);
+  const clockFace = cylinder(0.16, 0.16, 0.01, Materials.matte("#ede3d0"), 24);
+  clockFace.rotation.x = Math.PI / 2;
+  clockFace.position.z = 0.02;
+  clockGroup.add(clockFace);
+  // Four ticks (12/3/6/9) — enough to read as a clock face at a normal
+  // walking distance, short of the clutter twelve individual ticks would
+  // risk for an object this small and this far from the camera.
+  for (const angle of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+    const tick = box(0.012, 0.03, 0.005, Materials.matte("#2b2b2b"), { castShadow: false });
+    tick.position.set(Math.sin(angle) * 0.13, Math.cos(angle) * 0.13, 0.026);
+    tick.rotation.z = -angle;
+    clockGroup.add(tick);
+  }
+  // Each hand is its own pivot group (the same "a mesh offset from its
+  // own local origin, inside a group whose origin is the real pivot"
+  // shape the front doors' own panels already use) — rotating the group
+  // sweeps the hand around the clock's centre, not around its own middle.
+  const clockHourHand = new THREE.Group();
+  const hourHandMesh = box(0.014, 0.09, 0.006, Materials.matte("#2b2b2b"), { castShadow: false });
+  hourHandMesh.position.set(0, 0.045, 0);
+  clockHourHand.add(hourHandMesh);
+  clockHourHand.position.z = 0.028;
+  clockGroup.add(clockHourHand);
+  const clockMinuteHand = new THREE.Group();
+  const minuteHandMesh = box(0.01, 0.13, 0.006, Materials.matte("#2b2b2b"), { castShadow: false });
+  minuteHandMesh.position.set(0, 0.065, 0);
+  clockMinuteHand.add(minuteHandMesh);
+  clockMinuteHand.position.z = 0.03;
+  clockGroup.add(clockMinuteHand);
+  const clockPin = cylinder(0.01, 0.01, 0.01, Materials.metal("#2b2b2b"), 10);
+  clockPin.rotation.x = Math.PI / 2;
+  clockPin.position.z = 0.032;
+  clockGroup.add(clockPin);
+  // Centred in the open wall segment between the two windows (see
+  // WINDOWS in layoutDefault.js: they span -2.65..-1.35 and 0.75..2.05,
+  // leaving -1.35..0.75 open) — a spot with no existing furniture or
+  // opening anywhere near it.
+  clockGroup.position.set(-0.3, 1.85, northInteriorZ + 0.02);
+  root.add(clockGroup);
 
   // --- Workshop door: same fix as the windows above — the frame is a real
   // hollow casing (jambs + header, no sill since the door reaches the
@@ -493,6 +570,22 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
     wallLightSockets.push(new THREE.Vector3(bracketX, 1.75, southInteriorZ - 0.15));
   }
 
+  // --- A small framed sketch, south wall — Decorative Details phase
+  // ("picture frames... wall decorations"). Reuses `Materials
+  // .sketchPaper()` (already built for the Builder's own sketch presence
+  // items — see docs/WORKBENCH.md) rather than inventing a second way to
+  // suggest hand-drawn paper; a sketch on the wall reads as "somebody's
+  // own work, framed," fitting a workshop's identity more than a generic
+  // print would. Positioned well clear of the sconce at x=1.9 (see
+  // above) and the light switch at x=1.5.
+  const artWidth = 0.28, artHeight = 0.36, artX = 2.8;
+  const artFrame = box(artWidth + 0.06, artHeight + 0.06, 0.03, Materials.wood("#3d2a1c"));
+  artFrame.position.set(artX, 1.8, southInteriorZ - 0.015);
+  root.add(artFrame);
+  const artPanel = box(artWidth, artHeight, 0.01, Materials.sketchPaper(), { castShadow: false });
+  artPanel.position.set(artX, 1.8, southInteriorZ - 0.035);
+  root.add(artPanel);
+
   // "Collision geometry should accurately match the visible doors" — one
   // box spanning the full doorway opening (the wall's own gap left for
   // it), at the wall's actual thickness — see RoomLayoutSystem.js's own
@@ -512,6 +605,8 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
     doorColliderBox,
     ceilingLightSockets,
     wallLightSockets,
+    clockHourHand,
+    clockMinuteHand,
     bounds: { width, depth, height },
     floorMesh: floor,
     wallColliders,

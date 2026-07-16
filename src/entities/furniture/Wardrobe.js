@@ -48,6 +48,28 @@ export const WardrobeDefinition = {
     body.position.set(cabinetX, cabinetHeight / 2, 0);
     g.add(body);
 
+    // Furniture & Storage phase — "storage cabinets... visual balance."
+    // A cornice cap, the same family of detail as Shelving.js's own new
+    // crown trim this phase — a plain box top never quite reads as a
+    // finished piece of case furniture the way a slightly overhanging
+    // cap does.
+    const cornice = box(cabinetWidth + 0.06, 0.05, cabinetDepth + 0.05, woodTrim);
+    cornice.position.set(cabinetX, cabinetHeight + 0.025, 0);
+    g.add(cornice);
+
+    // Two raised door panels, one either side of the seam below — a flat
+    // slab with just a seam line reads as "a box with a groove in it";
+    // a real panelled door almost always has a raised or recessed field
+    // inset from its own frame. Proud of the body's own front face by a
+    // few millimetres, not recessed — simpler to read correctly under
+    // the room's own lighting from a normal walking distance.
+    const panelMat = woodTrim;
+    for (const side of [-1, 1]) {
+      const panel = box(cabinetWidth / 2 - 0.12, cabinetHeight * 0.75, 0.015, panelMat, { castShadow: false });
+      panel.position.set(cabinetX + side * (cabinetWidth / 4), cabinetHeight / 2, cabinetDepth / 2 + 0.008);
+      g.add(panel);
+    }
+
     // A seam down the middle and two handles — just enough to read as
     // "a wardrobe with doors", not an unadorned box.
     const seam = box(0.015, cabinetHeight * 0.94, 0.01, woodTrim, { castShadow: false });

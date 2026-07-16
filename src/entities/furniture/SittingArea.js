@@ -7,6 +7,12 @@ import { box, cylinder, group, Materials } from "../../utils/PlaceholderFactory.
  * feature behind it on day one — this corner is comfortable *now* (a real
  * place to stop and look at the room) and is explicitly reserved for
  * something quieter later, like a local AI companion to sit and talk with.
+ *
+ * Furniture & Storage phase — a cushion tier, a proper table foot, and
+ * one closed book resting on the table (see `docs/FURNITURE.md`). The
+ * existing sit-down focus pose was reviewed against the slightly taller
+ * cushion and found to still read naturally — 8cm is a small enough
+ * change for a first-person camera fixed well above it.
  */
 export const SittingAreaDefinition = {
   id: "sittingArea",
@@ -23,6 +29,14 @@ export const SittingAreaDefinition = {
     const seat = box(0.62, 0.14, 0.6, Materials.fabric("#3c5a53"));
     seat.position.set(0, 0.38, 0);
     g.add(seat);
+    // Furniture & Storage phase — "chairs... comfort." A separate,
+    // slightly smaller cushion on top of the seat's own frame, rather
+    // than one flat slab standing in for both — the same "an upholstered
+    // base plus a real cushion reads as padded" idea the Desk phase's own
+    // office chair seat already established.
+    const cushion = box(0.56, 0.08, 0.54, Materials.fabric("#436b62"));
+    cushion.position.set(0, 0.49, 0);
+    g.add(cushion);
     const back = box(0.62, 0.55, 0.14, Materials.fabric("#33504a"));
     back.position.set(0, 0.66, -0.3);
     g.add(back);
@@ -44,6 +58,22 @@ export const SittingAreaDefinition = {
     const tableLeg = cylinder(0.03, 0.03, 0.42, Materials.wood("#3d2a1c"));
     tableLeg.position.set(0.75, 0.23, -0.5);
     g.add(tableLeg);
+    // Furniture & Storage phase — "side tables." A bare pedestal leg
+    // floating at floor level never quite reads as stable; a real round
+    // side table almost always has a foot wider than the leg itself.
+    const tableFoot = cylinder(0.09, 0.11, 0.02, Materials.wood("#3d2a1c"));
+    tableFoot.position.set(0.75, 0.01, -0.5);
+    g.add(tableFoot);
+
+    // Furniture & Storage phase — "environmental storytelling... a
+    // reading corner someone actually uses." One closed book resting on
+    // the table, near its own edge rather than dead centre — the single,
+    // deliberately restrained addition here, the same standard the
+    // Workbench's pencil and the Desk's pen holder already set.
+    const book = box(0.14, 0.03, 0.1, Materials.fabric("#7a3b3b"));
+    book.position.set(0.75, 0.48, -0.55);
+    book.rotation.y = 0.15;
+    g.add(book);
 
     return g;
   },
