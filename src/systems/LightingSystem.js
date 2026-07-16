@@ -145,6 +145,12 @@ export class LightingSystem {
       this.practicalLights.push(light);
     }
 
+    // Decorative Details phase — "clocks." Cached here (not looked up
+    // fresh every time) the same way every other room-provided mesh
+    // reference in this method already is.
+    this.clockHourHand = roomSystem?.room?.clockHourHand ?? null;
+    this.clockMinuteHand = roomSystem?.room?.clockMinuteHand ?? null;
+
     const furnitureSystem = this.engine.getSystem(FurnitureSystem);
     const workbench = furnitureSystem?.getPiece("workbench");
     const lampSocket = workbench?.entity?.object3D?.userData?.lampSocket;
@@ -262,7 +268,7 @@ export class LightingSystem {
     return materials;
   }
 
-  _onTimeChanged({ sunDirection, sunIntensity, sunColor, hemiIntensity, ambientIntensity }) {
+  _onTimeChanged({ sunDirection, sunIntensity, sunColor, hemiIntensity, ambientIntensity, hour }) {
     this.sun.position.copy(sunDirection).multiplyScalar(10);
     this.sun.target.position.set(0, 0, 0);
     const dampening = 1 - this._weatherDampening;
@@ -271,6 +277,23 @@ export class LightingSystem {
     this._baseHemiIntensity = hemiIntensity * (0.7 + 0.3 * dampening);
     this._baseAmbientIntensity = ambientIntensity;
     this._lastSunIntensity = sunIntensity;
+    this._updateClockHands(hour);
+  }
+
+  /** Decorative Details phase — "clocks." `hour` is the exact same 0-24
+   *  value `TimeOfDaySystem` already broadcasts for the sun; the clock
+   *  is just one more consumer of it, not a second source of truth for
+   *  what time it is. Standard 12-hour clock-hand geometry: the hour
+   *  hand completes one full turn every 12 hours, the minute hand every
+   *  1. Negated because a positive Z rotation sweeps counter-clockwise
+   *  toward the viewer this clock faces — real clock hands sweep the
+   *  other way. */
+  _updateClockHands(hour) {
+    if (!this.clockHourHand || !this.clockMinuteHand) return;
+    const hourAngle = ((hour % 12) / 12) * Math.PI * 2;
+    const minuteAngle = (hour % 1) * Math.PI * 2;
+    this.clockHourHand.rotation.z = -hourAngle;
+    this.clockMinuteHand.rotation.z = -minuteAngle;
   }
 
   _onEnvironmentChanged({ lightDampening, id }) {
