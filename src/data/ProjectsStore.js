@@ -22,6 +22,17 @@
  * This mirrors how a real workshop works: the corkboard is where things get
  * pinned up and thought about, the bench is where the current thing gets
  * physically worked on.
+ *
+ * **Workshop Tools phase — `calculations`.** "Projects should become
+ * long-term records of how work was completed, rather than only storing
+ * finished assets." Each project now carries its own array of saved
+ * calculations — a tool's own inputs and result, deliberately saved by
+ * whoever ran it (see `ToolsStore.js`'s own "recent runs" for the
+ * separate, ephemeral rolling history this is *not*). The same
+ * "Attach Calculator Result to a job" concept the source application's
+ * own Planner offered, generalised onto the Workshop's existing project
+ * system rather than a second, parallel job board — see docs/TOOLS.md's
+ * own "Why no Planner" for the reasoning.
  */
 import { EventBus } from "../core/EventBus.js";
 
@@ -30,7 +41,7 @@ let _nextId = 1;
 export class ProjectsStore {
   constructor() {
     this.events = new EventBus();
-    /** @type {Array<{id:number,title:string,status:string,notes:string,kind:string,presence:Array|null,updatedAt:string}>} */
+    /** @type {Array<{id:number,title:string,status:string,notes:string,kind:string,presence:Array|null,calculations:Array,updatedAt:string}>} */
     this.projects = [];
   }
 
@@ -42,6 +53,7 @@ export class ProjectsStore {
       notes,
       kind,
       presence,
+      calculations: [],
       updatedAt: new Date().toISOString(),
     };
     this.projects.push(project);
@@ -74,6 +86,29 @@ export class ProjectsStore {
     return [...this.projects];
   }
 
+  /** "Saving calculations to projects... reference notes." A calculation
+   *  is appended, never replaces the array — the same "long-term record"
+   *  reasoning the class comment above describes. `record` is
+   *  `{toolId, toolTitle, inputs, result}`; timestamp and id are this
+   *  store's own responsibility, not the caller's. */
+  addCalculation(projectId, record) {
+    const project = this.get(projectId);
+    if (!project) return null;
+    if (!Array.isArray(project.calculations)) project.calculations = [];
+    const entry = { id: `calc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, createdAt: new Date().toISOString(), ...record };
+    project.calculations.push(entry);
+    project.updatedAt = new Date().toISOString();
+    this.events.emit("projects:changed", this.projects);
+    return entry;
+  }
+
+  removeCalculation(projectId, calculationId) {
+    const project = this.get(projectId);
+    if (!project?.calculations) return;
+    project.calculations = project.calculations.filter((c) => c.id !== calculationId);
+    this.events.emit("projects:changed", this.projects);
+  }
+
   // ---- persistence contract, read by PersistenceSystem ----
   save() {
     return { projects: this.projects };
@@ -81,8 +116,9 @@ export class ProjectsStore {
 
   load(data) {
     if (!data?.projects) return;
-    // Backward-compatible with phase-1 save files that predate kind/presence.
-    this.projects = data.projects.map((p) => ({ kind: "general", presence: null, ...p }));
+    // Backward-compatible with phase-1 save files that predate kind/presence,
+    // and with pre-Tools-phase saves that predate calculations.
+    this.projects = data.projects.map((p) => ({ kind: "general", presence: null, calculations: [], ...p }));
     const maxId = this.projects.reduce((m, p) => Math.max(m, p.id), 0);
     _nextId = maxId + 1;
     this.events.emit("projects:changed", this.projects);
