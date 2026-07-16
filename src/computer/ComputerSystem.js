@@ -100,14 +100,16 @@ export class ComputerSystem {
    *  sounds were considered and deliberately left out: the player's own,
    *  real physical keyboard already makes that sound while they type into
    *  this panel's text fields, and synthesising a second one under it
-   *  would be redundant at best, distracting at worst. */
+   *  would be redundant at best, distracting at worst. Sound & Presence
+   *  phase — now passes the desk's own world position for real distance
+   *  falloff. */
   activate() {
     if (this.active || !this.screenMesh) return;
     this.active = true;
     this._panelClosed = false;
     this.panel.open(this.lastAppId);
     this.engine.input?.exitPointerLock();
-    this.deps.audioSystem?.playInteractionSound("chairCreak", { pitch: 1.05 });
+    this.deps.audioSystem?.playInteractionSound("chairCreak", { pitch: 1.05, position: this.deskObject.getWorldPosition(new THREE.Vector3()) });
   }
 
   deactivate() {
@@ -118,7 +120,7 @@ export class ComputerSystem {
     // rejected by the browser if it falls outside a user-gesture window, in
     // which case clicking the canvas (already wired in main.js) covers it.
     this.engine.input?.requestPointerLock();
-    this.deps.audioSystem?.playInteractionSound("chairCreak", { pitch: 0.9 });
+    this.deps.audioSystem?.playInteractionSound("chairCreak", { pitch: 0.9, position: this.deskObject.getWorldPosition(new THREE.Vector3()) });
   }
 
   update(dt) {
