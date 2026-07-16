@@ -756,6 +756,33 @@ happens — the existing Settings → Audio → Ambient Volume slider already
 scales the entire nature-ambience layer (`AudioSystem._updateNatureIntensity()`),
 crickets included; no separate toggle was added on top of it.
 
+**Jumping, silently cancelling itself on every single attempt — found
+and fixed (Visual Identity phase).** Reported simply as "jumping has
+stopped functioning correctly," introduced sometime during the terrain
+work. The actual cause lived in `_updateGroundMovement()`'s own
+slope-following logic — the branch added specifically so "walking down
+gentle slopes or edited terrain should not enter a falling state,"
+guarded by `wasGrounded && belowGround <= STEP_TOLERANCE`.
+`wasGrounded` is captured at the very top of the function, *before* the
+jump-input check below it runs; on the exact frame a jump starts, that
+check sets `this._grounded = false`, but `wasGrounded` — one line
+earlier — still holds the pre-jump `true`. A single frame's worth of
+jump rise (a few centimetres, from `JUMP_VELOCITY * dt`) is always far
+smaller than `STEP_TOLERANCE` (0.6m), so this branch fired on every
+jump's very first frame, without exception: foot snapped straight back
+to the ground, velocity zeroed, `_grounded` forced back to `true` —
+all before that frame ever rendered. The jump was cancelled by the same
+code that exists to make walking downhill feel smooth, one frame after
+it started, every time. The branch's own comment already described the
+*intended* behaviour correctly ("a jump already in progress" should
+skip it) — the fix is using `this._grounded` (the current, already-
+updated value) instead of `wasGrounded` (which only catches up one
+frame later) in that one condition. Ordinary walking is provably
+unaffected: nothing between the `wasGrounded` capture and that
+condition ever changes `this._grounded` except the jump check itself,
+so the two values are identical on every frame that isn't a jump's own
+first one.
+
 ## Known limitations
 
 - **"Never see themselves" in first person is physics, not a rule.** The

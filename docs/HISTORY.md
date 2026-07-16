@@ -271,6 +271,58 @@ a list of features. They're the kind of thing you only notice once,
 and then can't stop noticing — which is exactly what this phase's own
 brief asked for.
 
+## Reflecting — Version 2, Phase 20 (Visual Identity)
+
+**What had the biggest impact on the Workshop's visual identity:** the
+shadow fix, and it isn't close, precisely because of how invisible it
+is. Nobody will ever take a screenshot and think "ah, the shadow camera
+frustum is being applied correctly now." But shadows are one of the
+things that most separates "a lit 3D scene" from "a *place* with real
+depth and time of day" — and this one had been quietly, completely
+broken for who knows how many phases, hiding behind comments that
+confidently described numbers that were never actually reaching the
+GPU. Fixing a bug nobody could see, in a system every visible thing in
+the Workshop depends on, is exactly the kind of unglamorous work this
+whole phase turned out to be about.
+
+**What I'm most pleased with:** finding both regressions by reading,
+not by guessing. Neither fix involved trial and error — the shadow bug
+was confirmed by grepping the entire codebase for a method call that
+simply wasn't there anywhere; the jump bug was confirmed by tracing one
+variable's exact lifetime across eleven lines of one function and
+noticing it was read one line too early. Both root causes were provable
+before a single character of code changed, which is what let me be
+confident neither fix needed a compensating workaround anywhere else.
+That's the standard I most want future phases held to, this one
+included: a bug fix should be able to explain, in advance, exactly why
+it will work — not just that it happened to.
+
+## Reflecting — Version 2, Phase 21 (Sound & Presence)
+
+**What stood out:** how differently this phase's own brief read three
+past deferrals compared to when I originally wrote them. Each one had
+been declined for a specific, honest reason at the time — no clear
+cause for an ambient sound, no positional audio to make a clock tick
+sound right, no clean architectural seam for a drawer. None of those
+reasons turned out to be wrong. What changed is that this phase's own
+brief either supplied the missing piece directly (occasional,
+contextual sound is explicitly the *goal* here, not a risk to avoid) or
+made building the missing piece properly in scope for the first time
+(positional audio, a generic sound hook). I found that quietly
+satisfying in a way I didn't expect going in — three "not yet, and
+here's exactly why" notes, each closed out for a reason that traces
+directly back to the original note, rather than someone simply
+overriding an earlier decision.
+
+**What I found most rewarding:** the volume fix, of all things. It's
+the least interesting line I changed all phase — one number, `0.5` to
+`0.3` — but finding it required actually holding seven different
+sounds' envelopes in my head at once and noticing that the oldest one
+didn't belong with the rest anymore. Nothing about it would ever show
+up in a feature list. That's exactly the kind of maintenance this
+project's own history keeps rewarding, and I'd rather report that
+honestly than pad this reflection with the flashier additions.
+
 ## Changelog
 
 <details>
@@ -739,5 +791,44 @@ every plant pot in the Workshop. A ticking clock sound was considered
 and deliberately left out — it needs real positional audio to sound
 right at different distances, which doesn't exist yet. See
 `docs/ROADMAP.md`'s own Phase 19 account for the complete list.
+
+**Version 2, Phase 20 — Visual Identity (v2.2.0)** — a different kind
+of phase: a whole-pipeline consistency review, plus two named
+regressions actually root-caused rather than patched around. Shadows
+were missing from the terrain because the sun's shadow camera frustum
+was being set as plain properties that `OrthographicCamera` never
+applies without an explicit `updateProjectionMatrix()` call — missing
+everywhere in the codebase, meaning the shadow camera had silently been
+running on its tiny construction-time default (±5m) the entire time,
+regardless of what several past phases' own comments claimed to expand
+it to. One call fixes it. Jumping was silently cancelling itself on
+every attempt: the terrain phase's own slope-following logic read a
+"was grounded" flag captured *before* the jump-input check that clears
+it, so every jump's first frame looked like ordinary ground contact and
+got reverted before it ever rendered. One flag reference fixed it. A
+broader review confirmed tone mapping, material families, reflection
+tuning, and the terrain/floor material match at the doorway threshold
+were all already consistent — nothing rebuilt, nothing new introduced.
+See the new `docs/VISUAL_IDENTITY.md`, and fuller per-bug writeups in
+`docs/WORLD.md` and `docs/PLAYER.md`.
+
+**Version 2, Phase 21 — Sound & Presence (v2.2.1)** — three previously-
+deferred audio items, each resolved once the conditions their own
+deferral named were actually met. A distance-based gain scalar
+(`AudioSystem._computeDistanceGain()`) gave every interaction sound real
+spatial positioning, which unblocked a wall-clock chime on the hour
+(deferred in Decorative Details) and, combined with a new generic
+`soundOnInteract` field on `FurnitureSystem`, tool storage's own drawer
+sound (deferred in Furniture & Storage). A building creak/settle sound,
+self-scheduled every 3-7 real minutes and indoors only, resolves the
+Workshop Interior phase's own deferral — that phase worried an
+unprompted creak would have no cause a player could connect it to; this
+phase's own brief asks for exactly that as the desired behaviour.
+Bubble gained a first, very quiet sound on starting to think. An
+architectural review found `playPaperShuffle`'s volume had never been
+checked against the family that grew up around it (fixed) and that four
+creak/scrape sounds were hand-copied duplicates of one graph (merged
+into a shared helper, changing nothing audible). See the new
+`docs/AUDIO.md` for the complete account.
 
 </details>

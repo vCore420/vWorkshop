@@ -2908,6 +2908,95 @@ nature) rather than tied to one object's own position. Left for
 whichever future phase actually introduces positional audio, rather
 than shipped as an always-on sound with no way to make it sound right.
 
+## Version 2 — Phase 20 — Visual Identity (v2.2.0)
+
+**Goal:** "Every screenshot should immediately look like The Workshop...
+the objective is not photorealism, the objective is recognisability."
+A different kind of phase — a whole-pipeline consistency review plus
+two named regressions to actually root-cause, rather than one object or
+room. See the new `docs/VISUAL_IDENTITY.md` for the full account, with
+fuller per-bug writeups in `docs/WORLD.md` and `docs/PLAYER.md`.
+
+**Shadows, restored to the terrain.** The real cause: `LightingSystem
+.init()` sets the sun's shadow camera frustum (`near`/`far`/`left`/
+`right`/`top`/`bottom`) as plain properties, but `OrthographicCamera`
+never recomputes its own `projectionMatrix` from those unless
+`updateProjectionMatrix()` is called explicitly — and nothing in the
+codebase ever called it. The shadow camera had been silently running on
+its construction-time default frustum (±5m) this entire time; every
+"expand shadow coverage" pass in this system's own history changed a
+property that nothing ever read. A ±5m frustum pinned to the origin
+happened to roughly cover the Workshop's old, small, recentring ground —
+once the terrain became one real 200m mesh that doesn't recentre, the
+same stale frustum left nearly all of it permanently unshadowed. One
+call fixes it, for every future change to those properties too.
+
+**Jumping, fixed at its actual cause.** The terrain phase's own
+slope-following logic (`wasGrounded && belowGround <= STEP_TOLERANCE`,
+added so walking downhill doesn't trigger a false "falling" state) read
+a flag captured *before* the jump-input check that sets it — so on
+every jump's first frame, that stale flag still said "grounded," and
+the branch silently snapped the player straight back down, zeroed the
+jump velocity it had just been given, and cancelled the jump before it
+ever rendered a frame. Fixed by reading the current, already-updated
+value instead of the stale one; slope-walking behaviour is provably
+unaffected, since nothing else changes that value between the two
+points in the function.
+
+**A visual-consistency review, confirmed rather than rebuilt** — tone
+mapping/exposure/colour space (already `ACESFilmicToneMapping`, applied
+uniformly since every render call, including the mirror's own, shares
+one renderer instance), every material family's roughness/metalness
+banding, the terrain and interior floor's already-matching roughness at
+the doorway threshold, and reflection tuning were all checked against
+the brief's own list. No new rendering complexity was introduced
+anywhere this phase — both fixes are a single corrected line each, plus
+documentation.
+
+## Version 2 — Phase 21 — Sound & Presence (v2.2.1)
+
+**Goal:** "The objective is not simply to add more audio. The objective
+is to give the Workshop presence... closing your eyes should still
+tell you you're inside the Workshop." Three previously-deferred audio
+items — each deferred for a specific, named reason — finally had the
+right conditions to be resolved properly. See the new `docs/AUDIO.md`
+for the complete account.
+
+**Positional audio, the foundation the other three items needed.**
+`AudioSystem._computeDistanceGain()` scales an interaction sound's gain
+by real distance from an optional world position, reusing the exact
+camera-position reference this file already reads for indoor/outdoor
+detection. Every existing interaction sound (the clipboard, the chair,
+the front doors) now passes its own object's real position, not just
+the new ones this phase adds.
+
+**Three deferred items, resolved.** A building creak/settle sound
+(deferred in the Workshop Interior phase for lacking a clear cause a
+player could connect it to — this phase's own brief names exactly that
+behaviour as the *desired* one, which is what makes implementing it now
+correct rather than a reversal), a wall-clock chime on the hour
+(deferred in Decorative Details for lacking positional audio), and tool
+storage's drawer sound (deferred in Furniture & Storage for lacking a
+clean architectural seam — resolved via a new generic `soundOnInteract`
+field on `FurnitureSystem`, so a future piece gets this for free too).
+
+**Residents gained their first sound.** Bubble had none at all — a
+single, very quiet cue on `isThinking` turning true, the smallest sound
+in the Workshop's library by design.
+
+**Architectural review, two real findings.** `playPaperShuffle`'s peak
+gain (0.5) was noticeably louder than every sound built in later phases
+(0.18-0.32) and nobody had gone back to check it — brought down to 0.3.
+Four separate hand-copied noise/sweep/envelope implementations
+(`chairCreak`, `doorCreak`, `buildingCreak`, `drawerSlide`) were
+refactored into one shared `playFilteredNoiseBurst()` helper, every
+numeric value preserved exactly.
+
+**Windows and the phone, reviewed and deliberately left silent** —
+neither involves any physical motion a sound could represent, and this
+phase's own "every sound should earn its place" standard argues against
+adding one anyway.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

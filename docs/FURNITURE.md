@@ -123,18 +123,19 @@ too — see `docs/WORLD.md`'s own "Craftsmanship (Version 2, Phase 19)"
 section for the full account of that phase's work, most of which lives
 in the room shell rather than here.
 
-**What was considered and deliberately left out.** A drawer/cabinet
-interaction sound (paralleling the paper shuffle, chair creak, and door
-creak from the last two phases) was considered for the tool storage
-cabinet specifically. Unlike those three, tool storage has no dedicated
-system of its own — it opens through the generic `overlayId` pipeline,
-not a self-contained `onInteract`/`onExit` pair — so adding one sound
-here would mean either building a small system this phase's own brief
-explicitly ruled out, or having a furniture *definition* file reach
-directly into `AudioSystem`, breaking the "furniture files describe
-geometry and emit events; systems own behaviour" split every other
-object in this project respects. Left for a future phase that's
-actually about interaction sound, rather than bent into this one.
+**What was considered and deliberately left out (resolved, Sound &
+Presence phase).** A drawer/cabinet interaction sound (paralleling the
+paper shuffle, chair creak, and door creak from the last two phases)
+was considered for the tool storage cabinet specifically, and left out
+here for exactly the reason described above — no dedicated system to
+own it without either building a small system this phase's own brief
+ruled out, or a furniture file reaching directly into `AudioSystem`.
+The Sound & Presence phase resolved this generically rather than
+bending this phase's own scope: `FurnitureSystem` — the one system that
+already wires up every furniture piece's interaction — gained an
+optional `soundOnInteract` field, so the system that already owns this
+behaviour is what plays the sound, not the furniture file. See
+`docs/AUDIO.md` for the full account.
 
 ## Known simplifications (by design, for this phase)
 
@@ -157,8 +158,5 @@ actually about interaction sound, rather than bent into this one.
 - **A real inventory/storage system** — should one ever get built, tool
   storage's cabinet and shelving's new bins are both already sitting
   exactly where such a system's own physical presence would live.
-- **A drawer/cabinet interaction sound**, once there's a natural system
-  home for it (see "What was considered and deliberately left out"
-  above).
 - **Crown moulding on the shelving/wardrobe**, if a future pass wants
   the two matched more closely to the room's own baseboard trim.

@@ -1086,28 +1086,96 @@ is purely decorative" behaviour, was reviewed and found already exactly
 as honest as it should be: it does nothing at all, on purpose, and says
 so in its own comment.
 
-**What was considered and deliberately left out.** A ticking clock
-sound was the obvious pairing for a functioning clock, and didn't
-survive the same restraint test everything else in this phase did: a
-continuous ambient sound needs real 3D positional audio to be
-believable (quiet near the desk, more present standing under it),
-which nothing in `AudioSystem` currently provides — every existing
-ambience is global (weather, nature) rather than tied to a specific
-object's own position in the room. Built globally instead, a tick loud
-enough to hear near the clock would be equally, unrealistically loud
-from across the room. Left for whichever future phase actually
-introduces positional audio, rather than shipped as an always-on sound
-with no way to make it sound right. Record-player ambience (crackle,
-hiss) was also considered and left to `docs/MUSIC.md`'s own domain —
-a real audio-quality feature for the music system itself, not a
-decorative object question.
+**What was considered and deliberately left out (resolved, Sound &
+Presence phase).** A ticking clock sound was the obvious pairing for a
+functioning clock, and didn't survive the same restraint test
+everything else in this phase did: a continuous tick needs real
+distance-based volume to be believable, which nothing in `AudioSystem`
+provided at the time. Positional audio arrived in the Sound & Presence
+phase (`AudioSystem._computeDistanceGain()`), and with it, a chime —
+not a continuous tick, which that phase's own brief ruled out on
+separate grounds — on the hour. See `docs/AUDIO.md` for the full
+account. Record-player ambience (crackle, hiss) remains left to
+`docs/MUSIC.md`'s own domain — a real audio-quality feature for the
+music system itself, not a decorative object question.
 
 ## Future extension points (Decorative Details)
 
-- **Positional audio** — the clock's own deferred tick, and likely other
-  small object sounds, are waiting on this rather than on anything
-  specific to any one object.
 - **A second framed piece or two**, if a future pass ever wants the
   walls to feel a little further along without tipping into the
   "decorated, not lived-in" read this phase deliberately avoided.
+
+## Visual Identity phase — the shadow regression, actually understood
+
+"The Workshop terrain correctly receives lighting but no longer
+receives dynamic shadows as it previously did. Determine why shadow
+reception was lost." Every terrain-side setting was already correct —
+`this.mesh.receiveShadow = true`, a genuine `MeshStandardMaterial`,
+correctly computed normals. The real cause lived one file away, in
+`LightingSystem.js`, and had nothing to do with `TerrainSystem.js`
+itself.
+
+**The actual bug: a classic, well-documented three.js gotcha.** The
+sun's shadow camera has its `near`/`far`/`left`/`right`/`top`/`bottom`
+set directly as plain properties in `LightingSystem.init()` — but
+`OrthographicCamera` (what a `DirectionalLight`'s shadow uses) only
+ever recomputes its `projectionMatrix` in its own constructor, or when
+`updateProjectionMatrix()` is called explicitly; nothing about setting
+those properties afterward triggers it automatically, and three.js's
+own shadow-map render path (`LightShadow.updateMatrices()`) reads
+`camera.projectionMatrix` directly rather than deriving it fresh every
+frame. That call was missing entirely — grepped for across the whole
+codebase and found nowhere near `this.sun.shadow.camera`. The practical
+effect: the shadow camera had been silently running on its
+*construction-time default* frustum (a `DirectionalLightShadow`'s own
+default camera is `±5, near 0.5, far 500`) this entire time, regardless
+of what this file's own comments claimed — every "expand shadow
+coverage" pass in this system's history (±6 → ±9 → the ±13 currently in
+the code) changed a JavaScript property that nothing ever read for
+rendering purposes.
+
+**Why this specifically reads as a *terrain* regression.** The bug
+itself predates the terrain rewrite — it's unrelated to
+`TerrainSystem.js` and was presumably always there. But its visible
+*impact* is what changed: a ±5 frustum pinned to the world origin
+happens to roughly cover a single small room, which is what the
+Workshop's entire outdoor "ground" used to be (a 48m patch plus an
+infinitely-recentring flat plane that followed the player, so shadows
+being limited to a small area around a fixed point was much less
+noticeable). Once the terrain became one real 200m ground that doesn't
+recentre, that same stale ±5 frustum left nearly the entire outdoor
+world permanently outside the shadow camera's own view — exactly
+"terrain correctly lit, never shadowed." One `updateProjectionMatrix()`
+call, right after the properties it depends on are set, fixes every
+future change to those properties too, not just this one.
+
+**A worth-watching, not clearly broken, side effect.** `shadow.bias`
+and `shadow.normalBias` (tuned to avoid shadow acne) were presumably
+tuned against whatever was *actually* rendering at the time — which,
+given this bug, was always the stale ±5 frustum, never the larger one
+the comments describe. Restoring the real ±13 frustum spreads the same
+1024×1024 shadow map texel budget across roughly 6x the area (in each
+dimension), which coarsens shadow resolution and could plausibly want
+a different bias value to look its best. Left unchanged rather than
+retuned blind — this needs an actual rendered frame to judge, not a
+guess.
+
+## Visual Identity phase — terrain review
+
+Confirmed against every item the brief named: materials (the terrain's
+`MeshStandardMaterial` with `roughness: 0.95` already sits in the exact
+same "very rough, non-reflective" family as the interior floor's own
+`roughness: 0.95` — the two meet at the doorway threshold already
+reading as one continuous, consistent world, not two different
+surfaces), lighting (ordinary diffuse/ambient response was never the
+reported problem, and wasn't touched), and shadow rendering (fixed
+above). `_computeGroundHeight()` in `CameraSystem.js` already queries
+`TerrainSystem.getHeightAt()` directly wherever the terrain patch
+covers a point, falling back to flat `0` only outside it — the same
+single source of truth for movement, collision, and Builder object
+placement this system's own file comment already promises. No separate
+rendering behaviour exists for terrain anywhere in the pipeline; the
+brief's own "avoid introducing separate rendering behaviour for
+terrain" was already true going into this phase, not something this
+phase had to create.
 
