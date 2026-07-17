@@ -187,12 +187,25 @@
 }
 .builder-field-narrow { flex: 1; min-width: 0; }
 
+/* Interface & Design Refinement phase — "additional options push the
+   interface wider than its container." This row's own field count isn't
+   always fixed — buildPartEditor()'s own `miscRow` starts with two
+   fields and conditionally appends a third ("Segments") only for
+   cylinder/sphere/cone-type parts — and nothing here previously let the
+   row respond to that by wrapping, only by overflowing. `flex-wrap`
+   plus a real minimum basis per field (rather than `flex: 1` alone,
+   which happily shrinks a field to an unusable sliver before ever
+   wrapping) is "wrapping should almost always be preferred over layouts
+   expanding horizontally," concretely: two fields comfortably share a
+   row at typical panel widths; a third wraps onto its own line instead
+   of squeezing in or spilling out. */
 .builder-inline-row {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
   margin-bottom: var(--space-2);
 }
-.builder-inline-row .builder-field { margin-bottom: 0; flex: 1; min-width: 0; }
+.builder-inline-row .builder-field { margin-bottom: 0; flex: 1 1 80px; min-width: 0; }
 .builder-inline-row input[type="number"] {
   width: 100%;
   font-family: var(--font-mono);

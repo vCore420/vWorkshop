@@ -94,7 +94,7 @@
   background-image: linear-gradient(rgba(0,0,0,0.02) 1px, transparent 1px);
   background-size: 100% 28px;
   border-radius: 2px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px var(--paper-dark);
+  box-shadow: var(--shadow-panel), 0 0 0 1px var(--paper-dark);
   color: var(--ink);
   padding: var(--space-4) var(--space-5);
   transform: rotate(-0.3deg);
@@ -138,7 +138,7 @@
   background-size: 6px 6px;
   border-radius: var(--radius-md);
   border: 14px solid var(--wood-mid);
-  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  box-shadow: var(--shadow-panel);
   padding: var(--space-4);
   overflow-y: auto;
   color: var(--wood-dark);
@@ -159,7 +159,7 @@
   background: #fef6d8;
   padding: var(--space-3);
   border-radius: 2px;
-  box-shadow: 0 6px 14px rgba(0,0,0,0.35);
+  box-shadow: var(--shadow-medium);
   transform: rotate(-1.2deg);
   font-size: var(--text-sm);
   position: relative;

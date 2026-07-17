@@ -352,6 +352,57 @@ convinced me the shared-plumbing approach was the right one rather than
 a shortcut — a real tool library has to hold genuinely different shapes
 of problem without each one needing its own special case.
 
+## Reflecting — Version 2, Phase 23a (Workshop Refinement, Pass A)
+
+**Which improvements had the biggest impact on the overall feel of the
+Workshop:** the startup fix and the Factory Reset fix, and for the same
+underlying reason — both were places where the Workshop was *lying*,
+quietly, about its own state. A button that looks pressable but isn't
+yet, a reset that looks complete but wasn't, are both a gap between what
+the interface claims and what's actually true underneath it. Everything
+else this phase touched (the moon, the crouch camera, the ladder zone)
+makes something *nicer*; these two make the Workshop *honest* about
+itself again, which I think matters more to "feels trustworthy" than
+any individual polish pass could.
+
+**What stood out:** how often "investigate more carefully" turned out to
+be the actual fix, rather than a prelude to one. The AI timeout had
+already been correctly sized by an earlier phase — the real problem was
+one level up (never letting the wait happen at all). The ladder's
+underlying bug had already been fixed too — what was left was a
+detection radius nobody had thought to make generous, the same instinct
+this project already applies everywhere else. I went into this pass
+expecting six numbers to retune and came out having genuinely rewired
+two of them, but the more interesting work was almost always figuring
+out which layer a symptom actually lived in before touching anything.
+
+## Reflecting — Version 2, Phase 23b (Interface & Design Refinement)
+
+**How this pass strengthened the Workshop's visual identity:** by
+showing me it was already mostly there. I went in expecting to find a
+design system in name only — plausible-looking tokens that individual
+files quietly ignored the moment they needed something slightly
+different. What I actually found was a token system genuinely being
+used almost everywhere, with a small number of real, specific gaps
+(shadows entirely absent, two radius values missing) rather than
+pervasive drift. That distinction changed the whole shape of this
+phase: instead of a wholesale rewrite, it became an audit that closed
+real holes and left the rest alone, which I think is a truer form of
+"consistency" than forcing every file to look identical would have
+been.
+
+**What helped the Workshop feel more like a cohesive creative
+operating system:** the Phone, without much competition. Every other
+change this phase was infrastructure — real, valuable, but invisible
+by design. The Phone is the one thing a person actually *looks at* and
+either believes or doesn't, and giving it a status bar that tells the
+truth about what time it actually is in the Workshop (not a fabricated
+clock, the real one) did more to make it feel like a genuine object
+than the new proportions or the icon tiles did on their own. It's the
+same lesson the wall clock taught a few phases ago, in a new shape: a
+detail that's actually connected to something real outranks one that's
+merely decorated to look like it might be.
+
 ## Changelog
 
 <details>
@@ -879,5 +930,48 @@ the Workshop's existing project system already plays that role in its
 own idiom — building a second one would have been exactly the
 "duplicate functionality" this phase's own review was watching for. See
 the new `docs/TOOLS.md` for the complete account.
+
+**Version 2, Phase 23a — Workshop Refinement, Pass A (v2.2.3a)** — the
+first refinement pass before Version 2 is considered complete, six real
+issues root-caused rather than patched. Factory Reset (and Backup
+Import) had a genuine race condition — `beforeunload`'s own autosave
+firing during the reload both actions trigger, silently undoing the
+reset or import a moment before it took effect. The moon was tracing
+the mirror-image of its own real cycle — an addition that needed to be
+a subtraction, invisible at exactly the two phase values a previous
+investigation happened to test. The crouch camera constant never did
+what its own comment claimed ("proportional to the character," while
+subtracting a fixed 0.5m regardless) — now a genuine ratio. Ladders had
+a real detection bug (an ~8cm-deep hit zone, none of the generosity
+every other interaction zone already holds itself to) alongside an
+honest account of the already-correct intended interaction. AI gained a
+real keep-alive system — warming the active model proactively rather
+than just tolerating a longer wait — with a persisted, user-facing
+toggle in Mission Control; AI profile export was reviewed and found
+already complete. The startup screen's "Step inside" button had no
+click handler at all until the entire boot sequence finished — now
+responsive immediately, with a gentle status line. See
+`docs/REFINEMENT.md`'s own "Refinement Pass A" section for the complete
+account.
+
+**Version 2, Phase 23b — Interface & Design Refinement (v2.2.3b)** — the
+second refinement pass, a craftsmanship pass on the Workshop's own
+interface rather than the Workshop itself. A real, findable gap in the
+design tokens: shadows had no shared scale at all, and three separate
+files hardcoded the exact same shadow value byte for byte (one with an
+accidental blur-radius drift from the other two) — now a small, real
+shadow scale, plus two genuine radius gaps closed alongside it. The
+Workshop Phone got the complete shell refinement its own brief named —
+a real status bar showing the Workshop's own actual time, a home
+indicator, refined proportions, real icon tiles — while staying wood
+and brass rather than becoming a generic glass case. The Builder's own
+named overflow bug ("additional options push the interface wider than
+its container") was traced to a specific row that conditionally grows
+from two fields to three with nowhere for the third to go — fixed with
+wrapping, not a workaround. A review of the Workshop's other digital
+interfaces found the shared navigation and form-control patterns
+already genuinely consistent, closing the real gaps found rather than
+rebuilding what was already working. See the new
+`docs/DESIGN_SYSTEM.md` for the complete account.
 
 </details>

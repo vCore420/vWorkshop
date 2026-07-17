@@ -1,35 +1,40 @@
 /* ==========================================================================
    Workshop Phone — shell
    "The phone should animate naturally into view from the player's hand...
-   feel like a physical object carried by the player." The exact same
-   shell (position, size, wood/brass styling, slide-from-hand animation)
-   the old Builder Phone already established in buildmode.css — proven,
-   not redesigned.
+   feel like a physical object carried by the player." The slide-from-hand
+   animation (position, transform, transition) is the exact same one the
+   old Builder Phone already established in buildmode.css — proven, not
+   redesigned. The case itself was refined this phase (Interface & Design
+   Refinement) toward "immediately recognisable as a modern smartphone" —
+   real proportions, a real status bar, a home indicator — while staying
+   wood and brass rather than becoming a generic glass slab; "its own
+   identity while remaining clearly part of the Workshop" meant refining
+   this material language, not replacing it.
    ========================================================================== */
 .workshop-phone {
   position: absolute;
   bottom: 20px;
   right: 20px;
-  width: 300px;
-  height: 520px;
-  max-height: 82vh;
+  width: 290px;
+  height: 600px;
+  max-height: 84vh;
   background: var(--wood-dark);
-  border: 7px solid var(--wood-mid);
-  border-radius: 30px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), inset 0 0 0 2px var(--brass);
+  border: 6px solid var(--wood-mid);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-float), inset 0 0 0 2px var(--brass);
   pointer-events: auto;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   transform: translateY(140%);
-  transition: transform 0.38s cubic-bezier(0.2, 0.8, 0.3, 1);
+  transition: transform var(--duration-slow) cubic-bezier(0.2, 0.8, 0.3, 1);
 }
 .workshop-phone.open {
   transform: translateY(0);
 }
 
 /* "Comfortable one-handed use... safe button placement... proper
-   scaling." A fixed 300px corner panel works on desktop/tablet, where
+   scaling." A fixed 290px corner panel works on desktop/tablet, where
    there's plenty of room either side of it, but on an actual small
    phone viewport it can crowd the edge or even overflow. Below this
    width, the phone becomes a full-width, bottom-anchored sheet instead
@@ -41,9 +46,34 @@
     right: 12px;
     bottom: 12px;
     width: auto;
-    height: 78vh;
-    border-radius: 22px;
+    height: 80vh;
+    border-radius: var(--radius-lg);
   }
+}
+
+/* Interface & Design Refinement phase — "status bar." A real device's
+   own clock (see PhoneSystem.js's own _updateStatusBar()) plus two
+   honestly-decorative glyphs — a permanently-full signal/battery is the
+   same "harmless fiction every phone mockup already tells" convention
+   real product screenshots use, not something worth simulating for real. */
+.workshop-phone-statusbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px 2px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--paper);
+  letter-spacing: 0.02em;
+}
+.workshop-phone-status-time {
+  font-variant-numeric: tabular-nums;
+}
+.workshop-phone-status-icons {
+  opacity: 0.85;
+  font-size: 0.7rem;
 }
 
 .workshop-phone-header {
@@ -51,7 +81,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 10px;
+  padding: 4px 10px 8px;
   font-family: var(--font-display);
   font-weight: 500;
   color: var(--brass-bright);
@@ -68,7 +98,7 @@
   background: none;
   border: none;
   color: var(--brass-bright);
-  font-size: var(--text-base);
+  font-size: var(--text-md);
   cursor: pointer;
   padding: 2px 8px;
   border-radius: var(--radius-sm);
@@ -82,45 +112,81 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   background: var(--paper);
   color: var(--ink);
-  padding: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   display: flex;
   flex-direction: column;
 }
 
+/* Interface & Design Refinement phase — "navigation... home indicator."
+   The one purely cosmetic nod to "this is a touchscreen" every modern
+   phone shares — not a real gesture surface, just the visual grammar
+   that reads as one. */
+.workshop-phone-home-indicator {
+  flex-shrink: 0;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--wood-dark);
+}
+.workshop-phone-home-indicator::after {
+  content: "";
+  width: 90px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: rgba(237, 227, 208, 0.35);
+}
+
 /* ==========================================================================
    Home screen — "a simple grid of icons... minimal, clear, readable,
-   comfortable." Plain buttons, no attempt at imitating a phone OS.
+   comfortable," now with the wallpaper-and-icon-tile treatment a real
+   home screen has instead of plain bordered boxes on a flat surface.
    ========================================================================== */
+.workshop-phone-content:has(.workshop-phone-home-grid) {
+  background: radial-gradient(ellipse at 50% -10%, rgba(184, 134, 59, 0.16), transparent 60%), linear-gradient(180deg, var(--paper) 0%, var(--paper-dark) 100%);
+}
 .workshop-phone-home-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-3);
+  gap: var(--space-3) var(--space-2);
+  padding-top: var(--space-2);
 }
 .workshop-phone-app-tile {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  background: rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-2);
+  background: none;
+  border: none;
+  padding: var(--space-1);
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-standard);
-}
-.workshop-phone-app-tile:hover {
-  background: rgba(127, 216, 196, 0.12);
 }
 .workshop-phone-app-glyph {
-  font-size: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  font-size: 24px;
   line-height: 1;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(160deg, var(--wood-light), var(--wood-mid));
+  box-shadow: var(--shadow-tile);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+.workshop-phone-app-tile:hover .workshop-phone-app-glyph {
+  transform: translateY(-2px);
+}
+.workshop-phone-app-tile:active .workshop-phone-app-glyph {
+  transform: translateY(0) scale(0.94);
 }
 .workshop-phone-app-label {
-  font-size: var(--text-xs);
+  font-size: 0.68rem;
   text-align: center;
-  color: var(--ink);
+  color: var(--ink-soft);
 }
 
 /* ==========================================================================

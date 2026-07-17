@@ -3050,6 +3050,110 @@ own "Why no Planner" for the full reasoning.
 had no caller anywhere in that file — dead code in the source itself,
 left out of the port rather than faithfully perpetuated.
 
+## Version 2 — Phase 23a — Workshop Refinement, Pass A (v2.2.3a)
+
+**Goal:** "This is the first refinement pass before Version 2 is
+considered complete... think like a craftsman rather than a feature
+developer." Six real, separately-investigated issues from a named
+"Known Issues" list, each root-caused rather than patched around. See
+`docs/REFINEMENT.md`'s own "Refinement Pass A" section for the complete
+account.
+
+**Factory Reset (and Backup Import, though nobody had reported that one
+yet) had a genuine race condition**, not a partial implementation:
+`beforeunload`'s own autosave fired during the `window.location.reload()`
+both actions trigger themselves, silently re-writing the old in-memory
+state back over the just-cleared (or just-imported) `localStorage` a
+moment before the reload took effect. A single `_suppressSave` guard,
+set before either method does anything else, closes it for both.
+
+**The moon was tracing the mirror-image of its own real cycle** — an
+addition that needed to be a subtraction, verified numerically (a
+first-quarter moon peaked at 6am instead of the correct 6pm). A previous
+investigation had concluded the formula was correct, having tested
+specifically the two phase values (0 and 0.5) where the sign error is
+mathematically invisible.
+
+**The crouch camera constant never did what its own comment claimed** —
+"proportional to the character," while the code subtracted a fixed
+0.5m from any standing height. Replaced with a genuine ratio
+(`CROUCH_HEIGHT_RATIO`, 0.78), fixing the "camera too far into the
+model" complaint for every body proportion at once.
+
+**Ladders had a real detection bug**: the climbable zone was the
+ladder's own raw ~8cm-deep visual geometry, with none of the generosity
+every other interaction zone in the Workshop already holds itself to.
+Padded out to a genuinely walkable zone. The underlying "ladders don't
+function" bug was already fixed in an earlier phase; this pass also
+documents the intended interaction plainly (walk in, hold forward/back,
+no key prompt) for anyone still unsure whether past reports were bugs,
+design ambiguity, or user error.
+
+**AI keep-alive**: the timeout was never the actual problem — it was
+already a generous 180 seconds. `AIConnectionManager` now warms the
+active profile's model proactively and keeps it warm on a recurring
+ping inside Ollama's own unload window, with a real, persisted,
+user-facing toggle in Mission Control. AI profile export/import was
+reviewed and found already complete, capturing every meaningful field
+while deliberately excluding anything that would make a shared profile
+less than fully portable, or an import destructive.
+
+**The startup experience could look completely frozen** — the entry
+button had no click handler at all until the entire boot sequence
+finished. Now wired immediately, with instant visual feedback and a
+gentle status line, entering automatically the moment boot completes if
+pressed early. Starting the render loop itself earlier (for an
+atmospheric background behind the loading screen) was considered and
+deliberately left for a future pass that can actually verify it renders
+cleanly.
+
+## Version 2 — Phase 23b — Interface & Design Refinement (v2.2.3b)
+
+**Goal:** "Pursue visual harmony, not visual uniformity." The second
+refinement pass — a craftsmanship pass on the Workshop's own interface.
+Physical interfaces (Workbench, Pinboard, notes) deliberately keep
+their own material identity; this phase unified the shared plumbing
+underneath the digital interfaces, and gave the Phone the complete
+treatment its own brief specifically named. See the new
+`docs/DESIGN_SYSTEM.md` for the full account, and `docs/PHONE.md`'s own
+new "Craftsmanship" section for the phone specifically.
+
+**A real gap in the design tokens, found and closed.** Despite an
+already-solid token system (palette, type scale, spacing, motion),
+shadows had no shared tokens at all — three separate files hardcoded
+the *exact same* shadow value byte for byte, one with an accidental
+60px/70px drift from the other two. A small, real shadow scale now
+exists, plus `--radius-xl`/`--radius-pill` for two genuine gaps the
+Phone's own redesign needed, with several exact-match hardcoded values
+elsewhere swept to reference the shared tokens instead. A scripted
+sweep of every `var(--...)` reference against what `tokens.css`
+actually defines also turned up a real, previously-invisible bug: the
+Phone's own header buttons referenced a token (`--text-base`) that had
+never existed anywhere, silently falling back to inherited sizing
+rather than any deliberately-chosen one.
+
+**The Workshop Phone got the complete shell refinement its own brief
+named** — a real status bar (the Workshop's own current time, not a
+fabricated one), a home indicator, refined proportions and case, real
+icon tiles instead of bordered boxes, slightly denser content padding
+— while staying wood and brass rather than becoming a generic glass
+case, "its own identity while remaining clearly part of the Workshop."
+
+**The named Builder overflow bug, root-caused.** "Additional options
+push the interface wider than its container" traced to a specific
+cause: a row that conditionally grows from two fields to three (a
+"Segments" field, only for cylinder/sphere/cone parts) with no
+`flex-wrap` to catch it. Fixed with wrapping plus a real minimum basis
+per field, and a broader sweep confirmed similar "row" patterns
+elsewhere were already either fixed-content or already wrapping.
+
+**Digital interfaces, reviewed and confirmed largely consistent
+already** — shared tab-bar and form-control patterns are already
+genuinely reused across Settings, AI Mission Control, the Tools app,
+the Builder, Wardrobe, and the Animation Editor, not just superficially
+similar-looking. This phase closed the real gaps found during that
+review rather than rebuilding a system that was already mostly working.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

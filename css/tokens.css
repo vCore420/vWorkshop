@@ -44,11 +44,29 @@
   --radius-sm: 3px;
   --radius-md: 6px;
   --radius-lg: 12px;
+  --radius-xl: 28px;
+  --radius-pill: 999px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 16px;
   --space-4: 24px;
   --space-5: 40px;
+
+  /* --- Shadows ---
+     Interface & Design Refinement phase — "shared shadows." Three
+     separate files (buildmode.css, music.css, phone.css) each hardcoded
+     the exact same "floating panel, brass inset ring" shadow byte for
+     byte; several more each had their own one-off elevation value doing
+     the same job at a slightly different strength. A small, real scale
+     — soft/medium/panel/float — rather than a token for literally every
+     value that existed before, since not every one-off actually needed
+     to survive; several were already close enough to round to one of
+     these without anyone ever noticing the difference. */
+  --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.2);
+  --shadow-medium: 0 6px 14px rgba(0, 0, 0, 0.35);
+  --shadow-panel: 0 20px 60px rgba(0, 0, 0, 0.5);
+  --shadow-float: 0 24px 60px rgba(0, 0, 0, 0.55);
+  --shadow-tile: 0 4px 10px rgba(0, 0, 0, 0.3);
 
   /* --- Motion --- */
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);

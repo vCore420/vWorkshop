@@ -72,8 +72,12 @@ on the same keystroke.
 "Display applications as a simple grid of icons... the design should
 remain minimal, clear, readable, comfortable... support future
 applications without redesign." A plain CSS grid of buttons — an emoji
-glyph and a label, nothing attempting to imitate Android or iOS. Adding
-a ninth app needs no layout change at all.
+glyph and a label. Adding a ninth app needs no layout change at all.
+Interface & Design Refinement phase — each glyph now sits on a real
+rounded-square icon tile with its own gradient and a small lift on
+hover, on a soft wallpaper gradient rather than a flat surface; see
+this phase's own "Craftsmanship" section below for the rest of the
+shell.
 
 ## The Applications
 
@@ -116,6 +120,49 @@ a ninth app needs no layout change at all.
 - **Settings** — a small, deliberately partial subset (volume, camera
   sensitivity, invert) of the full computer Settings app.
 
+## Craftsmanship (Version 2, Phase 23b — Interface & Design Refinement)
+
+"Rather than feeling like a prototype or small floating panel, it
+should become immediately recognisable as a modern smartphone." The
+shell gained the actual anatomy a phone has, without touching how apps
+mount, how navigation behaves, or Application Persistence above — every
+change lives in `PhoneUI.js`'s own constructor and `css/phone.css`.
+
+**A status bar with a real clock.** `PhoneSystem._updateStatusBar()`
+reads `TimeOfDaySystem.currentTime` directly — the same value the wall
+clock and Settings' own "Current time" row already use, via a newly
+shared `src/utils/TimeFormat.js` (previously a private copy inside
+`SettingsApp.js`) — and writes it into the status bar on a throttled
+half-second timer, only while the phone is actually open. Two
+decorative glyphs (signal, battery) sit beside it, permanently full —
+the same convention every real phone's own marketing screenshot
+already uses.
+
+**A home indicator** — a thin cosmetic pill at the very bottom of the
+screen, the one visual cue that says "touchscreen" without needing an
+actual gesture system behind it.
+
+**Refined proportions and case** — 290×600 rather than 300×520 (closer
+to a real modern phone's own aspect ratio), a slightly thinner bezel, a
+larger corner radius (`--radius-xl`, new this phase). Still wood and
+brass — "its own identity while remaining clearly part of the
+Workshop" meant refining that material language further, not replacing
+it with a generic glass-and-aluminium case that would fit any other
+project's phone just as well.
+
+**Real icon tiles**, not bordered boxes — see "Home Screen" above.
+
+**Slightly denser content padding** — "the phone should feel spacious
+despite its limited screen size" meant giving a little room back to
+content specifically (vertical padding, most of all), not a wholesale
+rescale of the shared app-content classes, which were already
+reasonably tight.
+
+See `docs/DESIGN_SYSTEM.md` for the rest of this phase's own work —
+design tokens, the Builder's own named overflow bug, and what was
+reviewed and found already consistent across the Workshop's digital
+interfaces.
+
 ## Known simplifications (by design, for this phase)
 
 - **Wardrobe preview is a colour swatch, not a live 3D render** — see
@@ -140,3 +187,7 @@ a ninth app needs no layout change at all.
   shell assumes a mouse-and-keyboard session specifically; a touch-first
   variant of the same grid/content-area shape is a styling change, not
   a redesign.
+- **A lock screen and real notifications** — both considered during the
+  Interface & Design Refinement phase and deliberately left out; see
+  `docs/DESIGN_SYSTEM.md`'s own "Known limitations" for why (in short:
+  neither has anything real behind it yet to justify the visual).

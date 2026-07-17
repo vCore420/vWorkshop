@@ -132,6 +132,25 @@ working — the model may be loading for the first time") once a reply has
 genuinely been taking a while, so a long wait never reads as the Workshop
 having simply frozen.
 
+**Keeping a model warm — Workshop Refinement phase (Pass A).** The
+three-minute timeout above is a safety net, not the actual fix for "the
+Workshop should feel patient rather than fragile" — a longer timeout
+only makes a cold load more *tolerable*, it never makes one *shorter*,
+and doesn't stop the same slow load from happening again the next time
+the model gets unloaded from inactivity. `AIConnectionManager
+.setWarmModel()` (called by `main.js` whenever the active resident
+profile's own model changes) pings Ollama once immediately — warming a
+newly-selected model in the background before anyone's actually waiting
+on it — and keeps re-pinging on a comfortable margin inside Ollama's own
+5-minute default unload window, so a model genuinely in use never gets
+the chance to cool down between messages. `keepAliveEnabled` (on by
+default, persisted) is a real toggle in Mission Control's own
+"Connection" section, for anyone who'd rather Ollama managed its own
+memory, or is running something memory-constrained enough that holding a
+model warm between messages isn't welcome. Every keep-alive ping fails
+exactly as quietly as the connection poll already does — it's a
+background convenience, never a user-facing error.
+
 **Latency**, tracked this phase — `AIConnectionManager.lastLatencyMs` is
 a real round-trip measurement from the most recent successful connection
 check, `null` before the first one or after a failure. Read by Resident

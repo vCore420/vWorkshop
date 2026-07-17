@@ -28,7 +28,7 @@
   background: var(--wood-dark);
   border: 7px solid var(--wood-mid);
   border-radius: 30px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), inset 0 0 0 2px var(--brass);
+  box-shadow: var(--shadow-float), inset 0 0 0 2px var(--brass);
   pointer-events: auto;
   display: flex;
   flex-direction: column;

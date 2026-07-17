@@ -215,3 +215,158 @@ twice, given how total and irreversible it is.
   change — they call `save()` directly, which always writes the *current*
   (already-migrated, already-correct) in-memory state, never a stale
   on-disk copy.
+
+## Refinement Pass A (Version 2, Phase 23a)
+
+"Walk through the Workshop as though you are preparing it for its first
+public release." A second refinement pass, well after Version 2's major
+systems existed — six real, separately-investigated issues, each with its
+own root cause rather than a surface patch. See each system's own doc for
+where it's normally covered; this section is the "what changed and why,
+gathered in one place" account the brief specifically asked for.
+
+**Factory Reset didn't fully reset — and neither did Backup Import,
+though nobody had reported that one yet.** `PersistenceSystem.save()` is
+wired to `beforeunload` for the ordinary "don't lose the last few seconds
+of work on tab close" case. Both `factoryReset()` and `importBackup()`
+call `window.location.reload()` themselves, which fires `beforeunload`
+too — and that fired *after* `factoryReset()`'s own `localStorage.clear()`,
+or *after* `importBackup()`'s freshly-written imported data, silently
+re-serialising whatever every provider's still-in-memory (old, pre-reset
+or pre-import) state happened to be, straight back into `localStorage`,
+moments before the reload that was supposed to leave it clean. Not a
+partial reset limited to Builder blocks and terrain specifically — every
+provider, every time either action ran; those two were just the most
+visually obvious ones to notice missing. A single `_suppressSave` guard,
+set before either method does anything else, closes the race for both at
+once. See `PersistenceSystem.js`'s own `save()` comment for the complete
+account.
+
+**The moon was tracing the wrong half of its own cycle.** The offset
+between the sun's position and the moon's was being *added*
+(`currentTime + phase * 24`) when it needed to be *subtracted* — a real
+first-quarter moon culminates six hours *after* solar noon, not before.
+Verified numerically against `solarPosition()` directly: at phase 0.25,
+the old formula peaked at 6am, exactly where a *last*-quarter moon
+belongs. A previous investigation (this doc's own "Interior and lighting"
+section's sibling account, and `docs/ROADMAP.md`'s Phase 13 entry) had
+concluded the formula was already correct — but it verified specifically
+at phase 0 and phase 0.5 via `moonPhaseOverride`, the two degenerate
+points where adding or subtracting a 0- or 12-hour offset lands on the
+exact same result modulo 24. Every other phase was tracing the
+mirror-image lunar cycle instead of the real one, which reads as "vaguely
+wrong, sometimes tracks the sun too closely" rather than obviously
+broken — exactly the report that reopened this. See
+`TimeOfDaySystem.js`'s own moon-position comment for the full numeric
+account.
+
+**Crouching lowered the camera too far — because the constant governing
+it was never actually what its own comment claimed.** `CROUCH_HEIGHT_
+REDUCTION`'s comment said the crouch drop was "proportional to the
+character;" the code subtracted a fixed 0.5m from *any* standing height,
+never proportional to anything. A flat 0.5m off a typical ~1.65m standing
+height is a much bigger relative drop than a genuinely proportional
+reduction would be — which is what was pushing the camera low enough to
+feel like it was sinking into the model. Replaced with
+`CROUCH_HEIGHT_RATIO` (0.78), what the comment always said this should
+have been, fixing the complaint for every body proportion the Wardrobe
+can produce at once, not just retuning one fixed number for the
+default-sized case. See `CameraSystem.js`.
+
+**Ladders: a real usability bug, and an honest account of the intended
+design.** The climbable zone was the ladder's own raw visual bounding
+box — for the Construction Library's ladder piece, about 8cm deep, rail
+to rail. Every other interaction zone in the Workshop is deliberately
+more generous than the geometry it's attached to; ladders were the one
+exception, requiring near-pixel-perfect positioning to register at all.
+`LadderSystem` now pads the zone by a generous, fixed margin (22cm
+horizontal, 12cm vertical) before using it for detection — the most
+likely real explanation for "walked right up to it and it didn't do
+anything." *Ladders were already functionally wired* — a previous phase
+(see `ConstructionLibrary.js`'s own comment on the ladder piece) already
+found and fixed the actual "ladders don't work at all" bug, where the
+library piece never carried its own climbable behaviour. The intended
+interaction, for the avoidance of any remaining doubt: walk into a
+ladder's zone and climbing begins automatically — no key prompt, no
+button press, the same way physically walking up to a real ladder and
+starting to climb doesn't ask permission first. Hold forward to climb up,
+back to climb down (facing the ladder to ascend reads more naturally than
+a dedicated key, and needed no new input binding at all); release either
+to stop and hang in place. Strafe drifts gently sideways without leaving
+the ladder outright. This was a genuine bug in detection, not user error
+or design ambiguity in the interaction itself.
+
+**AI: the timeout was never the real problem.** Both the Connection Test
+and real conversation calls already carry a 180-second timeout, generous
+enough for a legitimate cold model load on modest hardware — a previous
+phase had already established that number for the same reason this
+phase's brief names again. Bumping it further wouldn't have helped: a
+longer timeout only makes the *wait* more tolerable, it never makes the
+wait shorter, and doesn't stop the same slow load from happening again
+every time a model gets unloaded from inactivity. The actual fix is not
+needing that cold load to happen in the middle of a conversation at all:
+`AIConnectionManager` now warms whichever model the active resident
+profile is configured to use — immediately when it becomes active, and
+then on a recurring ping comfortably inside Ollama's own 5-minute default
+unload window, so a model genuinely in use never gets the chance to cool
+down between messages. `keepAliveEnabled`, on by default and persisted,
+is a real, configurable toggle in Mission Control's own Connection
+section, for anyone who'd rather Ollama managed its own memory, or is
+running something memory-constrained enough that holding a model warm
+between messages isn't welcome. See `AIConnectionManager.js`'s own class
+comment.
+
+**AI profile export/import — reviewed, found already complete.**
+`ResidentProfileStore.exportProfile()`/`importProfile()` already capture
+every meaningful field a profile has (identity, traits, behaviour
+configuration and dials, memory configuration, embodiment, model,
+provider, and the expression-set reference), deliberately excluding
+anything that would make a shared profile less than fully portable to a
+different Workshop installation (no connection details/API keys, no
+personal conversation history — both live in entirely separate stores
+that were never part of a profile to begin with) or that would make
+importing someone else's file dangerous (always creates a new profile
+with a fresh id; never overwrites anything by id). Confirmed rather than
+rebuilt.
+
+**The startup experience could look completely frozen for the entire
+loading period.** The real cause: the entry screen's "Step inside" button
+had *no click handler attached at all* until the entire async boot chain
+(`engine.init()`, spawning every saved object, resolving player
+textures, `engine.start()`) had already finished — a control that looked
+interactive and silently did nothing if pressed too soon, for however
+long boot happened to take. The button is now wired immediately, at the
+top of `main.js`, before any of that async work begins, and responds
+instantly either way: if boot's already done, it enters right away; if
+not, it gives immediate visual feedback ("Preparing…", disabled, a status
+line explaining what's happening) and enters automatically the moment
+boot actually finishes, rather than requiring a second press. A gentle
+breathing status line ("Preparing the Workshop…" → "Finishing touches…" →
+"Ready when you are") is visible from the very first paint, not just
+after a delay. Deliberately *not* attempted: starting the render loop
+itself earlier so an atmospheric world preview shows behind the entry
+screen while it loads. `engine.start()` is what actually begins
+`renderer.setAnimationLoop()` — moving that earlier means rendering a
+scene before every system that populates it has finished, a real risk of
+visible pop-in or partially-initialised geometry that this pass couldn't
+verify without being able to render and watch it happen. Left as a named,
+future opportunity rather than a change shipped without being able to
+see it work.
+
+### Remaining issues worth revisiting
+
+- **A true atmospheric loading background** (see the startup section
+  above) — needs either a genuinely progressive `engine.init()` that can
+  report partial completion, or a deliberately separate, lightweight
+  "preview scene" rendered before the real one — either is a bigger
+  architectural decision than this pass's own scope.
+- **Ladder top/bottom transitions** — climbing is clamped to the padded
+  zone's own vertical bounds, which now extends slightly past the visual
+  ladder (12cm) for a smoother step-on/step-off feel at platform height.
+  Whether that's generous enough at every ladder height and pitch a
+  future Builder-designed ladder might use is worth re-checking once more
+  than one ladder shape actually exists in the wild.
+- **Crouch camera** — `CROUCH_HEIGHT_RATIO` (0.78) is a reasoned default,
+  not something this pass could visually tune against a rendered frame.
+  Worth a deliberate playtest pass once one's possible.
+
