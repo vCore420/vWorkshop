@@ -18,13 +18,8 @@
  */
 import { WEATHER_STATES } from "../../systems/EnvironmentSystem.js";
 import { getObserverLocation, solarPosition, moonPhaseFraction, moonIllumination, sunriseSunset, moonriseMoonset, dayOfYear, getSeason } from "../../utils/Astronomy.js";
+import { formatClockTime } from "../../utils/TimeFormat.js";
 
-
-function formatClockTime(hour) {
-  const h = Math.floor(hour) % 24;
-  const m = Math.round((hour - Math.floor(hour)) * 60);
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
 
 const COMPASS_LABELS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 /** A wind/sun direction in radians (0 = north, clockwise) to a plain

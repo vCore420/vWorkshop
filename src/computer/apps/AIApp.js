@@ -252,6 +252,16 @@ export function createAIApp({
         hint.className = "app-subtitle";
         hint.textContent = "Checked automatically every few seconds \u2014 nothing needs to be started in a particular order. If the connection drops, the Workshop keeps quietly retrying on its own; nothing here needs to be manually reconnected.";
         section.appendChild(hint);
+
+        // Workshop Refinement phase (Pass A) — "a configurable keep-alive
+        // system within Mission Control."
+        section.appendChild(
+          checkboxRow("Keep the active model warm in the background", aiConnectionManager.keepAliveEnabled, (v) => aiConnectionManager.setKeepAliveEnabled(v))
+        );
+        const keepAliveHint = document.createElement("p");
+        keepAliveHint.className = "app-subtitle";
+        keepAliveHint.textContent = "Quietly pings Ollama every few minutes so a model already in use stays loaded, instead of unloading and needing a slow cold start again the next time someone talks to a resident. Turn this off if you'd rather Ollama manage its own memory.";
+        section.appendChild(keepAliveHint);
         return section;
       }
 
@@ -1153,6 +1163,19 @@ export function createAIApp({
         const h = document.createElement("h3");
         h.textContent = text;
         return h;
+      }
+
+      function checkboxRow(label, checked, onChange) {
+        const row = document.createElement("div");
+        row.className = "panel-row";
+        const labelEl = document.createElement("label");
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = !!checked;
+        checkbox.addEventListener("change", () => onChange(checkbox.checked));
+        labelEl.append(checkbox, document.createTextNode(" " + label));
+        row.appendChild(labelEl);
+        return row;
       }
 
       function textRow(label, value, onChange, placeholder) {

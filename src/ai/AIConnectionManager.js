@@ -3,6 +3,24 @@ import { EventBus } from "../core/EventBus.js";
 const DEFAULT_BASE_URL = "http://localhost:11434";
 const POLL_INTERVAL_MS = 10000; // a calm cadence, not a tight retry loop
 const FETCH_TIMEOUT_MS = 4000;
+// Workshop Refinement phase (Pass A) — "quietly warming models in the
+// background, periodically keeping them alive." Ollama's own default is
+// to unload a model after 5 minutes of inactivity; pinging somewhat
+// inside that window (not right up against it) keeps a genuinely-in-use
+// model loaded without a person ever noticing it almost lapsed.
+// `KEEP_ALIVE_DURATION` is how long *each* ping asks Ollama to hold the
+// model for — generous enough that a slightly-late next ping (the
+// Workshop tab backgrounded for a bit, say) still won't have let it
+// unload, but not "forever": once the Workshop stops asking, a
+// person's own machine gets that memory back within a reasonable time
+// on its own, the same way it would if they'd been using Ollama
+// directly.
+const KEEP_ALIVE_INTERVAL_MS = 4 * 60 * 1000;
+const KEEP_ALIVE_DURATION = "10m";
+// The warm-up/keep-alive ping *is* a real model-load request on a cold
+// model — same reasoning as ResidentConnection.sendMessage()'s own
+// timeout, and the same number, for the same reason.
+const WARM_TIMEOUT_MS = 180000;
 
 /**
  * AIConnectionManager
@@ -41,6 +59,28 @@ const FETCH_TIMEOUT_MS = 4000;
  * which is exactly right for staying calm: there's no way to tell them
  * apart reliably, so there's no reason to show a different, scarier
  * message for one than the other.
+ *
+ * **Workshop Refinement phase (Pass A) — keeping a model warm.** "The
+ * Workshop should feel patient rather than fragile" when a slower
+ * machine needs real time to load a model into memory — the honest fix
+ * isn't a longer timeout (that only makes the *wait* more tolerable,
+ * never shorter), it's not needing that cold load to happen in the
+ * middle of a conversation at all. `setWarmModel(modelId)` — called by
+ * `main.js` whenever the active resident profile's own model changes —
+ * pings Ollama once immediately (so switching to a model warms it right
+ * away, in the background, before anyone's actually waiting on it) and
+ * keeps re-pinging on `KEEP_ALIVE_INTERVAL_MS`, each ping asking Ollama
+ * to hold the model for `KEEP_ALIVE_DURATION` — comfortably inside
+ * Ollama's own 5-minute default unload window, so a model that's
+ * genuinely in use never has the chance to cool down between messages.
+ * `keepAliveEnabled` (persisted, on by default) is the whole feature's
+ * own on/off switch — Mission Control's own "Connection" section — for
+ * anyone who'd rather Ollama managed its own memory without the
+ * Workshop's help, or is running something memory-constrained enough
+ * that holding a model warm between messages isn't welcome. Every ping
+ * fails exactly as quietly as `checkConnection()` already does — a
+ * missed keep-alive isn't an error, it just means the next real message
+ * pays the ordinary cold-load cost once, same as always.
  */
 export class AIConnectionManager {
   constructor() {
@@ -56,10 +96,16 @@ export class AIConnectionManager {
     this.lastFailureAt = null;
     this._pollTimer = null;
     this._disposed = false;
+    // Workshop Refinement phase (Pass A) — see the class comment's own
+    // "keeping a model warm" section.
+    this.keepAliveEnabled = true;
+    this._warmModelId = null;
+    this._keepAliveTimer = null;
   }
 
   init() {
     this._poll();
+    this._scheduleKeepAlive();
   }
 
   setBaseUrl(url) {
@@ -121,6 +167,66 @@ export class AIConnectionManager {
     }
   }
 
+  /** Workshop Refinement phase (Pass A) — called by `main.js` whenever
+   *  the active resident profile's own model changes (including on
+   *  startup, and including to `null` if no profile has a model
+   *  configured at all). Warms the new model immediately, in the
+   *  background, rather than waiting for the next scheduled keep-alive —
+   *  switching models is exactly the moment a cold load is otherwise
+   *  about to happen the instant someone actually says something. */
+  setWarmModel(modelId) {
+    const normalized = modelId || null;
+    if (normalized === this._warmModelId) return;
+    this._warmModelId = normalized;
+    if (normalized && this.keepAliveEnabled && this.status === "connected") this._pingKeepAlive(normalized);
+  }
+
+  /** Mission Control's own "Connection" toggle. Turning this off doesn't
+   *  retroactively unload anything already warm — it just stops asking
+   *  Ollama to keep holding it, the same way turning it back on doesn't
+   *  force an immediate warm-up either; the next scheduled tick (or the
+   *  next real message) picks it back up naturally. */
+  setKeepAliveEnabled(enabled) {
+    this.keepAliveEnabled = !!enabled;
+    this.events.emit("connection:changed");
+    this.events.emit("persistence:saveRequested");
+  }
+
+  _scheduleKeepAlive() {
+    if (this._keepAliveTimer) clearTimeout(this._keepAliveTimer);
+    this._keepAliveTimer = setTimeout(() => this._runKeepAlive(), KEEP_ALIVE_INTERVAL_MS);
+  }
+
+  async _runKeepAlive() {
+    if (this._disposed) return;
+    if (this.keepAliveEnabled && this.status === "connected" && this._warmModelId) {
+      await this._pingKeepAlive(this._warmModelId);
+    }
+    if (this._disposed) return;
+    this._scheduleKeepAlive();
+  }
+
+  /** The actual ping — `prompt: ""` asks Ollama to load the model without
+   *  generating anything, and `keep_alive` is the one part of this
+   *  request that isn't just "a normal generation call": it's what tells
+   *  Ollama to hold the model in memory for `KEEP_ALIVE_DURATION` rather
+   *  than its own default. Fire-and-forget from every caller's own
+   *  perspective — failures are swallowed here, on purpose, the same
+   *  "a background health check is never a user-facing error"
+   *  reasoning `checkConnection()` already follows. */
+  async _pingKeepAlive(modelId) {
+    try {
+      await fetch(`${this.baseUrl}/api/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: modelId, prompt: "", keep_alive: KEEP_ALIVE_DURATION }),
+        signal: AbortSignal.timeout(WARM_TIMEOUT_MS),
+      });
+    } catch {
+      // Quiet — see this method's own comment above.
+    }
+  }
+
   /** A one-off test prompt — "purely for testing... not yet the Workshop
    *  chat interface." Callers are expected to show their own honest
    *  failure message; this doesn't swallow the error the way
@@ -144,16 +250,22 @@ export class AIConnectionManager {
   dispose() {
     this._disposed = true;
     if (this._pollTimer) clearTimeout(this._pollTimer);
+    if (this._keepAliveTimer) clearTimeout(this._keepAliveTimer);
   }
 
   // ---- persistence contract, read by PersistenceSystem ----
   save() {
-    return { baseUrl: this.baseUrl };
+    return { baseUrl: this.baseUrl, keepAliveEnabled: this.keepAliveEnabled };
   }
 
   load(data) {
-    if (!data?.baseUrl) return;
-    this.baseUrl = data.baseUrl;
+    if (!data) return;
+    if (data.baseUrl) this.baseUrl = data.baseUrl;
+    // Workshop Refinement phase (Pass A) — explicit `=== false` rather
+    // than a falsy check: a save file from before this phase existed has
+    // no `keepAliveEnabled` key at all (`undefined`), which should mean
+    // "keep the default (on)," not "off."
+    if (data.keepAliveEnabled === false) this.keepAliveEnabled = false;
     this.events.emit("connection:changed");
   }
 }
