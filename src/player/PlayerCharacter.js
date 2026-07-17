@@ -40,6 +40,20 @@ import { configureFlatTexture } from "../utils/TextureUtils.js";
 
 export const PART_IDS = ["head", "torso", "upperArm", "lowerArm", "hand", "upperLeg", "lowerLeg", "foot"];
 
+// Version 3, Phase 1 ("Completing Promises") — "crouching should restore a
+// comfortable first-person camera without animation artefacts obscuring the
+// view." A dedicated Three.js render layer for the head mesh, so a
+// first-person camera can reliably exclude it instead of depending on the
+// backface-culling coincidence that only happens to hide it while standing
+// (see CameraSystem.js's own comment on why crouching breaks that
+// coincidence). Not applied here — buildCharacter() is also used by the
+// Wardrobe's own isolated preview rig, which should always show the full
+// character. PlayerCharacterSystem applies this layer only to the one rig
+// instance that actually shares a camera with the player; ReflectionSystem
+// re-enables it on every mirror's own camera, since a reflection should
+// always show the full character too.
+export const FIRST_PERSON_HIDDEN_LAYER = 1;
+
 export const MATERIAL_PRESETS = {
   matte: { roughness: 0.85, metalness: 0.05 },
   fabric: { roughness: 0.95, metalness: 0 },

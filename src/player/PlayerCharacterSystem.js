@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { buildCharacter, disposeCharacter } from "./PlayerCharacter.js";
+import { buildCharacter, disposeCharacter, FIRST_PERSON_HIDDEN_LAYER } from "./PlayerCharacter.js";
 import { CameraSystem } from "../systems/CameraSystem.js";
 
 const REBUILD_DEBOUNCE_MS = 120; // see _scheduleRebuild
@@ -21,10 +21,20 @@ const DEFAULT_EYE_HEIGHT = 1.65; // fallback for getEyeHeight() before the very 
  * else. While focused (sitting at a desk, say), the camera simply holds
  * still, so the rig harmlessly keeps re-copying the same frozen position;
  * nothing here needs to know that's happening. "First-person... should
- * normally never see themselves" is true by construction: nothing hides
- * the mesh, it just naturally sits at/below the camera facing the same
+ * normally never see themselves" is mostly true by construction — the
+ * torso/arms/legs just naturally sit at/below the camera facing the same
  * direction, the same reason you don't normally see your own face in a
- * real first-person view unless you look down.
+ * real first-person view unless you look down. The head is the one part
+ * that needed a real, deliberate fix rather than relying on that same
+ * luck: standing happens to put the camera exactly inside the head mesh
+ * (backface culling hides it too), but crouching moves the camera without
+ * moving the rig — nothing here ever translates a pivot, only rotates
+ * (see `PlayerCharacter.js`'s own `applyPose()`) — leaving the head
+ * visibly floating above it. `FIRST_PERSON_HIDDEN_LAYER` (see its own
+ * comment in `PlayerCharacter.js`, tagged onto the head mesh in
+ * `_rebuild()` below, and toggled by `CameraSystem.js`) excludes the head
+ * from the first-person camera explicitly instead, which holds at every
+ * crouch depth, not just while standing.
  *
  * The Wardrobe app's live preview (see docs/PLAYER.md) is deliberately
  * *not* this system moving the main camera to look at the character — an
@@ -95,6 +105,9 @@ export class PlayerCharacterSystem {
       const textureImages = await resolveTextureImages(this.appearanceStore.appearance, this.textureStore);
       next = buildCharacter(this.appearanceStore.appearance, this.appearanceStore.bodyModelId, textureImages);
     }
+    // See FIRST_PERSON_HIDDEN_LAYER's own comment in PlayerCharacter.js —
+    // safe no-op for an imported-model rig, which has no `meshes.head`.
+    next.meshes?.head?.layers.set(FIRST_PERSON_HIDDEN_LAYER);
 
     if (this._current) {
       this.engine.scene.remove(this._current.root);
