@@ -74,10 +74,17 @@ export function distributeEvenly(positions, axis) {
 /** The overall bounding extent of a set of positions alone — a simple,
  *  point-based measurement (not the true geometric bounding box each
  *  object's own compiled mesh would have, which `WorldObjectsSystem.
- *  getFootprints()` already computes per instance for collision — see
- *  `BuildModeSystem.js`'s own `_measureSelection()` for where the two are
- *  combined). Useful on its own for "how far apart is my whole layout,
- *  from object origin to object origin." */
+ *  getFootprint()` already computes per instance for collision).
+ *  Useful on its own for "how far apart is my whole layout, from
+ *  object origin to object origin" — a natural building block for a
+ *  future alignment feature (distribute evenly, fit to bounds) in this
+ *  same file, though nothing currently calls it yet. Version 2 Sign-Off
+ *  phase — this comment previously claimed `BuildModeSystem.js`'s own
+ *  `_measureSelection()` already combines the two; checked directly,
+ *  and it doesn't — that method has its own separate min/max
+ *  computation over mesh-derived boxes, a different input shape than
+ *  this function's plain position arrays. Corrected rather than left
+ *  pointing at an integration that was never actually there. */
 export function positionsBounds(positions) {
   const xs = axisValues(positions, "x");
   const ys = axisValues(positions, "y");

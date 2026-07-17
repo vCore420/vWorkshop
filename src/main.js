@@ -632,8 +632,11 @@ const workbenchSystem = engine.addSystem(new WorkbenchSystem({ projectsStore, au
 
 const interactionSystem = engine.addSystem(new InteractionSystem());
 
-// BuildModeSystem suspends InteractionSystem purely over events (see both
-// files' comments) and looks up CameraSystem/RoomLayoutSystem/
+// BuildModeSystem no longer coordinates with InteractionSystem directly at
+// all — Build Mode is a Phone app now, and PhoneSystem's own open-guard +
+// `phone:opened`/`phone:closed` events handle the mutual exclusion for
+// every app uniformly (see all three files' comments). It looks up
+// CameraSystem/RoomLayoutSystem/
 // WorldObjectsSystem at the moment it needs them, not at init() time, so it
 // has no strict ordering requirement beyond "after the systems it looks up
 // already exist in the list" (they do, above).

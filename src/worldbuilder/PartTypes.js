@@ -63,6 +63,10 @@ export const PART_CATEGORIES = [
   },
 ];
 
+/** Every part type id, flattened — a convenience export with no external
+ *  caller today (v2.2.3d review checked directly); kept because it's the
+ *  natural "is this a valid part type?" companion to PART_CATEGORIES and
+ *  costs one line, not because anything currently imports it. */
 export const ALL_PART_TYPES = PART_CATEGORIES.flatMap((c) => c.types.map((t) => t.id));
 
 /** Types whose geometry resolution depends on a segment count, and so show the "Segments" field in the part editor. */

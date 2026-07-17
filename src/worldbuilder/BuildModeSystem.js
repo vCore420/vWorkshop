@@ -68,13 +68,21 @@ function nextGroupId() {
  * `_gatherSurfaces`), and nothing here assumes there is only one room —
  * see docs/WORLD.md.
  *
- * Build Mode is mutually exclusive with the normal interaction pipeline:
- * entering refuses if `InteractionSystem.active` (you're sitting at the
- * computer, say); entering also tells `InteractionSystem` to suspend its
- * own proximity scan for as long as Build Mode is open, purely over events
- * (`buildmode:entered`/`buildmode:exited`) — see InteractionSystem's own
- * `_suspended` flag. Neither system imports the other's internals beyond
- * that.
+ * Build Mode is mutually exclusive with the normal interaction pipeline,
+ * but no longer enforces that itself: since Build Mode became a Phone app
+ * (`BuilderPhoneApp.js`), both halves of the old contract moved up into
+ * `PhoneSystem` — `PhoneSystem.open()` refuses while
+ * `InteractionSystem.active` (you're sitting at the computer, say), and
+ * `InteractionSystem` suspends its proximity scan on `phone:opened` /
+ * `phone:closed`, uniformly for every app, this one included. enter()
+ * and exit() below still broadcast `buildmode:entered`/`buildmode:exited`
+ * — honestly: nothing in the Workshop listens for them today. They're
+ * kept as a public signal (a plugin or a future system that cares
+ * specifically about *building*, as opposed to the phone being out, has
+ * no other way to know), not because anything currently consumes them —
+ * exactly the "deliberately not built on yet" distinction the dead-code
+ * audits keep drawing, made legible here so the next audit doesn't have
+ * to re-derive it.
  *
  * **Builder Evolution phase: multi-selection, grouping, history, and
  * layout tools, all layered on top of the mechanics above without

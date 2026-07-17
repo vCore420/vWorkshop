@@ -205,8 +205,12 @@ export function group(position = [0, 0, 0], rotationY = 0) {
   return g;
 }
 
-/** Computes a world-space footprint box used by collision + interaction radius helpers. */
-export function computeFootprint(object3D) {
-  const box3 = new THREE.Box3().setFromObject(object3D);
-  return box3;
-}
+// Version 2 Sign-Off phase — `computeFootprint(object3D)` used to live
+// here: a one-line wrapper around `new THREE.Box3().setFromObject()`,
+// whose own docstring claimed it was "used by collision + interaction
+// radius helpers." It never actually was — every real caller of that
+// exact pattern (`WorldObjectsSystem.js`, `LadderSystem.js`) already
+// calls `Box3.setFromObject()` directly, and nothing anywhere called
+// this wrapper. Removed rather than kept as a second, unused way to do
+// the same one-line thing — see docs/REFINEMENT.md's own "Version 2
+// Sign-Off" section.

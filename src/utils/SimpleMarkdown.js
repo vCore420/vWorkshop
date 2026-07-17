@@ -3,12 +3,17 @@
  * ----------------
  * Renders exactly the markdown the Workshop's own docs/*.md files
  * actually use — headers, paragraphs, bold/italic, inline code, fenced
- * code blocks, (nested) bullet lists, links, and horizontal rules — not
- * a general-purpose CommonMark implementation. `workshop://docs`,
- * `workshop://builder`, and `workshop://animation` are the only callers,
- * and they're rendering trusted, Workshop-authored files, not arbitrary
- * user content, so this doesn't need to defend against malicious
- * markdown either.
+ * code blocks, (nested) bullet lists, links, horizontal rules, and a
+ * three-tag `<details>`/`<summary>` whitelist (the one HTML construct
+ * any Workshop doc actually uses — HISTORY.md's collapsed changelog) —
+ * not a general-purpose CommonMark implementation. The `workshop://`
+ * documentation pages (`documentation`, `builder`, `animation`,
+ * `plugin-sdk`, and `history` — see WorkshopPages.js) are the only
+ * callers, and they're rendering trusted, Workshop-authored files, not
+ * arbitrary user content, so this doesn't need to defend against
+ * malicious markdown either. (The caller list above was itself found
+ * stale in the v2.2.3d review — it had said three pages for two phases
+ * after plugin-sdk became a fourth.)
  */
 export function renderMarkdown(source) {
   const lines = source.replace(/\r\n/g, "\n").split("\n");
@@ -44,6 +49,25 @@ export function renderMarkdown(source) {
     const line = rawLine;
     if (line.trim() === "") {
       closeLists();
+      continue;
+    }
+    // A three-tag whitelist, not general HTML support: docs/HISTORY.md
+    // wraps its full changelog in <details>/<summary> (the one HTML
+    // construct any Workshop doc actually uses), and without this the
+    // tags would render as escaped literal text. The summary's own inner
+    // text still goes through inline() like anything else; every other
+    // HTML-looking line in a doc stays escaped, exactly as before.
+    // Added for workshop://history (v2.2.3d's One Contribution).
+    const trimmed = line.trim();
+    if (trimmed === "<details>" || trimmed === "</details>") {
+      closeLists();
+      htmlParts.push(trimmed);
+      continue;
+    }
+    const summaryMatch = trimmed.match(/^<summary>(.*)<\/summary>$/);
+    if (summaryMatch) {
+      closeLists();
+      htmlParts.push(`<summary>${inline(summaryMatch[1])}</summary>`);
       continue;
     }
     if (/^---+\s*$/.test(line.trim())) {
