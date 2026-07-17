@@ -1,10 +1,12 @@
 import { CURRENT_SAVE_VERSION } from "../systems/SaveMigrations.js";
 
-/** "Healthy. Warning. Error. Unavailable." The one vocabulary every
- *  health computation in this file uses — see `_worse()` for how two
- *  levels combine into an overall one. */
-export const HEALTH_LEVELS = ["healthy", "warning", "error", "unavailable"];
-
+// Version 2 Sign-Off phase — "Healthy. Warning. Error. Unavailable."
+// used to also live here as its own exported `HEALTH_LEVELS` array —
+// this phase's own dead-code audit found it was never actually read as
+// a value anywhere (only mentioned in a comment below), and it
+// duplicated a vocabulary `SEVERITY`'s own keys already define.
+// Removed rather than kept alongside a second copy of the same list.
+//
 // Order matters — index is severity, used by _worse()/_overallHealth()
 // below. "unavailable" sits *after* "error" here on purpose: an
 // unavailable optional feature (Ollama not running, the Host Companion
@@ -75,7 +77,7 @@ export class DiagnosticsService {
    *  **Workshop Diagnostics phase — the shape changed from "numbers" to
    *  "understanding."** Every section used to be a flat bag of counts;
    *  each now also carries a computed `health` level (see
-   *  `HEALTH_LEVELS` above) and, where genuinely useful, a
+   *  `SEVERITY` above) and, where genuinely useful, a
    *  `suggestion` — "health should be calculated using the current
    *  state of each subsystem rather than being manually assigned" is
    *  true throughout: nothing here is a hardcoded "healthy," every
