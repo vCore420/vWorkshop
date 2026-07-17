@@ -197,9 +197,26 @@ own colour shift) that were already true and already meaningful, not
 invented for this. Nothing is scripted or guaranteed — it's still an
 ordinary weighted pick among idle locations that already existed; a
 patient, observant player might eventually notice it forms a pattern of
-its own, which is exactly the point. See the README's own "One
+its own, which is exactly the point. See `docs/HISTORY.md`'s own "One
 contribution" section for the fuller reasoning behind choosing this,
-specifically, over everything else it could have been.
+specifically, over everything else it could have been. (Version 2
+Sign-Off phase — that cross-reference used to point at "the README's
+own" section; the writing moved to `docs/HISTORY.md` at some point and
+this line never followed it. Corrected as part of this phase's own
+documentation audit.)
+
+**Version 2 Sign-Off phase's own contribution, the same habit, one more
+thread.** The wall clock (Decorative Details phase) and its hourly
+chime (Sound & Presence phase) had existed for two entire phases
+without `_windowWatchWeights()` ever hearing about either — an idle
+location, `besideClock`, now sits beside the clock the same way
+`lookingOutWindow` sits beside a window, and gets the same kind of
+gentle pull within a few minutes either side of the hour turning over.
+Never guaranteed, never synchronised on purpose — but on the occasions
+it does land there, a resident already looking at the clock the moment
+it chimes is entirely possible now, where it simply couldn't have
+happened before. See `docs/HISTORY.md`'s own retrospective for the full
+reasoning behind choosing this as Version 2's own closing signature.
 
 ## Player awareness
 

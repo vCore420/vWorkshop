@@ -1,8 +1,17 @@
 # Assets
 
-There are no binary asset files in this project yet — no images, no audio
-files, no 3D models. That's a deliberate choice for this phase, not an
-oversight:
+Version 2 Sign-Off phase — this file used to claim there were no binary
+asset files in the project "yet." That stopped being true a while ago:
+four PWA icons live in `assets/icons/` (`icon-32.png`, `icon-180.png`,
+`icon-192.png`, `icon-512.png` — the favicon, Apple touch icon, and the
+two sizes `manifest.json` wants for install prompts/app switchers).
+Genuinely necessary, genuinely tiny, and not what the rest of this
+document is actually about — corrected here rather than left claiming
+something no longer true.
+
+Beyond those four small icons, there are still no *content* asset
+files — no 3D models, no textures, no audio files. That's a deliberate
+choice, not an oversight:
 
 - The brief asked for effort to go into architecture, not artwork.
 - Every visual is primitive Three.js geometry (boxes, cylinders) styled
@@ -13,10 +22,11 @@ oversight:
   `src/utils/AudioSynth.js` — ambient pads for the stereo, filtered noise
   for weather.
 
-This means the project has **zero external asset dependencies** and works
-completely offline (aside from loading Three.js itself and two Google
-Fonts, both from a CDN — see `index.html`'s comment on vendoring Three.js
-locally if fully offline use matters later).
+This means the project still has effectively zero external asset
+dependencies and works completely offline (aside from loading Three.js
+itself and two Google Fonts, both from a CDN — see `index.html`'s
+comment on vendoring Three.js locally if fully offline use matters
+later).
 
 ## Replacing a placeholder later
 

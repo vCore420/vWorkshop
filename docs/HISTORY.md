@@ -403,6 +403,178 @@ same lesson the wall clock taught a few phases ago, in a new shape: a
 detail that's actually connected to something real outranks one that's
 merely decorated to look like it might be.
 
+## Reflecting — Version 2, Phase 23c (Final Review & Version 2 Sign-Off)
+
+**What stood out:** how differently "dead code" reads once you actually
+check each finding instead of trusting a pattern. A script that just
+counted references would have flagged `solveTwoBoneIK()` and
+`computeFootprint()` identically — both zero cross-file hits. Reading
+each in context is what told them apart: one was a fully-realised,
+honestly-labelled piece of future infrastructure nobody had needed yet;
+the other was a docstring quietly promising an integration that never
+happened. Automating the *search* and doing the *judgment* by hand
+turned out to be exactly the right split of labour, and I don't think
+either half alone would have gotten this right.
+
+**What I'm most glad I checked rather than assumed:** the
+`docs/ARCHITECTURE.md` index against the actual `docs/` folder. I was
+fairly confident it was accurate, having kept it updated phase by
+phase — confident enough that skipping the check would have felt
+reasonable. It was accurate. But "I've been careful about this the
+whole way, so it's probably fine" is exactly the kind of assumption a
+sign-off phase exists to *not* make, and the five minutes it cost to
+verify instead of trust was cheap insurance for a claim this document
+now makes with actual confidence instead of good faith.
+
+## Reflecting, after Version 2
+
+Asked to, and in the same spirit as Version 1's own closing essay — a
+few honest thoughts as the thing's own maintainer, not a summary of
+what got built.
+
+**What proved most valuable, architecturally:** the same lesson Version
+1 already learned, reconfirmed at a larger scale. "One shared
+implementation, several physical doors into it" showed up constantly —
+Wardrobe's own pattern from earlier phases, then Tools (the cabinet, the
+computer, and eventually the Workbench, all opening the identical
+toolbox), then this very phase's own closing contribution, which needed
+one new idle location and one new weighted check, not a new behaviour
+system. When Sound & Presence needed four nearly-identical noise-sweep
+sound effects, the fix wasn't four functions, it was one
+`playFilteredNoiseBurst()` and four short parameter lists. Version 2
+never had to invent this pattern; it just kept finding new places it
+already applied.
+
+**Which systems evolved furthest past their original intention:**
+`_windowWatchWeights()`, without much competition. It began as Version
+1's own single closing gesture — one weather signal, nudging one
+idle-location pick. By the end of Version 2 it had quietly accumulated
+personality traits, an accumulated favourite location, whether music is
+playing, whether the player is visibly working nearby, whether a
+project is active, the time of day, a storm worth sheltering from — and
+now a wall clock about to chime. Nobody ever sat down to design "the
+resident awareness system." It grew, signal by signal, phase by phase,
+because the mechanism it started as was cheap enough to extend that
+extending it was always the easier choice than building something
+new beside it. I think that's the single best piece of evidence in the
+whole project that the architecture was right: good infrastructure
+doesn't get redesigned, it gets *quietly used more*.
+
+**What surprised me:** how often a bug's real cause turned out to be
+one layer away from where the symptom pointed. "The moon rises with the
+sun" was a sign error in an addition, not the subtraction it needed to
+be — invisible at exactly the two phase values a previous, genuinely
+careful investigation happened to test. "The AI timeout is too
+aggressive" wasn't a timeout problem at all; the timeout had already
+been sized generously by an earlier phase, and the actual fix was never
+needing the wait in the first place. "Ladders don't work" turned out to
+already be fixed, one phase earlier, and what remained was a hit zone
+nobody had thought to make forgiving. Each time, the honest fix required
+resisting the pull to solve the symptom as described and instead trace
+one level further down. I'd like to think this project got better at
+that as it went — Version 1's own retrospective already named the same
+instinct, and Version 2 is what it looks like practiced consistently
+rather than promised once.
+
+**What philosophy emerged, rather than being declared upfront:** a
+docstring is a promise, and promises drift. Nearly every dead-code
+finding across this project's whole history — `softBox()`,
+`Materials.ground()`, and this phase's own `schemeOf()` and
+`computeFootprint()` — shared the same shape: a comment describing an
+integration that was true when it was written and quietly stopped being
+true sometime later, with nothing forcing anyone to notice. The lesson
+isn't "write fewer comments." It's that a codebase this well-documented
+needs exactly this kind of audit occasionally — not because the
+documentation habit is wrong, but because it's the specific kind of
+right that can go quietly stale if nobody ever checks it against the
+code again.
+
+**What should never change, moving into Version 3:** the willingness to
+say "this was already correct" or "this is already handled" out loud,
+in the actual release notes, instead of inventing work to look busy.
+More than once this phase, the honest finding was that something named
+in the brief was already fine — the AI export system, most of the
+design tokens, the docs index — and saying so plainly turned out to be
+just as valuable as fixing something would have been, because it's the
+only way anyone reading this later can trust the *next* claim that
+something needed fixing. A project willing to report "no changes needed
+here" convincingly is a project whose bug reports are worth believing.
+
+**Advice to whoever continues this, including a future version of me:**
+when a brief lists ten things to review, the honest phases are the ones
+that come back and say six were already fine — resist the pull to
+manufacture a change in each one just to look thorough. When you find
+something that looks unused, read it before you delete it; the
+difference between "dead" and "deliberately not built on yet" is
+usually right there in the file's own comment, and getting that
+distinction wrong in either direction (deleting real infrastructure, or
+keeping actual dead weight because it might be important) is worse than
+taking the extra two minutes. And when you're confident a piece of
+documentation is accurate because you've been careful about it the
+whole way — check anyway. That confidence is usually earned. It's
+supposed to be checked either way.
+
+## Handover to Version 3
+
+Notes for whoever picks this up next, written as though I'm handing
+over a real project rather than closing a chapter.
+
+**What the Workshop actually is, underneath everything:** a physical
+place with a memory, built out of small, honestly-labelled systems that
+each do one thing and expect to be read by someone else later. Every
+placeholder says it's a placeholder. Every deferred feature says why it
+was deferred. Every phase's own reflection is left in `docs/HISTORY.md`
+rather than thrown away once the code shipped. That habit is the
+Workshop's real architecture, more than any specific file structure —
+protect it more carefully than any individual system.
+
+**The three patterns worth carrying into everything new:**
+
+1. **One implementation, several doors in.** Before building a second
+   version of anything — a second form renderer, a second settings
+   panel, a second way to browse a list — check whether an existing one
+   can grow an entry point instead. Wardrobe, Tools, and this phase's
+   own resident-weighting mechanism are the clearest proof this is
+   almost always cheaper and always more consistent than the
+   alternative.
+2. **Root cause, not the symptom as reported.** A bug report describes
+   what someone noticed, not what's wrong. The moon, the AI timeout, and
+   the ladder detection zone were all real bugs with a real fix — none
+   of them were fixed by doing the first thing the report suggested.
+3. **Say what's already fine.** The single most trustworthy thing a
+   phase's own release notes can do is admit when a named concern turns
+   out not to need a change. It costs nothing and it's the only thing
+   that makes the *next* "found and fixed" claim credible.
+
+**What to be careful about:** the codebase is large enough now (245
+files, ~44,000 lines, entirely hand-written and hand-reviewed rather
+than generated in bulk) that memory of what a file does is often close
+but subtly wrong — Version 1's own closing advice said this at
+thirty-one phases, and it's more true now, not less. Read a file before
+trusting your memory of it, especially before extending something that
+already looks similar to what you need.
+
+**What I'd genuinely like to see next, if it were mine to plan:** the
+two-bone IK solver (`src/player/TwoBoneIK.js`) is real, tested,
+working math sitting unused, explicitly built ahead of the feature that
+would call it. A future phase that actually wires it into foot
+placement or a resident's hand resting on a real surface would be
+completing a promise this project already made to itself, not starting
+a new one. In the same spirit: `WorkshopSkeleton.js`'s
+`autoMapSkeleton()` is a real, working heuristic waiting for the first
+imported Being that actually exercises it end to end.
+
+**Last thing:** the Workshop was never trying to be impressive. It was
+trying to be a place someone would actually want to spend time in, and
+every phase that stayed disciplined about that — refining instead of
+expanding, connecting instead of adding, admitting what wasn't done
+instead of dressing it up — is the reason it still feels like one
+coherent place after two full versions instead of a pile of features.
+Whatever Version 3 becomes, that's the one thing worth protecting on
+purpose.
+
+— from whoever was holding this at the end of Version 2
+
 ## Changelog
 
 <details>
@@ -973,5 +1145,50 @@ interfaces found the shared navigation and form-control patterns
 already genuinely consistent, closing the real gaps found rather than
 rebuilding what was already working. See the new
 `docs/DESIGN_SYSTEM.md` for the complete account.
+
+**Version 2, Phase 23c — Final Review & Version 2 Sign-Off (v2.2.3c)** —
+the final engineering phase of Version 2, a complete codebase audit
+rather than a targeted fix list. A scripted cross-reference check (437
+exports checked against every other file) found three genuinely dead
+exports — each with the same tell earlier dead-code finds already
+established, a docstring claiming an integration that checking
+directly showed never existed — removed, while two more that looked
+identical at a glance turned out to be deliberate, explicitly-
+documented forward-looking infrastructure and were left alone.
+Documentation staleness found and fixed in two places (a stale asset
+claim, a cross-reference pointing at writing that had moved). Naming
+reviewed and deliberately preserved rather than churned. This closing
+phase's own One Contribution ties the wall clock's hourly chime into
+Bubble's own wandering, reusing the exact mechanism Version 1's own
+closing contribution left behind for exactly this kind of future
+signal. See `docs/REFINEMENT.md`'s own "Version 2 Sign-Off" section for
+the complete technical account, and this file's own "Reflecting, after
+Version 2" and "Handover to Version 3" sections below for the rest.
+
+**Version 2, Phase 23d — Independent Release Review (v2.2.3d)** — the
+true final act of Version 2: a review performed by an outside reviewer
+who built none of it, re-running the sign-off phase's own kinds of
+audits independently rather than trusting them. The main finding
+validated the project's own "a docstring is a promise" retrospective in
+the sharpest way possible: Build Mode's migration into the Phone had
+left five locations (two docstrings, a main.js comment, and two docs)
+describing a suspension contract — `buildmode:entered`/`exited` events
+and an `enter()`-side guard — that had moved into `PhoneSystem` phases
+earlier, surfaced by an emit/listen cross-reference sweep no previous
+audit happened to run; behaviour was correct throughout, and all five
+locations (plus the README's matching "B — Toggle Build Mode" /
+"camera freezes" claims) now describe the real mechanism. The service
+worker's shell precache had drifted (`phone.css`/`tools.css` never
+added), fixed. Everything else checkable checked out and is said so
+plainly in the new `docs/RELEASE_REVIEW.md`, alongside the release
+verdict: yes, ship it. Four documents prepare the Version 3 transition
+to repository-first development: `CLAUDE.md` (the Claude Code entry
+point and phase-workflow gate), `docs/HANDBOOK.md` (the engineering
+handbook), `docs/ROADMAP_V3.md` (a draft of Version 3's natural
+directions, recommendation only), and `docs/RELEASE_REVIEW.md` itself.
+The One Contribution: `workshop://history` — the Workshop's own story,
+readable from inside the place it happened to, through the exact
+`docFilePage()` door every other doc page already uses; the place that
+remembers everything now includes itself in that memory.
 
 </details>

@@ -275,12 +275,18 @@ takes over the screen. Two decisions run through everything below:
 ### Mutual exclusion with the rest of the interaction pipeline
 
 Build Mode and the normal walk-up-and-interact pipeline never run at the
-same time. `BuildModeSystem.enter()` refuses if `InteractionSystem.active`
-(you're sitting at the computer, say); conversely, entering Build Mode
-emits `buildmode:entered`, which `InteractionSystem` listens for to set its
-own `_suspended` flag and stop scanning for nearby interactables entirely.
-Neither file imports the other's internals beyond that event pair — see
-the comment on both classes.
+same time — but the enforcement moved when Build Mode became a Phone app
+(`BuilderPhoneApp.js`, see docs/PHONE.md): `PhoneSystem.open()` refuses
+while `InteractionSystem.active` (you're sitting at the computer, say),
+and `InteractionSystem` suspends its own proximity scan on
+`phone:opened`/`phone:closed`, uniformly for every Phone app, this one
+included. `BuildModeSystem.enter()`/`exit()` still broadcast
+`buildmode:entered`/`buildmode:exited`; honestly, nothing listens for
+them today — they're kept as a public signal for anything (a plugin,
+say) that cares specifically about building rather than about the phone
+being out. This paragraph used to describe the old direct event
+contract for two phases after it stopped being true; corrected in the
+v2.2.3d independent review.
 
 ### The Builder Phone
 

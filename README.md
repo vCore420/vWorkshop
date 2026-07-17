@@ -110,7 +110,7 @@ troubleshooting if AI Mission Control shows "disconnected."
 | E | Interact with whatever's prompted at the bottom of the screen |
 | G | Open the Emote Wheel — trigger a gesture or animation |
 | M | Toggle the Compass |
-| B | Toggle Build Mode (also a button, top-left) — see below |
+| B | Take out the Workshop Phone (also the "Phone (B)" button, top-left) — it reopens to whichever app you last had open; the Builder app is Build Mode. See below |
 | V | Toggle first/third person (also a button, top-left) — mainly for viewing outfits, appreciating what you've built, and screenshots; the Workshop is still designed primarily for first person |
 | Esc | Step back out of whatever's open |
 | Click the canvas | Re-lock the mouse cursor (after pressing Esc, for instance) |
@@ -227,9 +227,13 @@ object library. An imported `.glb`/`.gltf` model can be used the exact
 same way as something you designed from primitives — see "Importing
 models" below.
 
-Then press **B** anywhere in the room to enter **Build Mode**: the camera
-freezes right where you're standing, the cursor comes free, and a
-**Builder Phone** slides up from the lower-right corner — a small device
+Then press **B** anywhere in the room to take out the **Workshop Phone**
+and open its **Builder** app — that's **Build Mode**. (The phone reopens
+to whichever app you last used, so tap Builder on its home grid if it
+lands somewhere else.) Mouse-look pauses and the cursor comes free while
+the phone is out, but you can keep walking — building while moving
+naturally through the environment is deliberate. The phone slides up from
+the lower-right corner — a small device
 you've taken out, not a separate editor screen; the room keeps rendering
 behind it the whole time. Tap something from its Construction Library,
 Saved Objects, or Imported Models tabs and a transparent, rotatable
@@ -464,5 +468,15 @@ This project has been built across many phases, each with its own goal
 and its own honest account of what was built, what was deferred, and
 what was learned. That full story — including the maintainer's own
 periodic reflections — is preserved in full in **`docs/HISTORY.md`**
-rather than cluttering this page. Worth reading if you're curious how
-the Workshop got here; not required reading to actually use it.
+rather than cluttering this page (and is readable from inside the
+Workshop itself, at `workshop://history` in its own Browser). Worth
+reading if you're curious how the Workshop got here; not required
+reading to actually use it.
+
+**Contributing or continuing development?** Start with
+`docs/HANDBOOK.md` (the engineering handbook — what the Workshop is and
+the principles that built it), then `CLAUDE.md` at the repository root
+(the practical entry point for repository-first development: ground
+rules, conventions, and the per-phase workflow). `docs/RELEASE_REVIEW.md`
+is the independent review that closed Version 2, and
+`docs/ROADMAP_V3.md` is its draft of where Version 3 could naturally go.

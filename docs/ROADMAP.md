@@ -3154,6 +3154,84 @@ the Builder, Wardrobe, and the Animation Editor, not just superficially
 similar-looking. This phase closed the real gaps found during that
 review rather than rebuilding a system that was already mostly working.
 
+## Version 2 — Phase 23c — Final Review & Version 2 Sign-Off (v2.2.3c)
+
+**Goal:** the final engineering phase of Version 2 — "review the
+Workshop as though you inherited it from another engineering team."
+A complete codebase audit, not a targeted fix list. See
+`docs/REFINEMENT.md`'s own "Version 2 Sign-Off" section for the full
+technical account, and `docs/HISTORY.md`'s own retrospective and
+handover notes for the rest.
+
+**A scripted dead-code audit** — every exported name in `src/` checked
+against every other file for an actual reference, 437 exports checked,
+24 flagged, each verified by hand rather than trusted blindly. Three
+genuinely dead exports removed (`PageRegistry.schemeOf()`,
+`DiagnosticsService.HEALTH_LEVELS`, `PlaceholderFactory
+.computeFootprint()`), each with the same tell earlier phases' own
+dead-code finds already established: a docstring claiming an
+integration that checking directly showed never existed. Two flagged
+exports (`solveTwoBoneIK()`, `IDENTITY_PLAYER_SKELETON_MAP`) turned out
+to be deliberate, explicitly-documented forward-looking infrastructure
+and were left alone on purpose — not everything unused is a mistake.
+
+**Documentation staleness, found and fixed** — `assets/README.md`
+claiming zero binary assets when four PWA icons already existed, and a
+cross-reference in `docs/RESIDENT.md` still pointing at "the README's
+own" section for writing that had moved to `docs/HISTORY.md` phases
+ago. `docs/ARCHITECTURE.md`'s own docs index was checked directly
+against the `docs/` folder — accurate.
+
+**Naming, reviewed and deliberately preserved** — "App" terminology is
+genuinely consistent across roughly fifteen files; a rename would be
+real churn for a subjective preference, exactly what this phase's own
+brief warned against choosing over stability.
+
+**The One Contribution** — a wall clock and its hourly chime
+(Decorative Details, Sound & Presence) had coexisted with Bubble's own
+wandering for two entire phases without ever acknowledging each other.
+A new idle location, `besideClock`, and a gentle pull toward it within
+a few minutes of the hour turning over — reusing the exact
+`weights`-based mechanism the *end of Version 1's own* One Contribution
+left behind specifically for a future signal like this one. Never
+guaranteed; on the occasions it lines up, a resident already looking at
+the clock the moment it chimes is newly *possible*, where it simply
+couldn't have happened before.
+
+## Version 2 — Phase 23d — Independent Release Review (v2.2.3d)
+
+**Goal:** one final review before Version 2 is considered complete —
+performed from an explicitly independent perspective ("you are reviewing
+another engineer's work"), with fresh sweeps rather than trust in the
+sign-off phase's own claims. Full account in `docs/RELEASE_REVIEW.md`;
+Version 3 preparation in `CLAUDE.md`, `docs/HANDBOOK.md`, and the draft
+`docs/ROADMAP_V3.md`.
+
+**The main finding** — a five-location documentation drift around Build
+Mode's migration into the Phone (stale suspension-contract descriptions
+in `InteractionSystem.js`, `BuildModeSystem.js`, `main.js`,
+`docs/ARCHITECTURE.md`, `docs/WORLDBUILDER.md`, plus the README's
+user-facing echo of it), surfaced by an event emit/listen
+cross-reference no earlier audit had run. Behaviour was correct the
+whole time; the descriptions weren't. All corrected, and the still-
+emitted `buildmode:*` events are now honestly labelled as
+currently-unheard public signals. Also fixed: the service worker's
+drifted shell precache, a stale `css/` listing in the architecture doc,
+and a stale caller list in `SimpleMarkdown.js`.
+
+**Reviewed and found already fine** — the persistence architecture's
+exclusivity claim, the Factory Reset ordering, every relative import,
+every design-token reference, the formula evaluator's safety, and more
+— each stated plainly in the review document per the house rule.
+
+**The One Contribution** — `workshop://history`: the Workshop's own
+development story readable from inside the Workshop, one `docFilePage()`
+registration plus a three-tag `<details>` whitelist in SimpleMarkdown.
+A place with a memory now includes itself in it.
+
+**The release verdict** — yes. See `docs/RELEASE_REVIEW.md` for the
+full reasoning.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

@@ -41,6 +41,8 @@ const SHELL_URLS = [
   "./css/workbench.css",
   "./css/buildmode.css",
   "./css/music.css",
+  "./css/phone.css",
+  "./css/tools.css",
   "./css/touch.css",
   "./src/main.js",
 ];

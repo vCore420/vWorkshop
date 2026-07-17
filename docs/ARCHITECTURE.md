@@ -25,7 +25,7 @@ shaped two decisions everywhere in this codebase:
 
 ```
 index.html                 entry point, import map for Three.js (CDN)
-css/                        tokens.css (design tokens) · main.css (HUD/entry) · overlays.css · browser-pages.css (workshop:// page styling)
+css/                        one file per interface surface: tokens.css (design tokens) · main.css (HUD/entry) · overlays.css · computer.css · builder.css · workbench.css · buildmode.css · phone.css · music.css · tools.css · touch.css · browser-pages.css (workshop:// page styling — loaded by PageShell, not index.html)
 src/
   core/                      engine primitives — no Three.js *scene content* lives here
     Engine.js                owns renderer/scene/camera, runs the update/render loop
@@ -59,7 +59,7 @@ src/
   plugins/                   PluginManifest.js, PluginPermissions.js, PluginStorage.js, WorkshopSDK.js, PluginLoader.js — the Plugin SDK, see docs/PLUGIN_SDK.md
     examples/                dustMotesPlugin.js (engine.plugins contract), examplePagePlugin.js + calculatorPlugin.js (Browser-page contract, still fully supported — see docs/PLUGIN_GUIDE.md), workshopToolkitPlugin.js (the SDK's own reference example — see docs/PLUGIN_SDK.md)
   main.js                    wiring only — construct, register, start. No behaviour here.
-docs/                        this file, SETUP.md, HISTORY.md, COMPUTER.md, WORKBENCH.md, FURNITURE.md, VISUAL_IDENTITY.md, AUDIO.md, TOOLS.md, DESIGN_SYSTEM.md, WORLDBUILDER.md, WORLD.md, ATMOSPHERE.md, POLISH.md, MUSIC.md, PERFORMANCE.md, PLAYER.md, ANIMATION.md, BROWSER.md, AI.md, RESIDENT.md, HOST.md, ASSETS.md, BEINGS.md, PHONE.md, PERSISTENCE.md, RESPONSIVE.md, REFINEMENT.md, ROADMAP.md, PLUGIN_GUIDE.md, PLUGIN_SDK.md, DIAGNOSTICS.md
+docs/                        this file, SETUP.md, HISTORY.md, COMPUTER.md, WORKBENCH.md, FURNITURE.md, VISUAL_IDENTITY.md, AUDIO.md, TOOLS.md, DESIGN_SYSTEM.md, WORLDBUILDER.md, WORLD.md, ATMOSPHERE.md, POLISH.md, MUSIC.md, PERFORMANCE.md, PLAYER.md, ANIMATION.md, BROWSER.md, AI.md, RESIDENT.md, HOST.md, ASSETS.md, BEINGS.md, PHONE.md, PERSISTENCE.md, RESPONSIVE.md, REFINEMENT.md, ROADMAP.md, ROADMAP_V3.md (draft Version 3 directions), PLUGIN_GUIDE.md, PLUGIN_SDK.md, DIAGNOSTICS.md, HANDBOOK.md (the engineering handbook — read first), RELEASE_REVIEW.md (the v2.2.3d independent release assessment); CLAUDE.md at the repository root is the entry point for repository-first development
 assets/                      README explaining the "no shipped binary assets yet" decision
 host-companion/              a real, optional, zero-dependency local server the Workshop Host can talk to — NOT part of the browser bundle; see docs/HOST.md's own "The Workshop Host Companion" section and host-companion/README.md
 ```
@@ -101,8 +101,9 @@ WorkbenchSystem      → same two reasons as ComputerSystem, for the bench's
                        clipboard panel and presence geometry — see
                        docs/WORKBENCH.md
 InteractionSystem    → reads CameraSystem's position; also listens for
-                       `buildmode:entered`/`exited` to suspend itself
-                       entirely while Build Mode is open
+                       `phone:opened`/`phone:closed` to suspend itself
+                       entirely while the Phone is open (which covers
+                       Build Mode too — it's a Phone app now)
 WorldObjectsSystem   → no strict ordering requirement (only needs
                        engine.scene/engine.entities, present from
                        construction) — see docs/WORLDBUILDER.md

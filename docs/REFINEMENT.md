@@ -370,3 +370,84 @@ see it work.
   not something this pass could visually tune against a rendered frame.
   Worth a deliberate playtest pass once one's possible.
 
+## Version 2 Sign-Off (Phase 23c)
+
+The final engineering phase of Version 2 — "review the Workshop as
+though you inherited it from another engineering team." A complete
+codebase audit rather than a targeted bug hunt, closing out the
+refinement series this section itself belongs to.
+
+**Dead code, found by scripted cross-reference rather than by memory.**
+Every exported name in `src/` was checked against every other file for
+an actual reference — 437 exports checked, 24 flagged with zero
+cross-file usage. Manually verifying each of the 24 mattered: most
+were genuinely fine (constants and helpers used repeatedly *within*
+their own file, exported for a future caller that hasn't needed them
+yet — normal, healthy encapsulation, not a defect), and two —
+`solveTwoBoneIK()` and `IDENTITY_PLAYER_SKELETON_MAP` — turned out to
+be deliberate, explicitly-documented forward-looking infrastructure
+("the architecture should be established even where complete
+implementations are deferred"), which this audit left untouched on
+purpose. Three were genuinely dead, each with the same tell as
+`softBox()`/`Materials.ground()` before them: a docstring claiming an
+integration that checking directly showed never existed.
+
+- `PageRegistry.schemeOf()` — a sibling to the actively-used
+  `isInternalUrl()`, with zero callers anywhere, including internally.
+- `DiagnosticsService.HEALTH_LEVELS` — never read as a value anywhere,
+  only mentioned in a comment, and redundant with `SEVERITY`'s own keys.
+- `PlaceholderFactory.computeFootprint()` — a one-line
+  `Box3.setFromObject()` wrapper whose own docstring claimed it was
+  "used by collision + interaction radius helpers." Every real caller
+  of that exact pattern (`WorldObjectsSystem.js`, `LadderSystem.js`)
+  already calls `Box3.setFromObject()` directly; nothing ever called
+  this wrapper.
+
+All three removed. A fourth, `AlignmentTools.positionsBounds()`, had a
+stale cross-reference (claiming `BuildModeSystem._measureSelection()`
+already combined the two — checked directly, and it doesn't, it has
+its own separate min/max computation over a different input shape) —
+corrected rather than removed, since the function itself is reasonable,
+on-topic infrastructure for that file's own domain even though nothing
+calls it yet.
+
+**Zero unused imports**, found by the same scripted method applied to
+every `import { ... }` statement in the codebase — a clean result, not
+a suspicious one; import hygiene is the kind of thing that's easy to
+catch in the moment, unlike cross-file dead exports.
+
+**Documentation staleness, found and fixed in two places.**
+`assets/README.md` still claimed "no binary asset files... yet," while
+four PWA icons (added in a later phase for install prompts and
+favicons) had quietly made that untrue. `docs/RESIDENT.md`'s own "A
+quiet habit" section pointed at "the README's own 'One contribution'
+section" — writing that had actually moved to `docs/HISTORY.md` phases
+ago, with nothing updating the cross-reference to follow it. Both
+corrected. `docs/ARCHITECTURE.md`'s own docs index was checked against
+the actual `docs/` folder directly (every file present, nothing listed
+that doesn't exist) — accurate, confirmed rather than assumed.
+
+**Naming — reviewed, deliberately left alone.** "App"/"application"
+terminology is used consistently across roughly fifteen files, every
+one following the identical `createXApp()` factory shape this project
+established early and never deviated from. A rename to "Tool" or
+"Station" would touch dozens of files and every doc that references
+them, for a naming preference rather than a genuine clarity problem —
+exactly the "churn without value" this phase's own brief warned
+against. Left unchanged; consistency (which this codebase already has)
+outranks a naming preference (which is subjective) here.
+
+**Performance, reliability, and duplicate-logic** — reviewed rather
+than rewritten. A handful of small, single-purpose `clamp*()` variants
+across different files (`clamp01`, `clampUnit`, `clamp01to2`,
+`clampToRadius`) look superficially similar to `MathUtils.clamp()` but
+each does something genuinely distinct (a fallback for non-numeric
+input, a different fixed range, vector-radius clamping rather than
+scalar) — reasonable, self-contained specialisations, not harmful
+duplication worth unwinding. No `console.log` debug remnants, no
+`TODO`/`FIXME` markers, no stray `debugger` statements anywhere in
+`src/` — a genuinely clean result from a direct search, not an
+assumption. A spot-check of per-frame `update()` loops found no new
+DOM-query-in-a-hot-path issues beyond what earlier phases (Visual
+Identity, Sound & Presence) had already addressed.
+

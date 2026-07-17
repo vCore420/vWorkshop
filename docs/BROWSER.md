@@ -91,11 +91,20 @@ way to pass them.
 
 **Real documentation, not stub pages.** `workshop://documentation`
 (`workshop://docs` keeps working as an alias, so existing bookmarks and
-history don't break), `workshop://builder`, and `workshop://animation`
-`fetch()` this project's own actual `README.md`/`docs/WORLDBUILDER.md`/
-`docs/PLAYER.md` and render them with `src/utils/SimpleMarkdown.js`.
-Reading these always shows the genuine, currently-accurate documentation,
-never a copy that drifts out of date.
+history don't break), `workshop://builder`, `workshop://animation`,
+`workshop://plugin-sdk`, and `workshop://history` `fetch()` this
+project's own actual `README.md`/`docs/WORLDBUILDER.md`/
+`docs/PLAYER.md`/`docs/PLUGIN_SDK.md`/`docs/HISTORY.md` and render them
+with `src/utils/SimpleMarkdown.js`. Reading these always shows the
+genuine, currently-accurate documentation, never a copy that drifts out
+of date. `workshop://history` — the v2.2.3d independent review's One
+Contribution — is the Workshop's own development story made readable
+from inside the place it happened to: every phase's honest account and
+both versions' closing reflections, through the exact same
+`docFilePage()` mechanism as every other page here (one new
+registration, one search entry, one home tile — and a three-tag
+`<details>`/`<summary>` whitelist added to SimpleMarkdown, the one
+construct HISTORY.md uses that nothing else needed).
 
 ## Persistence
 
