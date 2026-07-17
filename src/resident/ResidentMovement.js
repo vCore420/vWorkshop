@@ -43,6 +43,13 @@ export const IDLE_LOCATIONS = [
   { id: "byMusicPlayer", label: "by the music player", position: new THREE.Vector3(2.65, 1.9, 2.0), lookAt: new THREE.Vector3(3.5, 1.1, 2.15) },
   { id: "besideQuietCorner", label: "beside the quiet corner", position: new THREE.Vector3(1.4, 1.95, 0.75), lookAt: new THREE.Vector3(2.3, 1.0, 0.9) },
   { id: "lookingOutWindow", label: "looking out the window", position: new THREE.Vector3(-2.0, 2.0, -2.55), lookAt: new THREE.Vector3(-2.0, 1.55, -3.5) },
+  // Version 2 Sign-Off phase — "One Contribution." The wall clock
+  // (Decorative Details phase) sits at world (-0.3, 1.85, -2.92) — see
+  // WorkshopRoom.js's own `clockGroup.position.set(...)`. `lookAt`
+  // targets that exact position; `position` is offset the same "float
+  // above head height, a little back" distance every other idle spot
+  // near a fixed piece of the room already uses.
+  { id: "besideClock", label: "beside the clock", position: new THREE.Vector3(-0.3, 2.0, -2.4), lookAt: new THREE.Vector3(-0.3, 1.85, -2.92) },
   // "Bubble should naturally spend time... around the Workshop grounds.
   // Bubble should occasionally use the front door naturally." Positioned
   // near x=0 — the front door's own span (WORKSHOP_DOOR, ±1.3 around

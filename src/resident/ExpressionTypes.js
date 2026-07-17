@@ -37,6 +37,10 @@ export const EXPRESSION_TYPES = [
  *  128px — an 8px cell per pixel at this grid size). */
 export const EXPRESSION_GRID_SIZE = 16;
 
+/** Lookup by id — a convenience export with no external caller today
+ *  (v2.2.3d review checked directly); `isValidExpression()` below is what
+ *  callers have actually wanted so far. Kept as the natural companion
+ *  accessor, not because anything currently imports it. */
 export function getExpressionType(id) {
   return EXPRESSION_TYPES.find((e) => e.id === id) ?? null;
 }

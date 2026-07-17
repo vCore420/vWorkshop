@@ -33,11 +33,19 @@ const LOOK_AT_COS_THRESHOLD = Math.cos((7 * Math.PI) / 180); // ~7° cone — "t
  * the last scan found — it's a cheap check, and delaying *that* would be
  * an actual, perceptible input lag, not just a theoretical one.
  *
- * Build Mode (src/worldbuilder/) suspends this system entirely for as long
- * as it's open, purely via two event names (`buildmode:entered` /
- * `buildmode:exited`) — this file never imports BuildModeSystem, and
- * BuildModeSystem never imports this one beyond a single "is something
- * already open?" check before it lets itself start.
+ * The Workshop Phone suspends this system entirely for as long as it's
+ * open, purely via two event names (`phone:opened` / `phone:closed`) —
+ * see the `_suspended` listeners in init() below. Because Build Mode is
+ * itself a Phone app now (see `BuilderPhoneApp.js`), that one mechanism
+ * covers it too — this file used to listen for a dedicated
+ * `buildmode:entered`/`buildmode:exited` pair back when Build Mode owned
+ * its own shell, and this docstring described that for two phases after
+ * it stopped being true (found and corrected in the v2.2.3d independent
+ * review — the same "a docstring is a promise" drift shape
+ * docs/HISTORY.md's own retrospective names). This file never imports
+ * PhoneSystem or BuildModeSystem; the mutual-exclusion check in the
+ * other direction ("don't open the phone while sitting at the computer")
+ * lives in `PhoneSystem.open()` itself.
  */
 export class InteractionSystem {
   constructor() {

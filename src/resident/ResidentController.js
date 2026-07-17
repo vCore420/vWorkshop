@@ -235,7 +235,10 @@ export class ResidentController {
    *  true here by simply adding more real signals into a merge function
    *  that already existed, not a new decision system layered on top of
    *  it. Still never guaranteed, never scripted — an ordinary weighted
-   *  pick among idle locations that already exist either way. */
+   *  pick among idle locations that already exist either way.
+   *  **Version 2 Sign-Off phase — "One Contribution":** the wall clock's
+   *  own hourly chime joins the same mechanism, the same way — see the
+   *  comment on the check itself, just below. */
   _windowWatchWeights() {
     const weights = {};
     const merge = (extra) => {
@@ -245,6 +248,25 @@ export class ResidentController {
     if (this._environmentSystem && this._timeOfDaySystem) {
       const worthWatching = isRainingNow(this._environmentSystem) || isGoldenHourNow(this._timeOfDaySystem) || this._environmentSystem.current === "windy";
       if (worthWatching) merge({ lookingOutWindow: 4 });
+    }
+
+    // Version 2 Sign-Off phase — "One Contribution." The wall clock
+    // (Decorative Details phase) and its own hourly chime (Sound &
+    // Presence phase) have coexisted with Bubble's own wandering since
+    // each was built, without ever once acknowledging one another —
+    // exactly the kind of already-real, already-meaningful signal this
+    // method already exists to fold in. A gentle pull toward the clock
+    // within a few minutes either side of the hour turning over, the
+    // same "usually random, occasionally shaped by something real"
+    // texture every other signal here already has. Never guaranteed —
+    // Bubble might be anywhere else entirely when the chime actually
+    // sounds — but on the times it does land here, a resident already
+    // looking at the clock right as it chimes reads as attention, not
+    // choreography; nothing new was built to make it *possible* for the
+    // two to line up, only newly *likely* to, sometimes.
+    if (this._timeOfDaySystem) {
+      const minutesIntoHour = (this._timeOfDaySystem.currentTime % 1) * 60;
+      if (minutesIntoHour < 4 || minutesIntoHour > 56) merge({ besideClock: 3 });
     }
 
     // "Residents should naturally respond to... wind... environmental
