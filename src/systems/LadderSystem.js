@@ -1,6 +1,19 @@
 import * as THREE from "three";
 
 const _scratchPos = new THREE.Vector3();
+// Workshop Refinement phase (Pass A) — "ladders still require
+// investigation... detection." A ladder's own *visual* geometry is
+// realistically thin (the Construction Library's own ladder piece is
+// about 8cm deep, rail to rail) — using that raw bounding box as the
+// climbable zone meant a player had to be positioned within a few
+// centimetres of the rungs' own physical depth before anything happened
+// at all, with no forgiveness either side. Every other interaction zone
+// in the Workshop is deliberately more generous than the geometry it's
+// attached to (see docs/WORLD.md's own interaction-distance pass for
+// furniture); ladders were the one exception, and the most likely real
+// explanation for "walked right up to it and it didn't do anything."
+const ZONE_MARGIN_HORIZONTAL = 0.22; // metres, added to every horizontal side — turns an 8cm-deep hit zone into a genuinely walkable one
+const ZONE_MARGIN_VERTICAL = 0.12; // metres, added top and bottom — smooths stepping on/off at the very top or bottom rung rather than requiring foot-perfect alignment with the last one
 
 /**
  * LadderSystem
@@ -20,7 +33,10 @@ const _scratchPos = new THREE.Vector3();
  * "cheap to check every frame, only recompute on genuine change" pattern
  * `ReflectionSystem`'s fixed camera transform already uses, for the same
  * reason: a Builder-placed ladder repositioned in Build Mode shouldn't
- * leave its climbable zone behind where it used to be.
+ * leave its climbable zone behind where it used to be. That zone is then
+ * padded out from the raw geometry by `ZONE_MARGIN_HORIZONTAL`/
+ * `_VERTICAL` above — generous on purpose, the same standard every other
+ * interaction zone in the Workshop already holds itself to.
  *
  * `CameraSystem` is the only consumer — `getZoneAt(x, y, z)` returns
  * whichever ladder zone (if any) contains that point, which is all
@@ -39,9 +55,10 @@ export class LadderSystem {
   }
 
   /** Marks `object3D` as climbable — its current world-space bounding box
-   *  becomes the zone a player standing inside switches into ladder-climb
-   *  movement within. Returns a disposer; call it if the ladder is ever
-   *  removed from the scene. */
+   *  (padded generously — see this file's own comment) becomes the zone
+   *  a player standing inside switches into ladder-climb movement
+   *  within. Returns a disposer; call it if the ladder is ever removed
+   *  from the scene. */
   registerLadder(object3D) {
     const entry = { object3D, box: new THREE.Box3(), lastPosition: new THREE.Vector3(NaN, NaN, NaN) };
     this._updateZone(entry);
@@ -59,6 +76,12 @@ export class LadderSystem {
     if (currentPosition.distanceToSquared(entry.lastPosition) < 0.0005) return; // hasn't moved — nothing to recompute
     entry.lastPosition.copy(currentPosition);
     entry.box.setFromObject(entry.object3D);
+    entry.box.min.x -= ZONE_MARGIN_HORIZONTAL;
+    entry.box.max.x += ZONE_MARGIN_HORIZONTAL;
+    entry.box.min.z -= ZONE_MARGIN_HORIZONTAL;
+    entry.box.max.z += ZONE_MARGIN_HORIZONTAL;
+    entry.box.min.y -= ZONE_MARGIN_VERTICAL;
+    entry.box.max.y += ZONE_MARGIN_VERTICAL;
   }
 
   /** The ladder zone (if any) containing this point — CameraSystem calls

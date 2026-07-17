@@ -32,6 +32,8 @@ export class PersistenceSystem {
     this.providers = new Map();
     this.lastSavedAt = null;
     this.lastSaveFailedAt = null;
+    // Workshop Refinement phase (Pass A) — see save()'s own comment.
+    this._suppressSave = false;
   }
 
   init(engine) {
@@ -90,8 +92,32 @@ export class PersistenceSystem {
    *  (`lastSaveFailedAt`) and announced (`"persistence:saveFailed"`) the
    *  same honest way a successful save already announces itself via
    *  `"persistence:saved"` — see `DiagnosticsService.js`'s own health
-   *  computation for where this actually surfaces to a person. */
+   *  computation for where this actually surfaces to a person.
+   *
+   *  Workshop Refinement phase (Pass A) — "Factory Reset should truly
+   *  restore the Workshop... some world modifications remain after a
+   *  reset." Root cause: `save()` is *also* wired to `beforeunload`
+   *  (see `init()` above, for the ordinary "don't lose the last few
+   *  seconds of work on tab close" case) — but `factoryReset()` and
+   *  `importBackup()` both call `window.location.reload()` themselves,
+   *  which fires `beforeunload` too. That fired *after*
+   *  `factoryReset()`'s own `localStorage.clear()`, or *after*
+   *  `importBackup()`'s own freshly-written imported data — and
+   *  `save()` unconditionally re-serialises whatever every provider's
+   *  own *in-memory* state still is at that moment, which is still the
+   *  old, pre-reset (or pre-import) state, since nothing had actually
+   *  reloaded yet. That re-write silently put the old data straight
+   *  back into `localStorage` a few milliseconds before the reload that
+   *  was supposed to leave it empty — not a partial reset limited to
+   *  Builder blocks and terrain specifically, but every provider, every
+   *  time either action ran; those two were just the most visibly
+   *  obvious ones to notice missing. `_suppressSave` is set by both
+   *  methods before they do anything else, so this genuinely becomes a
+   *  no-op for the remainder of that page's lifetime once either one has
+   *  started — there's nothing to resume it for, since both paths always
+   *  end in a reload. */
   save() {
+    if (this._suppressSave) return null;
     const envelope = this._buildEnvelope();
     const ok = StorageUtils.set(SAVE_KEY, envelope);
     if (ok) {
@@ -163,9 +189,15 @@ export class PersistenceSystem {
    *  imported state consistently, rather than trusting every live UI to
    *  notice a full-state swap happening underneath it. */
   async importBackup() {
+    // See save()'s own comment on the identical race this closes.
+    this._suppressSave = true;
     const envelope = await StorageUtils.uploadJSON();
-    if (!envelope || typeof envelope.version !== "number") throw new Error("That file doesn't look like a Workshop backup.");
+    if (!envelope || typeof envelope.version !== "number") {
+      this._suppressSave = false; // no reload is coming after all — let ordinary saving resume
+      throw new Error("That file doesn't look like a Workshop backup.");
+    }
     if (envelope.type && envelope.type !== "workshop-backup") {
+      this._suppressSave = false;
       throw new Error(envelope.type === "workshop-ai-profile" ? "That's an AI profile export, not a Workshop backup \u2014 import it from AI Control instead." : "That file doesn't look like a Workshop backup.");
     }
     if (envelope.version > CURRENT_SAVE_VERSION) {
@@ -173,7 +205,10 @@ export class PersistenceSystem {
         "This backup was made with a newer version of the Workshop than you're currently running. " +
           "Importing it anyway may not restore everything correctly. Import it anyway?"
       );
-      if (!proceed) return;
+      if (!proceed) {
+        this._suppressSave = false;
+        return;
+      }
     }
     const migrated = migrateEnvelope(envelope);
     StorageUtils.set(SAVE_KEY, migrated);
@@ -208,6 +243,10 @@ export class PersistenceSystem {
    *  see docs/PERFORMANCE.md's persistence section for why those two live
    *  in IndexedDB at all. */
   async factoryReset(dbNames = []) {
+    // See save()'s own comment for why this has to be first, before any
+    // `await` — the whole point is closing the window a stray save could
+    // slip through in, and that window starts now.
+    this._suppressSave = true;
     await this.clearServiceWorkerCache();
     localStorage.clear();
     await Promise.all(

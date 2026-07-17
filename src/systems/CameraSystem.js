@@ -17,7 +17,21 @@ const PLAYER_RADIUS = 0.32;
 // PlayerCharacterSystem's own current rig, since a taller or shorter
 // character genuinely needs a different one.
 const DEFAULT_STANDING_EYE_HEIGHT = 1.65;
-const CROUCH_HEIGHT_REDUCTION = 0.5; // how much crouching lowers the eyes below whatever the standing height currently is — proportional to the character, not a fixed absolute number
+// Workshop Refinement phase (Pass A) — "recent crouching adjustments
+// lowered the camera too far into the player model... find a better
+// compromise." This constant's own comment always claimed the crouch
+// reduction was "proportional to the character" — but the code
+// subtracted a fixed 0.5m from *any* standing height, never actually
+// proportional to anything. That mismatch is the real root cause: a
+// flat 0.5m off a typical ~1.65m standing height is a much bigger
+// relative drop than a genuinely proportional reduction would be, which
+// is what was pushing the camera low enough to feel like it was sinking
+// into the model. Fixed to be what the comment always said it should
+// be — a ratio of the character's own standing height, not a fixed
+// absolute subtraction — which resolves the complaint for every body
+// proportion at once rather than just retuning one fixed number for the
+// default-sized case.
+const CROUCH_HEIGHT_RATIO = 0.78; // crouched eye height, as a fraction of standing — genuinely proportional to the character, unlike the fixed-subtraction constant this replaces
 // The Wardrobe's own proportion sliders (0.4x-2x per body part) can
 // combine to produce a rig eye height around 3.76m at their extremes —
 // comfortably above the workshop's own 3m ceiling. Clamping here means
@@ -531,7 +545,7 @@ export class CameraSystem {
     }
 
     const standingEyeHeight = this._getStandingEyeHeight();
-    const targetEyeHeight = this._crouching ? standingEyeHeight - CROUCH_HEIGHT_REDUCTION : standingEyeHeight;
+    const targetEyeHeight = this._crouching ? standingEyeHeight * CROUCH_HEIGHT_RATIO : standingEyeHeight;
     this._currentEyeHeight = damp(this._currentEyeHeight, targetEyeHeight, EYE_HEIGHT_DAMPING, dt);
     this.position.y = this._footY + this._currentEyeHeight;
 

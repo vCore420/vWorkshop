@@ -224,21 +224,31 @@ export class TimeOfDaySystem {
     // regardless of phase" — is what "moon movement matching the current
     // date and time" actually means astronomically.
     //
-    // Workshop Reliability phase — re-verified end to end after "the moon
-    // rises and sets alongside the sun" was reported again. Traced by
-    // hand and confirmed numerically (both altitude *and* rise/set hour,
-    // across a full lunar cycle and several latitudes): this formula is
-    // correct — a full moon computes strongly anti-correlated with the
-    // sun (up at night, down at midday), exactly as real astronomy
-    // predicts, and the offset moves at the real ~50-minutes-later-per-day
-    // rate a real moon does. The one time this formula genuinely *does*
-    // produce a moon that tracks close to the sun is right around an
-    // actual real-world new moon — which is correct behaviour, not a
-    // bug, and easy to mistake for one if observed on/near that handful
-    // of days each month. No change made here as a result; see
-    // docs/ROADMAP.md's own Phase 13 account for the full investigation.
+    // Workshop Refinement phase (Pass A) — "the moon currently rises and
+    // sets alongside the sun." A real bug this time, and a genuinely
+    // subtle one: the offset was being *added* (`currentTime +
+    // moonPhaseFrac * 24`), which is backwards. The moon should culminate
+    // *later* than the sun as the phase advances (a first-quarter moon
+    // peaks around 6pm, six hours after solar noon; a last-quarter moon
+    // peaks around 6am, six hours before it) — i.e. the offset needs to be
+    // *subtracted*. Verified numerically against `solarPosition()`
+    // directly: at phase 0.25, the old formula peaked at 6am — exactly
+    // where a *last*-quarter moon belongs, not a first-quarter one.
+    // Subtracting instead produces the correct 6pm peak.
+    //
+    // This also explains why the Reliability phase's own investigation
+    // (see docs/ROADMAP.md's Phase 13 account) concluded the formula was
+    // already correct: it was re-verified specifically at phase 0 and
+    // phase 0.5 via `moonPhaseOverride`, and those are the two degenerate
+    // points where adding or subtracting a 12- or 0-hour offset lands on
+    // the exact same result modulo 24 — the one place in the entire cycle
+    // where this sign error is mathematically invisible. Every other
+    // phase traces the mirror-image (conjugate) lunar cycle instead of the
+    // real one, which reads as "vaguely wrong, sometimes tracks the sun
+    // too closely" without ever being obviously broken at a glance —
+    // exactly the report that reopened this.
     const moonPhaseFrac = this.moonPhaseOverride ?? moonPhaseFraction();
-    const moonHour = (this.currentTime + moonPhaseFrac * 24) % 24;
+    const moonHour = (((this.currentTime - moonPhaseFrac * 24) % 24) + 24) % 24;
     const moon = solarPosition(moonHour, latitude, doy);
     const moonDirection = azimuthAltitudeToDirection(moon.azimuth, Math.max(moon.altitude, -8.6));
     const moonIllum = moonIllumination(moonPhaseFrac);
