@@ -443,6 +443,52 @@ same fix applies to the gentle horizontal drift while climbing, which
 used to zero out world-space Z outright rather than computing a proper
 strafe-only vector.
 
+### Crouching: the camera moved, but so, deliberately, does the head
+
+Version 3, Phase 1 ("Completing Promises") named this directly:
+"crouching should restore a comfortable first-person camera without
+animation artefacts obscuring the view." Two earlier fixes (Workshop
+Reliability's root-tracking fix; Refinement Pass A's
+`CROUCH_HEIGHT_RATIO`, replacing a flat subtraction with a genuine ratio)
+were both real and both correctly resolved what they targeted, but
+neither touched a deeper fact: this rig has no vertical translation at
+all — `applyPose()` only ever rotates pivots, and `torsoPivot`'s own
+position is fixed once at build time. So while crouching genuinely eases
+the *camera's* eye height down, nothing about the *mesh* ever moves —
+`PlayerCharacterSystem`'s own root-position formula (`cam.position.y -
+cam.getCurrentEyeHeight()`) algebraically always resolves to `_footY`,
+standing or crouched.
+
+Standing has always relied on a coincidence to hide this: the
+first-person camera happens to sit precisely inside the head mesh, so
+ordinary backface culling hides it. Crouching breaks that coincidence —
+the camera drops out of the head box into the torso box instead, and the
+head it left behind floats visibly above it, fully rendered, for every
+body proportion the Wardrobe can produce.
+
+The fix doesn't move any joint. Lowering `torsoPivot` to match would have
+dragged the hip/leg/foot chain down with it — un-planting the feet from a
+`CROUCH_CLIP` pose that was authored assuming a fixed hip height, and
+likely needing that clip re-tuned too. That's foot IK's own job (a later
+Phase 1 milestone), not this one's. Instead: `PlayerCharacter.js`'s new
+`FIRST_PERSON_HIDDEN_LAYER` puts the head mesh on its own Three.js render
+layer; `PlayerCharacterSystem._rebuild()` tags it once per rig build
+(skipped harmlessly for an imported-model rig, which has no head mesh);
+`CameraSystem.update()` excludes that layer from `engine.camera` whenever
+the view is effectively first-person, reusing `thirdPersonActive` (the
+same value already driving the view-mode blend) rather than adding new
+state — which also correctly covers focus mode, since sitting down always
+eases back to first-person regardless of `viewMode`. `ReflectionSystem.js`
+explicitly re-enables the layer on every mirror's own camera, since a
+reflection should always show the full character. Verified directly
+against the live engine — root position staying pinned to `_footY`
+throughout a simulated crouch, eye height easing to exactly
+`standingHeight × 0.78`, and every layer-enabled state checked mid-crouch
+and across a view-mode toggle — rather than by a rendered screenshot,
+which this environment's tooling couldn't produce during this pass; see
+"Known limitations" above for the one residual claim (the torso staying
+hidden too) that's analysis-backed rather than visually confirmed.
+
 ### Body models: the same rig, different starting proportions
 
 `BodyModels.js` defines the available procedural body models (Masculine,
@@ -785,16 +831,22 @@ first one.
 
 ## Known limitations
 
-- **"Never see themselves" in first person is physics, not a rule.** The
-  camera sits almost exactly where the head mesh is, so — thanks to
-  ordinary backface culling — the head effectively becomes invisible to
-  it from the inside, and looking down shows the torso/legs/feet
-  normally, the same as any first-person game. There's no deliberate
-  visibility toggle hiding the mesh from its own camera — confirmed by
-  third person and the reflection system both existing now (see
-  "Reflections and third person" above) and needing zero changes to this
-  system to work: move the viewing camera outside the head, in either
-  form, and the rig is just normally visible, exactly as predicted.
+- **"Never see themselves" in first person is mostly physics, with one
+  deliberate exception.** The camera sits almost exactly where the head
+  mesh is, so — thanks to ordinary backface culling — the torso/arms/legs
+  effectively become invisible to it from the inside, and looking down
+  shows them normally, the same as any first-person game. The head itself
+  is no longer relying on that same coincidence — see "Crouching: the
+  camera moved, but so, deliberately, does the head" below for why a real
+  visibility rule was needed there specifically.
+- **The torso's own first-person invisibility while crouched is still
+  the backface-culling coincidence, not a rule.** Analysis (the crouched
+  eye height stays well inside the torso mesh's own bounds, for every
+  body proportion the Wardrobe can produce) says this should hold, and
+  live engine state (eye height, root position, layer state) was
+  confirmed directly — but this specific claim wasn't confirmed against
+  an actual rendered frame, only computed. Worth a visual check once
+  screenshot tooling is available in this environment.
 - **The reflection is an approximation, not a true mirror**, and the
   third-person camera's own collision reuses the player's flat wall/
   furniture push-out rather than a real 3D check — see their own sections
