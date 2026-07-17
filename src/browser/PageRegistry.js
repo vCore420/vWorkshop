@@ -52,12 +52,13 @@ export const INTERNAL_SCHEMES = ["workshop", "host", "plugin", "asset", "residen
 
 const SCHEME_PATTERN = new RegExp(`^(${INTERNAL_SCHEMES.join("|")}):\\/\\/`, "i");
 
+// Version 2 Sign-Off phase — a sibling `schemeOf(url)` (returning which
+// scheme matched, not just whether one did) lived here until this
+// phase's own dead-code audit found it had never had a single caller
+// anywhere, including internally. Removed rather than kept "just in
+// case" — see docs/REFINEMENT.md's own "Version 2 Sign-Off" section.
 export function isInternalUrl(url) {
   return SCHEME_PATTERN.test(url ?? "");
-}
-
-export function schemeOf(url) {
-  return SCHEME_PATTERN.exec(url ?? "")?.[1]?.toLowerCase() ?? null;
 }
 
 export class PageRegistry {

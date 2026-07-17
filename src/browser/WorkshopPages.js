@@ -16,9 +16,11 @@ import { EMBODIMENT_TYPES } from "../ai/EmbodimentConfiguration.js";
  * registry, never to `projectsStore` or any docs file directly.
  *
  * **Real documentation, not stub pages.** `workshop://documentation`,
- * `workshop://builder`, and `workshop://animation` `fetch()` this
+ * `workshop://builder`, `workshop://animation`, `workshop://plugin-sdk`,
+ * and `workshop://history` `fetch()` this
  * project's own actual `README.md`/`docs/WORLDBUILDER.md`/
- * `docs/PLAYER.md` from the deployed site (the exact same static files
+ * `docs/PLAYER.md`/`docs/PLUGIN_SDK.md`/`docs/HISTORY.md`
+ * from the deployed site (the exact same static files
  * this repository already ships — GitHub Pages serves the whole
  * repository, `docs/*.md` included, so a root-relative fetch reaches the
  * genuine, currently-accurate file, not a frozen copy that drifts out of
@@ -55,6 +57,13 @@ export function registerWorkshopPages(pageRegistry, searchIndex, deps) {
   pageRegistry.register("workshop://builder", () => docFilePage("Builder Documentation", "./docs/WORLDBUILDER.md"));
   pageRegistry.register("workshop://animation", () => docFilePage("Player & Animation Documentation", "./docs/PLAYER.md"));
   pageRegistry.register("workshop://plugin-sdk", () => docFilePage("Plugin SDK Documentation", "./docs/PLUGIN_SDK.md"));
+  // v2.2.3d's One Contribution — the Workshop's own story, readable from
+  // inside the place it tells the story of. docs/HISTORY.md already
+  // preserves every phase's honest account and both versions' closing
+  // reflections; this makes that memory part of the Workshop itself,
+  // through the exact docFilePage() door every other doc page already
+  // uses. See docs/RELEASE_REVIEW.md for why this, of everything.
+  pageRegistry.register("workshop://history", () => docFilePage("The Workshop's Story", "./docs/HISTORY.md"));
   pageRegistry.register("workshop://projects", () => projectsPage(projectsStore, hostProjectsService));
   pageRegistry.register("workshop://settings", () => settingsPage());
   pageRegistry.register("workshop://residents", () => residentsPage({ residentProfileStore, residentState, residentBehaviour, conversationMemory, aiConnectionManager }));
@@ -70,6 +79,7 @@ export function registerWorkshopPages(pageRegistry, searchIndex, deps) {
     { url: "workshop://documentation", title: "Workshop Documentation", category: "Documentation", keywords: ["docs", "readme", "help"] },
     { url: "workshop://builder", title: "Builder Documentation", category: "Documentation", keywords: ["builder", "construction", "objects"] },
     { url: "workshop://plugin-sdk", title: "Plugin SDK Documentation", category: "Documentation", keywords: ["plugin", "sdk", "developer", "extend"] },
+    { url: "workshop://history", title: "The Workshop's Story", category: "Documentation", keywords: ["history", "story", "changelog", "phases", "versions", "how it was built"] },
     { url: "workshop://animation", title: "Player & Animation Documentation", category: "Documentation", keywords: ["animation", "player", "movement"] },
     { url: "project://", title: "Workshop Projects", category: "Workshop", keywords: ["notebook", "pinboard", "workbench"] },
     { url: "workshop://settings", title: "Browser Settings", category: "Workshop", keywords: ["preferences", "clear data"] },
@@ -123,6 +133,7 @@ function homePage({ browserStore, hostManager, residentProfileStore }) {
         ${tile("workshop://mission-control", "Mission Control", "AI resident status snapshot")}
         ${tile("workshop://diagnostics", "Diagnostics", "Workshop status and system health")}
         ${tile("workshop://documentation", "Workshop Documentation", "How the Workshop is built")}
+        ${tile("workshop://history", "The Workshop's Story", "Every phase, honestly told")}
         ${tile("workshop://builder", "Builder Documentation", "Building objects and behaviours")}
         ${tile("workshop://animation", "Player & Animation", "Identity, movement, and animation")}
         ${tile("workshop://plugin-sdk", "Plugin SDK", "Extending the Workshop with plugins")}
