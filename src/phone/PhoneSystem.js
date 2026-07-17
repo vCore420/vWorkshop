@@ -1,6 +1,8 @@
 import { PhoneUI } from "./PhoneUI.js";
 import { InteractionSystem } from "../systems/InteractionSystem.js";
 import { CameraSystem } from "../systems/CameraSystem.js";
+import { TimeOfDaySystem } from "../systems/TimeOfDaySystem.js";
+import { formatClockTime } from "../utils/TimeFormat.js";
 
 /**
  * PhoneSystem
@@ -45,11 +47,16 @@ export class PhoneSystem {
     this.isOpen = false;
     this.activeAppId = null; // null = home screen
     this._mountedDispose = null;
+    // Interface & Design Refinement phase — the status bar's own clock;
+    // see _updateStatusBar()'s own comment for why this is throttled
+    // rather than read every frame.
+    this._statusBarTimer = 0;
   }
 
   init(engine) {
     this.engine = engine;
     this._cameraSystem = engine.getSystem(CameraSystem);
+    this._timeOfDaySystem = engine.getSystem(TimeOfDaySystem);
 
     const root = document.getElementById("workshop-phone-root");
     this.ui = new PhoneUI(root, {
@@ -80,8 +87,26 @@ export class PhoneSystem {
     engine.events.on("phone:toggleRequested", () => this.toggle());
   }
 
-  update(_dt) {
+  update(dt) {
     if (this.engine.input?.wasJustPressed("phone")) this.toggle();
+    if (!this.isOpen) return;
+    // Interface & Design Refinement phase — "status bar." A real device's
+    // own clock only actually changes once a minute; polling every single
+    // frame for a value that's overwhelmingly likely to be identical to
+    // last frame's would be wasted work for something nobody can even
+    // perceive updating that often. Every half-second is already far more
+    // often than the displayed minute could possibly change, and is cheap
+    // enough not to matter either way.
+    this._statusBarTimer -= dt;
+    if (this._statusBarTimer <= 0) {
+      this._statusBarTimer = 0.5;
+      this._updateStatusBar();
+    }
+  }
+
+  _updateStatusBar() {
+    const hour = this._timeOfDaySystem?.currentTime;
+    if (typeof hour === "number") this.ui.setStatusTime(formatClockTime(hour));
   }
 
   toggle() {
@@ -101,6 +126,7 @@ export class PhoneSystem {
     this._cameraSystem?.pauseLook();
     this.engine.input?.exitPointerLock();
     this.ui.show();
+    this._updateStatusBar();
     this._renderCurrentScreen();
     this.engine.events.emit("phone:opened");
   }
