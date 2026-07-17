@@ -154,6 +154,45 @@ const environmentSystem = engine.addSystem(new EnvironmentSystem());
 const audioSystem = engine.addSystem(new AudioSystem());
 const cameraSystem = engine.addSystem(new CameraSystem());
 
+// --- Entry screen ---
+// Workshop Refinement phase (Pass A) — "the interface appears largely
+// inactive until loading has completed... avoid moments where the
+// application appears frozen or unresponsive." Wired here, immediately,
+// rather than after the long boot sequence below — the button used to
+// have *no click handler attached at all* until the entire async chain
+// (engine.init(), spawning every saved object, resolving player
+// textures, ...) had already finished, which is exactly what "appears
+// frozen" describes: a control that looks interactive and silently does
+// nothing if pressed too soon. Now it responds the instant it's
+// pressed, whether boot is done yet or not — see the "--- Boot ---"
+// section below for the other half of this.
+const entryScreen = document.getElementById("entry-screen");
+const entryButton = document.getElementById("entry-button");
+const entryStatus = document.getElementById("entry-status");
+let _workshopReady = false;
+let _entryRequested = false;
+
+function _setEntryStatus(text) {
+  if (entryStatus) entryStatus.textContent = text;
+}
+
+function _enterWorkshop() {
+  audioSystem.resumeContext();
+  engine.input.requestPointerLock();
+  entryScreen.classList.add("hidden");
+}
+
+entryButton.addEventListener("click", () => {
+  _entryRequested = true;
+  if (_workshopReady) {
+    _enterWorkshop();
+    return;
+  }
+  entryButton.disabled = true;
+  entryButton.textContent = "Preparing\u2026";
+  _setEntryStatus("Almost ready \u2014 stepping inside the moment it's done.");
+});
+
 void roomLayoutSystem;
 void furnitureSystem;
 
@@ -250,6 +289,17 @@ const residentProfileStore = new ResidentProfileStore();
 // ResidentController resolves a profile's own expressionSetId.
 const expressionSetStore = new ExpressionSetStore();
 aiConnectionManager.init();
+// Workshop Refinement phase (Pass A) — "quietly warming models in the
+// background." Whenever the active profile (or its own chosen model)
+// changes, tell AIConnectionManager which model to keep warm —
+// deliberately wired here rather than either file importing the other,
+// since AIConnectionManager has no reason to know what a "resident
+// profile" even is (see its own class comment). Called once immediately
+// too, so startup warms whatever's already active rather than waiting
+// for the first change event that might never come this session.
+const _syncWarmModel = () => aiConnectionManager.setWarmModel(residentProfileStore.getActive()?.model ?? null);
+residentProfileStore.events.on("residents:changed", _syncWarmModel);
+_syncWarmModel();
 hostConnectionManager.init();
 // "workshop://models... live from the same connection AI Mission Control
 // uses" — HostPages.js itself is registered later now (see the "Browser
@@ -982,6 +1032,7 @@ hostManager.pluginRegistry.registerPlugin(examplePagePlugin());
 hostManager.pluginRegistry.registerPlugin(calculatorPlugin());
 
 // --- Boot ---
+_setEntryStatus("Preparing the Workshop\u2026");
 await engine.init();
 // Must happen after engine.init() resolves, not inside either system's own
 // init() — persistence loading happens synchronously as part of the
@@ -990,19 +1041,25 @@ await engine.init();
 // MusicLibraryStore/PlayerAppearanceStore guaranteed to hold whatever was
 // actually saved. See the comments on WorldObjectsSystem.spawnAll() and
 // WorkbenchSystem/MusicSystem/PlayerCharacterSystem's own finalizeInitialState().
+_setEntryStatus("Finishing touches\u2026");
 worldObjectsSystem.spawnAll();
 workbenchSystem.finalizeInitialState();
 await musicSystem.finalizeInitialState(); // async: checks each library root's still-live permission state
 await playerCharacterSystem.finalizeInitialState(); // async: resolves any part textures before the first rig build
 engine.start();
 
-const entryScreen = document.getElementById("entry-screen");
-const entryButton = document.getElementById("entry-button");
-entryButton.addEventListener("click", () => {
-  audioSystem.resumeContext();
-  engine.input.requestPointerLock();
-  entryScreen.classList.add("hidden");
-});
+// Workshop Refinement phase (Pass A) — the other half of the entry
+// screen wiring above. If the button was already pressed while this was
+// still running, honour that now, immediately, rather than making
+// someone who was ready and waiting press it a second time.
+_workshopReady = true;
+entryButton.disabled = false;
+entryButton.textContent = "Step inside";
+if (entryStatus) {
+  entryStatus.textContent = "Ready when you are.";
+  entryStatus.classList.add("ready");
+}
+if (_entryRequested) _enterWorkshop();
 
 // Clicking the canvas re-acquires pointer lock (e.g. after Escape, or after
 // closing an overlay) whenever nothing else is open — including the Phone,
