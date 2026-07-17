@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { FurnitureSystem } from "./FurnitureSystem.js";
+import { FIRST_PERSON_HIDDEN_LAYER } from "../player/PlayerCharacter.js";
 
 const DEFAULT_RESOLUTION = 320; // modest — a mirror is seen from a few metres away, not pixel-peeped
 const DEFAULT_UPDATE_INTERVAL = 3; // render every Nth frame, not every frame
@@ -183,6 +184,12 @@ export class ReflectionSystem {
     renderTarget.texture.repeat.x = -1;
     renderTarget.texture.offset.x = 1;
     const camera = new THREE.PerspectiveCamera(50, resolution / (resolution * aspect), CAMERA_NEAR, CAMERA_FAR);
+    // CameraSystem.js excludes FIRST_PERSON_HIDDEN_LAYER (the player's own
+    // head mesh) from the main camera whenever it's effectively
+    // first-person, so the player never sees their own floating head.
+    // A reflection is never first-person — a mirror should always show
+    // the full character, head included.
+    camera.layers.enable(FIRST_PERSON_HIDDEN_LAYER);
 
     // Cloned, never mutated in place — the same reasoning Build Mode's own
     // ghost preview and the Builder's part-selection highlight both

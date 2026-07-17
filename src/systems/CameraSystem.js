@@ -7,6 +7,7 @@ import { WorldObjectsSystem } from "../worldbuilder/WorldObjectsSystem.js";
 import { LadderSystem } from "./LadderSystem.js";
 import { PlayerAnimationSystem } from "../player/PlayerAnimationSystem.js";
 import { TerrainSystem } from "./TerrainSystem.js";
+import { FIRST_PERSON_HIDDEN_LAYER } from "../player/PlayerCharacter.js";
 
 const WALK_SPEED = 2.3; // metres/second
 const RUN_MULTIPLIER = 1.8;
@@ -331,6 +332,25 @@ export class CameraSystem {
 
     const thirdPersonActive = this.viewMode === "third" && this.mode === "walk";
     this._viewBlend = damp(this._viewBlend, thirdPersonActive ? 1 : 0, 6, dt);
+    // Version 3, Phase 1 ("Completing Promises") — "crouching should
+    // restore a comfortable first-person camera without animation
+    // artefacts obscuring the view." Standing has always relied on a
+    // coincidence to hide the player's own head from their own eyes: the
+    // first-person camera sits precisely inside the head mesh, so ordinary
+    // backface culling hides it. Crouching moves the camera
+    // (CROUCH_HEIGHT_RATIO above) without moving the rig at all — nothing
+    // in this rig ever translates, only rotates (see PlayerCharacter.js's
+    // applyPose()) — so the camera ends up inside the torso instead, and
+    // the head it left behind floats visibly above it. Excluding
+    // FIRST_PERSON_HIDDEN_LAYER from the camera exactly whenever
+    // `thirdPersonActive` is false replaces that coincidence with
+    // something that holds at every crouch depth, not just while
+    // standing — and correctly covers focus mode too (sitting down always
+    // eases back to first person regardless of `viewMode`, same as this
+    // value already does above). ReflectionSystem.js re-enables this layer
+    // on every mirror's own camera, since a reflection should always show
+    // the full character.
+    this.engine.camera.layers[thirdPersonActive ? "enable" : "disable"](FIRST_PERSON_HIDDEN_LAYER);
     this._updateZoom(dt);
     this._applyCameraTransform();
   }
