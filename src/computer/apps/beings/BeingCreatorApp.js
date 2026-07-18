@@ -4,6 +4,7 @@ import { compileBody, mirrorSubtree, makeDefaultBodyPart, nextBodyPartId, descen
 import { WORKSHOP_JOINTS, autoMapSkeleton, isSkeletonMapUsable } from "../../../player/WorkshopSkeleton.js";
 import { ClipPlayer } from "../../../player/AnimationPlayback.js";
 import { applyPoseToMappedSkeleton } from "../../../player/AnimationRetargeting.js";
+import { importModelFile } from "../../../beings/ModelLibrary.js";
 
 const RAD_TO_DEG = 180 / Math.PI;
 const DEG_TO_RAD = Math.PI / 180;
@@ -722,12 +723,8 @@ function buildModelSection(draft, modelLibrary, modelAssetStore, onChange, onPre
   importInput.addEventListener("change", async () => {
     const file = importInput.files?.[0];
     if (!file) return;
-    const isGltf = file.name.toLowerCase().endsWith(".gltf");
     try {
-      const data = isGltf ? await file.text() : await file.arrayBuffer();
-      const modelId = modelLibrary.add(file.name.replace(/\.(glb|gltf)$/i, ""), isGltf ? "gltf" : "glb");
-      await modelAssetStore.put(modelId, data);
-      draft.modelId = modelId;
+      draft.modelId = await importModelFile(file, { modelLibrary, modelAssetStore });
       onPreviewChange();
       onChange();
     } catch {

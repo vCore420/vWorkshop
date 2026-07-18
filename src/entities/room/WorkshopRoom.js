@@ -506,7 +506,15 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
   roof.position.set(0, roofY, 0);
   root.add(roof);
 
-  const fasciaMat = Materials.wood("#2c2419");
+  // Living Spaces phase — "wall texture continuity." A distinct dark
+  // tone from the door frame/baseboard/sketch frame's own shared
+  // "#3d2a1c" (see the baseboard's own comment below: "the same dark
+  // trim tone the door frame already established"), close enough to
+  // read as a near-duplicate rather than a deliberate second trim
+  // colour — nothing anywhere explained the difference. Unified to the
+  // one dark trim tone the rest of the room's woodwork already commits
+  // to, rather than leaving an unexplained near-miss.
+  const fasciaMat = Materials.wood("#3d2a1c");
   const fasciaDrop = 0.16;
   const fasciaY = roofY - roofThickness / 2 - fasciaDrop / 2;
   const fasciaEdgeZ = southOuterZ + roofOverhang;

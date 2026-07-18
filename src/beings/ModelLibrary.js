@@ -103,3 +103,25 @@ export class ModelLibrary {
     this.events.emit("library:changed");
   }
 }
+
+/** Living Spaces phase — "extend an existing pathway before creating a
+ *  new one." The Builder's own "Import Model" button
+ *  (`BuildModeSystem.importModel()`) and the Being Creator's
+ *  (`BeingCreatorApp.js`'s own import handler) had each grown an
+ *  independent copy of the identical five steps: read the file's
+ *  extension to decide `.glb` vs `.gltf`, read it as bytes or text
+ *  accordingly, register a new `ModelLibrary` entry, store the raw
+ *  bytes. Both already converge on the same underlying model — a
+ *  `ModelLibrary` id backed by `ModelAssetStore` bytes — so the *data*
+ *  was always genuinely shared; only the code that produces it wasn't.
+ *  One function both callers call now. Throws on an unreadable file —
+ *  each caller already has its own established way of surfacing that
+ *  (`BuildModeSystem.importModel()`'s own doc comment; the Being
+ *  Creator's `window.alert`), so this doesn't try to unify that part. */
+export async function importModelFile(file, { modelLibrary, modelAssetStore }) {
+  const isGltf = file.name.toLowerCase().endsWith(".gltf");
+  const data = isGltf ? await file.text() : await file.arrayBuffer();
+  const modelId = modelLibrary.add(file.name.replace(/\.(glb|gltf)$/i, ""), isGltf ? "gltf" : "glb");
+  await modelAssetStore.put(modelId, data);
+  return modelId;
+}

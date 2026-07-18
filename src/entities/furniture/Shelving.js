@@ -91,10 +91,24 @@ export const ShelvingDefinition = {
 
       // A handful of book/box placeholders per shelf — enough to read as
       // "documentation lives here", stopping well short of decorative clutter.
+      //
+      // Living Spaces phase — "bookshelf proportions." The gap between
+      // items used to be a fixed 0.03m regardless of the shelf's own
+      // width, so the whole cluster only ever spanned the first
+      // ~0.3-0.4m from the left edge on every shelf, leaving well over
+      // half of each one visibly bare. Spreading the same items across
+      // the shelf's own usable width (mirroring the original 0.1m left
+      // inset on the right too) keeps the restrained item count exactly
+      // as it was — this was a placement bug, not a "too few items" one.
       const itemCount = 3 + (i % 2);
+      const itemWidths = [];
+      for (let j = 0; j < itemCount; j++) itemWidths.push(0.06 + ((i + j) % 3) * 0.02);
+      const usableWidth = width - 0.2;
+      const totalItemWidth = itemWidths.reduce((sum, w) => sum + w, 0);
+      const gap = (usableWidth - totalItemWidth) / (itemCount - 1);
       let cursor = -width / 2 + 0.1;
       for (let j = 0; j < itemCount; j++) {
-        const w = 0.06 + ((i + j) % 3) * 0.02;
+        const w = itemWidths[j];
         const h = 0.18 + ((i * 3 + j) % 3) * 0.03;
         const d = depth * 0.7;
         const item = box(w, h, d, Materials.matte(itemColors[colorIndex % itemColors.length]));
@@ -102,7 +116,7 @@ export const ShelvingDefinition = {
         item.position.set(cursor + w / 2, y + 0.015 + h / 2, 0);
         item.rotation.y = (Math.random() - 0.5) * 0.05;
         g.add(item);
-        cursor += w + 0.03;
+        cursor += w + gap;
       }
     }
 

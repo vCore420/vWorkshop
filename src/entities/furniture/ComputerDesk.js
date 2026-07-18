@@ -177,6 +177,33 @@ export const ComputerDeskDefinition = {
     g.add(lampShade);
     g.userData.deskLampSocket = new THREE.Vector3(0.46, topY + 0.24, -0.26);
 
+    // Living Spaces phase — "environmental composition." A monitor and a
+    // lamp sitting on this desk with nothing ever visibly plugged into
+    // anything was a real, if small, gap — named directly in this
+    // project's own Furniture & Storage retrospective ("the music
+    // cabinet's own cabling... the next unglamorous detail worth
+    // attention," docs/HISTORY.md) and never picked up since. One cable,
+    // not a tangle of them — the same "one small, deliberately
+    // restrained addition" standard the pen holder and pencil already
+    // set. Two plain, single-axis segments (the vice crank's own "a
+    // single, unambiguous rotation" preference, not a compound one)
+    // rather than a fully modelled drape: along the desk's own back
+    // edge, then straight down beside the back-left leg to the floor.
+    // Routed just outside the back-left leg's own outer face (leg spans
+    // x:[-0.61,-0.55] — see the leg loop above) rather than straight down
+    // its centre line, specifically to clear the stretcher rail that
+    // shares this same z=-0.28 (spans x:[-0.6,0.6] — see the stretcher
+    // loop above): a cable at the leg's own x would have run straight
+    // through it.
+    const cableMat = Materials.rubber("#1a1a1a");
+    const cableAcrossDesk = cylinder(0.006, 0.006, 0.62, cableMat, 6);
+    cableAcrossDesk.rotation.z = Math.PI / 2;
+    cableAcrossDesk.position.set(-0.31, surfaceY + 0.005, -0.28);
+    g.add(cableAcrossDesk);
+    const cableDownLeg = cylinder(0.006, 0.006, surfaceY, cableMat, 6);
+    cableDownLeg.position.set(-0.62, surfaceY / 2, -0.28);
+    g.add(cableDownLeg);
+
     // Desk phase — "environmental storytelling... without introducing
     // unnecessary clutter." One small holder, a couple of pens leaning
     // in it — the desk's entire environmental-storytelling addition

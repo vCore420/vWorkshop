@@ -17,7 +17,21 @@ import { box, cylinder, group, Materials } from "../../utils/PlaceholderFactory.
 export const SittingAreaDefinition = {
   id: "sittingArea",
   label: "Sitting area",
-  footprint: { width: 0.9, depth: 0.9 }, // just the armchair's bulk — the rug is walkable, the side table is small enough to allow minor overlap in this placeholder pass
+  // Living Spaces phase — "furniture alignment." This used to cover only
+  // the armchair's own bulk, with an honestly-labelled gap for the side
+  // table ("small enough to allow minor overlap") — checking the actual
+  // numbers found the table isn't a minor overlap at all, it sits
+  // entirely outside the old footprint, meaning it had no collision at
+  // all. The chair (x:[-0.38,0.38], z:[-0.37,0.3]) and the table group
+  // (x:[0.53,0.97], z:[-0.72,-0.28], including its leg/foot/book) don't
+  // share a natural centre, so `offset` (see FurnitureSystem.js's own
+  // comment) recentres the footprint on the midpoint of their combined
+  // bounds instead — a tight fit around both, not a symmetric box nearly
+  // double the size just to reach the table from the chair's own centre.
+  // The rug stays deliberately outside this footprint too — it's still
+  // meant to be walkable, not part of the "don't walk through this"
+  // volume.
+  footprint: { width: 1.35, depth: 1.02, offset: [0.295, -0.21] },
 
   build() {
     const g = group();

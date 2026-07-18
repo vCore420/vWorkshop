@@ -86,9 +86,18 @@ export const MusicCabinetDefinition = {
     const recordColors = ["#2a231d", "#3c5a53", "#6b4a34", "#232323", "#4a3120"];
     let cursor = -cabinetWidth / 2 + 0.08;
     let colorIndex = 0;
+    // Living Spaces phase — "decorative prop clipping." This Y was the
+    // lower compartment's own vertical *centre*, plus an unexplained
+    // +0.02 — never actually checked against either shelf. It left every
+    // record floating ~3.75cm above the bottom board's real surface while
+    // its own top simultaneously poked ~2.5mm into the mid-shelf above.
+    // Resting them on the bottom board's actual surface (its own
+    // half-thickness above bottomY) plus the record's own half-height
+    // grounds them properly, with real clearance to the shelf above.
+    const recordRestY = bottomY + 0.0125 + 0.09;
     while (cursor < cabinetWidth / 2 - 0.08) {
       const record = box(0.014, 0.18, cabinetDepth - 0.08, Materials.matte(recordColors[colorIndex % recordColors.length]));
-      record.position.set(cursor, shelfY - (shelfY - bottomY) / 2 + 0.02, 0);
+      record.position.set(cursor, recordRestY, 0);
       record.rotation.y = (Math.random() - 0.5) * 0.08;
       g.add(record);
       colorIndex++;
@@ -106,8 +115,15 @@ export const MusicCabinetDefinition = {
     const record = cylinder(0.1, 0.1, 0.003, Materials.plastic("#232323"), 28);
     record.position.set(turntableX, topY + 0.041 + 0.0015 + 0.006, 0.01);
     g.add(record);
+    // Living Spaces phase — "decorative prop clipping." This used to add
+    // a flat +0.0005 nudge to the vinyl record's own centre instead of
+    // actually stacking on its top surface, leaving the label mostly
+    // embedded in the record's own geometry rather than resting on it.
+    // Deriving this from `record.position.y` directly (record's own
+    // half-height, then the label's own) rather than a second
+    // hand-computed literal keeps the two from drifting apart again.
     const recordLabel = cylinder(0.028, 0.028, 0.004, Materials.matte("#8d6a45"), 20);
-    recordLabel.position.set(turntableX, topY + 0.041 + 0.0015 + 0.006 + 0.0005, 0.01);
+    recordLabel.position.set(turntableX, record.position.y + 0.0015 + 0.002, 0.01);
     g.add(recordLabel);
     const tonearmBase = cylinder(0.018, 0.018, 0.03, Materials.metal("#8a8580"), 16);
     tonearmBase.position.set(turntableX + 0.13, topY + 0.05, -0.09);
