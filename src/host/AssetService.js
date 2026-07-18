@@ -1,5 +1,6 @@
 import { EventBus } from "../core/EventBus.js";
 import { normalizeAssetDescriptor } from "./WorkshopAssetSchema.js";
+import { StorageUtils } from "../utils/StorageUtils.js";
 
 const RECENT_LIMIT = 12; // "Recent Assets" — enough to feel useful, small enough to stay a quick glance, not a second full listing
 
@@ -49,7 +50,7 @@ export class AssetService {
     this._recent = [];
   }
 
-  registerKind(id, { label, all, get, toDescriptor, getDependencies, validateItem }) {
+  registerKind(id, { label, all, get, toDescriptor, getDependencies, validateItem, exportItem }) {
     this._kinds.set(id, {
       id,
       label,
@@ -58,6 +59,18 @@ export class AssetService {
       toDescriptor: toDescriptor ?? (() => ({})),
       getDependencies: getDependencies ?? (() => []),
       validateItem: validateItem ?? (() => []),
+      // Version 3, Phase 7 ("Sharing the Workshop") — optional, the same
+      // shape `toDescriptor`/`getDependencies`/`validateItem` already
+      // are: a kind that doesn't provide one simply isn't exportable
+      // from the Browser, honestly, rather than showing a button that
+      // does nothing. Distinct from `requestExport()` below, which is
+      // about a *file-system* destination via a future Host Companion
+      // bridge — this is the same in-browser "download a JSON file"
+      // every export button elsewhere in the Workshop already uses
+      // (`ResidentProfileStore.exportProfile()`, `BlueprintStore
+      // .exportBlueprint()`, and so on), just made discoverable from
+      // one place instead of six separate apps.
+      exportItem: exportItem ?? null,
     });
   }
 
@@ -288,6 +301,43 @@ export class AssetService {
 
   requestExport(_assetId, _destinationPath) {
     throw new Error("AssetService.requestExport() isn't implemented yet — the Workshop Host doesn't have a bridge to export files yet.");
+  }
+
+  /** Whether `exportAsset()` below would actually produce anything for
+   *  this asset — `AssetPages.js`'s own detail page uses this to decide
+   *  whether to show an Export button at all, rather than showing one
+   *  that silently does nothing for the kinds (most of them, honestly)
+   *  that don't support this yet. */
+  canExport(assetId) {
+    const { kindId } = this._parseAssetId(assetId);
+    return typeof this._kinds.get(kindId)?.exportItem === "function";
+  }
+
+  /** The one place "Export" actually means something concrete: resolves
+   *  the asset, asks its own kind's `exportItem(item)` for the same
+   *  small envelope every direct export already produces, and triggers
+   *  an ordinary browser download via the shared `StorageUtils
+   *  .downloadJSON()` primitive — genuinely the same file a person would
+   *  get exporting the identical asset from its own dedicated app (the
+   *  Being Creator, Mission Control, the Builder Phone's own Blueprints
+   *  tab, and so on), just reachable from wherever the Browser's own
+   *  asset page already is. Returns `false` (not a throw) when the kind
+   *  doesn't support export or the item's own export produced nothing —
+   *  `AssetPages.js` doesn't show the button at all once `canExport()`
+   *  says no, so reaching this without a real export function would
+   *  only ever happen from a stale reference to an asset that was
+   *  deleted a moment ago. */
+  exportAsset(assetId) {
+    const { kindId, itemId } = this._parseAssetId(assetId);
+    const kind = this._kinds.get(kindId);
+    if (!kind?.exportItem) return false;
+    const item = kind.get(itemId);
+    if (!item) return false;
+    const envelope = kind.exportItem(item);
+    if (!envelope) return false;
+    const name = (item.name ?? item.title ?? kindId).replace(/[^a-z0-9]+/gi, "-").toLowerCase() || kindId;
+    StorageUtils.downloadJSON(`${name}.json`, envelope);
+    return true;
   }
 
   // ---- persistence contract, read by PersistenceSystem ----
