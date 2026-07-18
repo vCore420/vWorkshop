@@ -36,6 +36,19 @@ export class MusicSystem {
     this.shuffle = false;
     this.repeat = "off"; // "off" | "all" | "one"
     this.isPlaying = false;
+    // Version 3, Phase 4 ("Workshop Rituals") — "turning on the radio."
+    // `wasPlaying` has been captured into every save since this system
+    // existed, and never once read back — playback always restores
+    // paused (the browser's own autoplay policy leaves no honest
+    // alternative; see docs/MUSIC.md). This is that flag's first real
+    // reader: true for exactly the moment between a session restoring a
+    // paused-but-loaded queue and the player's first real playback
+    // action, so the UI (see PlaybackBar.js) can offer "pick up where
+    // you left off" as a genuine invitation rather than the queue simply
+    // looking coincidentally ready. Cleared the instant that first real
+    // action happens — resuming, choosing something else, skipping —
+    // never left showing once it's no longer true.
+    this.wasPlayingLastSession = false;
     this.playbackError = null; // set by _onPlaybackError() — a plain, honest message for the UI, cleared the moment a track actually starts playing successfully
     this.volume = 0.7;
     this.muted = false;
@@ -130,6 +143,7 @@ export class MusicSystem {
     this.queuePosition = Math.max(0, Math.min(restore.queuePosition ?? 0, this.playOrder.length - 1));
     this._restoredPosition = restore.position || 0;
     this._loadCurrentSong({ autoplay: false, seekTo: this._restoredPosition });
+    this.wasPlayingLastSession = !!restore.wasPlaying;
   }
 
   // ---------------------------------------------------------------------
@@ -148,6 +162,7 @@ export class MusicSystem {
     this._rebuildPlayOrder();
     this.queuePosition = this.playOrder.indexOf(startIndex);
     if (this.queuePosition === -1) this.queuePosition = 0;
+    this.wasPlayingLastSession = false;
     this._loadCurrentSong({ autoplay: true });
   }
 
@@ -158,7 +173,16 @@ export class MusicSystem {
   }
 
   resume() {
-    if (!this.audio.src) return;
+    // Cleared unconditionally, even if there's nothing to actually
+    // resume (the root that had this song became unreachable between
+    // sessions, say) — a "pick up where you left off" invitation that
+    // silently does nothing when clicked should still go away, not sit
+    // there forever offering something it can no longer deliver.
+    this.wasPlayingLastSession = false;
+    if (!this.audio.src) {
+      this._emitPlaybackState(); // still tell the UI, so the now-cleared hint above actually disappears
+      return;
+    }
     this.audio.play().catch(() => {}); // browser autoplay rejection is expected if this wasn't a real gesture; UI just stays paused
     this.isPlaying = true;
     this._emitPlaybackState();
@@ -179,6 +203,7 @@ export class MusicSystem {
 
   next() {
     if (this.playOrder.length === 0) return;
+    this.wasPlayingLastSession = false;
     if (this.queuePosition < this.playOrder.length - 1) {
       this.queuePosition += 1;
     } else if (this.repeat === "all") {
@@ -191,6 +216,7 @@ export class MusicSystem {
 
   previous() {
     if (this.playOrder.length === 0) return;
+    this.wasPlayingLastSession = false;
     // A real "previous" restarts the current track once you're a few
     // seconds in, matching how every physical and software player behaves.
     if (this.audio.currentTime > 3) {

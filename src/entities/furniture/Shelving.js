@@ -27,7 +27,25 @@ export const ShelvingDefinition = {
 
   build() {
     const g = group();
-    const width = 1.1, height = 2.1, depth = 0.35, shelfCount = 4;
+    const width = 1.1, depth = 0.35, shelfCount = 4;
+    // Version 3, Phase 3 ("The Reading Chair") — the frame's overall
+    // height used to be a fixed constant that shelf spacing was derived
+    // from, which happened to size it to just clear the top shelf's own
+    // boards with the cap sitting directly above — not to preserve the
+    // same headroom every other shelf gets. That left the top shelf with
+    // only ~0.135m of clearance to the cap versus ~0.57m everywhere else,
+    // and even the shortest book placeholder (0.18m) already overshot it.
+    // Spacing (`shelfSpacing`) is now the fixed, independent quantity —
+    // unchanged at 0.6, exactly as every shelf already used — and `height`
+    // is derived from it instead, sized so the top shelf gets that same
+    // ~0.57m (`shelfSpacing - boardThickness`) clearance to the cap's own
+    // underside that every other shelf already gets to the board above it.
+    // See docs/FURNITURE.md for the full account and the worked numbers.
+    const shelfSpacing = 0.6;
+    const boardThickness = 0.03;
+    const bottomShelfY = 0.15;
+    const topShelfY = bottomShelfY + (shelfCount - 1) * shelfSpacing;
+    const height = topShelfY + boardThickness / 2 + (shelfSpacing - boardThickness);
 
     const frameMat = Materials.wood("#4a3120");
     const sideL = box(0.04, height, depth, frameMat);
@@ -59,7 +77,7 @@ export const ShelvingDefinition = {
     const binShelfIndex = 1;
 
     for (let i = 0; i < shelfCount; i++) {
-      const y = 0.15 + i * ((height - 0.3) / (shelfCount - 1));
+      const y = bottomShelfY + i * shelfSpacing;
       // Each board a subtly different wood tone rather than one uniform
       // Materials.wood() call — a shelf assembled over time from whatever
       // timber was on hand rarely matches board-for-board.
@@ -105,7 +123,19 @@ export const ShelvingDefinition = {
       for (let j = 0; j < itemCount; j++) itemWidths.push(0.06 + ((i + j) % 3) * 0.02);
       const usableWidth = width - 0.2;
       const totalItemWidth = itemWidths.reduce((sum, w) => sum + w, 0);
-      const gap = (usableWidth - totalItemWidth) / (itemCount - 1);
+      // Phase 3 planning — the fix above correctly filled each shelf's own
+      // usable width, but with one perfectly even, mechanically-computed
+      // gap between every item, which reads as assembled-by-formula rather
+      // than shelved by hand over time. Squared-random weights per gap
+      // (skewing toward small gaps, with the occasional much larger one)
+      // redistribute the exact same leftover space instead of splitting it
+      // evenly, so items bunch into a few natural-looking clusters rather
+      // than a comb — same item count, same overall width coverage.
+      const leftoverWidth = usableWidth - totalItemWidth;
+      const gapWeights = [];
+      for (let j = 0; j < itemCount - 1; j++) gapWeights.push(Math.random() ** 2 + 0.0001);
+      const weightTotal = gapWeights.reduce((sum, w) => sum + w, 0);
+      const gaps = gapWeights.map((w) => (w / weightTotal) * leftoverWidth);
       let cursor = -width / 2 + 0.1;
       for (let j = 0; j < itemCount; j++) {
         const w = itemWidths[j];
@@ -116,7 +146,7 @@ export const ShelvingDefinition = {
         item.position.set(cursor + w / 2, y + 0.015 + h / 2, 0);
         item.rotation.y = (Math.random() - 0.5) * 0.05;
         g.add(item);
-        cursor += w + gap;
+        cursor += w + (gaps[j] ?? 0);
       }
     }
 

@@ -24,9 +24,20 @@ export function buildPlaybackBar({ musicSystem }) {
   title.className = "music-playback-title";
   const artist = document.createElement("div");
   artist.className = "music-playback-artist";
+  // Version 3, Phase 4 ("Workshop Rituals") — "turning on the radio."
+  // Restored queue/position already leave the exact right song loaded
+  // and paused, indistinguishable from a queue nobody's touched yet;
+  // this is the one thing that tells them apart — see
+  // MusicSystem.js's own `wasPlayingLastSession` comment. Shown only for
+  // that one moment, never a persistent status.
+  const resumeHintEl = document.createElement("button");
+  resumeHintEl.type = "button";
+  resumeHintEl.className = "music-playback-resume-hint";
+  resumeHintEl.textContent = "▶ Picking up where you left off";
+  resumeHintEl.addEventListener("click", () => musicSystem.resume());
   const playbackErrorEl = document.createElement("div");
   playbackErrorEl.className = "music-playback-error";
-  info.append(title, artist, playbackErrorEl);
+  info.append(title, artist, resumeHintEl, playbackErrorEl);
   bar.appendChild(info);
 
   const transport = document.createElement("div");
@@ -112,6 +123,7 @@ export function buildPlaybackBar({ musicSystem }) {
     repeatBtn.textContent = musicSystem.repeat === "one" ? "\u{1F501}\u00B9" : "\u{1F501}";
     muteBtn.textContent = musicSystem.muted || musicSystem.volume === 0 ? "\u{1F507}" : "\u{1F50A}";
     volumeInput.value = String(musicSystem.muted ? 0 : musicSystem.volume);
+    resumeHintEl.classList.toggle("visible", musicSystem.wasPlayingLastSession);
     // "Music loading behaves differently between Chromium, Firefox and
     // Safari" — see MusicSystem.js's own _onPlaybackError() comment. A
     // plain, honest line rather than leaving playback looking silently

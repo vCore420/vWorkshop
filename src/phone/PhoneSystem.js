@@ -118,9 +118,12 @@ export class PhoneSystem {
     if (this.isOpen) return;
     // Can't reach into your pocket while sitting at the computer or mid-
     // conversation with Bubble — both already want the mouse for their
-    // own overlay.
+    // own overlay. Reading Chair phase — the sitting area is the one
+    // exception: its `allowLookAround` focus pose is a genuinely relaxed
+    // pose, not a hands-occupied one, so checking Phone while seated there
+    // is allowed. See InteractionSystem.activeAllowsLookAround.
     const interactionSystem = this.engine.getSystem(InteractionSystem);
-    if (interactionSystem?.active) return;
+    if (interactionSystem?.active && !interactionSystem.activeAllowsLookAround) return;
 
     this.isOpen = true;
     this._cameraSystem?.pauseLook();

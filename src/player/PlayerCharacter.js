@@ -49,9 +49,12 @@ export const PART_IDS = ["head", "torso", "upperArm", "lowerArm", "hand", "upper
 // coincidence). Not applied here — buildCharacter() is also used by the
 // Wardrobe's own isolated preview rig, which should always show the full
 // character. PlayerCharacterSystem applies this layer only to the one rig
-// instance that actually shares a camera with the player; ReflectionSystem
-// re-enables it on every mirror's own camera, since a reflection should
-// always show the full character too.
+// instance that actually shares a camera with the player; every other
+// camera that should still see the full character has to explicitly
+// re-enable it — ReflectionSystem does, on every mirror's own camera,
+// since a reflection should always show the full character too; and
+// (Version 3, Phase 3b, "player shadow has no head") LightingSystem does,
+// on the sun's own shadow camera, since a shadow should too.
 export const FIRST_PERSON_HIDDEN_LAYER = 1;
 
 export const MATERIAL_PRESETS = {
