@@ -12,6 +12,7 @@ import { makeTransparent, restoreMaterials, disposeGhostMaterials, defaultGhostP
 import { EditHistory } from "./EditHistory.js";
 import { alignPositions, distributeEvenly } from "./AlignmentTools.js";
 import { TERRAIN_MATERIALS } from "../systems/TerrainSystem.js";
+import { importModelFile } from "../beings/ModelLibrary.js";
 
 const ROTATE_STEP = Math.PI / 4; // 45° per press — coarse enough to feel deliberate, fine enough to square something up
 const WHEEL_ROTATE_STEP = Math.PI / 36; // 5° per tick — fine, continuous control matching common 3D editing workflows, not the button's own coarse step
@@ -355,10 +356,7 @@ export class BuildModeSystem {
    *  Creator's own import already handles. */
   async importModel(file) {
     if (!this.modelAssetStore || !this.modelLibrary) throw new Error("Models aren't available right now.");
-    const isGltf = file.name.toLowerCase().endsWith(".gltf");
-    const data = isGltf ? await file.text() : await file.arrayBuffer();
-    const modelId = this.modelLibrary.add(file.name.replace(/\.(glb|gltf)$/i, ""), isGltf ? "gltf" : "glb");
-    await this.modelAssetStore.put(modelId, data);
+    const modelId = await importModelFile(file, { modelLibrary: this.modelLibrary, modelAssetStore: this.modelAssetStore });
     this._renderLibrary();
     return modelId;
   }

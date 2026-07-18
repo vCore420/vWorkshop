@@ -781,7 +781,7 @@ overlayManager.register(
   })
 );
 overlayManager.register("window", createWindowOverlay({ environmentSystem, timeOfDaySystem }));
-overlayManager.register("restNook", createRestNookOverlay());
+overlayManager.register("restNook", createRestNookOverlay({ projectsStore }));
 overlayManager.register("wardrobe", createWardrobeOverlay({ appearanceStore, outfitStore, textureStore }));
 
 new HUD(document.getElementById("hud-root"), engine);
@@ -1067,7 +1067,14 @@ if (_entryRequested) _enterWorkshop();
 // Clicking the canvas re-acquires pointer lock (e.g. after Escape, or after
 // closing an overlay) whenever nothing else is open — including the Phone,
 // which needs the free cursor for its own clicks regardless of which app
-// is currently open within it (see PhoneSystem).
+// is currently open within it (see PhoneSystem). Reading Chair phase — the
+// sitting area's own `allowLookAround` focus pose stays "active" the whole
+// time the player is seated (that's what lets them get up again), but that
+// no longer means the click-to-look-around gesture should stay blocked for
+// as long as they're sitting quietly with nothing else open; see
+// InteractionSystem.activeAllowsLookAround for the shared condition.
 canvas.addEventListener("click", () => {
-  if (!interactionSystem.active && !phoneSystem.isOpen) engine.input.requestPointerLock();
+  if ((!interactionSystem.active || interactionSystem.activeAllowsLookAround) && !phoneSystem.isOpen) {
+    engine.input.requestPointerLock();
+  }
 });

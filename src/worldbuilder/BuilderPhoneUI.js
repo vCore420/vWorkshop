@@ -407,21 +407,35 @@ export class BuilderPhoneUI {
       scaleRow.append(scaleLabel, scaleInput);
       grid.appendChild(scaleRow);
 
-      const colorRow = document.createElement("div");
-      colorRow.className = "builder-phone-row";
-      const colorLabel = document.createElement("span");
-      colorLabel.textContent = "Colour";
-      const colorInput = document.createElement("input");
-      colorInput.type = "color";
-      colorInput.value = selection.instance.colorOverride ?? "#8d8577";
-      colorInput.addEventListener("input", () => this.callbacks.onColorOverrideChange(colorInput.value));
-      const clearColorBtn = document.createElement("button");
-      clearColorBtn.type = "button";
-      clearColorBtn.className = "builder-phone-small-button";
-      clearColorBtn.textContent = "Reset";
-      clearColorBtn.addEventListener("click", () => this.callbacks.onColorOverrideChange(null));
-      colorRow.append(colorLabel, colorInput, clearColorBtn);
-      grid.appendChild(colorRow);
+      // Living Spaces phase — "imported Builder objects should behave as
+      // first-class Workshop objects." colorOverride is only ever
+      // consumed by compileDefinition() (see WorldObjectsSystem.js's own
+      // _buildObject3D()), which an imported model's own placeholder/
+      // async-swap path never goes through — the control used to show,
+      // accept input, and persist a value that had no visible effect at
+      // all. An imported .glb can carry several of its own materials
+      // across its mesh hierarchy, so "one override colour" doesn't have
+      // the same well-defined meaning it does for a single-colour
+      // primitive part; rather than build a real per-material tinting
+      // system for this pass, the honest fix is not showing a control
+      // that does nothing.
+      if (selection.instance.definitionSource !== "importedModel") {
+        const colorRow = document.createElement("div");
+        colorRow.className = "builder-phone-row";
+        const colorLabel = document.createElement("span");
+        colorLabel.textContent = "Colour";
+        const colorInput = document.createElement("input");
+        colorInput.type = "color";
+        colorInput.value = selection.instance.colorOverride ?? "#8d8577";
+        colorInput.addEventListener("input", () => this.callbacks.onColorOverrideChange(colorInput.value));
+        const clearColorBtn = document.createElement("button");
+        clearColorBtn.type = "button";
+        clearColorBtn.className = "builder-phone-small-button";
+        clearColorBtn.textContent = "Reset";
+        clearColorBtn.addEventListener("click", () => this.callbacks.onColorOverrideChange(null));
+        colorRow.append(colorLabel, colorInput, clearColorBtn);
+        grid.appendChild(colorRow);
+      }
     }
 
     this.screen.appendChild(grid);

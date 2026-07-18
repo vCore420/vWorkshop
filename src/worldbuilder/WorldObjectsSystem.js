@@ -89,7 +89,7 @@ export class WorldObjectsSystem {
     live.entity.object3D.position.set(...instance.position);
     live.entity.object3D.rotation.y = instance.rotationY;
     live.entity.object3D.scale.setScalar(instance.scale);
-    this._updateFootprint(instanceId, live.entity.object3D);
+    this._updateFootprint(instanceId, live.entity.object3D, this._resolveDefinition(instance));
   }
 
   /** Expensive path: colour override changes which cached material every part uses. */
@@ -131,11 +131,36 @@ export class WorldObjectsSystem {
     return this.footprints.get(instanceId) ?? null;
   }
 
-  _updateFootprint(instanceId, object3D) {
+  /** `definition` is optional (every real call site has it on hand already
+   *  — see each one's own comment) purely so a future caller that
+   *  genuinely doesn't have it yet can't crash; without it, a ladder would
+   *  just be treated as solid until the next real update.
+   *
+   *  Version 3, Phase 3b (refinement) — "ladders still don't work." A
+   *  Builder-placed ladder was getting *two* independent things at once:
+   *  `LadderSystem`'s own generously-padded climbable zone, and this
+   *  system's ordinary solid walk-collision box, with nothing exempting
+   *  one from the other. `CameraSystem._resolveCollisions()` pushed the
+   *  player out of the solid box before they could ever walk far enough
+   *  forward to actually enter the padded zone, which is barely bigger
+   *  than the box itself — stopped at the ladder's own edge, from every
+   *  side, with the climbing code never getting a chance to run. A ladder
+   *  carrying the `"ladder"` behaviour (checked here the same way
+   *  `_spawn()`/`_disposeInstanceBehaviours()` already read
+   *  `definition.behaviours` for applying/disposing it) now gets no walk-
+   *  collision footprint at all — climbable everywhere within its own
+   *  zone, not just the small sliver of it a player could actually reach.
+   *  Two small, honest tradeoffs: a ladder can no longer be stood on top
+   *  of like a platform (never a real use case for one), and a player
+   *  could technically walk through the rails at a steep angle without
+   *  climbing — real per-shape collision would prevent that but is a much
+   *  bigger, more fragile change than this bug justifies. */
+  _updateFootprint(instanceId, object3D, definition) {
     object3D.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(object3D);
-    if (box.min.y >= COLLISION_HEIGHT_LIMIT) {
-      this.footprints.delete(instanceId); // entirely above head height — not an obstacle, same rule wall headers already follow
+    const isClimbable = definition?.behaviours?.some((b) => b.type === "ladder");
+    if (isClimbable || box.min.y >= COLLISION_HEIGHT_LIMIT) {
+      this.footprints.delete(instanceId); // climbable (no solid collision at all — see above), or entirely above head height, same rule wall headers already follow
     } else {
       this.footprints.set(instanceId, box);
     }
@@ -194,6 +219,20 @@ export class WorldObjectsSystem {
       if (!model || !group.children.includes(placeholder)) return; // despawned/replaced before this resolved
       group.remove(placeholder);
       group.add(model);
+      // Living Spaces phase — "imported Builder objects should behave as
+      // first-class Workshop objects." _spawn() computed this instance's
+      // footprint the moment it returned this group, when it still only
+      // contained the small placeholder capsule above — every walk-
+      // collision box for a freshly-placed or freshly-reloaded imported
+      // model was sized to that capsule, not the model. Recomputing now,
+      // against the real geometry that just arrived, closes the same gap
+      // updateInstanceTransform() already closes whenever the object is
+      // moved. Guarded on liveInstances rather than trusting the
+      // placeholder check above alone: removeInstance() disposes this
+      // group's contents but doesn't necessarily empty its children list,
+      // so an instance despawned while its model was still loading must
+      // not have a footprint silently reintroduced here after the fact.
+      if (this.liveInstances.has(instance.id)) this._updateFootprint(instance.id, group, definition);
     });
     return group;
   }
@@ -230,7 +269,7 @@ export class WorldObjectsSystem {
 
     this.engine.entities.create(entity);
     this.liveInstances.set(instance.id, { entity });
-    this._updateFootprint(instance.id, object3D);
+    this._updateFootprint(instance.id, object3D, definition);
     this._registerSwayParts(instance.id, object3D);
     return entity;
   }
