@@ -171,9 +171,27 @@ export class FurnitureSystem {
   }
 
   _computeFootprintBox(definition, position, rotationY) {
-    const { width = 0.6, depth = 0.6 } = definition.footprint ?? {};
+    const { width = 0.6, depth = 0.6, offset = [0, 0] } = definition.footprint ?? {};
     const [x, , z] = position;
     const theta = rotationY ?? 0;
+    // Living Spaces phase — "furniture alignment." Every footprint used to
+    // be forced to centre exactly on the piece's own placement position,
+    // which is fine for one solid object but breaks down for a corner
+    // like SittingArea's own chair-plus-side-table: the two don't share a
+    // natural centre, so a single symmetric box wide enough to reach the
+    // table from the chair's own centre would have to be nearly double
+    // the size actually needed, mostly covering empty space on the
+    // chair's far side. `offset` is a local-space point (in the piece's
+    // own unrotated frame, same convention as every mesh position inside
+    // that piece's own build()) the footprint should centre on instead —
+    // rotated here exactly the way any other local point on this piece
+    // already gets rotated into world space, so it stays correct
+    // regardless of which way the piece is placed facing. Defaults to
+    // [0, 0] — every footprint that doesn't declare one keeps behaving
+    // exactly as it always has.
+    const [ox, oz] = offset;
+    const cx = x + ox * Math.cos(theta) + oz * Math.sin(theta);
+    const cz = z - ox * Math.sin(theta) + oz * Math.cos(theta);
     const hw0 = width / 2, hd0 = depth / 2;
     // Axis-aligned bounding box of a (hw0 x hd0) rectangle rotated by theta —
     // an approximation (a true oriented box would be tighter), which is fine
@@ -181,8 +199,8 @@ export class FurnitureSystem {
     const hw = Math.abs(hw0 * Math.cos(theta)) + Math.abs(hd0 * Math.sin(theta)) + 0.05;
     const hd = Math.abs(hw0 * Math.sin(theta)) + Math.abs(hd0 * Math.cos(theta)) + 0.05;
     return new THREE.Box3(
-      new THREE.Vector3(x - hw, 0, z - hd),
-      new THREE.Vector3(x + hw, 2.2, z + hd)
+      new THREE.Vector3(cx - hw, 0, cz - hd),
+      new THREE.Vector3(cx + hw, 2.2, cz + hd)
     );
   }
 
