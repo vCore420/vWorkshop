@@ -1,16 +1,29 @@
 import { wrapPage } from "./PageShell.js";
 import { WORKSHOP_JOINTS } from "../player/WorkshopSkeleton.js";
 
-const DETAIL_URL_PATTERN = /^workshop:\/\/asset\/(object|blueprint|animation|being)\/(.+)$/;
-const ASSET_SCHEME_DETAIL_PATTERN = /^asset:\/\/(object|blueprint|animation|being)\/(.+)$/;
+const DETAIL_URL_PATTERN = /^workshop:\/\/asset\/(object|blueprint|animation|being|expression|atmosphere|calculator|resident)\/(.+)$/;
+const ASSET_SCHEME_DETAIL_PATTERN = /^asset:\/\/(object|blueprint|animation|being|expression|atmosphere|calculator|resident)\/(.+)$/;
 // The Browser's own URL segment ("object") vs. AssetService's own kind id
 // ("objects") differ by design — the kind id matches the natural-language
 // label ("Objects") used everywhere else (tiles, the Dashboard), while the
 // URL segment predates AssetService and stays singular for readability
 // (`asset://object/42`, not `asset://objects/42`). This is the one map
 // between the two.
-const URL_SEGMENT_TO_KIND = { object: "objects", blueprint: "blueprints", animation: "animations", being: "beings" };
-const KIND_TO_URL_SEGMENT = { objects: "object", blueprints: "blueprint", animations: "animation", beings: "being" };
+//
+// Version 3, Phase 7 ("Sharing the Workshop") — expression/atmosphere/
+// calculator/resident added alongside the original four, once each kind
+// gained a real `exportItem` (see main.js's own asset-kind wiring) —
+// reachable via `genericAssetDetailPage()` below rather than a bespoke
+// page each, since none of the four need their own custom preview the
+// way Objects' swatches or Blueprints' piece list do.
+const URL_SEGMENT_TO_KIND = {
+  object: "objects", blueprint: "blueprints", animation: "animations", being: "beings",
+  expression: "expressions", atmosphere: "atmosphere", calculator: "calculators", resident: "residents",
+};
+const KIND_TO_URL_SEGMENT = {
+  objects: "object", blueprints: "blueprint", animations: "animation", beings: "being",
+  expressions: "expression", atmosphere: "atmosphere", calculators: "calculator", residents: "resident",
+};
 
 /**
  * AssetPages
@@ -24,9 +37,14 @@ const KIND_TO_URL_SEGMENT = { objects: "object", blueprints: "blueprint", animat
  * `workshop://asset/<category>/<id>` keep resolving as aliases).
  * `asset://` is the overview — every asset category the Workshop
  * actually has a library for, each a live count read straight from
- * `AssetService`. Three of those six (Objects, Blueprints, Animations)
- * get real per-item detail pages, registered as a single dynamic
- * resolver rather than one exact registration per item.
+ * `AssetService`. Four kinds (Objects, Blueprints, Animations, Beings)
+ * get a bespoke per-item detail page with its own real preview; four
+ * more (Expression Sets, Atmosphere Profiles, Calculators, AI Resident
+ * Profiles — Version 3, Phase 7, once each gained a real `exportItem`)
+ * share one honest, generic page instead (`genericAssetDetailPage()`)
+ * rather than a bespoke preview none of them actually need. All eight
+ * are registered as a single dynamic resolver rather than one exact
+ * registration per item.
  *
  * **Workshop Asset System phase: pages now read `AssetService`'s own
  * descriptors, not the underlying stores directly.** Every detail page
@@ -152,6 +170,11 @@ function assetDetailPage(url, deps) {
   if (kindId === "blueprints") return blueprintDetailPage(descriptor, deps);
   if (kindId === "animations") return animationDetailPage(descriptor, deps);
   if (kindId === "beings") return beingDetailPage(descriptor, deps);
+  // Version 3, Phase 7 — any kind that supports export but has no
+  // bespoke page of its own (Expression Sets, Atmosphere Profiles,
+  // Calculators, AI Resident Profiles) gets a real, honest, generic page
+  // rather than a dead link — see genericAssetDetailPage()'s own comment.
+  if (assetService.canExport(assetId)) return genericAssetDetailPage(descriptor, deps);
   return notFoundPage(url);
 }
 
@@ -213,6 +236,46 @@ function favouriteButton(assetId, isFavourite) {
   `;
 }
 
+/** Version 3, Phase 7 ("Sharing the Workshop") — the Export counterpart
+ *  to `favouriteButton()` above, identical `postMessage` shape (see
+ *  `BrowserApp.js`'s own `"workshop-browser-export-asset"` handler).
+ *  Only ever rendered when `AssetService.canExport()` already said yes —
+ *  no kind without a real `exportItem` ever sees a button that would do
+ *  nothing. */
+function exportButton(assetId) {
+  return `
+    <button type="button" class="workshop-favourite-button" data-export-asset="${escapeHtml(assetId)}">⬇ Export</button>
+    <script>
+      document.querySelector("[data-export-asset]").addEventListener("click", (event) => {
+        window.parent.postMessage({ type: "workshop-browser-export-asset", assetId: event.target.dataset.exportAsset }, "*");
+      });
+    </script>
+  `;
+}
+
+/** Version 3, Phase 7 — the honest, plain page for any kind that
+ *  supports export (Expression Sets, Atmosphere Profiles, Calculators,
+ *  AI Resident Profiles) but doesn't need its own bespoke preview the
+ *  way Objects' swatches or Blueprints' piece list do. Same common
+ *  sections, favourite star, and (the one thing every other kind here
+ *  lacks) a real Export button, reusing `commonAssetSections()` exactly
+ *  like every bespoke page already does rather than a second, parallel
+ *  metadata layout. */
+function genericAssetDetailPage(descriptor, { assetService }) {
+  const html = `
+    <span class="workshop-page-badge">${escapeHtml(assetService.kinds().find((k) => k.id === descriptor.type)?.label ?? descriptor.type)}</span>
+    <h1>${escapeHtml(descriptor.name)}</h1>
+    <p class="workshop-page-subtitle">${escapeHtml(descriptor.description || "No description given.")}</p>
+    ${favouriteButton(descriptor.assetId, descriptor.isFavourite)}
+    ${exportButton(descriptor.assetId)}
+
+    ${commonAssetSections(descriptor, assetService)}
+
+    <p><a href="asset://">← Back to the Asset Library</a></p>
+  `;
+  return { title: descriptor.name, html: wrapPage(descriptor.name, html) };
+}
+
 /** Resolves either an `ObjectLibraryStore` id (numeric) or a Construction
  *  Library id (a string like `"tree"`) — the identical fallback chain
  *  the "objects" AssetService kind's own `get()` already uses (see
@@ -259,6 +322,7 @@ function blueprintDetailPage(descriptor, { assetService }) {
     <h1>${escapeHtml(descriptor.name)}</h1>
     <p class="workshop-page-subtitle">A reusable cluster of ${descriptor.dependencies.length} independent World Object${descriptor.dependencies.length === 1 ? "" : "s"}.</p>
     ${favouriteButton(descriptor.assetId, descriptor.isFavourite)}
+    ${exportButton(descriptor.assetId)}
 
     ${commonAssetSections(descriptor, assetService)}
 
@@ -338,6 +402,7 @@ function beingDetailPage(descriptor, { beingLibrary, assetService }) {
     <h1>${escapeHtml(descriptor.name)}</h1>
     <p class="workshop-page-subtitle">${escapeHtml(descriptor.description || "No description given.")}</p>
     ${favouriteButton(descriptor.assetId, descriptor.isFavourite)}
+    ${exportButton(descriptor.assetId)}
 
     ${preview}
 

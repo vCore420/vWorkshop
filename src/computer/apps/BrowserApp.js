@@ -343,6 +343,14 @@ export function createBrowserApp({ browserStore, pageRegistry, hostManager }) {
           hostManager?.services.get("assets")?.toggleFavourite(event.data.assetId);
           const tabId = activeTabId();
           if (frames.has(tabId)) loadIntoFrame(tabId, browserStore.getCurrentUrl(tabId));
+        } else if (event.data?.type === "workshop-browser-export-asset" && event.data.assetId) {
+          // Version 3, Phase 7 ("Sharing the Workshop") — every asset
+          // detail page's own Export button, see AssetPages.js's own
+          // exportButton(). AssetService.exportAsset() already triggers
+          // the StorageUtils.downloadJSON() download itself, the same
+          // primitive workshop-browser-export-event-log above uses —
+          // nothing further to do here beyond calling it.
+          hostManager?.services.get("assets")?.exportAsset(event.data.assetId);
         } else if (event.data?.type === "workshop-browser-plugin-action" && event.data.id) {
           // host://plugins' own Enable/Disable/Reload buttons — see
           // HostPages.js's own pluginsPage() comment. The real

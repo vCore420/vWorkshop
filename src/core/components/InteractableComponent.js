@@ -31,6 +31,18 @@ import { Component } from "../Component.js";
  *   than a resident-specific special case in InteractionSystem.js itself,
  *   so any future Being or object can opt into the same stricter
  *   behaviour. See InteractionSystem.js's own `_isLookingAt()`.
+ * @property {number} [interactionHeightOffset=0] - metres added to this
+ *   entity's own world Y before distance/look-at checks use it. Version
+ *   3, Phase 5 ("Beyond One Building") — "a placed door's interaction
+ *   point is too low." A World Object's own modelling origin sits at its
+ *   base by Construction Library convention, but `InteractionSystem`
+ *   compares against the player's *eye-height* camera position — for a
+ *   ground-level door, that vertical gap alone (~1.65m) already exceeds
+ *   most interactables' own radius, confirmed directly: standing right
+ *   next to a door with the standard 1.3m radius measured ~2.4m away.
+ *   `WorldObjectsSystem` sets this from each instance's own real geometry
+ *   (see `_updateInteractionHeight()`); every other caller (furniture,
+ *   residents) leaves it at 0, unchanged from before this existed.
  */
 export class InteractableComponent extends Component {
   /** @param {InteractableOptions} options */
@@ -44,10 +56,12 @@ export class InteractableComponent extends Component {
     this.opensOverlay = options.opensOverlay ?? false;
     this.enabled = options.enabled ?? true;
     this.requiresLookAt = options.requiresLookAt ?? false;
+    this.interactionHeightOffset = options.interactionHeightOffset ?? 0;
   }
 
   worldPosition(out) {
     this.entity.object3D?.getWorldPosition(out);
+    if (this.interactionHeightOffset) out.y += this.interactionHeightOffset;
     return out;
   }
 }

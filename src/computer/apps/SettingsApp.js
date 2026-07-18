@@ -19,6 +19,7 @@
 import { WEATHER_STATES } from "../../systems/EnvironmentSystem.js";
 import { getObserverLocation, solarPosition, moonPhaseFraction, moonIllumination, sunriseSunset, moonriseMoonset, dayOfYear, getSeason } from "../../utils/Astronomy.js";
 import { formatClockTime } from "../../utils/TimeFormat.js";
+import { StorageUtils } from "../../utils/StorageUtils.js";
 
 
 const COMPASS_LABELS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
@@ -393,6 +394,25 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         });
         el.appendChild(saveBtn);
 
+        // "Sharing the Workshop" — the same Import affordance every other
+        // exportable kind offers, right beside where a profile is already
+        // created rather than a new, separate destination for it.
+        const importBtn = document.createElement("button");
+        importBtn.type = "button";
+        importBtn.className = "settings-action-button";
+        importBtn.textContent = "Import profile…";
+        importBtn.addEventListener("click", async () => {
+          try {
+            const data = await StorageUtils.uploadJSON();
+            atmosphereProfileStore.importProfile(data);
+            setTab("atmosphere");
+          } catch (err) {
+            if (err.message === "No file selected") return;
+            window.alert(err.message || "Couldn't import that Atmosphere profile.");
+          }
+        });
+        el.appendChild(importBtn);
+
         const grid = document.createElement("div");
         grid.className = "atmosphere-profile-grid";
         for (const profile of atmosphereProfileStore.all()) grid.appendChild(buildAtmosphereProfileRow(profile));
@@ -429,6 +449,16 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
           setTab("atmosphere");
         });
         actions.appendChild(applyBtn);
+
+        const exportBtn = document.createElement("button");
+        exportBtn.type = "button";
+        exportBtn.className = "settings-action-button";
+        exportBtn.textContent = "Export";
+        exportBtn.addEventListener("click", () => {
+          const exported = atmosphereProfileStore.exportProfile(profile.id);
+          if (exported) StorageUtils.downloadJSON(`${profile.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "atmosphere"}.json`, exported);
+        });
+        actions.appendChild(exportBtn);
 
         if (!atmosphereProfileStore.isBuiltIn(profile.id)) {
           const deleteBtn = document.createElement("button");

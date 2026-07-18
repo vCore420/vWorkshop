@@ -130,6 +130,24 @@ export function descendantIds(bodyParts, partId) {
  *  way `BuilderApp.js`'s already does. Returns `{root, skeletonMap,
  *  skeletonRest}` — see this file's own module comment for why the
  *  skeleton needs no heuristic detection here. */
+/** A part's own `position`/`rotation`/`scale` missing or malformed used
+ *  to throw straight out of `compileBody()` — `mesh.rotation.set(...undefined)`
+ *  is a hard `TypeError`, not a bug this file caught anywhere. Since the
+ *  loop below builds every mesh before parenting any of them, that threw
+ *  partway through a Being's own root group, leaving it with *zero*
+ *  children — a real, already-placed `BeingInstanceStore` record with
+ *  nothing whatsoever to show for it, and no retry: `BeingController
+ *  ._spawnRuntime()` had already registered the runtime before calling
+ *  this, so `_reconcile()` never calls it again. Every field here now
+ *  falls back to `makeDefaultBodyPart()`'s own default (a well-formed
+ *  part authored entirely through the Being Creator's own UI already has
+ *  real values for all three; this defends against a hand-edited or
+ *  imported file that doesn't, matching `BeingLibrary.importDefinition()`'s
+ *  own "never trust the file" standard for every other field). */
+function normalizedVec3(value, fallback) {
+  return Array.isArray(value) && value.length === 3 && value.every((n) => typeof n === "number" && Number.isFinite(n)) ? value : fallback;
+}
+
 export function compileBody(bodyParts) {
   const root = new THREE.Group();
   root.name = "body-root";
@@ -142,9 +160,9 @@ export function compileBody(bodyParts) {
     mesh.receiveShadow = true;
     mesh.name = part.name || part.id;
     mesh.userData.partId = part.id;
-    mesh.position.set(...part.position);
-    mesh.rotation.set(...part.rotation);
-    mesh.scale.set(...part.scale);
+    mesh.position.set(...normalizedVec3(part.position, [0, 0.3, 0]));
+    mesh.rotation.set(...normalizedVec3(part.rotation, [0, 0, 0]));
+    mesh.scale.set(...normalizedVec3(part.scale, [0.3, 0.3, 0.3]));
     nodesById.set(part.id, mesh);
   }
 

@@ -2,8 +2,10 @@ import * as THREE from "three";
 import { CameraSystem } from "../systems/CameraSystem.js";
 import { RoomLayoutSystem } from "../systems/RoomLayoutSystem.js";
 import { InteractionSystem } from "../systems/InteractionSystem.js";
+import { defaultGhostPoint } from "../worldbuilder/GhostPreview.js";
 
 const ROTATE_STEP = Math.PI / 8;
+const FLOOR_Y = 0; // the Workshop's own floor-level convention every other system already anchors to
 
 /**
  * BeingSpawnerSystem
@@ -70,7 +72,7 @@ export class BeingSpawnerSystem {
     this.engine.input?.exitPointerLock();
 
     const preview = this._buildGhostMesh();
-    const point = this._raycastFloor() ?? new THREE.Vector3(0, 0, 0);
+    const point = this._raycastFloor() ?? this._defaultFloorPoint();
     preview.position.copy(point);
     this.engine.scene.add(preview);
     this._ghost = { object3D: preview, definition, rotationY: 0 };
@@ -102,14 +104,42 @@ export class BeingSpawnerSystem {
     return hits[0]?.point ?? null;
   }
 
+  /** "See a ghost preview, move the preview around the world" quietly
+   *  assumed the floor raycast always hits *something* — it doesn't. A
+   *  perfectly horizontal (or upward) look ray, entirely ordinary the
+   *  instant placement begins, can never intersect a floor plane below
+   *  eye level, so `_raycastFloor()` genuinely returns `null` until the
+   *  player happens to tilt the camera down far enough. The ghost used
+   *  to fall back to the literal world origin in that case (and simply
+   *  stop updating at all on every subsequent frame the raycast kept
+   *  failing) — invisible or badly placed depending on where the player
+   *  was actually standing, and confirming it there is exactly what
+   *  "the app recognises it's been placed, but we never see it" was:
+   *  a real instance, genuinely spawned, just somewhere nobody was
+   *  looking. `defaultGhostPoint()` (`GhostPreview.js`) is
+   *  `BuildModeSystem`'s own already-proven answer to this same
+   *  question — straight ahead of the camera at a comfortable distance —
+   *  reused here rather than re-invented, with its own Y forced back to
+   *  floor level since (unlike a Builder object, which can rest on any
+   *  surface a ghost hovers over) a Being can only ever stand on the
+   *  floor. Applied on *every* pointer move here, not just on entry —
+   *  `BuildModeSystem`'s own multi-surface raycast rarely fails at all in
+   *  practice, but this system's single floor-only raycast fails any
+   *  time the player simply isn't looking down, which is often. */
+  _defaultFloorPoint() {
+    const point = defaultGhostPoint(this.engine.camera);
+    point.y = FLOOR_Y;
+    return point;
+  }
+
   _handlePointerMove(event) {
     if (!this.active || !this._ghost) return;
     const rect = this.engine.canvas.getBoundingClientRect();
     this._pointerNDC.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     this._pointerNDC.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     this._hasPointer = true;
-    const point = this._raycastFloor();
-    if (point) this._ghost.object3D.position.copy(point);
+    const point = this._raycastFloor() ?? this._defaultFloorPoint();
+    this._ghost.object3D.position.copy(point);
   }
 
   _handlePointerDown(event) {
