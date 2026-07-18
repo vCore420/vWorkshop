@@ -1314,4 +1314,109 @@ sequence itself was left untouched on purpose — its instantness is
 restraint, not a gap. See `docs/ROADMAP.md`'s own Phase 4 account for
 the complete story.
 
+**Version 3, Phase 5 — Beyond One Building (v3.0.5, v3.0.5b)** — proving
+`docs/WORLDBUILDER.md`'s claim that the architecture generalises to
+player-built rooms without changing. Investigation found the crux of the
+brief — automatic enclosure detection — already built
+(`BuildingDetectionSystem.js`, from Version 2's World Expansion phase),
+something the Version 3 plan hadn't fully accounted for. Two
+user-reported bugs followed: excess ground-tile collision, confirmed
+already fixed as a side effect of an earlier fix, and interaction points
+sitting too low on ground-anchored objects like doors, genuinely fixed
+with a new `InteractableComponent.interactionHeightOffset` (default 0,
+every existing interactable unaffected) computed centrally by
+`WorldObjectsSystem`. Fixing that exposed a real third bug: multi-part
+Construction pieces (a doorway's posts and header) were getting one
+combined collision box each, solidly blocking the very gap a player is
+meant to walk through — fixed with per-part collision boxes
+(`collisionBoxes`, keyed by `ObjectCompiler`'s own part tagging) alongside
+the existing per-instance overall box, which in turn exposed a fourth: a
+door's cached collision stayed frozen at "closed" after swinging open,
+fixed with a new `refreshFootprint()` that recomputes collision without
+persisting the transient open/closed state. The phase closed with three
+default interior blueprints (Simple Shed, Sunlit Room, Two-Room Cottage),
+seeded by `BlueprintStore`'s own constructor so every session sees them
+— "so the player can see that, by default, good things can be made with
+the default building blocks." Verifying them surfaced one more honest
+finding, genuinely fixed rather than routed around: the Construction
+Library's `window` piece couldn't seal a boundary for enclosure
+detection, by its own design (an open, unglazed opening, sill and header
+each independently too short/too high to count as wall-like). Two new
+pieces, `windowPane`/`largeWindowPane`, fix it the same way `door` fixes
+`doorway` — a thin box sized to satisfy the existing wall-like check on
+its own, which also gives a window real collision for the first time.
+Sunlit Room uses a real, sealed window; every exterior opening across all
+three blueprints pairs a frame with whatever closes it. See
+`docs/ROADMAP.md`'s own Phase 5 account for the complete story.
+
+**Version 3, Phase 6 — The Workshop Remembers (v3.0.6)** — extending
+continuity beyond persistence into memory, without becoming a
+notification system. Investigation found most of the brief already
+built: Version 2's own `WorldEventLog`/`WorldAwareness`/
+`ResidentPreferences`/`PlayerPatternMemory`/`ConversationMemory`/
+`ResidentCuriosity` already fold real world events into Bubble's own
+conversation context — "Bubble mentioning the storm that happened while
+they were away," the brief's own headline example, already worked. Of
+three real remaining gaps, a player-facing "time away" surface was
+dropped as unnecessary (the wall clock, computer, phone, and sky
+outside already tell time naturally); the other two shipped. Workbench
+presence now quietly ages — a project's own already-real `updatedAt`
+drives a subtle material desaturation once it's sat untouched past two
+weeks, cloned per-mesh so the shared material cache stays untouched, and
+recomputed fresh on every rebuild rather than stored as a flag. And
+Bubble's own conversation panel — a real, still-outstanding Version 2
+carry-over, confirmed rather than assumed — no longer buries Bubble
+behind a full-screen backdrop: a new, sixth overlay material,
+`companion`, docks a small frosted-glass card in the corner instead,
+leaving the room, and Bubble, exactly as visible as before the
+conversation opened. See `docs/ROADMAP.md`'s own Phase 6 account for the
+complete story.
+
+**Version 3, Phase 6b — Being Placement, Actually Visible (v3.0.6b)** —
+a real user-reported bug, found and fixed while beginning Phase 7's own
+investigation. Reproducing it directly (not assuming) found two
+independent causes: the placement ghost's own floor raycast had no
+fallback for an ordinary horizontal look ray, snapping to the world
+origin and then freezing there — fixed by reusing `BuildModeSystem`'s
+own already-proven `defaultGhostPoint()`, applied on every pointer move
+rather than just on entry, since this system's single floor-only raycast
+fails far more often than Build Mode's own broad one. And a malformed
+body part crashed `BodyCompiler.compileBody()` outright, leaving an
+already-recorded, already-placed Being with zero rendered geometry and
+no retry — fixed by defending `position`/`rotation`/`scale`
+independently, falling back to the Being Creator's own defaults rather
+than crashing the whole compile. A real, unrelated doc drift was also
+corrected in the same pass: `docs/BEINGS.md` still described
+`BeingSpawnerApp.js`/`BeingManagerApp.js` as computer apps several phases
+after both were consolidated into the Phone's `BeingsPhoneApp.js`. See
+`docs/ROADMAP.md`'s own Phase 6b account for the complete story.
+
+**Version 3, Phase 7 — Sharing the Workshop (v3.0.7)** — "let creations
+travel," the maximum community value achievable with zero backend.
+Investigation confirmed the pattern already existed
+(`ResidentProfileStore`/`ExpressionSetStore`'s own envelope shape,
+`StorageUtils.downloadJSON()`/`uploadJSON()`) and found exactly three
+real gaps: Blueprints, custom Calculators, and Atmosphere Profiles had
+no export/import at all. All three gained it, each wired into its own
+native panel (the Builder Phone's Blueprints tab, the Tools panel's
+Calculator Builder, Settings' Atmosphere Profiles section), plus a new
+unified path: `AssetService.registerKind()` gained a fifth optional
+`exportItem` callback, and `canExport()`/`exportAsset()` make any
+registered kind's Export button reachable straight from that asset's own
+Browser page. Two things surfaced along the way, both genuine
+pre-existing gaps rather than anything this phase introduced: Atmosphere
+Profiles, Calculators, and AI Resident Profiles had never been
+registered as `AssetService` kinds at all, so all three became full new
+kinds (not a narrower export-only mode) as part of this work; and only
+four kinds had a real Browser detail page, so the four newly-exportable
+ones would have been exportable in principle but unreachable in
+practice — resolved with one shared `genericAssetDetailPage()` rather
+than four bespoke ones. Verified live end-to-end for all six exportable
+kinds — store-level round-trips (including malformed-input rejection),
+`AssetService`'s own `canExport`/`exportAsset`, every one of the eight
+now-reachable detail pages resolving with a working Export button, and
+the Builder Phone/Tools panel UI mounted and driven directly against
+real data. See `docs/ROADMAP.md`'s own Phase 7 account for the complete
+story.
+
 </details>

@@ -130,6 +130,38 @@ opacity directly would fade unrelated objects across the workshop too.
 Scale has no such side effect, which is why every transition in this module
 is scale-based.
 
+### Dust (Version 3, Phase 6)
+
+"As time goes on, the things on the workbench move/change" — the
+Workshop's own continuity brief (`docs/ROADMAP_V3.md`'s Phase 6),
+answered without any new persisted state: `ProjectsStore` was already
+stamping `updatedAt` on every edit. `WorkbenchSystem._isStale(project)`
+compares that against `Date.now()`; once a project has genuinely sat
+untouched past `DUST_THRESHOLD_DAYS` (14), `_applyDust()` desaturates
+and flattens every presence item's own materials the next time
+`_rebuildPresence()` runs — a project worked on last week still looks
+exactly as it always did, only one truly neglected shows it.
+
+**Cloned, never mutated in place.** Every presence builder reuses
+`PlaceholderFactory`'s shared, colour-keyed material cache (see
+"Transitions" above) — tinting one of those directly would dull every
+other object in the room using that same cached instance, not just this
+one project's own presence. `_applyDust()` clones each mesh's own
+material first, exactly the same reasoning the Builder's own part
+-highlighting and Build Mode's own ghost preview already follow for the
+identical shared-cache hazard.
+
+**Recomputed fresh, never sticky.** There's no "dusty" flag stored
+anywhere — `_isStale()` re-reads `updatedAt` every time presence is
+rebuilt (a project switch, or the next session), so returning to a
+project and genuinely working on it again means the *next* rebuild
+simply doesn't apply dust, with nothing to explicitly clear. Staleness
+is captured *before* `_resolvePresenceArray()` runs specifically because
+resolving a brand-new project's presence template for the first time
+writes back to the store (bumping `updatedAt` itself) — checking after
+would erase the very signal this exists to show, right as a
+long-neglected project first becomes current again.
+
 ## "Finished work leaves behind history, not nothing"
 
 Marking a project finished (`finishCurrentProject()`) sets its status to
@@ -305,3 +337,6 @@ same pass eventually, not a lesser one.
 - **Presence items don't cast/receive shadows specially** — they inherit
   whatever `PlaceholderFactory.box()`/`cylinder()` set by default, same as
   every other placeholder mesh in the room.
+- **The dust threshold is a fixed constant, not configurable** —
+  `DUST_THRESHOLD_DAYS` (14) applies uniformly to every project and every
+  presence type; there's no per-project or per-kind override.

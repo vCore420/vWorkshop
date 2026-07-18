@@ -605,6 +605,28 @@ on every single `instances:changed` event, and re-run automatically
 whenever anything changes — a wall moved, added, or removed
 re-evaluates every detected region from scratch.
 
+**A window couldn't seal a boundary, by its own design — found while
+building Version 3, Phase 5's default interior blueprints, since fixed.**
+The Construction Library's `window` piece has posts either side (tall
+enough and low enough to count as wall-like on their own) but its sill
+is only 1m tall and its header doesn't start until 2m up — nothing of
+the piece on its own ever spanned the full ≥1.6m/≤1.2m band the
+flood-fill checks for at the window's own middle. That gap read exactly
+like an un-doored doorway: the flood-fill poured straight through it,
+and the *whole* connected region failed to register as enclosed, not
+just the area near the window. Not a bug in the detection system itself
+— an open, unglazed window opening genuinely isn't sealed — but a real
+gap in what a player could build with the pieces on hand: there was no
+way to have a window *and* a fully weather-protected interior. Fixed the
+same way `doorway` was always sealable — by pairing, not by special-
+casing: `windowPane`/`largeWindowPane` are new pieces that seal their
+matching `window`/`largeWindow` exactly the way a real `door` seals a
+`doorway`, sized to independently satisfy this same generic check on
+their own rather than teaching `BuildingDetectionSystem` anything
+piece-specific. See `docs/WORLDBUILDER.md`'s "Collision integration"
+section for the geometry, and its "Default starter blueprints" section —
+Sunlit Room now uses a real, sealed window.
+
 **Real, acknowledged limitations**: a single horizontal slice, not a true
 3D volume — a multi-storey building or one whose floor doesn't align
 with the Workshop's own ground level isn't something this system reasons

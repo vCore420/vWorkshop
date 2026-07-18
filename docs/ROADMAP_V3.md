@@ -209,6 +209,13 @@ future opt-in sync.
 
 Creation without retrieval is an incomplete workflow.
 
+**Playtesting notes (post-v3.0.5):** a direct instance of this phase's
+own "creation without retrieval is an incomplete workflow" — the
+Phone's Beings app shows no list of a player's own saved/created Beings
+to place, and the Being Creator app on the computer has the same gap.
+A Being can be designed but never browsed back for placement the way a
+Builder object already can.
+
 **Risks:** imported content is the first *untrusted* data the Workshop
 would render — validation needs the same care `PluginManifest`
 already shows. Versioned schemas from day one, or migrations multiply.
@@ -228,6 +235,20 @@ It is about making existing tools disappear into the creative process.
 **Opportunities it creates:** Better continuity between tools, faster iteration, fewer interruptions, and a stronger feeling that the Workshop supports thinking rather than demanding attention.
 
 **Version 2 carry-over:** Existing workflows should also be reviewed for unnecessary friction before introducing new capabilities. Layout consistency, navigation clarity and responsive interfaces are all part of creative flow. Existing management surfaces should comfortably accommodate growing libraries without obscuring or hiding functionality.
+
+**Playtesting notes (post-v3.0.5):** the Wardrobe's own full-screen menu
+(and other similarly-structured overlay menus) reads as noticeably
+rougher than the rest of the Workshop's interface — much larger than
+any other panel, closer to an early prototype than something built for
+the player. Worth folding into this phase's own "layout consistency,
+navigation clarity" review rather than a one-off visual patch.
+Alongside it: an imported model placed as a World Object can't be
+individually reselected through the Builder once placed — today it's
+only reachable via a drag/group-select that happens to include it
+alongside an ordinary piece. Originally flagged against Phase 1's own
+"imported objects should behave as first-class objects" promise;
+relocated here since it's fundamentally a Builder workflow friction
+point, and Phase 1 has already shipped.
 
 **Risks / considerations:** Every workflow improvement should reduce friction without reducing intention. Simplicity should never come at the expense of understanding.
 
@@ -250,6 +271,18 @@ same phase).
 
 **Opportunities:** establishes the asset-introduction workflow
 (sourcing, licensing notes, caching) every later visual pass reuses.
+
+**Playtesting notes (post-v3.0.5):** icon assets throughout the
+Workshop should feel more attached to the Workshop's own identity
+rather than reading as generic — a concrete target for this phase's own
+placeholder-to-real pass, explicitly flagged during play as belonging
+here. Alongside it: outdoor ground textures (the default grass, and
+the Builder's own paintable ground textures) read as flat colour with
+too little surface detail despite already responding well to colour
+and lighting — originally flagged against Phase 2's own environmental
+polish, relocated here since it's really the same "placeholder reads
+as placeholder" problem this phase already exists to solve, and Phase 2
+has already shipped.
 
 **Risks:** binary assets end the "everything generated in code" purity
 — cross that line deliberately, in the docs as well as the repo, or
@@ -294,9 +327,137 @@ for the resulting standards.
 **Opportunities:** the audit doubles as the design-system conformance
 sweep Version 3's new surfaces will be held to.
 
+**Playtesting notes (post-v3.0.5):** three concrete "who can actually
+inhabit the place" gaps found in play. Zoom and the compass toggle have
+no touch-equivalent — zoom needs a HUD button alongside Jump/Crouch,
+and the compass toggle needs one in the top-left, similar to the
+existing "I'm lost" button. The Esc/menu-close touch buttons are
+present but read as too low-visibility to notice reliably. And
+separately, the personal music library currently depends on a
+Chromium-only file-system API — Firefox and Safari players can't load
+their own library at all; a fallback path (even one that trades away
+live-folder persistence) would bring the feature to every browser
+rather than one.
+
 **Risks:** the 3D world itself has hard limits a pass can't erase — be
 honest in the docs about what is and isn't achievable, in the
 project's own tradition.
+
+## Phase 12 V3.1.2 — The Phone Becomes a Device
+
+**Purpose:** grow the Phone from a functional menu surface into
+something that actually feels like carrying a device — its own settings
+depth, its own presence, apps that feel distinct from one another the
+way real phone apps do.
+
+**Why it matters:** the Phone already works well as a mechanism (see
+`docs/PHONE.md`), but playtesting found its *identity* hasn't caught up
+to its function: there's no way to make it feel like *your* phone (no
+wallpaper, no border colour, no home-screen presets), app open/close
+transitions don't read as phone-like, and a basic navigation habit — a
+bottom bar returning to the home screen — is simply missing. "Real
+phone apps share quality features but not themes and designs" is the
+standard to hold each app to individually, not just the shell.
+
+**Systems involved:** `PhoneSystem`, `PhoneUI.js`, the Settings app
+(both its Phone-facing and PC-facing surfaces), each individual Phone
+app.
+
+**Opportunities it creates:** a natural extension of Phase 10's "your
+Workshop" identity — a phone a player has actually customised is a
+small, concrete way ownership shows up, without drifting into gameplay
+progression. It also gives every future Phone app a bar to clear: feel
+like its own app, not a reskinned shared template.
+
+**Playtesting notes driving this phase:**
+
+- The bottom bar should return to the phone's home screen when
+  pressed — currently it doesn't.
+- The Settings app should let a player change the home screen's
+  wallpaper (from basic colours through richer presets) and the
+  phone's own border colour; app opening/closing should transition
+  with a bit more phone-like motion; and each app should read as
+  distinctly itself rather than sharing one visual template.
+- A 24-hour/12-hour time format toggle belongs in the time settings on
+  both the PC and the Phone — the same setting, both surfaces.
+
+**Risks / considerations:** this is cosmetic-adjacent territory the way
+Phase 10 explicitly warns against — the difference worth holding onto
+is that these are *player-chosen* settings (a wallpaper picked, a
+format preferred), not systems inventing personality on the player's
+behalf. Keep the scope to genuine device-feel (settings depth,
+transitions, per-app distinctness), not a theming engine for its own
+sake.
+
+## Phase 13 V3.1.3 — Further Environmental Polish (the room, revisited)
+
+**Purpose:** carry forward the environmental, furniture, and geometry
+playtesting notes that would have belonged in Phase 2 or Phase 5 had
+they been found in time — both have already shipped, so rather than
+reopen finished phases, everything that doesn't have a natural home in
+a later phase's own theme lands here instead.
+
+**Why it matters:** this is honestly the same kind of work Phase 2
+already named — "review as part of this pass rather than through
+isolated fixes" — plus one geometry limitation Phase 5's own
+`DoorBehaviour.js` already flagged as a known gap. None of it is new in
+kind, only in timing.
+
+**Systems involved:** Furniture, LightingSystem, WeatherSystem, Bubble,
+WorkbenchSystem, `ConstructionLibrary.js`/`DoorBehaviour.js`,
+`PlayerCharacterSystem`/`CameraSystem` (the shadow item).
+
+**Playtesting notes driving this phase:**
+
+- The first-person missing-head-shadow problem — already attempted
+  once, see `docs/HISTORY.md`'s v3.0.3b entry — was reported again
+  during this pass; worth a fresh, more careful look rather than
+  assuming the earlier fix still holds.
+- The room's own furniture layout needs rearranging now that every
+  core piece exists — positioning them relative to each other, the
+  room's lighting, and its overall feel, rather than the incremental
+  placement each piece happened to arrive with.
+- The workshop's own interior should feel more generally lit at
+  night — not more fixtures, just more spread from the existing main
+  lighting (the two desk lights are fine as they are).
+- The workbench fan's base clips through the top of the workbench.
+- The computer chair's wheel legs don't line up evenly from the
+  stand's own centre — each leg is off by a different amount.
+- Some furniture colour choices (the wardrobe, the music player's
+  stand and speakers) read a little too dark — the wood grain texture
+  itself is good, it just needs to pop a bit more while still
+  contrasting sensibly with the room.
+- The moon's position lags roughly an hour behind the sun's — its
+  cycle isn't quite right.
+- The desk keyboard model should shift further left, away from the
+  mouse, so it isn't sitting on top of the mousepad.
+- The north-facing exterior wall's texture doesn't line up across the
+  shorter wall segments above/below the window — the same texture
+  compresses differently at a smaller height than the full-height
+  segments beside it.
+- The workshop could use exterior lighting by the front door,
+  spreading a bit of light outward.
+- Bubble's face projection looks off, especially on the orb body —
+  rarely showing more than a dot or two — and the cube body's
+  flat-surface projection visibly "hunts" to face the player rather
+  than reading naturally.
+- A handful of small outdoor details belong right against the
+  workshop's own exterior walls — a bench seat, planter boxes under
+  the windows — making the workshop itself feel more lived-in from
+  outside, distinct from populating the wider surrounding world (still
+  a non-goal).
+- The Workshop's own original front doors should hinge from the
+  outside wall's edge, not the inside — opening them currently clips
+  visibly through the wall's own thickness. The concrete, now-observed
+  case of the limitation `DoorBehaviour.js`'s own comment already names
+  (no true edge hinge, the whole compiled object swings around its own
+  centre) — see `docs/WORLDBUILDER.md`'s "Future extension points" for
+  the hinge-offset property this would need.
+
+**Risks / considerations:** this is a grab-bag by nature, not a
+themed phase — resist inventing a unifying narrative for it that isn't
+there. Keep each item a small, isolated fix; nothing here should grow
+into new architecture the way Phase 5's own enclosure detection did.
 
 ---
 

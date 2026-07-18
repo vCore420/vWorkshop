@@ -271,9 +271,10 @@ actions, relationships." `src/browser/AssetPages.js`:
 - **`asset://`** — the overview. Favourites and Recently Viewed first
   (both genuinely real — see docs/ASSETS.md's own "Asset Library"
   section), then every kind the Workshop has a library for (Objects,
-  Blueprints, Animations, Beings, Models, Images, Music, Poses, plus
-  anything a plugin registers), each a live count read straight from
-  `AssetService`.
+  Blueprints, Animations, Beings, Models, Images, Music, Poses,
+  Expression Sets, Atmosphere Profiles, Calculators, AI Resident
+  Profiles, plus anything a plugin registers), each a live count read
+  straight from `AssetService`.
 - **`asset://<category>/<id>`** — real per-item detail pages for four
   of those kinds (Objects, Blueprints, Animations, Beings), registered as
   a single dynamic resolver rather than one exact registration per item
@@ -293,12 +294,22 @@ actions, relationships." `src/browser/AssetPages.js`:
   Builder or Animation Editor from the Computer's rail), not a fabricated
   button that would need a cross-app-switching bridge this phase doesn't
   build.
-- **Models, Images, Music, and any kind without its own detail page**
-  (a plugin-registered one, say) get a real count and an honest note on
-  the overview instead of a grid of dead links — each already has its
-  own dedicated computer app for browsing in depth today, and a genuine
-  detail page for any of them is a reasonable, explicitly scoped future
-  extension rather than something this phase claims to cover exhaustively.
+- **Since Version 3, Phase 7 ("Sharing the Workshop"), four more kinds**
+  (Expression Sets, Atmosphere Profiles, Calculators, AI Resident
+  Profiles — every kind whose `exportItem` is registered but that has no
+  bespoke page above) get a shared **generic detail page**
+  (`genericAssetDetailPage()`) instead: badge, title, description, the
+  same favourite toggle, a real Export button (`exportButton()`, the
+  identical `postMessage`-to-parent pattern the favourite button already
+  established), and `commonAssetSections()` — no bespoke preview, but a
+  genuine, clickable page rather than a dead link.
+- **Models, Images, Music, Poses, and any kind with neither a bespoke
+  page nor `exportItem`** (a plugin-registered one, say) still get a real
+  count and an honest note on the overview instead of a grid of dead
+  links — each already has its own dedicated computer app for browsing in
+  depth today, and a genuine detail page for any of them is a reasonable,
+  explicitly scoped future extension rather than something this phase
+  claims to cover exhaustively.
 
 ## Plugin Pages
 

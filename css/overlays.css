@@ -276,6 +276,49 @@
   min-height: 0;
 }
 
+/* ---------- Companion overlay material (the resident) ---------- */
+/* Version 3, Phase 6 ("The Workshop Remembers") — "the dialogue interface
+   should better support watching Bubble while interacting... expressions,
+   colour changes and animation should remain visible instead of being
+   obscured by large centred dialogue panels." Every other overlay material
+   above is a full-screen backdrop with a large centred panel, correct for
+   a document or a screen to read but not for a character to actually
+   watch while talking with them. This one deliberately isn't that: no
+   backdrop at all (the room, and Bubble, stay exactly as visible as
+   before opening it), and the panel itself sits docked in a corner rather
+   than claiming the centre of the screen Bubble is standing in. */
+.overlay--companion {
+  background: transparent;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: var(--space-4);
+}
+.overlay--companion .overlay-panel {
+  width: min(380px, 88vw);
+  max-height: min(64vh, 560px);
+  display: flex;
+  flex-direction: column;
+  background: rgba(16, 28, 26, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(127, 216, 196, 0.32);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 32px rgba(127, 216, 196, 0.08);
+  padding: var(--space-3);
+  color: var(--paper);
+}
+.overlay--companion h2 {
+  font-family: var(--font-display);
+  margin: 0 0 var(--space-2);
+  color: var(--teal-bright);
+  flex-shrink: 0;
+}
+.overlay--companion .resident-conversation-messages {
+  max-height: none;
+  flex: 1;
+  min-height: 80px;
+}
+
 /* ---------- Environment panel (the window) ---------- */
 .environment-panel .environment-summary {
   font-size: var(--text-md);

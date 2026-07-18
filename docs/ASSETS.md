@@ -60,17 +60,20 @@ configuration already follows (`MemoryConfiguration.js`,
   values that shouldn't be silently remapped.
 - **`src/host/AssetService.js`** — the consumer, and the one place every
   other system actually talks to. `registerKind(id, {label, all, get,
-  toDescriptor, getDependencies, validateItem})` is how a kind joins —
-  `all`/`get` already existed (Workshop Platform phase); `toDescriptor`,
-  `getDependencies`, and `validateItem` are new this phase, all optional,
+  toDescriptor, getDependencies, validateItem, exportItem})` is how a
+  kind joins — `all`/`get` already existed (Workshop Platform phase);
+  `toDescriptor`, `getDependencies`, and `validateItem` were added in the
+  Asset Library phase; `exportItem` was added in Version 3, Phase 7
+  ("Sharing the Workshop") — see "Export" below. All five are optional,
   each with an honest default (an empty descriptor, no dependencies, no
-  extra validation issues) for a kind that doesn't implement them.
+  extra validation issues, not exportable) for a kind that doesn't
+  implement them.
 
 `main.js`'s own "Workshop Platform" wiring block is where every built-in
-kind actually registers — six calls, each handing over real functions
-from a real, already-existing store. Nothing about `AssetService.js`
-itself imports a single library store; it only ever calls the functions
-it was given.
+kind actually registers — one `registerKind()` call per kind, each
+handing over real functions from a real, already-existing store.
+Nothing about `AssetService.js` itself imports a single library store;
+it only ever calls the functions it was given.
 
 ## Workshop Assets
 
@@ -106,11 +109,19 @@ should remain on creative discovery rather than directory navigation."
 Favourites and Recently Viewed at the top (both genuinely real, see
 below), then one section per registered kind, each a live grid of tiles
 built straight from `AssetService`'s own descriptors. Four kinds
-(Objects, Blueprints, Animations, Beings) get real per-item detail pages;
-kinds without one (Models, Images, Music, Poses, and any future or
-plugin-registered kind) get an honest note instead of a grid of dead
-links — see `docs/BROWSER.md`'s own "File Pages" section for the
-Browser-facing account.
+(Objects, Blueprints, Animations, Beings) get bespoke per-item detail
+pages built around what makes that kind distinct. Since Version 3, Phase
+7, any kind whose `exportItem` is registered but has no bespoke page
+(Expression Sets, Atmosphere Profiles, Calculators, AI Resident
+Profiles) instead gets a shared **generic detail page**
+(`genericAssetDetailPage()` in `AssetPages.js`) — badge, title,
+description, the same Favourite/Export buttons, and `commonAssetSections()`
+— rather than either a bespoke page or a dead link. Only kinds with
+neither a bespoke page nor `exportItem` (Models, Images, Music, Poses,
+and any future or plugin-registered kind that doesn't call
+`exportItem`) still fall back to an honest text note instead of a
+clickable link — see `docs/BROWSER.md`'s own "File Pages" section for
+the Browser-facing account.
 
 **Favourites and Recent are both genuinely real and persisted** — plain
 sets of asset ids on `AssetService` itself
@@ -262,6 +273,39 @@ capability (see `docs/HOST.md`'s own "The Workshop Host Companion"
 section) would fill in, once optimisation work of any kind can safely
 happen outside the browser.
 
+## Export ("Sharing the Workshop", Version 3, Phase 7)
+
+A second, deliberately lighter-weight mechanism from `requestImport()`/
+`requestExport()` below — a kind's own `exportItem(item)` returns a
+plain envelope object (`{type: "workshop-<kind>", version, exportedAt,
+<kind>: {...}}`, the same small shape `ResidentProfileStore.exportProfile()`
+established first), and `AssetService.canExport(assetId)`/
+`exportAsset(assetId)` are the generic wrapper every kind shares:
+`exportAsset()` looks up the item, calls the kind's own `exportItem()`,
+and hands the result to `StorageUtils.downloadJSON()` — an ordinary
+browser file download, nothing filesystem-adjacent. Six kinds implement
+it today: Blueprints, Expression Sets, Beings, and (new this phase)
+Atmosphere Profiles, Calculators, and AI Resident Profiles. Import is
+the mirror on each store itself (`BlueprintStore.importBlueprint()`,
+`ToolsStore.importCustomCalculator()`, `AtmosphereProfileStore.importProfile()`,
+and the pre-existing `ExpressionSetStore.importSet()`/
+`BeingLibrary.importDefinition()`/`ResidentProfileStore.importProfile()`)
+— each defensively normalises the incoming data rather than trusting the
+file, the same standard `BodyCompiler.compileBody()` holds itself to for
+a malformed Being part. Every asset detail page (bespoke or generic)
+that can export shows a real Export button next to Favourite,
+`AssetPages.js`'s own `exportButton()` — the identical `postMessage`-to-
+parent-frame pattern `favouriteButton()` already established, handled in
+`BrowserApp.js`'s `onMessage` listener.
+
+Three kinds — Atmosphere Profiles, Calculators, and AI Resident
+Profiles — were not registered as `AssetService` kinds at all before
+this phase (confirmed by their absence from `main.js`'s own
+`registerKind()` calls); making their Export button reachable from the
+Browser required registering all three as genuine new kinds (full
+`toDescriptor`, not just `exportItem`), not inventing a narrower
+export-only registration mode.
+
 ## Import Pipeline
 
 "Imported content should naturally become Workshop Assets... no
@@ -273,10 +317,13 @@ import mechanism that adds an item to `ObjectLibraryStore` (or any other
 backing store) makes that item a Workshop Asset automatically, with zero
 changes to `AssetService.js` itself. `requestImport(sourcePath)` exists
 as the honest, not-yet-implemented entry point for *bringing in* a file
-from outside the Workshop in the first place (see `docs/HOST.md`'s own
-Files/Documents sections for the filesystem side of this) —
-`requestExport(assetId, destinationPath)` is its honest counterpart for
-the other direction.
+from outside the Workshop's own browser sandbox in the first place (a
+future Host Companion filesystem bridge — see `docs/HOST.md`'s own
+Files/Documents sections) — `requestExport(assetId, destinationPath)` is
+its honest counterpart for the other direction. Deliberately distinct
+from "Export" above: that mechanism moves a single asset in or out as an
+ordinary browser file (already real, working, six kinds deep); this one
+is about a future direct filesystem handle, still genuinely deferred.
 
 ## Plugin Integration
 
@@ -299,20 +346,24 @@ creative system — Materials, Textures, Particles, Sounds, Behaviours, a
 future Being Creator 2.0, a future AI-generated asset pipeline — should
 reach for `assetService.registerKind()` the same way every kind already
 in `main.js` does (Objects, Blueprints, Animations, Models, Images,
-Music, Poses, Beings, Expression Sets, and counting), rather than
-building its own parallel notion of "browse what exists," "search for
-something," or "show me a detail page." The four functions a kind can
-provide (`toDescriptor`/`getDependencies`/`validateItem`, plus the
-pre-existing `all`/`get`) are the entire contract; a kind that only
-implements `all`/`get` still works everywhere, just with a minimal
-descriptor.
+Music, Poses, Beings, Expression Sets, Atmosphere Profiles, Calculators,
+AI Resident Profiles, and counting), rather than building its own
+parallel notion of "browse what exists," "search for something," "show
+me a detail page," or "let me share this." The five functions a kind
+can provide (`toDescriptor`/`getDependencies`/`validateItem`/
+`exportItem`, plus the pre-existing `all`/`get`) are the entire
+contract; a kind that only implements `all`/`get` still works
+everywhere, just with a minimal descriptor and no Export button.
 
 ## Known simplifications (by design, for this phase)
 
-- **Only four kinds (Objects, Blueprints, Animations, Beings) have real
-  detail pages** — Models, Images, Music, Poses, and any plugin-registered
-  kind are fully described, searchable, and favouritable, but don't have
-  their own dedicated Browser page yet.
+- **Only four kinds (Objects, Blueprints, Animations, Beings) have
+  bespoke detail pages**; four more (Expression Sets, Atmosphere
+  Profiles, Calculators, AI Resident Profiles) get the shared generic
+  detail page instead (see "Export" above). Models, Images, Music,
+  Poses, and any plugin-registered kind that implements neither are
+  fully described, searchable, and favouritable, but don't have their
+  own dedicated Browser page yet.
 - **Two real dependency relationships exist** — Blueprints depending on
   Objects, and Beings depending on the Model and/or Animation clips they
   reference. Every other kind's `getDependencies()` is honestly
@@ -324,9 +375,13 @@ descriptor.
   colour swatches — and, since the Workshop Personality phase,
   Expression Sets via `buildPixelThumbnail()`'s own real pixel
   rendering), `null` for the rest — see "Thumbnails" above.
-- **No real import/export/optimisation** — all three throw honest,
-  named errors; see their own sections above for exactly what a future
-  implementation would need to fill in.
+- **No real filesystem import/export, or optimisation** —
+  `requestImport`/`requestExport`/`requestOptimization` all still throw
+  honest, named errors; see their own sections above for exactly what a
+  future implementation would need to fill in. Per-asset browser-file
+  export/import (six kinds: Blueprints, Expression Sets, Beings,
+  Atmosphere Profiles, Calculators, AI Resident Profiles) is real and
+  working — see "Export" above; don't confuse the two.
 - **Materials, Textures, Particles, Sounds, Behaviours have no dedicated
   kind yet** — named explicitly in this phase's own brief as future
   asset types; each is one `registerKind()` call away the moment a real

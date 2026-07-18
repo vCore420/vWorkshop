@@ -548,6 +548,71 @@ place, same id and all — the real "bring this shared Blueprint up to
 date with how I've since rearranged its pieces" workflow, rather than
 only ever being able to save a brand new one under a new name.
 
+### Sharing a Blueprint (Version 3, Phase 7)
+
+The "share" half of the brief quoted above, finally real:
+`BlueprintStore.exportBlueprint(id)` returns a plain envelope
+(`{type: "workshop-blueprint", version, exportedAt, blueprint: {name,
+objects}}`) that `AssetService.exportAsset()` hands to
+`StorageUtils.downloadJSON()` — an ordinary file a player can send
+anyone else running the Workshop. `importBlueprint(data)` is the
+reverse: validates the envelope's own `type`, then normalises every
+`objects` entry defensively (`definitionId`, `definitionSource`
+defaulting to `"library"` per `WorldObjectsStore.js`'s own convention,
+`offset` via a module-level `normalizedOffset()` helper, `rotationY`/
+`scale`/`colorOverride` each independently typed) before calling the
+same `create()` every other blueprint goes through — a malformed or
+hand-edited file degrades to sane defaults rather than crashing the
+Builder. The Builder Phone's own Blueprints tab exposes both directly:
+each card in `BuilderPhoneUI._buildBlueprintCard()` is now a `<div>`
+wrapper around two sibling buttons — the original arm-on-click area, and
+a new Export button (single `<button>` elements can't nest a second
+button, which is why this needed the wrapper) — plus a new "Import
+Blueprint…" row above the grid, mirroring `_buildImportModelRow()`'s
+existing `StorageUtils.uploadJSON()` shape. `BuildModeSystem._importBlueprint()`
+is the thin glue between the two, re-rendering the library the same way
+`importModel()` already does on success. Every Blueprint is also a
+Workshop Asset with a real Export button on its own Browser detail page
+— see `docs/ASSETS.md`'s own "Export" section.
+
+### Default starter blueprints (Version 3, Phase 5)
+
+"So the player can see that, by default, good things can be made with the
+default building blocks — to give the player ideas on what is capable."
+`DefaultBlueprints.js` defines three interiors — Simple Shed (8 pieces,
+one room, 2m×2m), Sunlit Room (19 pieces, one room, 4m×4m), Two-Room
+Cottage (34 pieces, two 4m×4m rooms sharing an interior doorway) — built
+entirely from existing Construction Library pieces, no new content.
+`BlueprintStore`'s constructor seeds them directly (a brand-new session
+never reaches `load()` at all — see `PersistenceSystem._loadFromStorage()`'s
+own early return when there's no save yet); `load()` preserves them
+unless a player has *any* real saved blueprint data of their own,
+including having deliberately deleted every default — respected exactly
+as much as any custom blueprint would be.
+
+Every exterior opening in all three is sealed: a `doorway` paired with a
+real, closed `door` (Simple Shed, Two-Room Cottage's own exterior entry,
+and Sunlit Room's own entry), and — Sunlit Room's west wall — a `window`
+paired with a `windowPane`. `BuildingDetectionSystem`'s flood-fill needs
+a genuinely sealed boundary (see `docs/WORLD.md`'s "Interior Recognition"
+section) to recognise an enclosure at all, and a bare opening frame
+wouldn't register as an interior until a player happened to add the
+sealing piece. The one exception is intentional: Two-Room Cottage's
+interior connecting doorway is left without a leaf, since an always-open
+threshold between two rooms of the same building reads as welcoming
+rather than unfinished, and it doesn't affect the *outer* seal either
+way.
+
+**A real, non-obvious finding from building these, since resolved**: the
+Construction Library's `window` piece couldn't seal a boundary for
+detection purposes on its own — its sill and header independently fall
+short of what counts as wall-like (see "Collision integration" below),
+leaving its own middle gap flood-fill-permeable exactly like an
+un-doored doorway. Rather than route around it in this file alone, the
+fix went into the library itself: `windowPane`/`largeWindowPane`, two
+new pieces that pair with `window`/`largeWindow` the same way `door`
+pairs with `doorway`. Sunlit Room now uses a real, sealed window.
+
 ## Collision integration
 
 Builder-placed objects — and, by extension, anything built with the
@@ -576,6 +641,74 @@ from `LadderSystem`, and the solid box always won — `CameraSystem`
 pushed the player back out before they could ever walk far enough
 forward to actually enter the zone. A ladder now has no walk-collision at
 all, only its own climbable zone; see "Ladders" above for that mechanism.
+
+**Version 3, Phase 5 ("Beyond One Building") — one box per instance
+wasn't enough once instances started having genuine internal gaps.** A
+`doorway` piece (two posts plus a header, an open gap between) used to
+get exactly one combined `Box3` covering its own full extent — collision
+saw a solid block spanning the gap a player is supposed to be able to
+walk through. `_updateFootprint()` now keeps that overall box (still
+what `getFootprint(id)`, dimension measurement, and Build Mode's own
+stacking-snap use — a single instance's *overall* extent is still the
+right answer for those) but *also* builds one real `Box3` per compiled
+child part (tagged `userData.partId` by `ObjectCompiler`) into a second
+map, `collisionBoxes`. `getFootprints()` — what `CameraSystem` and
+`BuildingDetectionSystem` actually walk-collide and flood-fill against —
+now flattens that per-part map instead of the single-box-per-instance
+one, so a doorway's own open middle genuinely has no blocker in it while
+its posts and header still do. An *imported* model (arbitrary mesh
+hierarchy, no `partId` tagging) keeps the old one-combined-box behaviour
+unchanged — the per-part split only applies to something this codebase
+itself compiled from parts.
+
+**Interaction height moved with it.** `InteractableComponent` gained an
+`interactionHeightOffset` (default 0, so furniture/residents/every
+existing interactable is untouched), applied in `worldPosition()`.
+`_updateFootprint()` sets it to `min(overallBox height × 0.5, 1.0)` for
+whatever's on the same entity — a ground-level piece (a door, a switch)
+gets a genuinely higher interaction point than "wherever its origin
+happens to sit," matching where a player would actually expect to reach
+for it, without every behaviour needing to know or set this itself.
+
+**`refreshFootprint(instanceId)`** recomputes an instance's footprint and
+collision boxes from its object3D's *current* transform, without
+touching the persisted `WorldObjectsStore` record. `DoorBehaviour.js`
+calls it after every open/close swing — the door's cached collision used
+to stay frozen at however it looked when placed (closed), so a player
+could watch it swing open and still be blocked by where it no longer is.
+Deliberately not the same path as `updateInstanceTransform()`, which
+*does* write to the store — "door is currently open" is transient
+interaction state, not a placement edit, and persisting it would mean
+every door in a reloaded save silently forgets it was ever closed.
+
+**A window couldn't seal an enclosure, and the fix is why "wall-like"
+means what it means.** `BuildingDetectionSystem` counts a footprint box
+as wall-like when it's independently tall enough (≥1.6m) with a low
+enough base (≤1.2m) — a per-box check, deliberately geometric rather
+than tied to any specific piece. A `window`'s sill (only 1m tall) and
+header (starts at 2m) each fail that check on their own, so the window's
+own middle — where glass would be — had no blocker at all, reading
+exactly like an un-doored doorway to the flood-fill. `windowPane`/
+`largeWindowPane` (new construction pieces, paired with `window`/
+`largeWindow` the same way `door` pairs with `doorway`) fix this with
+nothing but ordinary geometry: a single thin box sized to span the
+window's *entire* frame height on its own — tall enough and low enough
+to independently pass the same generic check every wall already does,
+no special-casing added to `BuildingDetectionSystem` itself. Placing one
+also means the "glass" now has real collision, fixing a second, smaller
+issue the same box happened to cover: a window used to have nothing
+blocking a player from walking straight through it.
+
+The pane also looks like glass, not a flat tinted box: `ObjectCompiler.
+buildPart()` gained one small, optional escape hatch, `part.materialType`
+(the same kind of data-only field `rotationX`/`rotationZ` already are —
+something the hardcoded Construction Library can set, not a Builder form
+field), so a part can ask for `Materials.glass()` — the real
+`MeshPhysicalMaterial` (transmission, thickness, honest partial opacity)
+`WorkshopRoom.js`'s own hand-built windows already use — instead of the
+`Materials.matte()` every part used unconditionally before. Defaults to
+matte when unset, so every already-authored part, Builder-designed or
+Construction Library, is completely unaffected.
 
 This means "future buildings created by the player... become real
 architecture rather than decoration" is true today: a wall built from
@@ -633,9 +766,16 @@ entirely on custom objects":
 - **Structural** — Wall, Half Wall, Corner Wall, Floor, Ceiling, Roof,
   Roof Corner, Pillar, Beam, Stairs, Ladder, plus the original Cube and
   Plane.
-- **Openings** — Doorway, Door, Double Door, Window, Large Window,
-  Archway (the first construction piece built from the new Arch
-  primitive — see "Preset shapes" above).
+- **Openings** — Doorway, Door, Double Door, Window, Window Pane, Large
+  Window, Large Window Pane, Archway (the first construction piece built
+  from the new Arch primitive — see "Preset shapes" above). Window Pane
+  and Large Window Pane (Version 3, Phase 5) pair with their matching
+  Window piece exactly the way Door pairs with Doorway: the window
+  itself stays an open, unglazed opening (a real, sometimes-wanted
+  choice, e.g. a servery hatch or a rustic cabin), and adding the
+  matching pane is what actually seals it — see "Collision integration"
+  below and `docs/WORLD.md`'s "Interior Recognition" section for why a
+  window couldn't seal an enclosure at all before this pairing existed.
 - **Nature** — Tree, Bush, Flower, Rock, Log, Grass Patch, Garden Bed —
   added in the World Builder phase; see `docs/WORLD.md`'s own "Landscape
   Assets" section, including a real dead-code bug (an older, duplicate,

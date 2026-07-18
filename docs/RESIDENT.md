@@ -244,6 +244,26 @@ by any means `OverlayManager` already supports, calls `endConversation()`
 needed no explicit "resume" logic, since idle travel was only ever paused,
 never reset.
 
+**A genuinely different overlay material (Version 3, Phase 6).** "The
+dialogue interface should better support watching Bubble while
+interacting... expressions, colour changes and animation should remain
+visible instead of being obscured by large centred dialogue panels" was
+a real, still-outstanding Version 2 carry-over — every other overlay
+material (`screen`, `paper`, `cork`, `panel`, `wardrobe`) is a
+full-screen, 70%+-opacity backdrop with a large centred panel, correct
+for a document or a screen to read but not for a character to actually
+watch while talking with them. `ResidentConversation.js` now registers
+with a sixth, new `materialClass`, `"companion"` — no backdrop at all
+(the room, and Bubble, stay exactly as visible as before opening it), a
+small frosted-glass card docked to the bottom-right corner rather than
+claiming the screen's centre — which is specifically where Bubble is
+standing, since a conversation has no camera focus pose to reposition
+the player's own view. See `css/overlays.css`'s own comment on
+`.overlay--companion` for the full reasoning, and `docs/AI.md`'s own
+"Resident Sandbox" for confirmation this is scoped to the physical
+walk-up conversation only — Mission Control's own sandbox chat is a
+separate UI, untouched.
+
 Every message goes through `ResidentConnection.sendMessage()`, which
 calls Ollama's `/api/chat` with the active profile's own model,
 temperature, context size, and maximum response length — "the resident

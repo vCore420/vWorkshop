@@ -445,39 +445,88 @@ Workshop's own `ModelLibrary`, which an imported file has no access to at
 all; the imported Being simply starts with `ModelLoader`'s own honest
 placeholder shape until a real model is chosen for it here.
 
-## Being Spawner
+## Being Spawner & Manager (the Phone)
+
+**Corrected from an earlier version of this document**, which described
+`BeingSpawnerApp.js`/`BeingManagerApp.js` as computer apps — both were
+removed and consolidated into `BeingsPhoneApp.js` on the Phone: "the
+Computer should remain responsible for creating Beings, editing Being
+Definitions. The Phone should become responsible for managing placed
+Beings." One app, two sections, reusing the exact same stores the
+removed computer apps already used.
 
 "This should behave similarly to the Builder placement workflow." The
-computer-side half (`BeingSpawnerApp.js`) is deliberately thin — it never
-touches a `THREE.Object3D` or the scene, only ever calling
-`beingSpawnerSystem.beginPlacement(id)` and getting out of the way. The
-world-side half (`BeingSpawnerSystem.js`) is the actual ghost-preview
-workflow: a translucent capsule ghost follows the cursor via a raycast
-against the floor specifically (not `BuildModeSystem`'s own full
-multi-surface gathering — a living creature stands on the ground, not on
-top of furniture the way a Builder object might), R rotates it, a left
-click confirms and creates a `BeingInstanceStore` entry, Escape cancels.
-Confirming creates the record and nothing more — `BeingController.js`'s
-own `instances:changed` listener is what actually spawns the live, moving
-Being a moment later.
+Phone-side half (`BeingsPhoneApp.js`'s own "Spawn a Being" section) is
+deliberately thin — it never touches a `THREE.Object3D` or the scene,
+only ever calling `beingSpawnerSystem.beginPlacement(id)` and closing the
+Phone. The world-side half (`BeingSpawnerSystem.js`) is the actual
+ghost-preview workflow: a translucent capsule ghost follows the cursor
+via a raycast against the floor specifically (not `BuildModeSystem`'s own
+full multi-surface gathering — a living creature stands on the ground,
+not on top of furniture the way a Builder object might), R rotates it, a
+left click confirms and creates a `BeingInstanceStore` entry, Escape
+cancels. Confirming creates the record and nothing more —
+`BeingController.js`'s own `instances:changed` listener is what actually
+spawns the live, moving Being a moment later.
 
-## Being Manager
+**Version 3, Phase 7 — two real bugs found by direct reproduction, not
+just from a bug report.** "See a ghost preview, move the preview around
+the world" quietly assumed the floor raycast always hits *something* —
+it doesn't. A perfectly horizontal (or upward) look ray, entirely
+ordinary the instant placement begins, can never intersect a floor plane
+below eye level, so the raycast genuinely returns nothing until the
+player happens to tilt the camera down far enough — and the ghost used
+to fall back to the literal world origin the first time this happened,
+then simply *stop updating at all* on every later frame it kept failing.
+Confirming a placement there creates a perfectly real, correctly-recorded
+`BeingInstanceStore` entry at that same wrong position — "the app
+recognises it's been placed, but we never see it," exactly. Fixed by
+reusing `BuildModeSystem`'s own already-proven answer to this,
+`defaultGhostPoint()` (`GhostPreview.js` — straight ahead of the camera
+at a comfortable distance), with its own Y forced back to floor level
+since a Being, unlike a Builder object, can only ever stand on the floor.
+Applied on *every* pointer move here, not just on entry — unlike
+`BuildModeSystem`'s own broad multi-surface raycast, which rarely fails
+in practice, this system's single floor-only raycast fails any time the
+player simply isn't looking down, which is often enough that "freeze
+until you look at the floor again" (`BuildModeSystem`'s own acceptable
+behaviour, given how rarely it applies there) would have stayed a real
+problem here.
 
-"Think of this as the Workshop's population manager." `BeingManagerApp.js`
-lists every placed instance, cross-referenced against its own definition
-for a name and type, with Select (click to view its own row),
-Locate (shown inline as live distance-from-player and coordinates, rather
-than a separate action — always visible, not something to request),
-Rename (a per-instance name override, `BeingInstanceStore`'s own `name`
-field — so two placed copies of the same "Dog" definition can be told
-apart as "Rex" and "Buddy"), Replace Template (`BeingController.
-replaceTemplate()`, swapping which definition an already-placed instance
-renders as without losing its own position/state), Move ("Move to me" —
-the practical interpretation of a desktop-screen "move" action, since
-there's no direct 3D drag-and-drop from inside the computer), Remove
-(deletes the instance for good), and Despawn/Respawn (`despawned`, a flag
-BeingInstanceStore keeps rather than deleting — temporarily removing a
-Being from the active world without forgetting it ever existed).
+**A second, independent bug, found while reproducing the first**: a
+primitive body part missing (or malforming) its own `rotation` threw a
+hard `TypeError` straight out of `BodyCompiler.compileBody()` — and since
+that loop builds every mesh before parenting any of them, the failure
+left a Being's own root group with *zero* children. Worse, `BeingController
+._spawnRuntime()` had already registered the runtime *before* calling
+`compileBody()`, so `_reconcile()` never retried it — a real,
+already-placed instance, permanently invisible, with no error surfaced
+anywhere a player would see it. Every part authored through the Being
+Creator's own UI always has a well-formed `rotation` (`makeDefaultBodyPart()`'s
+own default), so this wasn't reachable through ordinary use — but
+`BeingLibrary.importDefinition()` never validated `bodyParts` at all,
+unlike every other field it imports, which normalizes defensively rather
+than trusting the file. `compileBody()` now defends the same way:
+`position`/`rotation`/`scale` each fall back to a sensible default
+(matching `makeDefaultBodyPart()`'s own) rather than crashing the whole
+compile over one malformed part.
+
+`BeingManagerApp.js`'s own account survives unchanged, just under its
+new home: `BeingsPhoneApp.js`'s "Placed Beings" section lists every
+placed instance, cross-referenced against its own definition for a name
+and type, with Select (click to view its own row), Locate (shown inline
+as live distance-from-player and coordinates, rather than a separate
+action — always visible, not something to request), Rename (a
+per-instance name override, `BeingInstanceStore`'s own `name` field — so
+two placed copies of the same "Dog" definition can be told apart as
+"Rex" and "Buddy"), Replace Template (`BeingController.replaceTemplate()`,
+swapping which definition an already-placed instance renders as without
+losing its own position/state), Move ("Move to me" — the practical
+interpretation of a "move" action from the Phone, since there's no
+direct 3D drag-and-drop from inside it), Remove (deletes the instance
+for good), and Despawn/Respawn (`despawned`, a flag `BeingInstanceStore`
+keeps rather than deleting — temporarily removing a Being from the
+active world without forgetting it ever existed).
 
 ## Persistence
 

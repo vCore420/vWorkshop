@@ -3668,6 +3668,279 @@ click — including the root-unreachable edge case once found and fixed.
 The Browser home page's project line was confirmed rendering inside the
 real computer Browser app, not just as computed HTML.
 
+## Version 3 — Phase 5 — Beyond One Building (v3.0.5, v3.0.5b)
+
+**Goal:** the first additional structure feels like a *place*, not
+decoration — proving `docs/WORLDBUILDER.md`'s claim that the architecture
+generalises to player-built rooms without changing. See
+`docs/ROADMAP_V3.md`'s own Phase 5 entry for the original brief.
+
+**Investigation first found the crux of the brief already built.**
+`BuildingDetectionSystem.js` — a real, complete flood-fill enclosure
+detector (any placed object tall enough and low-based enough counts as
+wall-like; a coarse 2D grid floods in from its own outer edge; whatever's
+never reached registers with `InteriorSystem.registerVolume()`, the same
+call `RoomLayoutSystem` makes for the Workshop's own room) already
+existed from Version 2's "World Expansion" phase, something
+`docs/ROADMAP_V3.md`'s own planning hadn't fully accounted for. The real
+remaining work wasn't building detection — it was making what a player
+actually builds with today's Construction Library hold up against it.
+
+**Two bugs, reported directly rather than found by investigation.**
+"Ground tiles like paths and the foundation and floor all had too much
+collision" turned out to already be fully fixed, confirmed by live
+testing rather than assumed — a side effect of an earlier
+vertical-column collision correction to `CameraSystem._pushOutOfBox()`,
+no new work needed here. "Blocks like doors that have an interaction seem
+to have their interaction point set too low" was real: an interactable's
+world position was always its entity's own origin, correct for furniture
+(already centred sensibly) but wrong for anything ground-anchored like a
+door or switch, where the origin sits at floor level and the camera's
+eye-height distance check made the prompt feel like it needed to be
+almost stood on top of. Fixed with `InteractableComponent.interactionHeightOffset`
+(default 0 — every existing interactable, furniture included, confirmed
+unaffected) — `WorldObjectsSystem` computes it centrally from each
+instance's own overall height (`min(height × 0.5, 1.0)`), so no
+individual behaviour needs to set it itself.
+
+**A third bug, found while fixing the second.** Multi-part Construction
+pieces — a `doorway`'s two posts and a header, with a real gap between —
+were getting exactly *one* combined collision box covering their whole
+extent, meaning the gap a player is supposed to walk through was
+solid. `WorldObjectsSystem._updateFootprint()` now keeps that overall box
+for what genuinely needs it (dimension measurement, Build Mode's own
+stacking-snap) but separately builds one real box per compiled child part
+(`collisionBoxes`, keyed by the same `userData.partId` tagging
+`ObjectCompiler` already applies) for what walk-collision and
+enclosure-detection actually consume. An imported model, with no part
+tagging of its own, keeps the old single-box behaviour unchanged — the
+split only applies to what this codebase itself compiled from parts. See
+`docs/WORLDBUILDER.md`'s "Collision integration" section for the full
+account, including a fourth bug this one exposed during verification: a
+door's cached collision box stayed frozen at "closed" even after
+swinging open, fixed with a new `refreshFootprint()` that recomputes
+collision from an object3D's current transform without persisting the
+transient open/closed state as if it were a placement edit
+(`DoorBehaviour.js` calls it after every swing).
+
+**Three default interior blueprints**, seeded by `BlueprintStore`'s own
+constructor so every session — including a brand-new one that never
+reaches `load()` at all — sees them: Simple Shed (8 pieces), Sunlit Room
+(20 pieces), Two-Room Cottage (34 pieces, two rooms sharing an interior
+doorway), all built from existing Construction Library pieces, "so the
+player can see that, by default, good things can be made with the
+default building blocks." A genuine finding surfaced while first
+verifying Sunlit Room: the `window` piece couldn't seal a boundary for
+`BuildingDetectionSystem`, by its own honest design (its sill and header
+never independently overlapped the wall-like height band the flood-fill
+checks for) — a room built with one in its outer ring registered as not
+enclosed *anywhere* inside it, not just near the window. Reported rather
+than hidden, and then genuinely fixed rather than routed around: two new
+Construction Library pieces, `windowPane`/`largeWindowPane`, pair with
+`window`/`largeWindow` exactly the way `door` pairs with `doorway` — a
+thin box sized to independently satisfy the same generic wall-like check
+on its own, no special-casing added to `BuildingDetectionSystem` itself,
+and (as a genuine bonus) real collision where a window's own "glass" used
+to have none at all. Sunlit Room now uses a real, sealed window; every
+exterior opening across all three blueprints is sealed, each the same
+shape — an opening frame paired with whatever piece actually closes it.
+See `docs/WORLD.md`'s "Interior Recognition" section and
+`docs/WORLDBUILDER.md`'s "Collision integration" and "Default starter
+blueprints" sections for the full account.
+
+**Verified live throughout, not by code review alone**: the doorway gap
+walkable while its posts and header still block; a door's interaction
+height, and its collision correctly following it open and shut; all
+three blueprints placed through the real Build Mode placement pipeline
+and confirmed enclosed (or, for the cottage, both rooms registering as
+one connected interior through their shared doorway) after
+`BuildingDetectionSystem`'s own debounce; furniture and residents
+confirmed to carry a zero interaction-height offset, completely
+unaffected by any of this.
+
+## Version 3 — Phase 6 — The Workshop Remembers (v3.0.6)
+
+**Goal:** extend continuity beyond persistence into memory — the
+Workshop noticing, gently, what has been happening — without becoming a
+notification system. See `docs/ROADMAP_V3.md`'s own Phase 6 entry for
+the original brief.
+
+**Investigation first found most of the brief already built.** Version
+2's own Living World work — `WorldEventLog`, `WorldAwareness`,
+`ResidentPreferences`, `PlayerPatternMemory`, `ConversationMemory`,
+`ResidentCuriosity` — is real, working, and already wired together;
+`ResidentContext.buildConversationContext()` already folds the two most
+recent world events into Bubble's own conversation context, meaning
+"Bubble mentioning the storm that happened while they were away," the
+brief's own headline example, already worked before this phase touched
+anything. Presented with three real remaining gaps, the user dropped the
+first (a player-facing "time away" surface) as unnecessary — the wall
+clock, the computer, the phone, and the sky outside already let a player
+tell time naturally — and approved the other two.
+
+**Workbench dust.** `ProjectsStore` already stamped every project with
+`updatedAt` on every edit; nothing read it for anything visual.
+`WorkbenchSystem._isStale(project)`/`_applyDust()` now desaturate a
+project's own presence items once it's sat genuinely untouched past two
+weeks, on the next rebuild — cloning each mesh's own material first
+(every presence builder shares `PlaceholderFactory`'s colour-keyed
+cache; mutating it in place would have dulled every other object in the
+room using that same cached colour, not just this one project),
+recomputed fresh every rebuild rather than stored as a flag, so working
+on a project again simply means the next rebuild shows no dust, with
+nothing to explicitly clear. Verified live: a project's own `updatedAt`
+set 20 days in the past visibly desaturated on rebuild, the shared
+cache's own original colour confirmed still in use elsewhere in the
+room, and the effect reverting cleanly once the timestamp was fresh
+again.
+
+**Bubble's conversation panel, genuinely redesigned.** A real, still-
+outstanding Version 2 carry-over, confirmed rather than assumed: every
+existing overlay material (`screen`, `paper`, `cork`, `panel`,
+`wardrobe`) is a full-screen, 70%+-opacity backdrop with a large centred
+panel — exactly covering Bubble, since talking to Bubble has no camera
+focus pose and the player is already looking straight at it, roughly
+screen-centre, the moment a conversation opens. A sixth overlay
+material, `companion` — no backdrop, a small frosted-glass card docked
+to the bottom-right corner — leaves the room, and Bubble, exactly as
+visible as before the conversation opened. Verified live: the overlay's
+own computed background is fully transparent, the panel sits in the
+screen's bottom-right quadrant at a compact 380px wide, and the existing
+message/input UI (and the "waiting for connection" offline state) both
+render correctly inside it, unchanged.
+
+## Version 3 — Phase 6b — Being Placement, Actually Visible (v3.0.6b)
+
+**Goal:** a real, user-reported bug fix, found while beginning Phase 7's
+own investigation rather than part of Phase 7's own planned work — closed
+out on its own rather than folded silently into a later phase.
+
+**The report:** placing a Being showed no ghost preview, and clicking to
+place it left "the app recognising it's been put into the world, but we
+never see it." Reproduced directly rather than assumed: creating a real
+Being and calling the real placement pipeline confirmed both symptoms,
+and traced to two independent bugs.
+
+**Bug one — the ghost's own floor raycast has no fallback.** A perfectly
+horizontal or upward look ray, entirely ordinary the instant placement
+begins, can never intersect a floor plane below eye level — the ghost
+used to snap to the literal world origin the first time this happened,
+then simply stop updating on every later frame the raycast kept failing.
+`BuildModeSystem.js` solved this exact problem already
+(`defaultGhostPoint()` in `GhostPreview.js`, straight ahead of the camera
+at a comfortable distance); `BeingSpawnerSystem.js` now reuses it
+directly, with the fallback's own Y forced to floor level, applied on
+every pointer move rather than just on entry — this system's single
+floor-only raycast fails far more often than `BuildModeSystem`'s own
+broad multi-surface one, so "freeze until you look at the floor" would
+have stayed a real problem here even after the initial-position fix
+alone.
+
+**Bug two — a malformed body part crashed the entire spawn, silently.**
+`BodyCompiler.compileBody()` threw a hard `TypeError` on a part missing
+its own `rotation`, and since the loop builds every mesh before parenting
+any of them, that left a Being's own root group with zero children — a
+real, correctly-recorded `BeingInstanceStore` entry with nothing to show
+for it, and no retry, since `BeingController` had already registered the
+runtime before the crash. Not reachable through the Being Creator's own
+UI (every part it creates already has a well-formed `rotation`), but
+`BeingLibrary.importDefinition()` never validated `bodyParts` at all,
+unlike every other field it imports — exactly the "imported content is
+the first untrusted data the Workshop would render" risk Phase 7's own
+brief names. `compileBody()` now defends `position`/`rotation`/`scale`
+each independently, falling back to the same defaults the Creator's own
+`makeDefaultBodyPart()` already uses, rather than crashing the whole
+compile over one bad field.
+
+**Verified live, both together**: a camera at a distinctive, deliberately
+non-default position confirmed the ghost's own fallback point is
+genuinely camera-relative, not a coincidental match to the old hardcoded
+origin; a Being placed with the exact malformed part that used to crash
+now compiles with a real child and no console error; a well-formed part
+placed immediately after confirmed no regression in position, rotation,
+or scale. See `docs/BEINGS.md`'s own "Being Spawner & Manager" section
+for the complete account — which also corrected a real, unrelated doc
+drift found in the same file: `BeingSpawnerApp.js`/`BeingManagerApp.js`
+no longer exist, consolidated into `BeingsPhoneApp.js` on the Phone
+several phases ago, a move this document had never caught up to.
+
+## Version 3 — Phase 7 — Sharing the Workshop (v3.0.7)
+
+**Goal:** let creations travel — "every store already has clean JSON
+export/import primitives... what's missing is a coherent, discoverable
+'share this / bring this in' workflow." See `docs/ROADMAP_V3.md`'s own
+Phase 7 entry for the original brief.
+
+**Investigation first found the pattern, not the gap.**
+`ResidentProfileStore.exportProfile()`/`importProfile()` and
+`ExpressionSetStore.exportSet()`/`importSet()` already established the
+exact envelope shape (`{type: "workshop-<kind>", version, exportedAt,
+<kind>: {...}}`) every new export needed to follow; `StorageUtils
+.downloadJSON()`/`uploadJSON()` were already the shared browser-download/
+file-picker primitives, named explicitly in the brief itself. Three
+genuine gaps remained, confirmed by direct code read rather than
+assumed: `BlueprintStore.js`, `ToolsStore.js` (custom calculators), and
+`AtmosphereProfileStore.js` had zero export/import methods between
+them.
+
+**Three new store-level export/import pairs**, each following the
+established envelope shape and each defensively normalising on import
+rather than trusting the file (`BlueprintStore.importBlueprint()`,
+`ToolsStore.importCustomCalculator()`, `AtmosphereProfileStore
+.importProfile()`) — see `docs/WORLDBUILDER.md`'s "Sharing a Blueprint"
+and `docs/PERSISTENCE.md`'s "Import & Export" for the full account of
+each. Wired into their native panels: the Builder Phone's Blueprints tab
+(a new card layout — a single `<button>` per card couldn't hold a second
+nested Export button, so cards became a `<div>` wrapping two sibling
+buttons — plus a new Import row), the Tools panel's Calculator Builder,
+and Settings' Atmosphere Profiles section.
+
+**A unified `AssetService` export mechanism**, so any of these — plus
+the pre-existing Being and Expression Set exports — is also reachable
+from that asset's own Browser page, not only its native panel:
+`registerKind()` gained a fifth optional callback, `exportItem(item)`;
+`AssetService.canExport(assetId)`/`exportAsset(assetId)` are the generic
+wrapper that calls it and hands the result to `StorageUtils
+.downloadJSON()`. See `docs/ASSETS.md`'s own "Export" section.
+
+**Two things this surfaced that weren't previously true, worth stating
+plainly:**
+
+- **Atmosphere Profiles, Calculators, and AI Resident Profiles were not
+  registered as `AssetService` kinds at all before this phase** —
+  confirmed by their absence from `main.js`'s own `registerKind()` calls,
+  a real, pre-existing gap rather than something this phase introduced.
+  Making their Export button reachable from the Browser required
+  registering all three as genuine new kinds (full `toDescriptor`, not a
+  narrower export-only mode), the correct minimal-new-surface-area
+  choice rather than inventing a second, smaller registration contract
+  alongside the existing one.
+- **Only four kinds had a real Browser detail page** (Objects,
+  Blueprints, Animations, Beings); a kind without one shows a plain
+  summary note on the Asset Library's own overview page, not a clickable
+  link — meaning the four newly-export-enabled kinds (Expression Sets,
+  Atmosphere Profiles, Calculators, AI Resident Profiles) would have been
+  exportable in principle but practically unreachable. Resolved with one
+  new, shared **generic detail page** (`genericAssetDetailPage()`) rather
+  than four bespoke ones — badge, title, description, Favourite and
+  Export buttons, the same `commonAssetSections()` every bespoke page
+  already uses.
+
+**Verified live, all six kinds, store through to Browser page**: each
+store's own export/import round-tripped correctly (including rejecting
+a malformed envelope with a specific error, and defensively normalising
+a well-formed-but-incomplete one rather than crashing); `AssetService
+.canExport()`/`exportAsset()` confirmed true and working for exactly the
+intended six kinds and false for Objects/Animations (which have no
+`exportItem`); `pageRegistry.resolve()` confirmed every one of the eight
+now-reachable kinds' detail pages render with a working Export button,
+and the Asset Library overview page links to all eight; the Builder
+Phone's own Blueprint cards and Import row, and the Tools panel's own
+Calculator Import/Export buttons, were mounted and driven directly
+against real store data, confirming the DOM restructuring (the new
+`<div>`-wrapped card) renders and behaves correctly with no nested-button
+issue.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

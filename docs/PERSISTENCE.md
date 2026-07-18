@@ -131,8 +131,8 @@ to wire up.
 ## Import & Export (Workshop Workflow / Workshop Personality phases)
 
 "Importing and exporting Workshop data should feel consistent
-throughout the project." Three independent export/import pairs exist,
-all sharing one shape rather than each growing ad hoc:
+throughout the project." Six independent export/import pairs exist, all
+sharing one shape rather than each growing ad hoc:
 
 - **A whole-Workshop backup** — `PersistenceSystem.exportBackup()`/
   `importBackup()`. Everything: every project, object, outfit, setting,
@@ -151,35 +151,65 @@ all sharing one shape rather than each growing ad hoc:
   `ExpressionSetStore.exportSet()`/`importSet()`, in AI Mission
   Control's own new Expressions section — a "pack" of hand-drawn pixel
   expressions, exportable and shareable the identical way a profile is.
+- **A single Blueprint** (Version 3, Phase 7 — "Sharing the Workshop") —
+  `BlueprintStore.exportBlueprint()`/`importBlueprint()`, in the Builder
+  Phone's own Blueprints tab. See `docs/WORLDBUILDER.md`'s own "Sharing a
+  Blueprint" section.
+- **A single custom Calculator** (Version 3, Phase 7) —
+  `ToolsStore.exportCustomCalculator()`/`importCustomCalculator()`, in
+  the Tools panel's Calculator Builder. A calculator's formulas are
+  plain data (`ToolFormula.js`'s hand-rolled tokenizer, no `eval()`), so
+  nothing about importing one is any more sensitive than importing a
+  profile.
+- **A single Atmosphere Profile** (Version 3, Phase 7) —
+  `AtmosphereProfileStore.exportProfile()`/`importProfile()`, in
+  Settings' own Atmosphere Profiles section — including the three
+  built-in profiles, not only custom ones, since `exportProfile()` reads
+  through `getProfile()` rather than the custom-only `get()`.
 
 **Every envelope carries a `type` field** (`"workshop-backup"` /
-`"workshop-ai-profile"` / `"workshop-expression-pack"`) specifically so
-each importer can recognise the *other two* exports and say so plainly
-— "that's an AI profile export, not a Workshop backup" — rather than
-failing to parse an otherwise well-formed JSON file with a generic
-error. **All three validate before touching anything**: a missing/
-non-numeric version, an unrecognised `type`, or (backup only) a
-`version` newer than `CURRENT_SAVE_VERSION` (see `SaveMigrations.js`,
-which only ever migrates *forward*) all refuse with a specific message
-rather than silently importing a shape parts of this Workshop version
-might not fully understand — a newer-than-current backup asks for
-explicit confirmation instead of an outright refusal, since it may
-still import perfectly well. **All three normalise on import** using
-the exact same functions `load()` already trusts for a save restored
-from `localStorage` — a profile or expression pack exported from an
-older Workshop version, or shared by someone else's Workshop entirely,
-still imports as something complete and sensible rather than one with
-fields quietly `undefined` (an expression pack's own unknown expression
-ids, from a hypothetical future ninth expression, are simply dropped
-rather than kept as data this version has no use for). **A profile or
-expression-set import is always additive** — a fresh id, never
-overwriting anything already there, the same "Duplicate," never
-"Replace" instinct `ResidentProfileStore.duplicate()`/`ExpressionSetStore
-.duplicate()` already follow. A backup import reloads the page on
-success, the simplest way to guarantee
-every open panel reflects the newly imported state consistently, rather
-than trusting each one to notice a full-state swap happening underneath
-it live.
+`"workshop-ai-profile"` / `"workshop-expression-pack"` /
+`"workshop-blueprint"` / `"workshop-calculator"` /
+`"workshop-atmosphere-profile"`) specifically so each importer can
+recognise one of the *other five* exports and say so plainly — "that's
+an AI profile export, not a Workshop backup" — rather than failing to
+parse an otherwise well-formed JSON file with a generic error. **All six
+validate before touching anything**: a missing/non-numeric version, an
+unrecognised `type`, or (backup only) a `version` newer than
+`CURRENT_SAVE_VERSION` (see `SaveMigrations.js`, which only ever
+migrates *forward*) all refuse with a specific message rather than
+silently importing a shape parts of this Workshop version might not
+fully understand — a newer-than-current backup asks for explicit
+confirmation instead of an outright refusal, since it may still import
+perfectly well. **All six normalise on import** using the exact same
+kind of defensive per-field defaulting `load()` already trusts for a
+save restored from `localStorage` — a profile, expression pack,
+blueprint, calculator, or atmosphere profile exported from an older
+Workshop version, or shared by someone else's Workshop entirely, still
+imports as something complete and sensible rather than one with fields
+quietly `undefined` (an expression pack's own unknown expression ids,
+from a hypothetical future ninth expression, are simply dropped rather
+than kept as data this version has no use for; a Blueprint's own
+malformed object entry falls back to `WorldObjectsStore.js`'s own
+default offset/rotation/scale rather than crashing the Builder). **Every
+import is always additive** — a fresh id, never overwriting anything
+already there, the same "Duplicate," never "Replace" instinct
+`ResidentProfileStore.duplicate()`/`ExpressionSetStore.duplicate()`
+already follow. A backup import reloads the page on success, the
+simplest way to guarantee every open panel reflects the newly imported
+state consistently, rather than trusting each one to notice a
+full-state swap happening underneath it live; the other five apply
+immediately in place since each only ever adds one new item to its own
+store.
+
+**A unified Export button, independent of these six panels.** Every one
+of these six kinds (plus Beings, whose own export/import predates this
+phase) is also a Workshop Asset — `AssetService.exportAsset()` is the
+one generic entry point that calls whichever kind's own `exportItem()`
+and downloads the result, reachable from that asset's own Browser
+detail page rather than only from its native panel. See
+`docs/ASSETS.md`'s own "Export" section for the full mechanism, and
+`docs/BROWSER.md` for how a detail page exposes it.
 
 **One deliberate exception**: `WorkshopEventLog.exportLog()` (Workshop
 Diagnostics phase) follows the identical `type`-tagged envelope shape
