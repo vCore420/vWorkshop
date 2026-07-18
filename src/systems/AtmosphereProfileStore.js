@@ -130,6 +130,60 @@ export class AtmosphereProfileStore {
     return [...BUILTIN_ATMOSPHERE_PROFILES, ...this.profiles];
   }
 
+  // ---- export/import (Version 3, Phase 7 — "Sharing the Workshop") ----
+
+  /** Same small envelope shape `ResidentProfileStore.exportProfile()`/
+   *  `BlueprintStore.exportBlueprint()` already use. `getProfile()`, not
+   *  `get()` — a built-in preset is just as real and just as shareable as
+   *  a player-saved one, the same "author defaults to You, a plugin can
+   *  say otherwise" spirit `docs/ASSETS.md`'s own descriptor already
+   *  holds for every other kind. */
+  exportProfile(id) {
+    const profile = this.getProfile(id);
+    if (!profile) return null;
+    return { type: "workshop-atmosphere-profile", version: 1, exportedAt: new Date().toISOString(), profile: { name: profile.name, description: profile.description, weather: profile.weather, time: profile.time } };
+  }
+
+  /** Never trusts the file — `weather.current` falls back to `"clear"`
+   *  if it isn't even a non-empty string (this store deliberately never
+   *  imports `EnvironmentSystem.WEATHER_STATES` to validate against it
+   *  more precisely — see this file's own top comment on why it holds no
+   *  reference to that system at all; an id this Workshop's own
+   *  `EnvironmentSystem.setWeather()` doesn't recognise is already a safe
+   *  no-op there, the same honest degradation an export from a future
+   *  Workshop version with a weather state this one doesn't have yet
+   *  would need anyway), each manual override is either a finite number
+   *  or `null` (never `undefined`, which `setManualOverride()` doesn't
+   *  expect), and `time.hour` clamps into a real 0-24 range. Always
+   *  creates a genuinely new profile via `create()` — importing is
+   *  additive, never overwrites anything by id. */
+  importProfile(data) {
+    if (!data || typeof data !== "object") throw new Error("That file doesn't look like a Workshop Atmosphere profile.");
+    if (data.type && data.type !== "workshop-atmosphere-profile") {
+      throw new Error(data.type === "workshop-backup" ? "That's a whole Workshop backup file, not an Atmosphere profile — import it from Settings instead." : "That file doesn't look like a Workshop Atmosphere profile.");
+    }
+    const source = data.profile ?? data;
+    if (!source || typeof source !== "object" || !source.weather || !source.time) {
+      throw new Error("That file doesn't look like a Workshop Atmosphere profile.");
+    }
+    const overrides = source.weather.manualOverrides ?? {};
+    const normalizedOverride = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+    return this.create({
+      name: source.name ? `${source.name} (imported)` : "Imported Atmosphere",
+      description: typeof source.description === "string" ? source.description : "",
+      weather: {
+        current: typeof source.weather.current === "string" && source.weather.current ? source.weather.current : "clear",
+        manualOverrides: {
+          cloudCoverage: normalizedOverride(overrides.cloudCoverage),
+          precipitation: normalizedOverride(overrides.precipitation),
+          fogDensity: normalizedOverride(overrides.fogDensity),
+          windSpeed: normalizedOverride(overrides.windSpeed),
+        },
+      },
+      time: { hour: typeof source.time.hour === "number" && Number.isFinite(source.time.hour) ? Math.min(24, Math.max(0, source.time.hour)) : 12 },
+    });
+  }
+
   _emitChanged() {
     this.events.emit("profiles:changed", this.all());
     this.events.emit("persistence:saveRequested");

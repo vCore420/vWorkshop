@@ -2,6 +2,7 @@ import { NATIVE_CALCULATORS, TOOL_CATEGORIES } from "../../../tools/NativeCalcul
 import { CALCULATOR_TEMPLATES } from "../../../tools/CalculatorTemplates.js";
 import { validateFormula } from "../../../tools/ToolFormula.js";
 import { runTool, valuesFromSnapshot } from "../../../tools/runTool.js";
+import { StorageUtils } from "../../../utils/StorageUtils.js";
 
 /**
  * mountToolsPanel
@@ -468,9 +469,32 @@ export function mountToolsPanel(container, { toolsStore, projectsStore, audioSys
     }
     container.appendChild(templateGrid);
 
+    const existingHeadingRow = document.createElement("div");
+    existingHeadingRow.style.display = "flex";
+    existingHeadingRow.style.alignItems = "center";
+    existingHeadingRow.style.justifyContent = "space-between";
+    existingHeadingRow.style.gap = "8px";
     const existingHeading = document.createElement("h3");
     existingHeading.textContent = "Your calculators";
-    container.appendChild(existingHeading);
+    existingHeading.style.margin = "0";
+    // "Sharing the Workshop" \u2014 the same Import affordance every other
+    // exportable kind offers, right where custom calculators are already
+    // managed rather than a new, separate destination for it.
+    const importBtn = document.createElement("button");
+    importBtn.type = "button";
+    importBtn.textContent = "Import\u2026";
+    importBtn.addEventListener("click", async () => {
+      try {
+        const data = await StorageUtils.uploadJSON();
+        toolsStore.importCustomCalculator(data);
+        render();
+      } catch (err) {
+        if (err.message === "No file selected") return;
+        window.alert(err.message || "Couldn't import that Calculator.");
+      }
+    });
+    existingHeadingRow.append(existingHeading, importBtn);
+    container.appendChild(existingHeadingRow);
     const custom = toolsStore.allCustomCalculators();
     if (custom.length === 0) {
       const empty = document.createElement("div");
@@ -500,10 +524,16 @@ export function mountToolsPanel(container, { toolsStore, projectsStore, audioSys
         const dupBtn = document.createElement("button");
         dupBtn.textContent = "Duplicate";
         dupBtn.addEventListener("click", () => { toolsStore.duplicateCustomCalculator(calc.id); render(); });
+        const exportBtn = document.createElement("button");
+        exportBtn.textContent = "Export";
+        exportBtn.addEventListener("click", () => {
+          const exported = toolsStore.exportCustomCalculator(calc.id);
+          if (exported) StorageUtils.downloadJSON(`${calc.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "calculator"}.json`, exported);
+        });
         const removeBtn = document.createElement("button");
         removeBtn.textContent = "Remove";
         removeBtn.addEventListener("click", () => { toolsStore.removeCustomCalculator(calc.id); render(); });
-        controls.append(editBtn, dupBtn, removeBtn);
+        controls.append(editBtn, dupBtn, exportBtn, removeBtn);
         li.appendChild(controls);
         list.appendChild(li);
       }

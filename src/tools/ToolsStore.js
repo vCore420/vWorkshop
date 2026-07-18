@@ -97,6 +97,62 @@ export class ToolsStore {
     return [...this.customCalculators];
   }
 
+  // ---- export/import (Version 3, Phase 7 — "Sharing the Workshop") ----
+
+  /** Same small envelope shape `ResidentProfileStore.exportProfile()`/
+   *  `BlueprintStore.exportBlueprint()` already use — a `type` tag, a
+   *  plain object (not a JSON string, so the UI side uses the shared
+   *  `StorageUtils.downloadJSON()`/`uploadJSON()` primitives directly).
+   *  A custom calculator's own formula (`ToolFormula.js`'s hand-rolled
+   *  tokenizer/evaluator — no `eval()`, nothing it can do beyond
+   *  arithmetic on the inputs it's given) is safe to carry verbatim; the
+   *  only real risk on import is malformed *structure*, not a dangerous
+   *  formula string. */
+  exportCustomCalculator(id) {
+    const def = this.getCustomCalculator(id);
+    if (!def) return null;
+    return {
+      type: "workshop-calculator",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      calculator: { title: def.title, description: def.description, category: def.category, tags: def.tags, icon: def.icon, inputs: def.inputs, outputs: def.outputs },
+    };
+  }
+
+  /** Never trusts the file — `inputs`/`outputs` are each filtered down to
+   *  well-formed entries (a genuine `id` and `label` at minimum) rather
+   *  than crashing the Calculator Builder's own rendering on a malformed
+   *  one, the same standard `BlueprintStore.importBlueprint()` and
+   *  `BodyCompiler.compileBody()` now both hold themselves to. Always
+   *  creates a genuinely new calculator via `createCustomCalculator()` —
+   *  importing is additive, never overwrites anything by id. */
+  importCustomCalculator(data) {
+    if (!data || typeof data !== "object") throw new Error("That file doesn't look like a Workshop Calculator.");
+    if (data.type && data.type !== "workshop-calculator") {
+      throw new Error(data.type === "workshop-backup" ? "That's a whole Workshop backup file, not a Calculator — import it from Settings instead." : "That file doesn't look like a Workshop Calculator.");
+    }
+    const source = data.calculator ?? data;
+    if (!source || typeof source !== "object" || !Array.isArray(source.outputs)) {
+      throw new Error("That file doesn't look like a Workshop Calculator.");
+    }
+    const inputs = (Array.isArray(source.inputs) ? source.inputs : [])
+      .filter((i) => i && typeof i.id === "string" && i.id && typeof i.label === "string")
+      .map((i) => ({ id: i.id, label: i.label, type: "number", default: typeof i.default === "number" && Number.isFinite(i.default) ? i.default : 0 }));
+    const outputs = source.outputs
+      .filter((o) => o && typeof o.id === "string" && o.id && typeof o.label === "string" && typeof o.formula === "string")
+      .map((o) => ({ id: o.id, label: o.label, formula: o.formula, unit: typeof o.unit === "string" ? o.unit : "" }));
+    if (outputs.length === 0) throw new Error("That Calculator doesn't define anything to calculate.");
+    return this.createCustomCalculator({
+      title: source.title ? `${source.title} (imported)` : "Imported Calculator",
+      description: typeof source.description === "string" ? source.description : "",
+      category: typeof source.category === "string" ? source.category : "custom",
+      tags: Array.isArray(source.tags) ? source.tags : [],
+      icon: typeof source.icon === "string" ? source.icon : "✨",
+      inputs,
+      outputs,
+    });
+  }
+
   // ---- pinning (Personal Workspace) ----
 
   togglePin(toolId) {

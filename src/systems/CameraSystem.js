@@ -13,6 +13,13 @@ const WALK_SPEED = 2.3; // metres/second
 const RUN_MULTIPLIER = 1.8;
 const CROUCH_SPEED_MULTIPLIER = 0.55;
 const PLAYER_RADIUS = 0.32;
+// Version 3, Phase 5 ("Beyond One Building") — a fixed, generous
+// approximation for collision purposes only (real standing eye height is
+// dynamic, read from the current rig — see DEFAULT_STANDING_EYE_HEIGHT's
+// own comment below), used solely to decide whether the player could be
+// standing fully clear underneath a raised World Object; see
+// _pushOutOfBox()'s own comment.
+const PLAYER_HEIGHT = 1.9;
 // A fallback only — see "Player Height" in the class doc comment below.
 // The real standing eye height is dynamic, read every frame from
 // PlayerCharacterSystem's own current rig, since a taller or shorter
@@ -669,15 +676,44 @@ export class CameraSystem {
       this._pushOutOfBox(next, footprint);
     }
     for (const footprint of this._worldObjectsSystem?.getFootprints?.() ?? []) {
-      this._pushOutOfBox(next, footprint);
+      this._pushOutOfBox(next, footprint, { respectHeight: true });
     }
   }
 
   /** Circle-vs-AABB push-out, shared by wall and furniture collision — walls
    *  are no longer a hard rectangular clamp; they're just more boxes, with
    *  real gaps left at the door and windows (see WorkshopRoom.js). That's
-   *  what makes walking outside possible at all. */
-  _pushOutOfBox(next, box) {
+   *  what makes walking outside possible at all.
+   *
+   *  Version 3, Phase 5 ("Beyond One Building") — "a cube can be walked up
+   *  to then stopped by box collisions, but the collisions go up
+   *  vertically forever... climbing a ladder in front of a cube doesn't
+   *  let you fall on top of it." Confirmed directly: this function never
+   *  once looked at Y, for any box — every collider behaved like an
+   *  infinite column regardless of the player's own height, which also
+   *  meant jumping onto a low object was silently broken the same way,
+   *  not just the ladder case. `respectHeight` (set only for
+   *  `WorldObjectsSystem`'s own footprints below — real, variable-height
+   *  geometry, unlike the Workshop's own walls or furniture's fixed
+   *  0-2.2m column, both deliberately permanent full-height boundaries
+   *  that should never stop blocking) skips the horizontal push entirely
+   *  once the player is already standing at or above the box's own top,
+   *  using the exact same `STEP_TOLERANCE` threshold
+   *  `_computeGroundHeight()` already uses to decide "close enough to
+   *  step onto" — the two now can never disagree, so there's no gap
+   *  where the player is blocked sideways by something they could
+   *  already legitimately be standing on. The mirror case (fully
+   *  underneath a raised object) is the same "real geometry, but never
+   *  an obstacle you can't actually reach" principle
+   *  `WorldObjectsSystem._updateFootprint()`'s own `COLLISION_HEIGHT_LIMIT`
+   *  check already applies to anything entirely above head height —
+   *  applied here per-box instead of only at the "never collides at
+   *  all" extreme. */
+  _pushOutOfBox(next, box, { respectHeight = false } = {}) {
+    if (respectHeight) {
+      if (this._footY >= box.max.y - STEP_TOLERANCE) return; // already standing at/above its top
+      if (this._footY + PLAYER_HEIGHT <= box.min.y) return; // fully clear underneath it
+    }
     const closestX = clamp(next.x, box.min.x, box.max.x);
     const closestZ = clamp(next.z, box.min.z, box.max.z);
     const dx = next.x - closestX;

@@ -48,7 +48,12 @@ export function createResidentConversationOverlay({
   const history = []; // [{role: "user"|"assistant", content}] — this session only
 
   return {
-    materialClass: "panel",
+    // Version 3, Phase 6 ("The Workshop Remembers") — was "panel" (the
+    // same full-screen, centred, heavy-backdrop treatment every document
+    // overlay uses). Bubble is a character to watch while talking, not a
+    // document to read — see css/overlays.css's own comment on
+    // `.overlay--companion` for the full reasoning.
+    materialClass: "companion",
     mount(panelEl) {
       residentBehaviour.startConversation();
 
