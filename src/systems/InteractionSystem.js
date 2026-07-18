@@ -144,6 +144,19 @@ export class InteractionSystem {
     }
   }
 
+  /** Whether the currently-active interaction (if any) permits the
+   *  camera to keep looking around freely — the sitting area's own
+   *  `allowLookAround` focus pose, distinct from a fully fixed one like
+   *  the computer's or workbench's. Reading Chair phase — `main.js`'s
+   *  own re-lock-on-click handler and `PhoneSystem.open()`'s guard both
+   *  need this identical distinction (an interaction being "active"
+   *  doesn't by itself mean the player can't still look around or check
+   *  their phone), so it's exposed here once rather than each caller
+   *  reaching into `this.active.interactable.focusPose` itself. */
+  get activeAllowsLookAround() {
+    return !!this.active?.interactable?.focusPose?.allowLookAround;
+  }
+
   exitActive() {
     if (!this.active) return;
     const { interactable } = this.active;

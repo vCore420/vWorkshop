@@ -34,6 +34,21 @@ export class FurnitureSystem {
     this._footprintList = [];
     /** @type {Record<string, {position:[number,number,number], rotationY:number}>} */
     this.overrides = {};
+    // Version 3, Phase 4 ("Workshop Rituals") — "sitting at the same
+    // chair" becoming a genuine habit needs somewhere small and generic
+    // to remember *how* a piece was last used, not just where it's
+    // placed. Deliberately a plain, opaque bag per piece rather than a
+    // typed shape — this system has no reason to know what a "last
+    // reading view" or any future piece's own small interaction memory
+    // actually means, only that it's a piece of state worth saving. The
+    // reading chair (`RestNookOverlay.js`) is the first caller;
+    // `getInteractionState()`/`setInteractionState()` are the same "one
+    // small, generic capability, multiple independent callers" shape
+    // `ReflectionSystem.registerSurface()`/`LadderSystem.registerLadder()`
+    // already established, so any future piece needing the same kind of
+    // memory has somewhere to put it without inventing a new store.
+    /** @type {Record<string, object>} */
+    this.interactionState = {};
   }
 
   init(engine) {
@@ -113,15 +128,33 @@ export class FurnitureSystem {
     // replaced) — see this class's own comment above.
     engine.events.on("persistence:save", (bag) => {
       bag.furnitureOverrides = this.overrides;
+      bag.furnitureInteractionState = this.interactionState;
     });
     engine.events.on("persistence:load", (bag) => {
-      if (!bag?.furnitureOverrides) return;
-      this.overrides = bag.furnitureOverrides;
-      for (const [pieceId, override] of Object.entries(this.overrides)) {
-        this._applyTransform(pieceId, override.position, override.rotationY);
+      if (bag?.furnitureOverrides) {
+        this.overrides = bag.furnitureOverrides;
+        for (const [pieceId, override] of Object.entries(this.overrides)) {
+          this._applyTransform(pieceId, override.position, override.rotationY);
+        }
+        this._rebuildFootprintList();
       }
-      this._rebuildFootprintList();
+      if (bag?.furnitureInteractionState) this.interactionState = bag.furnitureInteractionState;
     });
+  }
+
+  /** A piece's own small saved interaction memory (see this class's own
+   *  constructor comment) — `null` if it's never set one. */
+  getInteractionState(pieceId) {
+    return this.interactionState[pieceId] ?? null;
+  }
+
+  /** Merges `patch` onto whatever a piece has already saved (so a caller
+   *  only needs to name the fields it actually cares about) and requests
+   *  a save — the same "genuinely player/session-owned data" persistence
+   *  path `setOverride()` above already uses. */
+  setInteractionState(pieceId, patch) {
+    this.interactionState[pieceId] = { ...this.interactionState[pieceId], ...patch };
+    this.engine.events.emit("persistence:saveRequested");
   }
 
   /** Called by BuildModeSystem once a furniture move/rotate is confirmed. */
@@ -167,7 +200,17 @@ export class FurnitureSystem {
       object3D.localToWorld(v);
       return [v.x, v.y, v.z];
     };
-    return { position: toWorld(local.position), lookAt: toWorld(local.lookAt) };
+    // Reading Chair phase — this used to return only `{position,
+    // lookAt}`, silently dropping any other field a `focusPoseLocal`
+    // declared. `SittingArea.js`'s own `allowLookAround: true` was one of
+    // them — the runtime focus pose `CameraSystem` actually received
+    // never carried it, so `_updateFocus()`'s own `allowLookAround` check
+    // had always evaluated falsy, regardless of what the furniture
+    // definition asked for. Spreading `local` first, then overwriting
+    // only the two fields that genuinely need transforming into world
+    // space, lets every other field — this one, and any future one —
+    // pass through honestly instead of being silently discarded.
+    return { ...local, position: toWorld(local.position), lookAt: toWorld(local.lookAt) };
   }
 
   _computeFootprintBox(definition, position, rotationY) {
