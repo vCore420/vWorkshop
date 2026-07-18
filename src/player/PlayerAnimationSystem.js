@@ -2,6 +2,8 @@ import { applyPose } from "./PlayerCharacter.js";
 import { MOVEMENT_STATE_TO_CLIP_ID } from "./AnimationClips.js";
 import { advanceFrame, computeBlendedPose, ClipPlayer } from "./AnimationPlayback.js";
 import { mergePoses, JOINT_GROUPS } from "./AnimationLayers.js";
+import { applyTerrainFootIK } from "./FootIK.js";
+import { TerrainSystem } from "../systems/TerrainSystem.js";
 
 /**
  * PlayerAnimationSystem
@@ -77,6 +79,7 @@ export class PlayerAnimationSystem {
 
   init(engine) {
     this.engine = engine;
+    this._terrainSystem = engine.getSystem(TerrainSystem);
     this._playClipForState("idle");
   }
 
@@ -180,6 +183,12 @@ export class PlayerAnimationSystem {
       pose = mergePoses(pose, overlayPose, this._overlayJointNames);
     }
     applyPose(pivots, pose);
+    // Version 3, Phase 1 ("Completing Promises") — "foot placement on
+    // terrain." Only while standing still — see FootIK.js's own header
+    // for why walking is a different, harder problem left for later.
+    // Runs after applyPose() so it corrects the base pose already
+    // applied above, not instead of it.
+    if (this._movementState === "idle") applyTerrainFootIK(pivots, this._terrainSystem);
   }
 
   _advance(dt) {

@@ -88,6 +88,24 @@ const JOINT_KIND_ORDER = ["head", "lowerArm", "upperArm", "hand", "upperLeg", "l
 const LEFT_PATTERNS = ["left", "_l", ".l", " l", "l_", "l.", ":l"];
 const RIGHT_PATTERNS = ["right", "_r", ".r", " r", "r_", "r.", ":r"];
 
+// Version 3, Phase 1 ("Completing Promises") — a real false positive,
+// found by testing against an actual downloaded glTF sample
+// (CesiumMan.glb, khronos's own reference test asset) rather than
+// assumed correct: its skeleton sits inside a plain container node
+// named "Armature" — the standard Blender/Mixamo/glTF-exporter default
+// label for a whole rig's own root wrapper, virtually never renamed by
+// anyone — and "armature" contains "arm" as a bare substring, so it
+// matched `upperArm`'s own generic "arm" fallback pattern before any
+// real arm bone ever got a chance to (first match wins). A handful of
+// other tool-default wrapper labels share the identical risk. These are
+// organisational containers, never joints, in every rig-export
+// convention this file is aware of — excluded outright by name, rather
+// than making the "arm" pattern itself stricter (a word-boundary
+// requirement would risk breaking genuine compound Mixamo names like
+// "LeftHandIndex1", which has no clean boundary around "hand" at all —
+// exactly the real-world naming this heuristic exists to handle).
+const NON_JOINT_CONTAINER_NAMES = new Set(["armature", "skeleton", "root", "rig"]);
+
 function detectSide(name) {
   const lower = name.toLowerCase();
   if (LEFT_PATTERNS.some((p) => lower.includes(p))) return "Left";
@@ -120,6 +138,7 @@ export function autoMapSkeleton(root) {
   const rest = {};
   root.traverse((node) => {
     if (!node.name) return;
+    if (NON_JOINT_CONTAINER_NAMES.has(node.name.toLowerCase().trim())) return;
     const kind = detectJointKind(node.name);
     if (!kind) return;
     const side = detectSide(node.name);
