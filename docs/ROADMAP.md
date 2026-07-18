@@ -3232,6 +3232,189 @@ A place with a memory now includes itself in it.
 **The release verdict** — yes. See `docs/RELEASE_REVIEW.md` for the
 full reasoning.
 
+## Version 3 — Phase 1 — Completing Promises (v3.0.1)
+
+**Goal:** wire in the forward-looking infrastructure Version 2 explicitly
+built and left waiting, before any new Version 3 foundations are laid —
+"believable contact with the world," and closing out a handful of core
+interaction systems named as never quite reaching the quality bar of a
+finished mechanic. See `docs/ROADMAP_V3.md`'s own Phase 1 entry for the
+original brief.
+
+**Crouch, the camera/mesh mismatch fixed at its actual root cause.**
+Two earlier fixes (Workshop Reliability's root-tracking fix, Refinement
+Pass A's `CROUCH_HEIGHT_RATIO`) were both real and both correctly
+resolved what they targeted, but neither touched a deeper fact: the rig
+has no vertical translation at all — `applyPose()` only ever rotates
+pivots. Crouching genuinely eased the camera's own eye height down, but
+never moved the mesh, so standing's own coincidental "camera sits inside
+the head, backface-culled" trick broke the moment crouching pushed the
+camera into the torso instead, leaving the head floating visibly above
+it. Fixed without moving any joint (which would have unplanted the feet
+from a fixed-hip-height `CROUCH_CLIP`): `FIRST_PERSON_HIDDEN_LAYER`, a
+dedicated Three.js render layer, excludes the head mesh from the
+first-person camera specifically, toggled by the same `thirdPersonActive`
+value `CameraSystem` already computes every frame; mirrors explicitly
+re-enable it so reflections keep showing the full character. See
+`docs/PLAYER.md`'s own "Crouching" account for the complete technical
+story, including the one claim left honestly unverified (whether the
+torso stays coincidentally hidden too, at every crouch depth).
+
+**Ladders, reviewed and found already complete.** Version 2's own
+changelog named two real, separately-fixed bugs (the Construction Library
+piece never carrying the climbing behaviour; an ~8cm hit zone with none
+of the generosity every other interaction zone holds itself to).
+`docs/ROADMAP_V3.md` still listed ladder traversal as unfinished; a full
+investigation, followed by an explicit playtest — a real ladder spawned
+through the actual Builder behaviour pipeline, driven frame-by-frame
+against the live engine rather than eyeballed — confirmed zone padding,
+climb speed, gravity suspension, smooth rung-catching, and exit-by-
+walking-away all work exactly as the existing code and docs already
+claimed. No code changed. Reported as complete rather than manufacturing
+a fix for something that wasn't broken.
+
+**Imported Builder objects, three real gaps closed.** A footprint-timing
+race (`WorldObjectsSystem._buildObject3D()` swaps in an imported model's
+real geometry asynchronously, but the collision footprint was measured
+against the small placeholder capsule immediately beforehand, and never
+recomputed once the real model arrived) now recomputes once the swap
+actually happens. The colour-override control — shown for imported
+models but silently doing nothing, since `colorOverride` is only ever
+consumed by the primitive-object compile path — no longer appears for a
+selection it can't affect, rather than misleading. The Builder's own
+`importModel()` and the Being Creator's own inline import handler, two
+independent copies of the same five-step file-import logic, are now one
+shared `importModelFile()` in `ModelLibrary.js`. See
+`docs/WORLDBUILDER.md`'s own account for the full technical detail.
+
+**Two-Bone IK, wired to a real gameplay case for the first time.**
+`TwoBoneIK.solveTwoBoneIK()` had been real, working, tested math with no
+caller since the Advanced Animation phase. `src/player/FootIK.js` now
+feeds it a real per-foot target — the outdoor sculpted terrain's own
+height under each foot, relative to the terrain under the character's
+own overall reference point — deliberately scoped to standing still only
+(walking is a genuinely different, animation-phase-aware problem, left
+for later) and only where `TerrainSystem` actually has height data.
+Testing against real sculpted terrain surfaced an honest asymmetry: the
+correction is exact when a foot needs to rise, and honestly reach-limited
+— not broken, just visibly small — when a foot needs to drop, because the
+default idle clip's own authored stance is already at ~99.99% of the
+leg's own maximum reach. Named plainly rather than hidden; closing it
+fully means retuning the idle clip's own knee bend or a root-height
+adjustment in `CameraSystem`, both bigger, separate changes. The resident
+hand-rest half of the original brief was deliberately dropped rather than
+built toward — Bubble has no rig to target at all, and the brief's own
+example was treated as illustrative, not prescriptive, rather than
+becoming a reason to give Bubble a body it has no other design reason to
+need yet.
+
+**`WorkshopSkeleton.autoMapSkeleton()`, validated end to end with real
+files, not only the mock hierarchy it was built against.** Two real,
+externally-sourced glTF models — Khronos's own `CesiumMan.glb` reference
+asset and three.js's own `Soldier.glb` (a genuine Mixamo export) — went
+through the actual import → load → map → spawn → animate pipeline. The
+Mixamo-exported model mapped all 14 Workshop joints correctly (`UpLeg`/
+`Leg` quirk included) and animated with real, varying rotation under a
+real Workshop walk clip; the Khronos asset honestly mapped only 5 of 14
+under its own different, legitimate naming convention and was correctly
+left unanimated. This testing found one real bug: the Khronos model's
+own skeleton container is named `"Armature"` — the standard Blender/
+Mixamo/glTF-exporter default label for a rig's own root wrapper — and
+`"armature"` contains `"arm"` as a bare substring, misidentifying it as
+the character's own upper arm ahead of any real arm bone. Fixed by
+excluding a small set of known non-joint container labels from candidacy
+entirely, rather than tightening the `"arm"` pattern itself and risking
+genuine compound Mixamo names like `"LeftHandIndex1"`. Both test models
+are kept in `.claude/test-assets/` (with their own README recording
+provenance and licence) for reuse in future testing, rather than
+discarded after this one use. See `docs/BEINGS.md`'s and
+`docs/ANIMATION.md`'s own "Version 3, Phase 1" accounts for the complete
+story.
+
+## Version 3 — Phase 2 — Living Spaces (v3.0.2)
+
+**Goal:** deepen the Workshop's existing rooms until they feel genuinely
+lived in rather than simply occupied — refinement, not new systems. See
+`docs/ROADMAP_V3.md`'s own Phase 2 entry for the original brief.
+
+**A complete environmental review came first**, room by room and
+furniture piece by piece, treating `docs/PRESENCE.md`'s own lens (does
+a fix make the Workshop feel more like it exists independently, or more
+like something arranged for a visitor) as the standard for every finding.
+Several areas — the room shell's baseboards/sconces/clock alignment,
+tool storage, the pinboard, the wardrobe, `AtmosphereProfileStore`'s six
+built-in profiles, `LightingSystem`'s practical-light tuning — were
+checked in comparable depth and found genuinely fine, reported as such
+rather than manufacturing findings to look thorough.
+
+**Storage now reads as genuinely stocked, not sparse.** Shelving's own
+book-packing loop always started its cursor at the same fixed left
+offset, so every shelf's placeholders only ever spanned the first
+35-40% of its own width, regardless of shelf index — the shelf's own
+usable width now gets filled properly, with the same restrained item
+count as before (a placement bug, not a "too few items" one). The music
+cabinet's stored vinyl records neither rested on their own shelf nor
+cleared the shelf above (a Y-position that was never actually checked
+against either boundary) — now rests flush on the real surface below it.
+The turntable's own record label was embedded in the vinyl record
+rather than resting on it, from a broken incremental Y-offset chain —
+now derived directly from the record's own already-correct position
+instead of a second, independently hand-computed value.
+
+**The sitting area's side table now has real collision**, closing a gap
+`SittingArea.js`'s own footprint comment had honestly labelled but not
+actually solved ("small enough to allow minor overlap" — checking the
+real numbers found the table sat entirely outside the old footprint, not
+overlapping it at all). `FurnitureSystem._computeFootprintBox()` gained
+an optional `offset` field — a local-space point a footprint can centre
+on instead of the piece's own placement position, for exactly this
+"two objects with no shared natural centre" case — defaulting to `[0,0]`
+so every other footprint keeps behaving exactly as it always has. The
+sitting area's own footprint now tightly covers the real combined bounds
+of chair and table, confirmed against the actual built mesh geometry
+(13 real meshes, the rug deliberately excluded, since it stays walkable).
+
+**One small, restrained decorative addition**: a cable, not several,
+running from behind the computer desk's own monitor stand, along the
+desk's back edge, down beside the back-left leg to the floor — the same
+"one small detail, not a scatter" standard the pen holder and pencil
+already set, closing a gap the Furniture & Storage phase's own
+retrospective named and never picked up. A real clipping bug in the
+first draft (the cable's own path ran straight through the desk's
+stretcher rail, which shares the same z-coordinate as the back legs) was
+found and fixed — via real mesh bounding-box overlap checks, not
+assumed clear — before it shipped.
+
+**One material-continuity gap closed**: the roof fascia's own dark wood
+tone was a distinct, unexplained near-duplicate of the shared trim colour
+the door frame, baseboard, and sketch frame all deliberately match —
+unified rather than left as an unexplained near-miss.
+
+**Shadow bias, re-verified rather than left an open question
+indefinitely.** `docs/VISUAL_IDENTITY.md`'s own "Known limitations" had
+flagged since the Visual Identity phase that `bias`/`normalBias` were
+only ever tuned against the shadow-frustum bug's stale ±5 extent, never
+the real ±13 one now in effect, and that judging it properly needed a
+rendered frame. This environment's own screenshot tooling proved
+unreliable, so verification used a documented substitute: real rendered
+frames read back pixel-by-pixel from the actual WebGL canvas. Tested at
+a deliberately extreme ~3.4° grazing sun angle across ten scanlines of
+open terrain: zero shadow acne. A real occluder showed one clean, sharp
+shadow edge with no banding. The existing values hold up at the current
+frustum — no change made, because none was found to be needed. See
+`docs/VISUAL_IDENTITY.md`'s own updated account for the complete method.
+
+**Explicitly not attempted, on purpose:** foot-IK during an actual walk
+cycle (still idle-only); a manual skeleton-mapping override UI (still
+undocumented as absent, unaffected by this phase's own `autoMapSkeleton`
+fix); the imported-Builder-object "no behaviours possible" gap the
+Phase 1 investigation named — a bigger scope question about whether
+imported models should be able to carry Seat/Light/Door-style behaviours
+at all, not a small fix; and a pixel-precise measurement of shadow-edge
+offset distance, which this pass's own testing method wasn't precise
+enough to produce — worth a real screenshot if a visible complaint ever
+actually surfaces, not before.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

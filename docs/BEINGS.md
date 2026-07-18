@@ -381,6 +381,44 @@ unmapped or absent model simply doesn't animate, exactly as it always
 has; nothing about this required any Being's own appearance to change.
 See `docs/ANIMATION.md` for the full architecture.
 
+**Version 3, Phase 1 ("Completing Promises"): validated end to end, with
+real content, not just read.** `docs/HISTORY.md`'s own Version 2 handover
+named this directly: `WorkshopSkeleton.autoMapSkeleton()` was "a real,
+working heuristic waiting for the first imported Being that actually
+exercises it end to end" — validated only against a mock Mixamo hierarchy
+during its own development phase, never against a real downloaded file
+going through the real import → load → map → spawn → animate pipeline.
+This phase did exactly that, with two real, externally-sourced glTF
+models (Khronos's own `CesiumMan.glb` reference asset, and three.js's own
+`Soldier.glb`, a genuine Mixamo export) — imported through the real
+`importModelFile()` path, spawned through the real `BeingLibrary`/
+`BeingInstanceStore`/`BeingController` pipeline, and driven by real
+`default-idle`/`default-walk` clips. The Mixamo-exported model mapped
+perfectly (14/14 joints, including the `UpLeg`/`Leg` naming quirk
+`autoMapSkeleton()`'s own comment already documented handling) and
+animated correctly — leg and arm rotations swung through a genuine 9°-28°
+range during the walk clip, confirmed non-`NaN`, confirmed actually
+varying frame to frame. The Khronos asset mapped only 5 of 14 joints and
+was honestly left unanimated by `isSkeletonMapUsable()`'s own threshold —
+its own naming convention (`"leg_joint_L_1"`, no recognisable "head" or
+"hand" substring anywhere) simply isn't the naming this heuristic targets,
+which is a real, informative result, not a failure of the validation.
+
+**A real bug, found by this testing, not assumed away.** The Khronos
+model's own skeleton sits inside a container node literally named
+`"Armature"` — the standard Blender/Mixamo/glTF-exporter default label
+for a rig's own root wrapper — and `"armature"` contains `"arm"` as a bare
+substring, so it was matching `upperArm`'s own generic fallback pattern
+before any real arm bone got a chance to (first match wins). Fixed by
+excluding a small, explicit set of known non-joint container labels
+(`"armature"`, `"skeleton"`, `"root"`, `"rig"`) from ever being considered
+a joint candidate at all, rather than making the `"arm"` pattern itself
+stricter — a word-boundary requirement would have risked breaking genuine
+compound Mixamo names like `"LeftHandIndex1"`, which is exactly the
+real-world naming this heuristic exists to handle. See
+`WorkshopSkeleton.js`'s own comment on `NON_JOINT_CONTAINER_NAMES` for
+the full account.
+
 **Being Creator phase (v2.0.7): a second, exact way to get a rig.** A
 primitive-built body (`BodyCompiler.js`) needs no heuristic detection at
 all — its own skeleton is derived directly from whichever parts the

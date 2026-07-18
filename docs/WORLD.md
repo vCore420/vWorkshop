@@ -410,6 +410,15 @@ Exterior collision is not a separate system — it's the same
 `wallColliders` list mentioned above, since a wall's box spans its full
 real thickness from interior to exterior face.
 
+**Version 3, Phase 2 ("Living Spaces") — the fascia's own trim colour,
+unified.** The door frame, baseboard, and framed-sketch frame all
+deliberately share one dark wood tone (`"#3d2a1c"` — see the baseboard's
+own comment on why). The fascia was quietly using a distinct, unexplained
+near-duplicate (`"#2c2419"`) instead — close enough to read as a slip
+rather than a second, deliberate trim colour, and nothing anywhere
+explained a reason for the difference. Unified to the one tone the rest
+of the room's woodwork already commits to.
+
 ## The Construction Library: "the alphabet"
 
 `src/worldbuilder/ConstructionLibrary.js` adds a second, permanent source
@@ -1149,16 +1158,24 @@ world permanently outside the shadow camera's own view — exactly
 call, right after the properties it depends on are set, fixes every
 future change to those properties too, not just this one.
 
-**A worth-watching, not clearly broken, side effect.** `shadow.bias`
-and `shadow.normalBias` (tuned to avoid shadow acne) were presumably
-tuned against whatever was *actually* rendering at the time — which,
-given this bug, was always the stale ±5 frustum, never the larger one
-the comments describe. Restoring the real ±13 frustum spreads the same
+**A worth-watching, not clearly broken, side effect — re-verified,
+Version 3, Phase 2 ("Living Spaces").** `shadow.bias` and
+`shadow.normalBias` (tuned to avoid shadow acne) were presumably tuned
+against whatever was *actually* rendering at the time — which, given
+this bug, was always the stale ±5 frustum, never the larger one the
+comments describe. Restoring the real ±13 frustum spreads the same
 1024×1024 shadow map texel budget across roughly 6x the area (in each
-dimension), which coarsens shadow resolution and could plausibly want
-a different bias value to look its best. Left unchanged rather than
-retuned blind — this needs an actual rendered frame to judge, not a
-guess.
+dimension), which coarsens shadow resolution and could plausibly want a
+different bias value to look its best. Left unchanged at the time
+rather than retuned blind, pending an actual rendered frame to judge —
+that judging has now happened (real rendered frames, read back
+pixel-by-pixel rather than eyeballed, since this environment's own
+screenshot tooling proved unreliable): zero shadow acne detected across
+ten scanlines of open terrain at a deliberately extreme ~3.4° grazing
+sun angle, and a clean, sharp lit-to-shadow transition on a real
+occluder with no intermediate banding. The existing values hold up at
+the current ±13 frustum. See `docs/VISUAL_IDENTITY.md`'s own "Known
+limitations" section for the full method and result.
 
 ## Visual Identity phase — terrain review
 

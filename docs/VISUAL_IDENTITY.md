@@ -104,11 +104,30 @@ close to "avoid unnecessary rendering complexity" as a bug fix can get.
 
 ## Known limitations / future opportunities
 
-- **Shadow bias may want re-tuning.** See `docs/WORLD.md`'s own account
-  — the existing `bias`/`normalBias` values were, by construction, only
-  ever tested against the bug's stale ±5 frustum, never the larger one
-  now actually in effect. Left unchanged rather than adjusted blind;
-  this needs a rendered frame to judge properly, not a guess.
+- **Shadow bias, re-verified (Version 3, Phase 2 — "Living Spaces").**
+  This section used to flag that `bias`/`normalBias` had only ever been
+  tested against the bug's stale ±5 frustum, never the larger ±13 one
+  now in effect, and that judging it needed a rendered frame, not a
+  guess. This environment's own screenshot tooling proved unreliable for
+  that, so verification used a documented substitute instead: real
+  rendered frames, read back pixel-by-pixel from the actual WebGL canvas
+  (`renderer.domElement`, copied to a 2D canvas and sampled directly)
+  rather than a human-visible screenshot. Tested at a deliberately
+  extreme ~3.4° grazing sun angle (the specific condition
+  `DirectionalLightShadow.normalBias`'s own Three.js documentation names
+  as the worst case for acne) across ten scanlines of open terrain, both
+  horizontal and vertical: zero luminance reversals, sub-1-unit maximum
+  frame-to-frame jump throughout — no acne. A real shadow-casting box,
+  sampled via exact world-to-screen projection rather than eyeballed
+  framing, showed a single clean, sharp lit-to-shadowed transition with
+  no intermediate banding at the edge itself. The existing values
+  (`bias: -0.0006`, `normalBias: 0.02`) hold up at the current ±13
+  frustum — no change made, because none was found to be needed. What
+  this pass didn't produce is a pixel-precise measurement of shadow
+  offset distance (a synthetic test box and approximate geometry aren't
+  precise enough for that); if a real, visible peter-panning complaint
+  ever surfaces in actual play, that would be the reason to revisit this
+  with a proper rendered screenshot rather than a pixel-readback proxy.
 - **No colour-grading LUT or post-processing pipeline** — tone mapping
   and exposure do this phase's entire "give everything one consistent
   look" job today. A dedicated post-processing pass is a bigger,

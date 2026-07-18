@@ -52,7 +52,7 @@ src/
                               set) — see docs/WORLDBUILDER.md and docs/WORLD.md
   music/                     the real music library + player — see docs/MUSIC.md
   settings/                  Workshop Settings: persisted data + the system that applies it — see docs/PERFORMANCE.md
-  player/                    the player character rig + appearance/outfit/texture persistence, AnimationLibraryStore.js, AnimationPlayback.js, WorkshopSkeleton.js, AnimationRetargeting.js, TwoBoneIK.js, AnimationLayers.js, PoseLibraryStore.js — see docs/PLAYER.md and docs/ANIMATION.md
+  player/                    the player character rig + appearance/outfit/texture persistence, AnimationLibraryStore.js, AnimationPlayback.js, WorkshopSkeleton.js, AnimationRetargeting.js, TwoBoneIK.js, FootIK.js, AnimationLayers.js, PoseLibraryStore.js — see docs/PLAYER.md and docs/ANIMATION.md
   data/                      plain state: layoutDefault.js, ProjectsStore.js, NotesStore.js
   ui/                        OverlayManager.js, HUD.js, overlays/*.js (one per physical panel)
   utils/                     PlaceholderFactory, ProceduralTexture, AudioSynth, InputManager, SimpleMarkdown, math, storage, ScreenProjector, AffinityTracker
@@ -229,7 +229,14 @@ an overlay if it needs one. Nothing in `InteractionSystem` or
   against `FurnitureSystem._computeFootprintBox`'s actual rotated-AABB
   formula rather than eyeballing new coordinates — a footprint's world
   extent swaps which of a piece's width/depth dominates depending on its
-  rotation, which is easy to get backwards by intuition alone.
+  rotation, which is easy to get backwards by intuition alone. A
+  `footprint` can also declare an optional `offset: [x, z]` (Living
+  Spaces phase) — a local-space point, rotated the same way any other
+  point on the piece would be, the footprint centres on instead of the
+  piece's own placement position; defaults to `[0, 0]`, so this only
+  matters for a piece like `SittingArea.js`'s own chair-plus-side-table,
+  where no single point is a natural centre for everything that needs
+  real collision.
 - **Furniture appearance & behaviour**: `src/entities/furniture/*.js`, each
   exporting a `{ id, label, footprint, build(), interaction }` definition,
   collected in `registry.js`. `registerFurniture()` lets a plugin add a new

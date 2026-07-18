@@ -185,6 +185,20 @@ corner, "better visual balance" made concrete, and the desk's entire
 storytelling addition this phase, the same restraint the Workbench
 phase held its own single pencil to.
 
+**Version 3, Phase 2 ("Living Spaces") — one more small addition, one
+phase later.** A monitor, a lamp, and an implied computer sat on this
+desk for two full versions with nothing ever visibly plugged into
+anything — named directly in the Furniture & Storage phase's own
+retrospective ("the music cabinet's own cabling... the next unglamorous
+detail worth attention") and never picked up until now. One cable, not
+several — the same restraint the pen holder above already sets — from
+behind the monitor stand, along the desk's own back edge, down beside
+the back-left leg to the floor. Routed specifically to clear the desk's
+own stretcher rail, which shares the exact z-coordinate as the back
+legs (see the leg/stretcher loops just above in `ComputerDesk.js`) —
+confirmed by checking real mesh bounding boxes for overlap, not assumed
+clear, after a first draft ran the cable straight through it.
+
 **The Workshop's second interaction sound effect.** A soft chair creak
 on sitting down and standing back up — `AudioSynth.playChairCreak()`, a
 narrower, sweeping bandpass filter on the same noise-burst technique

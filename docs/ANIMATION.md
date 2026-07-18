@@ -171,6 +171,29 @@ case-insensitive substring matching:
   back with fewer joints mapped (or none at all, for a genuinely
   non-humanoid rig) rather than a wrong guess.
 
+**Version 3, Phase 1: validated against real, externally-sourced files,
+not only the mock hierarchy above.** Two real glTF models — Khronos's own
+`CesiumMan.glb` reference asset, and three.js's own `Soldier.glb` (a
+genuine Mixamo export) — went through the actual import → load → map →
+spawn → animate pipeline end to end (see `docs/BEINGS.md`'s own account
+of both runs). The Mixamo-exported model mapped all 14 joints correctly,
+`UpLeg`/`Leg` quirk included, and animated with real, varying rotation
+under a real Workshop walk clip. The Khronos asset — a legitimate rig
+using a different, non-Mixamo naming convention (`"leg_joint_L_1"`, no
+recognisable "head" substring anywhere) — honestly mapped only 5 of 14
+and was correctly left unanimated, exactly the "comes back with fewer
+joints mapped... rather than a wrong guess" behaviour named above,
+demonstrated with a real file rather than only claimed. This same testing
+found one real bug: the Khronos model's own skeleton container is named
+`"Armature"` (the standard Blender/Mixamo/glTF-exporter default label for
+a rig's own root wrapper), and `"armature"` contains `"arm"` as a bare
+substring — a false positive for `upperArm`'s own generic fallback
+pattern, fixed by excluding a small set of known non-joint container
+labels from candidacy at all (see `WorkshopSkeleton.js`'s own
+`NON_JOINT_CONTAINER_NAMES` comment), rather than making the `"arm"`
+pattern itself stricter and risking genuine compound Mixamo names like
+`"LeftHandIndex1"`.
+
 `isSkeletonMapUsable(map)` is the honest threshold — at least half the
 Workshop skeleton's own joints need to be found before anything attempts
 retargeted playback at all; below that, a model simply doesn't animate
@@ -247,14 +270,29 @@ honestly reported as `reachable: false` and gracefully clamped rather
 than producing `NaN`; a degenerate pole hint (directly in line with the
 target) is handled without dividing by zero.
 
-**What this doesn't do yet**: this phase delivers the real math, not
-wired-up gameplay. "Foot placement, hand placement, object interaction,
-ground adaptation, looking at targets" all stay honest future extension
-points — none of them are automatically applied to the Player or a Being
-today. Building any of them means feeding this solver a real target (a
-raycast against the floor for ground adaptation; an object's own position
-for hand placement) from whichever system owns that concern, which this
-phase intentionally didn't build yet — "the architecture should be
+**Ground adaptation, wired for the Player (Version 3, Phase 1 —
+"Completing Promises")**: `src/player/FootIK.js`'s `applyTerrainFootIK()`
+feeds `solveTwoBoneIK()` a real per-foot target — the outdoor sculpted
+terrain's own height under each foot, via `TerrainSystem.getHeightAt()` —
+called from `PlayerAnimationSystem.update()` right after `applyPose()`
+applies the base pose each frame, but *only* while standing still
+(movement state `"idle"`; foot placement during a walk cycle is a
+genuinely different, animation-phase-aware problem, still an honest
+future extension point, not this one) and only where `TerrainSystem` has
+height data at all (indoors and off the sculpted patch, this is a silent
+no-op). Verified against real sculpted terrain, not just read: the
+correction is exact when the target is within the leg's own reach, and
+honestly reach-limited — not broken, just visibly small — when a foot
+needs to drop lower than an already-near-straight standing leg can
+reach; see `FootIK.js`'s own header for the full account of that
+asymmetry and what closing it would actually require.
+
+**What still doesn't do this**: "hand placement, object interaction,
+looking at targets" remain honest future extension points — none of them
+are automatically applied to the Player or a Being yet. Building any of
+them means feeding this solver a real target (an object's own position
+for hand placement, say) from whichever system owns that concern, which
+this phase intentionally didn't build — "the architecture should be
 established even where complete implementations are deferred" is a
 direct instruction, not a gap found by accident.
 
@@ -407,8 +445,10 @@ points."
   result can't currently be hand-corrected if it gets one joint wrong; a
   person can only accept what it found or not use that model for
   retargeted playback at all.
-- **IK is a real, tested solver, not wired into any gameplay system** —
-  see "Inverse Kinematics" above.
+- **IK is wired for one real gameplay case (Player ground adaptation,
+  while idle) and not yet the rest** (hand placement, object
+  interaction, looking at targets, and foot placement during a walk
+  cycle) — see "Inverse Kinematics" above.
 - **Procedural layering only exists on the Player rig** — `BeingController.js`
   doesn't yet support a second, layered clip on top of a Being's own
   idle/walk.
@@ -427,9 +467,13 @@ points."
 - **Manual skeleton-map correction** — a small UI (a joint dropdown per
   Workshop joint, listing the model's own bone names) editing
   `ModelLibrary`'s own cached `skeletonMap` directly.
-- **IK wired to real gameplay** — ground adaptation (a floor raycast
-  feeding `TwoBoneIK.solveTwoBoneIK()` automatically), hand placement for
-  object interaction, "looking at targets" for the head/torso.
+- **The rest of IK wired to real gameplay** — foot placement during an
+  actual walk cycle (not just while idle — a genuinely different,
+  animation-phase-aware problem), hand placement for object interaction,
+  "looking at targets" for the head/torso, and closing the reach-limited
+  downward-correction gap `FootIK.js`'s own header documents (retuning
+  the idle clip's own knee bend, or a root-height adjustment in
+  `CameraSystem`).
 - **Layered playback for Beings**, the same `AnimationLayers.mergePoses()`
   mechanism `PlayerAnimationSystem.js` already uses.
 - **Real listeners for animation events** — a footstep sound system, a

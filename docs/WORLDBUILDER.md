@@ -669,18 +669,35 @@ state used to read "import one in the Being Creator's own Model
 section," sending a Builder-only session to a different app entirely
 for a capability that belongs here just as much.
 
-`BuildModeSystem.importModel(file)` is the fix — the identical
-`.glb`/`.gltf` handling `BeingCreatorApp.js`'s own Model section already
-used (`modelLibrary.add()` for the library entry, `modelAssetStore.put()`
-for the actual bytes), called from a new "Import Model" button at the
-top of the Imported Models tab (`BuilderPhoneUI.js`'s own
-`_buildImportModelRow()`). Nothing about *how* an imported model behaves
-changed — it was already a real `AssetService` kind (`modelLibrary`
-itself, registered once in `main.js`), already saved and loaded through
-the ordinary `PersistenceSystem` provider contract, and already usable
-by a Being as much as by the Builder. Importing from within the Builder
-just means a Builder-only session never needs to detour through a
-different app to reach a capability that was always meant to be shared.
+`BuildModeSystem.importModel(file)` is the fix — calling
+`importModelFile()` (`src/beings/ModelLibrary.js`), the shared five-step
+import (`modelLibrary.add()` for the library entry, `modelAssetStore
+.put()` for the actual bytes) `BeingCreatorApp.js`'s own Model section
+also calls, from a new "Import Model" button at the top of the Imported
+Models tab (`BuilderPhoneUI.js`'s own `_buildImportModelRow()`). Two
+copies of this exact logic used to exist independently, one per caller —
+Version 3, Phase 1 ("Completing Promises") folded them into the one
+function both now call, rather than leaving them free to drift apart.
+
+**Version 3, Phase 1 — "nothing about how it behaves changed" turned out
+to be more confident than the code actually supported.** Real gaps,
+found by checking the actual numbers rather than trusting this section's
+own earlier claim: `WorldObjectsSystem._buildObject3D()` measured a
+freshly-placed (or freshly-reloaded) imported object's collision
+footprint against the small placeholder capsule shown before the real
+model finished loading, never recomputing it once the swap happened —
+fixed, now recomputed the moment the real geometry arrives. The colour
+override control was shown and its value persisted for an imported
+selection, but `colorOverride` is only ever consumed by the primitive-
+object compile path — an imported model never read it at all — fixed by
+not showing a control that did nothing, rather than building real
+per-material tinting for an arbitrary imported mesh hierarchy. What's
+still genuinely true, unaffected by either fix: `modelLibrary` is a real
+`AssetService` kind, already saved and loaded through the ordinary
+`PersistenceSystem` provider contract, and already usable by a Being as
+much as by the Builder — importing from within the Builder just means a
+Builder-only session never needs to detour through a different app to
+reach a capability that was always meant to be shared.
 
 ## Known simplifications (by design, for this phase)
 
@@ -715,6 +732,15 @@ different app to reach a capability that was always meant to be shared.
 - **Box-select only recognises Builder objects, never furniture** — see
   "Multi-Selection & Grouping" above for why that's a deliberate choice,
   not an oversight.
+- **An imported model can never carry a Builder behaviour.**
+  `ModelLibrary` entries have no `behaviours` field at all, and there's
+  no authoring UI for one — an imported chair can never be sat in, an
+  imported lamp can never light up, unlike any primitive-built object
+  with the identical shape. A real gap, found during Version 3, Phase
+  1's own imported-object review and left alone deliberately: whether
+  imported models should gain the full 14-behaviour system, and what
+  authoring that would even look like for a mesh hierarchy the Workshop
+  didn't build, is a genuinely bigger design question than a small fix.
 
 ## Future extension points
 

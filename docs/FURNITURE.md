@@ -123,6 +123,35 @@ too — see `docs/WORLD.md`'s own "Craftsmanship (Version 2, Phase 19)"
 section for the full account of that phase's work, most of which lives
 in the room shell rather than here.
 
+**Version 3, Phase 2 ("Living Spaces") — three real bugs, found by a
+full environmental review rather than assumed away.** Shelving's own
+book-packing loop always started its cursor at the same fixed left
+offset and used a fixed gap between items, so the "logical grouping"
+storage bins above got the shelf's full width but the ordinary book/box
+shelves never did — every one of them only ever filled the first
+35-40% of its own width, regardless of shelf index, leaving the rest
+visibly bare. The same items now spread across the shelf's real usable
+width, keeping the exact same restrained item count — a placement bug,
+not a "needs more clutter" one. The music cabinet's stored vinyl records
+were positioned at the storage compartment's own vertical *centre*, plus
+an unexplained nudge, never actually checked against either the shelf
+below or the shelf above — they floated ~3.75cm above the surface they
+were meant to rest on while simultaneously grazing the shelf above.
+Now rest flush on the real surface. The turntable's own record label
+was positioned from a second, independently hand-computed offset that
+quietly drifted from the vinyl record's own — mostly embedded in the
+record rather than resting on it — now derived directly from the
+record's own already-correct position instead. And the sitting area's
+side table, footprint-comment notwithstanding ("small enough to allow
+minor overlap"), turned out to have no collision at all — checking the
+real numbers found it sitting entirely outside the declared footprint,
+not merely overlapping it. `FurnitureSystem._computeFootprintBox()`
+gained an optional `offset` field for exactly this "two objects with no
+shared natural centre" case (see `docs/ARCHITECTURE.md`'s own footprint
+account); the sitting area's own footprint now tightly covers the real
+combined bounds of chair and table, confirmed against the actual built
+mesh geometry rather than trusted by construction.
+
 **What was considered and deliberately left out (resolved, Sound &
 Presence phase).** A drawer/cabinet interaction sound (paralleling the
 paper shuffle, chair creak, and door creak from the last two phases)

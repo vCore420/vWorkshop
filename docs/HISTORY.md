@@ -1191,4 +1191,37 @@ readable from inside the place it happened to, through the exact
 `docFilePage()` door every other doc page already uses; the place that
 remembers everything now includes itself in that memory.
 
+**Version 3, Phase 1 — Completing Promises (v3.0.1)** — the forward-
+looking infrastructure Version 2 built and left waiting, wired in before
+any new foundation: crouching's real root cause fixed (a render-layer
+head-hide, not a joint moved, since the rig has no vertical translation
+at all); ladders investigated and playtested against the live engine,
+found already complete, no code changed; three real gaps closed in how
+imported Builder objects behave (a footprint-timing race, a misleading
+no-op colour control, duplicated import code now shared); `TwoBoneIK`
+wired to real foot placement on terrain for the first time, honestly
+scoped to standing still, with a real reach-limit asymmetry found by
+testing and documented rather than hidden; and `WorkshopSkeleton
+.autoMapSkeleton()` validated end to end against two real, externally-
+sourced models — finding and fixing a real false-positive bug
+("Armature" matching the `"arm"` pattern) along the way. See
+`docs/ROADMAP.md`'s own Phase 1 account for the complete story.
+
+**Version 3, Phase 2 — Living Spaces (v3.0.2)** — a full environmental
+review of every room and furniture piece, then a refinement pass, not
+new systems: a real bookshelf-fullness bug fixed (placeholders only ever
+filled the first third of any shelf); two small vinyl-storage clipping
+fixes in the music cabinet; a real collision gap closed for the sitting
+area's own side table, via a new optional footprint `offset` on
+`FurnitureSystem` rather than a symmetric box nearly double the size it
+needed to be; one small restrained cable added at the computer desk,
+closing a gap the Furniture & Storage phase's own retrospective named
+two versions ago; a material-continuity near-duplicate unified at the
+roof fascia; and `docs/VISUAL_IDENTITY.md`'s own long-standing "needs a
+rendered frame to judge" shadow-bias question finally answered — real
+rendered frames read back pixel-by-pixel, since screenshot tooling
+proved unreliable in this environment, found no acne at the current
+frustum. See `docs/ROADMAP.md`'s own Phase 2 account for the complete
+story.
+
 </details>
