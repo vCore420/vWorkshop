@@ -1,6 +1,7 @@
 import { wrapPage } from "./PageShell.js";
 import { renderMarkdown } from "../utils/SimpleMarkdown.js";
 import { HOME_URL } from "./BrowserStore.js";
+import { WorkbenchSystem } from "../workbench/WorkbenchSystem.js";
 import { getIdleLocation } from "../resident/ResidentMovement.js";
 import { getProvider } from "../ai/ProviderRegistry.js";
 import { PERSONALITY_TRAITS } from "../ai/TraitConfiguration.js";
@@ -51,7 +52,9 @@ import { EMBODIMENT_TYPES } from "../ai/EmbodimentConfiguration.js";
 export function registerWorkshopPages(pageRegistry, searchIndex, deps) {
   const { projectsStore, browserStore, hostProjectsService, residentProfileStore, residentState, residentBehaviour, conversationMemory, aiConnectionManager, engine, hostManager } = deps;
 
-  pageRegistry.register("workshop://", () => homePage({ browserStore, hostManager, residentProfileStore }));
+  pageRegistry.register("workshop://", () =>
+    homePage({ browserStore, hostManager, residentProfileStore, projectsStore, workbenchSystem: engine?.getSystem(WorkbenchSystem) })
+  );
   pageRegistry.register("workshop://documentation", () => docFilePage("Workshop Documentation", "./README.md"));
   pageRegistry.register("workshop://docs", () => docFilePage("Workshop Documentation", "./README.md")); // alias — see this file's own comment
   pageRegistry.register("workshop://builder", () => docFilePage("Builder Documentation", "./docs/WORLDBUILDER.md"));
@@ -90,7 +93,13 @@ export function registerWorkshopPages(pageRegistry, searchIndex, deps) {
   ]);
 }
 
-async function fetchText(path) {
+// Exported (not just used internally by docFilePage) — the reading chair's
+// own book panel (RestNookOverlay.js) reuses this exact same fetch, rather
+// than re-implementing an identical wrapper, to show the same "Workshop's
+// Story" document without going through wrapPage()'s iframe-document
+// wrapping, which that panel — a real in-page DOM panel, not an iframe
+// surface — doesn't need. See docs/PLAYER.md's reading-chair section.
+export async function fetchText(path) {
   const response = await fetch(path);
   if (!response.ok) throw new Error(`${path} responded with ${response.status}`);
   return response.text();
@@ -107,7 +116,7 @@ async function docFilePage(title, path) {
   return { title, html: wrapPage(title, `<span class="workshop-page-badge">Workshop Docs</span>${bodyHtml}`) };
 }
 
-function homePage({ browserStore, hostManager, residentProfileStore }) {
+function homePage({ browserStore, hostManager, residentProfileStore, projectsStore, workbenchSystem }) {
   const recents = collectRecentUrls(browserStore);
   const recentsHtml = recents.length
     ? `<div class="workshop-home-grid">${recents.map((url) => tile(url, url)).join("")}</div>`
@@ -115,6 +124,13 @@ function homePage({ browserStore, hostManager, residentProfileStore }) {
 
   const activeResident = residentProfileStore?.getActive();
   const hostStatus = hostManager?.getOverviewStatus();
+  // Version 3, Phase 4 ("Workshop Rituals") — "checking yesterday's
+  // project," from a screen already opened for other reasons rather than
+  // a new dedicated dashboard. `WorkbenchSystem.currentProjectId` already
+  // persists across sessions (see that system's own comment); this is
+  // its first surfacing anywhere outside the Workbench itself.
+  const currentProject = workbenchSystem?.currentProjectId ? projectsStore?.get(workbenchSystem.currentProjectId) : null;
+  const projectsTileMeta = currentProject ? `Continuing: ${currentProject.title}` : "Everything you're building";
 
   const html = `
     <h1>Workshop Home</h1>
@@ -129,7 +145,7 @@ function homePage({ browserStore, hostManager, residentProfileStore }) {
       <div class="workshop-home-grid">
         ${tile("resident://", "Residents", activeResident ? `${activeResident.name} and friends` : "No residents yet")}
         ${tile("asset://", "Shared Asset Library", "Objects, blueprints, animations, and more")}
-        ${tile("project://", "Workshop Projects", "Everything you're building")}
+        ${tile("project://", "Workshop Projects", projectsTileMeta)}
         ${tile("workshop://mission-control", "Mission Control", "AI resident status snapshot")}
         ${tile("workshop://diagnostics", "Diagnostics", "Workshop status and system health")}
         ${tile("workshop://documentation", "Workshop Documentation", "How the Workshop is built")}
