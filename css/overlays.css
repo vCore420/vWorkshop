@@ -213,6 +213,8 @@
 }
 .overlay--panel .overlay-panel {
   width: min(560px, 90vw);
+  max-height: 86vh;
+  overflow-y: auto;
   background: linear-gradient(180deg, var(--wood-mid), var(--wood-dark));
   border-radius: var(--radius-lg);
   border: 3px solid var(--wood-dark);
@@ -385,6 +387,29 @@
 }
 .wide-list .item-title { font-weight: 600; }
 .wide-list .item-meta { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--paper-dark); }
+/* Version 3, Phase 3 — full notes and calculations attached to a finished
+   project (see ArchiveOverlay.js's own buildArchiveEntry()). */
+.archive-notes {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--paper);
+  white-space: pre-wrap;
+}
+.archive-calculations {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-2) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.archive-calculations li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+}
 .empty-state {
   text-align: center;
   color: var(--paper-dark);
@@ -453,6 +478,101 @@
   pointer-events: none;
   transition: background var(--duration-medium) var(--ease-standard);
 }
+
+/* Version 3, Phase 3 — the reading chair's own "Read" tab. Appended as a
+   sibling of .overlay-panel (see RestNookOverlay.js's own comment on why),
+   so it's untouched by .rest-nook-panel-dismissed's own opacity/pointer-
+   events even while the arrival reminder is fully faded out — it needs its
+   own explicit hidden state instead, revealed once dismiss() reveals it. */
+.rest-nook-read-tab {
+  position: absolute;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(58, 42, 30, 0.6);
+  border: 1px solid rgba(184, 134, 59, 0.4);
+  border-radius: 999px;
+  padding: 8px 20px;
+  color: var(--paper);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-medium) var(--ease-standard);
+}
+.rest-nook-read-tab.visible { opacity: 0.85; pointer-events: auto; }
+.rest-nook-read-tab:hover { opacity: 1; }
+
+.rest-nook-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: var(--space-3) 0;
+}
+.rest-nook-menu-item {
+  text-align: left;
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--paper);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+.rest-nook-menu-item:hover { background: rgba(255, 255, 255, 0.1); }
+
+.rest-nook-back {
+  display: block;
+  background: transparent;
+  border: none;
+  color: var(--paper-dark);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  padding: 0 0 var(--space-3);
+}
+.rest-nook-back:hover { color: var(--paper); }
+
+/* Minimal typography for the same rendered docs/HISTORY.md markdown
+   workshop://history shows in the Browser — scoped to this class rather
+   than reusing browser-pages.css (that stylesheet is the Computer/Browser
+   surface's own, loaded only inside its iframe; this is a plain in-page
+   DOM panel, so it gets its own small ruleset here instead, per this
+   project's own "one file per interface surface" CSS convention). */
+.rest-nook-story-body {
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+.rest-nook-story-body h1,
+.rest-nook-story-body h2,
+.rest-nook-story-body h3,
+.rest-nook-story-body h4 {
+  font-family: var(--font-display);
+  color: var(--brass-bright);
+  margin: var(--space-4) 0 var(--space-2);
+}
+.rest-nook-story-body h1:first-child,
+.rest-nook-story-body h2:first-child { margin-top: 0; }
+.rest-nook-story-body p { margin: 0 0 var(--space-3); }
+.rest-nook-story-body ul { margin: 0 0 var(--space-3); padding-left: var(--space-4); }
+.rest-nook-story-body code {
+  font-family: var(--font-mono);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.rest-nook-story-body pre {
+  background: rgba(0, 0, 0, 0.25);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+.rest-nook-story-body a { color: var(--brass-bright); }
+.rest-nook-story-body hr { border: none; border-top: 1px solid rgba(255, 255, 255, 0.15); margin: var(--space-4) 0; }
+.rest-nook-story-body summary { cursor: pointer; color: var(--brass-bright); margin: var(--space-2) 0; }
 
 /* ---------- Resident Conversation ---------- */
 .resident-conversation-messages {

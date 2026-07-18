@@ -216,6 +216,22 @@ interaction is: build geometry, attach an `InteractableComponent`, register
 an overlay if it needs one. Nothing in `InteractionSystem` or
 `OverlayManager` changes.
 
+**A `focusPose` can also declare `allowLookAround: true`** (see
+`SittingArea.js`) — a genuinely relaxed pose, unlike the computer or
+workbench's fully fixed one. `CameraSystem._updateFocus()` hands mouse-look
+back to the player once eased into such a pose, and `InteractionSystem`
+exposes `activeAllowsLookAround` (a getter on `this.active`) as the one
+shared place that distinction lives — `main.js`'s own canvas click handler
+(re-acquiring pointer lock after Escape or an overlay closes) and
+`PhoneSystem.open()`'s own "can't check the Phone mid-interaction" guard
+both read it, so a seated, relaxed interaction doesn't block either of
+those the way a fixed-focus one still correctly does. Version 3, Phase 3
+("The Reading Chair") — see `docs/FURNITURE.md`'s sitting-area account for
+the fuller story, including the earlier bug this replaced
+(`_resolveFocusPose()` used to silently drop every `focusPoseLocal` field
+except `position`/`lookAt`, so `allowLookAround` never actually reached the
+runtime focus pose at all).
+
 ## Data flow for "everything is data-driven"
 
 - **Room shape & furniture placement**: `src/data/layoutDefault.js`.

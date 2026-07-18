@@ -134,9 +134,9 @@ There is no menu. Everything is a physical object — see the table below.
 | Workbench | Physically shows whatever project you're currently focused on — lean in for a small panel to finish it, switch to another, or start something new. See below. |
 | Notebook (on the workbench) | A page of free-form notes, saved automatically — separate from whatever project is currently on the bench |
 | Music cabinet | A proper vinyl listening setup — turntable, amplifier, bookshelf speakers, records stored below. Opens the real music library — see "Music" below |
-| Shelving | Documentation & finished-project archive (honestly empty until there's something to archive) — the reference bookshelf at the top of the reading corner |
+| Shelving | Documentation & finished-project archive — full notes and any saved calculations, not just a title (honestly empty until there's something to archive) — the reference bookshelf at the top of the reading corner |
 | Tool storage | The Workshop's toolbox — calculators and planning tools, organised by category, pinnable, with a builder for making your own |
-| Reading chair | Part of the same reading-and-listening corner as the bookshelf and music cabinet — a quiet spot, deliberately reserved for something calmer later |
+| Reading chair | Sit for a while — a quiet arrival moment, then a small "Read" tab opens a book panel: the Workshop's own story, or the finished-project archive, both read from the chair itself. Part of the same reading-and-listening corner as the bookshelf and music cabinet |
 | Wardrobe | A physical wardrobe and full-height mirror — opens the exact same Wardrobe app the computer does, just from a second, physical entry point. Stand in front of the mirror to see yourself while you change |
 | Windows | Real glass now — see the actual sky/world outside. "Look outside" opens the Environment panel: view or change the weather, wind, and mode, see the current time |
 | Front doors | A proper pair of outward-opening French doors — opens/closes, and genuinely leads outside — walk through into the world and back in freely |

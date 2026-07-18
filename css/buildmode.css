@@ -65,14 +65,29 @@
 }
 
 /* ---------- Library screen ---------- */
+/* Workshop Reliability phase (v3.0.3b) — "the tab buttons don't wrap into
+   a new line and just keep pushing themselves off to the right." Five
+   buttons (labels from "Terrain" to "Construction Library") at `flex: 1`
+   with no `flex-wrap` meant each button's own default `min-width: auto`
+   (a flex item never shrinks below its own content's intrinsic width
+   unless told to — the same class of bug `.panel-row input[type="range"]`
+   was fixed for, see overlays.css's own comment on that one) held the row
+   to its full unshrunk width regardless of the 300px-wide phone panel,
+   pushing the later buttons off-screen instead. `flex-wrap: wrap` lets
+   the row genuinely break; `flex-basis: calc(50% - 2px)` (half the row,
+   minus half the 4px gap) targets two buttons per row rather than one
+   giant button per row or an uneven wrap driven purely by each label's
+   own length. */
 .builder-phone-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   margin-bottom: var(--space-3);
   flex-shrink: 0;
 }
 .builder-phone-tabs button {
-  flex: 1;
+  flex: 1 1 calc(50% - 2px);
+  min-width: 0;
   background: none;
   border: 1px solid var(--paper-dark);
   color: var(--ink-soft);

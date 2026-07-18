@@ -146,6 +146,22 @@ own autoplay policy (audio can't start without a real user gesture,
 independent of anything this app does), so this is what "restored" can
 honestly mean. See `MusicSystem.finalizeInitialState()`.
 
+**Version 3, Phase 4 ("Workshop Rituals") — "turning on the radio."** A
+restored, paused queue looks identical to a freshly-loaded one nobody's
+pressed play on yet — nothing distinguished "you were listening to this"
+from "here's whatever happened to load." `wasPlaying` had been captured
+into every save since this system existed and never once read back until
+this phase — `MusicSystem.wasPlayingLastSession` is that flag's first
+real reader, true for exactly the gap between a session restoring and the
+player's first real playback action. `PlaybackBar.js` shows a small
+"Picking up where you left off" invitation for that one moment — a real,
+one-click `resume()`, not autoplay, so the policy above still holds
+honestly — and it retires the instant *any* real action happens
+(resuming, choosing something else, skipping), including the edge case
+where the root that had the song became unreachable between sessions and
+resuming can't actually do anything: the invitation still goes away
+rather than sitting there forever offering something it can't deliver.
+
 ## Playback
 
 One real `HTMLAudioElement`, owned by `MusicSystem` for the lifetime of

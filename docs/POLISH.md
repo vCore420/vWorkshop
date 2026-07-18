@@ -93,13 +93,20 @@ two more places that needed it. Build Mode didn't have this problem: its
   `ProceduralTexture.js` — no external artwork, nothing licensed, nothing
   to attribute.
 - **`service-worker.js`** — precaches the true "shell" (index.html, the
-  CSS files, `main.js`) on install, and uses stale-while-revalidate for
-  everything else: cached content serves instantly, while a background
-  fetch quietly refreshes the cache for next time. Deliberately does *not*
-  enumerate every file in `src/` by hand — that list would need updating
-  every time a file is added or removed, and would silently drift stale.
+  CSS files, `main.js`) on install. Deliberately does *not* enumerate
+  every file in `src/` by hand — that list would need updating every
+  time a file is added or removed, and would silently drift stale.
   Instead, anything not in the shell gets cached the first time it's
-  actually requested.
+  actually requested. Version 3, Phase 3c — the Workshop's own files (this
+  repo's own same-origin source) are served **network-first**, always
+  trying the network before falling back to the cache; only cross-origin
+  requests (the Three.js CDN) still use stale-while-revalidate, the right
+  tradeoff for a pinned vendor URL that never actually changes once
+  fetched. The original single stale-while-revalidate strategy applied to
+  the Workshop's own files too, which meant a fresh deploy's own first
+  load still served the *previous* cached version — see that file's own
+  top comment for the full account, including why the fix needed to go
+  one layer deeper than the Service Worker's own Cache API.
 - **Honest limitation**: this makes the workshop work offline *after* one
   successful visit with a network connection — not on a completely
   first-ever offline load. Three.js loads from a CDN via the import map in

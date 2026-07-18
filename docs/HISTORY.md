@@ -1196,7 +1196,9 @@ looking infrastructure Version 2 built and left waiting, wired in before
 any new foundation: crouching's real root cause fixed (a render-layer
 head-hide, not a joint moved, since the rig has no vertical translation
 at all); ladders investigated and playtested against the live engine,
-found already complete, no code changed; three real gaps closed in how
+found already complete, no code changed (later corrected — see Phase 3b
+below; the playtest verified climbing itself but never simulated walking
+up to one, so it missed a real collision bug); three real gaps closed in how
 imported Builder objects behave (a footprint-timing race, a misleading
 no-op colour control, duplicated import code now shared); `TwoBoneIK`
 wired to real foot placement on terrain for the first time, honestly
@@ -1223,5 +1225,93 @@ rendered frames read back pixel-by-pixel, since screenshot tooling
 proved unreliable in this environment, found no acne at the current
 frustum. See `docs/ROADMAP.md`'s own Phase 2 account for the complete
 story.
+
+**Version 3, Phase 3 — The Reading Chair (v3.0.3)** — the reading corner's
+long-reserved "something calmer" finally delivered, using content that
+already existed rather than inventing new content. Two stacked bugs fixed
+so the sitting area's own `allowLookAround` focus pose finally works:
+`FurnitureSystem._resolveFocusPose()` was silently dropping every
+`focusPoseLocal` field except `position`/`lookAt`, and both `main.js`'s
+canvas click handler and `PhoneSystem.open()`'s guard refused to act
+while any interaction was active, never distinguishing a relaxed, seated
+pose from the computer/workbench's fully fixed one — `InteractionSystem`
+now exposes `activeAllowsLookAround` as the one shared place that
+distinction lives. The sitting area gained its first real behaviour: once
+the arrival reminder is dismissed, a small "Read" tab opens a panel
+offering "The Workshop's Story" (`docs/HISTORY.md`, the same content
+`workshop://history` shows) and "The Archive" (finished projects, reusing
+`ArchiveOverlay.js`'s own rendering verbatim rather than a second copy) —
+the "narrow" mechanism the phase's own planning settled on, no new
+interactable and no change to `InteractionSystem`'s suspension logic. The
+Archive itself was enriched in both places at once: full notes and every
+saved calculation, not just a title and a date. Two more real Shelving
+bugs fixed along the way: top-shelf items clipping through the cap trim
+(the frame's height is now decoupled from shelf spacing, sized instead
+for equal headroom on every shelf) and the book-packing fix from Living
+Spaces reading as too mechanically even (now randomised into natural-
+looking clusters). No new AI chat surface this pass, on purpose. See
+`docs/ROADMAP.md`'s own Phase 3 account for the complete story.
+
+**Version 3, Phase 3b — Refinement pass (v3.0.3b)** — a short
+user-reported bug list, not a new phase. The player's shadow was missing
+its head: the crouch fix's own `FIRST_PERSON_HIDDEN_LAYER` needed
+re-enabling on a third camera (the sun's shadow camera, alongside the
+main and mirror cameras that already did), the same one-line pattern
+`ReflectionSystem` already established. Ladders had never actually
+worked, despite Phase 1 reporting them complete: `WorldObjectsSystem`
+gave every placed object, ladders included, a solid walk-collision box
+that stopped the player before they could ever reach `LadderSystem`'s
+own climbable zone — fixed by exempting any `"ladder"`-behaviour object
+from collision entirely, verified with genuine forward-key input driven
+through the real collision path from two approach angles, not a position
+teleport (see the correction added to Phase 1's own account). The
+Builder Phone's own five tab buttons overflowed off the panel's right
+edge instead of wrapping — the same "flex item won't shrink below its
+own text" bug an earlier phase fixed for a range slider, fixed the same
+way (`flex-wrap: wrap` plus a sized flex-basis). See `docs/ROADMAP.md`'s
+own Phase 3b account for the complete story.
+
+**Version 3, Phase 3c — Service worker caching fix (v3.0.3c)** — a real
+user-reported bug: loading a new version of the Workshop needed a load,
+a refresh, and another load before it actually showed up. Root cause:
+the original service worker used one stale-while-revalidate strategy for
+every request, including the Workshop's own `index.html`/`css/`/`src/`
+files — the exact files that change on every deploy — always serving
+whatever was cached first and only refreshing it for *next* time. Fixed
+in two necessary layers, each confirmed by testing rather than assumed:
+same-origin requests are now network-first (cross-origin CDN requests
+keep the original strategy, still the right call for a pinned vendor
+URL); and, found only once that alone still failed a real simulated-
+deploy test, every same-origin fetch now explicitly bypasses the
+browser's own HTTP cache (`{ cache: "no-store" }`), since Python's dev
+server sends no `Cache-Control` header and that cache layer sits below
+the Service Worker's own Cache API entirely. New `.claude/DEV_NOTES.md`
+records this and the dev-session verification habits it forced
+throughout Phase 3b, so a future session doesn't rediscover any of it
+from scratch. See `docs/ROADMAP.md`'s own Phase 3c account for the
+complete story.
+
+**Version 3, Phase 4 — Workshop Rituals (v3.0.4)** — connecting systems
+that already remembered their own state, rather than adding new memory.
+Investigation found the Workshop remembers far more than the brief's own
+framing suggested: real elapsed time (`TimeOfDaySystem`'s realtime
+mode), weather, the light switch, the front door, the Workbench's
+current project, and music's queue/position all already persist; nothing
+stops music playing across any other activity, confirmed directly. Three
+small, connected touches followed, each reusing existing state rather
+than inventing new tracking: the reading chair now remembers what you
+were reading (`FurnitureSystem` gained a small, generic per-piece memory
+— `getInteractionState()`/`setInteractionState()` — the same
+"one capability, multiple callers" shape `ReflectionSystem`/
+`LadderSystem` already use); the music cabinet now offers to pick back
+up (`MusicSystem`'s own `wasPlaying` flag, captured into every save and
+never once read back since the system existed, finally has a reader);
+and the Browser's home page quietly mentions the current project. A
+scope boundary was drawn deliberately: `PlayerPatternMemory`/
+`WorldEventLog` (Phase 6's), new resident behaviour (Phase 10's), and
+creative-tool friction (Phase 8's) were all left alone, and the entry
+sequence itself was left untouched on purpose — its instantness is
+restraint, not a gap. See `docs/ROADMAP.md`'s own Phase 4 account for
+the complete story.
 
 </details>

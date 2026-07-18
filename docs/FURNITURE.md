@@ -26,8 +26,10 @@ workbench need that; see those objects' own docs for why).
 
 - **`Shelving.js`** — "documentation and project archives." A wooden
   frame, four shelves, and a scattering of book/box placeholders.
-  Opens `overlayId: "archive"`, an honest, currently-empty list of
-  every `status === "done"` project.
+  Opens `overlayId: "archive"`, showing every finished project's title,
+  notes, and saved calculations (`ArchiveOverlay.js`'s own
+  `buildArchiveContent()`), with an honest empty state when there's
+  nothing to archive yet.
 - **`ToolStorage.js`** — a pegboard and a three-drawer cabinet. No
   inventory system behind it; the interaction says so directly rather
   than faking one.
@@ -39,9 +41,19 @@ workbench need that; see those objects' own docs for why).
   why there's deliberately no second appearance system here), plus a
   full-height mirror — the first real payoff of `ReflectionSystem`'s
   generic reflection capability.
-- **`SittingArea.js`** — an armchair, a rug, and a side table. Explicitly
-  reserved for something quieter later (see its own comment); comfortable
-  *now* regardless of what that turns out to be.
+- **`SittingArea.js`** — an armchair, a rug, and a side table. Version 3,
+  Phase 3 ("The Reading Chair") gave it its first real quiet-corner
+  behaviour: sitting down still shows the same calm arrival reminder, and
+  once it's dismissed a small "Read" tab offers "The Workshop's Story"
+  (the same `docs/HISTORY.md` content `workshop://history` shows) and
+  "The Archive" (the same finished-project content `Shelving.js`'s own
+  overlay shows) — both swapped into the same reading panel rather than a
+  second interactable. See `RestNookOverlay.js` and this document's own
+  "Version 3, Phase 3" account below. Version 3, Phase 4 ("Workshop
+  Rituals") gave it a second, smaller behaviour: opening the reading
+  panel fresh now offers whichever of Story/Archive was last actually
+  read, rather than always resetting to the neutral menu — see this
+  document's own "Version 3, Phase 4" account below.
 - **`MusicCabinet.js`** — already given its own full redesign pass in an
   earlier phase (replacing the original stand-in stereo); this phase
   only reviewed it for material accuracy.
@@ -151,6 +163,83 @@ shared natural centre" case (see `docs/ARCHITECTURE.md`'s own footprint
 account); the sitting area's own footprint now tightly covers the real
 combined bounds of chair and table, confirmed against the actual built
 mesh geometry rather than trusted by construction.
+
+**Version 3, Phase 3 ("The Reading Chair") — two more real Shelving
+fixes, found while investigating the reading corner.** The top shelf's
+own items clipped through the cap trim above it — confirmed by the
+actual numbers, not just eyeballed: every shelf except the top one
+enjoyed a full `shelfSpacing` (0.6m) of headroom before the next
+shelf's own board; the top shelf only ever had 0.135m before the cap,
+since the frame's overall `height` was sized to just clear the top
+shelf's own boards with the cap sitting directly above, not to
+preserve the same headroom pattern every other shelf gets. Even the
+*shortest* possible item on the top shelf (0.18m tall) already
+overshot the cap's own bottom face; the tallest (0.24m) poked through
+the cap entirely, book and cap genuinely occupying the same space.
+Fixed by decoupling the frame's overall height from shelf spacing
+(`shelfSpacing`, still exactly `0.6` between every shelf, unchanged)
+and sizing it instead so the top shelf gets the same ~0.57m clearance
+(spacing minus a shelf board's own thickness) to the cap that every
+other shelf already gets to the shelf above it — `height = 2.535` (up
+from `2.1`, roughly 43.5cm/20% taller overall; still comfortably under
+the room's own 3m ceiling), confirmed against the real built mesh
+bounding boxes rather than trusted by the arithmetic alone. Separately:
+the book-packing fix two phases ago correctly filled each shelf's own
+usable width, but did it with one perfectly even, mechanically-computed
+gap between every item — which reads as assembled-by-formula rather
+than shelved by hand over time. Now fixed the same way: the same total
+item count and the same overall usable-width coverage, but the leftover
+gap space is distributed with randomised (squared-random, skewing
+toward small gaps with occasional larger breaks) rather than uniform
+weights per gap, so items bunch into a few natural-looking clusters
+instead of a comb.
+
+**Version 3, Phase 3 ("The Reading Chair") — the sitting area's own
+quiet-corner bugs, and a shared reading panel.** Two real, stacked bugs
+kept the sitting area from ever doing what its own `allowLookAround:
+true` focus pose asked for: `FurnitureSystem._resolveFocusPose()` only
+ever returned `{position, lookAt}`, silently dropping every other field
+a `focusPoseLocal` declared, so the runtime focus pose `CameraSystem`
+actually received never carried `allowLookAround` at all; and even with
+that fixed, both `main.js`'s own canvas click handler (re-acquiring
+pointer lock) and `PhoneSystem.open()`'s own guard refused to act while
+*any* interaction was active, a check written for the computer/
+workbench's fully fixed camera that never distinguished a relaxed,
+look-around-permitting one from theirs. `InteractionSystem` now exposes
+`activeAllowsLookAround` as the one shared place that distinction
+lives; see `docs/ARCHITECTURE.md`'s interaction-pipeline section for the
+fuller mechanism. On top of that fix, the sitting area gained its first
+real behaviour: once the arrival reminder is dismissed, a small "Read"
+tab reveals a reading panel offering "The Workshop's Story" (reusing
+`WorkshopPages.js`'s own `fetchText()` and `SimpleMarkdown.js`'s
+`renderMarkdown()` directly, skipping `PageShell.wrapPage()`'s
+iframe-document wrapping since this is a real in-page DOM panel) and
+"The Archive" (reusing `ArchiveOverlay.js`'s own `buildArchiveContent()`
+verbatim, so the chair and the shelf show the exact same archive). This
+is the "narrow" mechanism the phase's own planning settled on — a
+button inside the chair's own reading panel, no change to
+`InteractionSystem`'s suspension logic and no second interactable.
+`ArchiveOverlay.js` itself was enriched at the same time: a finished
+project's full `notes` and every saved `calculations` entry are now
+shown, not just its title and finished date.
+
+**Version 3, Phase 4 ("Workshop Rituals") — a new small, generic
+capability, and the reading chair's first use of it.** "Sitting at the
+same chair" becoming a genuine habit needed somewhere to remember *how*
+a piece was last used, not just where it's placed — `FurnitureSystem`
+gained `getInteractionState(pieceId)`/`setInteractionState(pieceId,
+patch)`, a plain per-piece bag persisted alongside its existing
+`overrides`, the same "one small, generic capability, multiple
+independent callers" shape `ReflectionSystem.registerSurface()` and
+`LadderSystem.registerLadder()` already established. `RestNookOverlay.js`
+is the first caller: opening the reading panel now checks
+`getInteractionState("sittingArea")` and offers whichever of
+Story/Archive was last actually read, first, instead of always resetting
+to the neutral menu — genuinely picking up the same book, not just
+resuming a generic screen. Backing out to the menu with "Back" doesn't
+clear this; the memory is what was last *read*, not what screen happened
+to be open. Any future piece needing similarly small "remember how I was
+last used" memory has somewhere to put it without inventing a new store.
 
 **What was considered and deliberately left out (resolved, Sound &
 Presence phase).** A drawer/cabinet interaction sound (paralleling the

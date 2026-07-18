@@ -443,6 +443,35 @@ same fix applies to the gentle horizontal drift while climbing, which
 used to zero out world-space Z outright rather than computing a proper
 strafe-only vector.
 
+**A second, much bigger bug: a Builder-placed ladder never actually
+worked at all, despite the fix above.** Found in Version 3, Phase 3b (a
+small refinement pass) after a real playtest report — "I get stopped by
+its collision and the player keeps trying to walk forward but not going
+up the ladder," tried from every side. Root cause:
+`WorldObjectsSystem` gives every placed instance a solid walk-collision
+box, unconditionally — including a ladder, since nothing exempted a
+`"ladder"`-behaviour object from it. `CameraSystem._resolveCollisions()`
+pushed the player back out of that solid box before they could ever walk
+far enough forward to actually reach `LadderSystem`'s own climbable
+zone, which is only slightly bigger than the box itself. Fixed in
+`WorldObjectsSystem._updateFootprint()`: an object carrying the
+`"ladder"` behaviour now gets no walk-collision footprint at all — see
+`docs/WORLDBUILDER.md`'s "Collision integration" section for the full
+account. Verified against the real collision path, not just the
+climbing mechanics in isolation — driving genuine forward-key input
+through `CameraSystem.update()` frame by frame from a standing start
+several metres away, from two different approach angles, both reaching
+the zone and climbing normally.
+
+This corrects an earlier, wrong claim: Version 3, Phase 1's own
+"explicit playtest" reported ladders as "reviewed and found already
+complete." That verification drove the player's own position directly
+to test the climbing mechanics themselves (zone padding, climb speed,
+gravity suspension) and never actually simulated walking in from a
+distance — so it never hit this collision wall. The climbing mechanics
+it tested were, and still are, genuinely correct; the approach to them
+never was.
+
 ### Crouching: the camera moved, but so, deliberately, does the head
 
 Version 3, Phase 1 ("Completing Promises") named this directly:

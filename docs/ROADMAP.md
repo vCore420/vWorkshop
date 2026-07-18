@@ -3273,6 +3273,14 @@ walking-away all work exactly as the existing code and docs already
 claimed. No code changed. Reported as complete rather than manufacturing
 a fix for something that wasn't broken.
 
+**Correction (Version 3, Phase 3b):** this was wrong. The playtest above
+verified the climbing mechanics themselves by driving the player's own
+position directly — it never actually simulated walking up to a ladder
+from a distance, so it never hit the real bug: `WorldObjectsSystem` gave
+every Builder-placed ladder a solid walk-collision box like any other
+object, which stopped the player before they could ever reach the
+climbable zone at all. See Phase 3b's own account below.
+
 **Imported Builder objects, three real gaps closed.** A footprint-timing
 race (`WorldObjectsSystem._buildObject3D()` swaps in an imported model's
 real geometry asynchronously, but the collision footprint was measured
@@ -3414,6 +3422,251 @@ at all, not a small fix; and a pixel-precise measurement of shadow-edge
 offset distance, which this pass's own testing method wasn't precise
 enough to produce — worth a real screenshot if a visible complaint ever
 actually surfaces, not before.
+
+## Version 3 — Phase 3 — The Reading Chair (v3.0.3)
+
+**Goal:** deliver whatever "something calmer" the reading corner was
+deliberately reserved for — using content that already exists
+(`docs/HISTORY.md`, the finished-project archive) rather than inventing
+new content, and resisting the temptation to make the chair a third full
+workstation. See `docs/ROADMAP_V3.md`'s own Phase 3 entry for the
+original brief.
+
+**Two stacked bugs were kept the sitting area's own `allowLookAround`
+focus pose from ever doing what it asked for**, both found by chasing a
+playtest report ("I can't click the screen to look around again") rather
+than trusted as already working. `FurnitureSystem._resolveFocusPose()`
+only ever returned `{position, lookAt}`, silently dropping every other
+field a `focusPoseLocal` declared — `SittingArea.js`'s own
+`allowLookAround: true` never actually reached the runtime focus pose
+`CameraSystem` checks. Fixed by spreading `local` first and only
+overwriting the two fields that genuinely need world-space conversion, so
+every field passes through honestly now, not just the two anticipated
+ones. Even with that fixed, `main.js`'s own canvas click handler and
+`PhoneSystem.open()`'s own guard both refused to act while *any*
+interaction was active — a check written for the computer/workbench's
+fully fixed camera that never distinguished a relaxed, look-around-
+permitting pose from theirs. `InteractionSystem` now exposes
+`activeAllowsLookAround` as the one shared place that distinction lives,
+used by both call sites instead of two independently-maintained copies of
+the same condition — see `docs/ARCHITECTURE.md`'s interaction-pipeline
+section. The Phone can now be checked while seated in the reading chair
+(a genuinely relaxed pose), while still correctly staying closed for
+fixed-focus interactions like the computer desk, confirmed for both cases
+directly against the live engine rather than assumed from the code alone.
+
+**The sitting area gained its first real behaviour**, using the "narrow"
+mechanism the phase's own planning settled on — a button inside the
+chair's own reading panel that swaps its content, not a second
+interactable or any change to `InteractionSystem`'s own suspension logic.
+The calm arrival reminder is untouched; once it's dismissed, a small
+"Read" tab (a sibling of the reminder's own panel element, so it survives
+the reminder's fade-out) reveals a small menu offering "The Workshop's
+Story" — the exact same `docs/HISTORY.md` content `workshop://history`
+shows, fetched and rendered with `WorkshopPages.js`'s own `fetchText()`
+and `SimpleMarkdown.js`'s `renderMarkdown()` directly, deliberately
+skipping `PageShell.wrapPage()`'s iframe-document wrapping since this is
+a real in-page DOM panel — and "The Archive," reusing
+`ArchiveOverlay.js`'s own `buildArchiveContent()` verbatim rather than a
+second, independently-maintained rendering, so the chair and the
+shelving unit genuinely show the same archive.
+
+**The Archive itself was enriched**, in both places at once since they
+now share one implementation: a finished project's full `notes` and
+every saved `calculations` entry (`toolTitle` plus the date it was run)
+are shown, not just its title and finished date. Built with `textContent`
+throughout rather than the previous overlay's `innerHTML` string — notes
+is free text, and there's no reason to parse it as HTML.
+
+**Two more real Shelving bugs, found while investigating the reading
+corner.** The top shelf's own book/box placeholders clipped through the
+cap trim above it — confirmed against the actual built mesh bounding
+boxes, not eyeballed: every shelf except the top one got a full 0.6m of
+shelf-to-shelf spacing as headroom, but the frame's overall height had
+only ever been sized to just clear the top shelf's own boards, leaving it
+just 0.135m of clearance to the cap versus ~0.57m everywhere else — even
+the shortest item already overshot it. Fixed by decoupling the frame's
+height from shelf spacing (which stays exactly `0.6`, unchanged) and
+sizing it instead so the top shelf gets that same ~0.57m clearance to the
+cap that every other shelf gets to the shelf above it (`height = 2.535`,
+up from `2.1`). Separately, the book-packing fix from the Living Spaces
+phase filled each shelf's own usable width correctly but with one
+perfectly even, mechanically-computed gap between every item, reading as
+assembled-by-formula rather than shelved by hand over time — items now
+bunch into a few natural-looking clusters instead, via randomised
+(squared-random) rather than uniform gap weights, with the same total
+item count and the same overall width coverage as before.
+
+**Explicitly deferred, on purpose:** no new AI chat surface for this
+pass — the reading corner stays "somewhere quiet to sit," not a second
+place to talk to Bubble; the roadmap's own "resident to sit and talk
+with" idea for this corner remains a future phase's decision, not this
+one's.
+
+## Version 3 — Phase 3b — Refinement pass (v3.0.3b)
+
+**Goal:** a short, user-reported bug list, not a new phase — three
+small, independent fixes, each investigated to a real root cause before
+touching any code, each verified against the live engine rather than
+assumed correct.
+
+**Player shadow had no head.** The crouch fix (Phase 1) moved the head
+mesh onto its own render layer (`FIRST_PERSON_HIDDEN_LAYER`) so the
+first-person camera could reliably exclude it — every other camera that
+should still see the full character has to explicitly re-enable that
+layer, and `ReflectionSystem`'s mirror camera already did. The sun's own
+shadow camera never got the same treatment, so the head — genuinely
+`castShadow = true`, like every other body part — was invisible to
+shadow rendering specifically. Fixed with the same one-line pattern
+`ReflectionSystem` already established, in `LightingSystem.js`. Verified
+directly against the exact boolean Three.js's own shadow pass uses
+(`headMesh.layers.test(shadowCamera.layers)`), confirmed `false` before
+the fix and `true` after it.
+
+**Ladders had never actually worked**, despite Phase 1 reporting them
+complete. Root cause: `WorldObjectsSystem` gave every placed object,
+including a Builder-placed ladder, a solid walk-collision box —
+`CameraSystem`'s own collision resolution stopped the player at that
+box's edge before they could ever walk far enough to reach
+`LadderSystem`'s own climbable zone, which is only slightly larger than
+the box itself. No key ever mattered, from any approach direction,
+because the climbing code never ran at all. Fixed by exempting any
+object carrying the `"ladder"` behaviour from `WorldObjectsSystem`'s own
+collision footprint entirely — a ladder is now climbable everywhere
+within its own zone, not just the sliver of it a player could actually
+reach. Two honest tradeoffs named rather than hidden: a ladder can no
+longer be stood on top of like a platform (never a real use case for
+one), and a player could technically walk through the rails at a steep
+angle without climbing. Verified by driving genuine forward-key input
+(real `KeyboardEvent`s, not a position teleport) through
+`CameraSystem.update()` frame by frame, from a standing start several
+metres away, from two different approach angles — both reached the zone
+and climbed normally — while confirming an ordinary Construction Library
+cube still blocks movement exactly as before. This also corrects Phase
+1's own claim that ladders were "reviewed and found already complete";
+that playtest verified the climbing mechanics directly but never
+simulated a real walk-up from a distance, so it never hit this bug — see
+the correction added to Phase 1's own account above.
+
+**The Builder Phone's own tab row (Construction Library / Saved Objects
+/ Imported Models / Blueprints / Terrain) overflowed off the right edge
+of the 300px-wide panel instead of wrapping.** `.builder-phone-tabs` was
+a plain flex row with no `flex-wrap`, and its buttons' own default
+`min-width: auto` meant they couldn't shrink below their label's own
+intrinsic width — the same class of bug `.panel-row input[type="range"]`
+was fixed for in an earlier phase. Fixed with `flex-wrap: wrap` plus a
+`calc(50% - 2px)` flex-basis targeting two buttons per row. Verified
+against the real 300px panel: five buttons now wrap into a clean
+2-2-1 layout with no overflow, tab-switching still works, and no text is
+clipped.
+
+## Version 3 — Phase 3c — Service worker caching fix (v3.0.3c)
+
+**Goal:** "loading a new version of the workshop needs a load, then a
+refresh, then another load to actually see it" — a real, user-reported
+production bug, not a dev-environment quirk (though it was that too,
+throughout Phase 3b's own verification work — see that phase's account
+above and `.claude/DEV_NOTES.md`, new this phase, for the workaround
+habits it forced).
+
+**Root cause: the original service worker used one single
+stale-while-revalidate strategy for every request, including the
+Workshop's own files.** Stale-while-revalidate is a genuinely correct,
+deliberate choice for content that rarely changes — but for `index.html`,
+everything under `css/` and `src/`, the exact files that change on
+*every single deploy*, always serving whatever's cached first (however
+old) and only refreshing the cache in the background for *next* time
+means the load immediately after a fresh deploy still shows the
+*previous* version, correctly, by that strategy's own design. A second
+reload was needed just to see what the background refresh had already
+fetched.
+
+**Fixed in two layers, both necessary — confirmed by testing each in
+isolation, not assumed.** First: same-origin requests (the Workshop's own
+files) now use network-first — always try the network, fall back to the
+Cache API only if that genuinely fails. Cross-origin requests (the
+Three.js CDN) keep the original stale-while-revalidate, the right
+tradeoff for a pinned vendor URL that never actually changes once
+fetched. Testing that alone against a real simulated deploy (editing a
+cached file, then reloading exactly once) still showed the *old*
+content — a second, deeper cache layer was intervening: Python's
+`http.server` (this project's own dev server) sends no `Cache-Control`
+header, which licenses the browser's own default HTTP cache — a layer
+below the Service Worker's Cache API entirely — to silently answer even
+a "network-first" `fetch()` call without a real network round-trip.
+Every same-origin fetch the service worker makes now explicitly requests
+`{ cache: "no-store" }` (`"reload"` for the one-time install-time
+precache), which is what actually closed the gap: the identical test
+(edit a file, reload once) then showed fresh content immediately, every
+time. `CACHE_NAME` was also bumped (`v2` → `v3`) as ordinary hygiene
+alongside a real strategy change, not the fix itself.
+
+**New this phase: `.claude/DEV_NOTES.md`**, durable engineering notes
+(not part of the Workshop itself, same category as `test-assets/` and
+`launch.json`) recording the caching pitfall above and the dev-session
+verification habits it forced throughout Phase 3b — a fresh port per
+`preview_start` session, unregistering stale service workers when
+reusing one, and the established pattern for driving the live engine
+directly (`window.__debugEngine`, real dispatched `KeyboardEvent`s,
+pixel-readback) for behaviour that's awkward to verify by screenshot
+alone in this environment. Written so a future session doesn't need to
+rediscover any of this the hard way.
+
+## Version 3 — Phase 4 — Workshop Rituals (v3.0.4)
+
+**Goal:** strengthen the Workshop by connecting systems that already
+remember their own state into small, optional rituals — never a new
+progression system, never anything required. See `docs/ROADMAP_V3.md`'s
+own Phase 4 entry for the original brief ("turning on the radio, opening
+the curtains, sitting at the same chair, checking yesterday's project").
+
+**Investigation first found the Workshop already remembers far more than
+the brief's own framing suggested was missing.** Time genuinely passes
+while the player is away (`TimeOfDaySystem.mode` defaults to
+`"realtime"`); weather, the light switch, the front door, the player's
+exact position, the computer's last-open app, and the Workbench's own
+current project (`WorkbenchSystem.currentProjectId`) all already persist
+exactly as left. Nothing stops music playing across any other activity —
+confirmed directly, not assumed. What was actually missing wasn't
+memory — it was connective tissue between systems that already remember,
+and a scope boundary worth naming precisely: `PlayerPatternMemory` and
+`WorldEventLog` (Phase 6's own territory), new resident behaviour
+(Phase 10's), and Notebook/Pinboard/Builder-library friction (Phase 8's)
+were all deliberately left alone here. The entry sequence itself
+(`main.js`'s `_enterWorkshop()`) was deliberately left untouched too —
+its current instantness reads as correct restraint, not a gap; forcing
+an acknowledgement there risks exactly what the brief warns against
+("the goal is not to tell players how to begin their session").
+
+**Three small, connected touches, each reusing state that already
+existed rather than inventing new tracking.** The reading chair now
+remembers what you were reading — `FurnitureSystem` gained a new small,
+generic per-piece memory (`getInteractionState()`/`setInteractionState()`,
+the same "one small, generic capability, multiple callers" shape
+`ReflectionSystem`/`LadderSystem` already established), and
+`RestNookOverlay.js` is its first caller: opening the reading panel
+offers whichever of Story/Archive was last actually read, first, instead
+of always resetting to the neutral menu. The music cabinet now offers to
+pick back up — `MusicSystem`'s own `wasPlaying` flag had been captured
+into every save and never once read back since the system existed;
+`wasPlayingLastSession` is its first real reader, surfaced as a small,
+one-click "Picking up where you left off" invitation in the playback bar
+that retires the instant any real playback action happens, including the
+edge case (found during verification, then fixed) where the invitation
+would otherwise sit there forever if the song's own root had become
+unreachable between sessions. The Browser's own home page now quietly
+mentions the current project — one line added to the existing "Workshop
+Projects" tile, reusing `WorkbenchSystem.currentProjectId` and
+`ProjectsStore` directly, answering "checking yesterday's project" from
+a screen already opened for other reasons rather than a new dashboard.
+
+**Verified live, not just by code review.** The reading chair's memory
+was confirmed across a real simulated return (sit, read Story, stand up,
+sit again — jumps straight back to Story). The music resume hint was
+confirmed to appear, correctly reflect the restored song, and clear on
+click — including the root-unreachable edge case once found and fixed.
+The Browser home page's project line was confirmed rendering inside the
+real computer Browser app, not just as computed HTML.
 
 ## Non-goals (revisit only if the philosophy changes)
 

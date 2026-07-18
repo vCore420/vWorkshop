@@ -568,7 +568,14 @@ removed — never on every frame. A box that sits entirely above
 `COLLISION_HEIGHT_LIMIT` (a decorative ceiling piece, say) is skipped
 from collision entirely, the same "a header above head height is real
 geometry but never an obstacle" rule `WorkshopRoom.js`'s wall segments
-already follow.
+already follow. An object carrying the `"ladder"` behaviour is skipped
+from collision entirely too, regardless of height (Version 3, Phase 3b —
+"ladders still don't work"; see `LadderBehaviour.js`). A Builder-placed
+ladder used to get *both* a solid collision box here and a climbable zone
+from `LadderSystem`, and the solid box always won — `CameraSystem`
+pushed the player back out before they could ever walk far enough
+forward to actually enter the zone. A ladder now has no walk-collision at
+all, only its own climbable zone; see "Ladders" above for that mechanism.
 
 This means "future buildings created by the player... become real
 architecture rather than decoration" is true today: a wall built from
