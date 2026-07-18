@@ -225,7 +225,13 @@ function unitArchGeometry(segments) {
 
 function buildPart(part, colorOverride) {
   const color = colorOverride ?? part.color ?? "#8d8577";
-  const material = Materials.matte(color);
+  // `materialType` is the same kind of escape hatch `rotationX`/
+  // `rotationZ` already are above — data the hardcoded Construction
+  // Library can set (see `windowPane`/`largeWindowPane` in
+  // `ConstructionLibrary.js`), not a field the Builder's own form
+  // exposes. Defaults to the matte every other part has always used, so
+  // nothing already authored changes.
+  const material = part.materialType === "glass" ? Materials.glass(color) : Materials.matte(color);
   const segments = part.segments ?? 16;
 
   switch (part.type) {

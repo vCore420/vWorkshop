@@ -882,6 +882,7 @@ assetService.registerKind("blueprints", {
   // — the one dependency relationship that's genuinely real and
   // computable today, straight from data every Blueprint already has.
   getDependencies: (b) => [...new Set(b.objects.map((o) => `objects:${o.definitionId}`))],
+  exportItem: (b) => blueprintStore.exportBlueprint(b.id),
 });
 assetService.registerKind("animations", {
   label: "Animations",
@@ -935,6 +936,7 @@ assetService.registerKind("expressions", {
       createdAt: set.createdAt,
     };
   },
+  exportItem: (set) => expressionSetStore.exportSet(set.id),
 });
 assetService.registerKind("images", {
   label: "Images",
@@ -999,6 +1001,74 @@ assetService.registerKind("beings", {
     if (b.bodySource === "primitives" && !b.bodyParts.some((p) => p.jointName)) issues.push("No Rig Joints assigned \u2014 this Being can't play Workshop animations yet.");
     return issues;
   },
+  // `exportDefinition()` returns a JSON *string* (the older of this
+  // Workshop's two export conventions \u2014 see BeingLibrary.js's own top
+  // comment), not the plain object `AssetService.exportAsset()`'s own
+  // contract expects (matching `toDescriptor`/`getDependencies`
+  // /`validateItem` above); parsed back once here rather than changing a
+  // working, already-wired method just for this.
+  exportItem: (b) => {
+    const json = beingLibrary.exportDefinition(b.id);
+    return json ? JSON.parse(json) : null;
+  },
+});
+// Version 3, Phase 7 ("Sharing the Workshop") — three real, player-
+// creatable kinds of data that had never been registered with
+// AssetService at all before this phase, found while wiring up the
+// unified Export button: Atmosphere Profiles, custom Calculators, and
+// AI Resident Profiles. Each already had (or, this phase, gained) a
+// working store with real export; registering them here is what
+// actually makes them Workshop Assets — discoverable in `asset://`,
+// included in `workshop://search`, favouritable — not just exportable
+// from their own dedicated app, the same "one shared vocabulary,
+// regardless of which store actually holds the data" standard
+// `docs/ASSETS.md` already sets for everything else.
+assetService.registerKind("atmosphere", {
+  label: "Atmosphere Profiles",
+  all: () => atmosphereProfileStore.all(),
+  get: (id) => atmosphereProfileStore.getProfile(id),
+  toDescriptor: (p) => ({
+    name: p.name,
+    description: p.description,
+    author: atmosphereProfileStore.isBuiltIn(p.id) ? "Workshop" : "You",
+    categories: ["Atmosphere"],
+    tags: [p.weather?.current].filter(Boolean),
+    createdAt: p.createdAt,
+  }),
+  exportItem: (p) => atmosphereProfileStore.exportProfile(p.id),
+});
+assetService.registerKind("calculators", {
+  label: "Calculators",
+  all: () => toolsStore.allCustomCalculators(),
+  get: (id) => toolsStore.getCustomCalculator(id),
+  toDescriptor: (c) => ({
+    name: c.title,
+    description: c.description,
+    categories: [c.category ? c.category.charAt(0).toUpperCase() + c.category.slice(1) : "Tools"],
+    tags: c.tags,
+    createdAt: c.createdAt,
+    updatedAt: c.updatedAt,
+  }),
+  validateItem: (c) => ((c.outputs ?? []).length === 0 ? ["No outputs defined."] : []),
+  exportItem: (c) => toolsStore.exportCustomCalculator(c.id),
+});
+assetService.registerKind("residents", {
+  label: "AI Resident Profiles",
+  all: () => residentProfileStore.all(),
+  get: (id) => residentProfileStore.get(id),
+  toDescriptor: (p) => ({
+    name: p.name,
+    description: p.identity?.personality ?? "",
+    categories: ["Characters"],
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt,
+  }),
+  // A profile's own referenced Expression Set is a real, computable
+  // dependency the moment it isn't the reserved "default" sentinel —
+  // the identical reasoning Beings already apply to their own
+  // modelId/animation references above.
+  getDependencies: (p) => (p.expressionSetId && p.expressionSetId !== "default" ? [`expressions:${p.expressionSetId}`] : []),
+  exportItem: (p) => residentProfileStore.exportProfile(p.id),
 });
 
 // --- Browser Ecosystem: Workshop pages, Host pages, Asset pages, Unified

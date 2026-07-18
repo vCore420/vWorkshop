@@ -276,6 +276,8 @@ export class BuildModeSystem {
       getMeasurement: () => this._measureSelection(),
       onSetTerrainTool: (tool) => this.setTerrainTool(tool),
       onImportModel: (file) => this.importModel(file),
+      onExportBlueprint: (id) => this.blueprintStore?.exportBlueprint(id) ?? null,
+      onImportBlueprint: (data) => this._importBlueprint(data),
     });
     this.enter();
   }
@@ -359,6 +361,17 @@ export class BuildModeSystem {
     const modelId = await importModelFile(file, { modelLibrary: this.modelLibrary, modelAssetStore: this.modelAssetStore });
     this._renderLibrary();
     return modelId;
+  }
+
+  /** Version 3, Phase 7 ("Sharing the Workshop") — the exact same
+   *  "import, then re-render the library screen so the new entry is
+   *  immediately visible" shape `importModel()` above already
+   *  establishes, applied to `BlueprintStore.importBlueprint()`. */
+  _importBlueprint(data) {
+    if (!this.blueprintStore) throw new Error("Blueprints aren't available right now.");
+    const blueprint = this.blueprintStore.importBlueprint(data);
+    this._renderLibrary();
+    return blueprint;
   }
 
   _resolveDefinition(definitionId, source) {
@@ -1041,11 +1054,37 @@ export class BuildModeSystem {
     return (this._furnitureSystem?.getAllPieces() ?? []).map((p) => p.entity.object3D);
   }
 
+  /** Version 3, Phase 5 ("Beyond One Building") — "we should be able to
+   *  place building blocks on top of each other with proper top
+   *  collisions... manual entry should just be for fine adjustments." A
+   *  raw hit point already lands correctly when the pointer manages to
+   *  hit an existing object's own top surface precisely — but that's
+   *  genuinely hard to aim at (a wall's own top is a thin 2m×0.2m strip
+   *  at height, confirmed directly against the real raycast geometry
+   *  before this fix, not assumed), so in practice the wall's far larger,
+   *  easier-to-hit side face gets hit instead, landing the new piece
+   *  embedded partway up the side rather than resting on top of it —
+   *  exactly the "have to manually enter the Y position" complaint this
+   *  fixes. Whenever the hit object is an existing World Object (not the
+   *  floor, not furniture — see `_identifyHit()`), the Y coordinate now
+   *  snaps to that object's own real top
+   *  (`WorldObjectsSystem.getFootprint()`, the exact same real per-object
+   *  box collision already uses) regardless of which face was actually
+   *  hit. Aiming anywhere at an existing structure means "build on top of
+   *  it," which is what stacking a roof onto a wall actually needs,
+   *  without requiring pixel-precise aim at a thin top edge. */
   _raycastGhostSurfaces() {
     if (!this._hasPointer) return null;
     this._raycaster.setFromCamera(this._pointerNDC, this.engine.camera);
     const hit = this._raycastFirst(this._gatherSurfaces());
-    return hit ? hit.point : null;
+    if (!hit) return null;
+
+    const identified = this._identifyHit(hit.object);
+    if (identified?.kind === "worldObject") {
+      const box = this._worldObjectsSystem?.getFootprint(identified.id);
+      if (box) hit.point.y = box.max.y;
+    }
+    return hit.point;
   }
 
   _raycastFirst(objects) {

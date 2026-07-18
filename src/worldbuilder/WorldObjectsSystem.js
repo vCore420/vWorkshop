@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { Entity } from "../core/Entity.js";
 import { MeshComponent } from "../core/components/MeshComponent.js";
+import { InteractableComponent } from "../core/components/InteractableComponent.js";
 import { compileDefinition } from "./ObjectCompiler.js";
 import { applyBehaviour, disposeBehaviour } from "./behaviours/index.js";
 import { CURRENT_ROOM_ID } from "./WorldObjectsStore.js";
@@ -37,6 +38,25 @@ import { EnvironmentSystem } from "../systems/EnvironmentSystem.js";
  * entirely, matching the same "a header above head height is real
  * geometry but never an obstacle" rule `WorkshopRoom.js`'s wall segments
  * already follow.
+ *
+ * **Version 3, Phase 5 ("Beyond One Building") — collision is per part, not
+ * per instance.** A single combined `Box3.setFromObject()` over an entire
+ * compiled piece swallows any genuine gap inside it — confirmed directly:
+ * a "Doorway" (two posts either side of a real, open, walkable gap) was
+ * colliding as one solid block spanning the whole opening, gap included,
+ * making it impossible to actually walk through a placed doorway at all.
+ * `footprints` (below) stays the *overall* box per instance — still
+ * exactly right for "Object dimensions" and Build Mode's own stacking
+ * snap, both of which want the whole piece's own real extent. `getFootprints()`,
+ * the one every collision/enclosure consumer actually reads, is now
+ * sourced from `collisionBoxes` instead: one real box per compiled child
+ * mesh (every part `compileDefinition()` builds carries its own
+ * `userData.partId`, the signal used to tell a predictable compiled piece
+ * apart from an imported model's own arbitrary hierarchy, which keeps its
+ * single combined box exactly as before — splitting an arbitrary GLB's
+ * mesh graph has no equivalent guarantee it would still make sense).
+ * Neither `CameraSystem` nor `BuildingDetectionSystem` needed to change at
+ * all — both already just consume whatever `getFootprints()` returns.
  */
 export class WorldObjectsSystem {
   constructor({ objectLibraryStore, worldObjectsStore, modelLibrary, modelLoader }) {
@@ -46,8 +66,10 @@ export class WorldObjectsSystem {
     this.modelLoader = modelLoader;
     /** @type {Map<number, {entity: import('../core/Entity').Entity}>} */
     this.liveInstances = new Map();
-    /** @type {Map<number, THREE.Box3>} instanceId -> cached collision box, skipped from the map entirely if the object sits entirely above head height */
+    /** @type {Map<number, THREE.Box3>} instanceId -> the whole instance's own real, combined extent — "Object dimensions" and Build Mode's own stacking snap; skipped from the map entirely if the object sits entirely above head height */
     this.footprints = new Map();
+    /** @type {Map<number, THREE.Box3[]>} instanceId -> one real box per compiled part (or a single-entry array for an imported model) — the actual walk-collision/enclosure-detection data; see this class's own comment above */
+    this.collisionBoxes = new Map();
     /** @type {Array<{instanceId:number, mesh:THREE.Object3D}>} every currently-live mesh tagged `swaysInWind` — see `_registerSwayParts()`/`update()`. */
     this._swayParts = [];
     this._swayTime = 0;
@@ -77,6 +99,7 @@ export class WorldObjectsSystem {
     this.engine.entities.destroy(live.entity);
     this.liveInstances.delete(instanceId);
     this.footprints.delete(instanceId);
+    this.collisionBoxes.delete(instanceId);
     this._swayParts = this._swayParts.filter((p) => p.instanceId !== instanceId);
     this.worldObjectsStore.remove(instanceId);
   }
@@ -89,6 +112,28 @@ export class WorldObjectsSystem {
     live.entity.object3D.position.set(...instance.position);
     live.entity.object3D.rotation.y = instance.rotationY;
     live.entity.object3D.scale.setScalar(instance.scale);
+    this._updateFootprint(instanceId, live.entity.object3D, this._resolveDefinition(instance));
+  }
+
+  /** Version 3, Phase 5 ("Beyond One Building") — "opening a door doesn't
+   *  update its own collision." A behaviour that moves its own object3D
+   *  directly at runtime (Door/Double Door/Gate, all sharing
+   *  `DoorBehaviour.js` — swinging open on interaction, not a Build Mode
+   *  edit) leaves the cached footprint/collision boxes frozen at whatever
+   *  they were the moment the piece was placed, since only
+   *  `updateInstanceTransform()` and `_spawn()` ever refresh them.
+   *  Deliberately *not* the same path as `updateInstanceTransform()`,
+   *  which persists its own patch into `WorldObjectsStore` — a door being
+   *  open right now is transient interaction state, not a change to the
+   *  piece's own saved placement, and treating it as one would make
+   *  "open" survive a reload as if the player had rotated the door there
+   *  in Build Mode. This only recomputes collision from whatever the
+   *  object3D's *current* transform already is. */
+  refreshFootprint(instanceId) {
+    const live = this.liveInstances.get(instanceId);
+    if (!live) return;
+    const instance = this.worldObjectsStore.get(instanceId);
+    if (!instance) return;
     this._updateFootprint(instanceId, live.entity.object3D, this._resolveDefinition(instance));
   }
 
@@ -115,11 +160,15 @@ export class WorldObjectsSystem {
     return [...this.liveInstances.values()].map((v) => v.entity.object3D);
   }
 
-  /** THREE.Box3 list for CameraSystem's walk-collision — cached per
-   *  instance, recomputed only on spawn/respawn/transform-change/removal,
-   *  not on every call. Read every single frame while walking. */
+  /** THREE.Box3 list for CameraSystem's walk-collision (and
+   *  BuildingDetectionSystem's own wall-detection) — cached per instance,
+   *  recomputed only on spawn/respawn/transform-change/removal, not on
+   *  every call. Read every single frame while walking. One or more boxes
+   *  per instance — see this class's own comment on `collisionBoxes`. */
   getFootprints() {
-    return [...this.footprints.values()];
+    const all = [];
+    for (const boxes of this.collisionBoxes.values()) all.push(...boxes);
+    return all;
   }
 
   /** A single instance's own cached collision box, or `null` if it has
@@ -154,16 +203,63 @@ export class WorldObjectsSystem {
    *  of like a platform (never a real use case for one), and a player
    *  could technically walk through the rails at a steep angle without
    *  climbing — real per-shape collision would prevent that but is a much
-   *  bigger, more fragile change than this bug justifies. */
+   *  bigger, more fragile change than this bug justifies.
+   *
+   *  Version 3, Phase 5 — also builds `collisionBoxes` (see this class's
+   *  own top comment) and refreshes the entity's own interaction-height
+   *  offset, if it has one (see `_updateInteractionHeight()`). */
   _updateFootprint(instanceId, object3D, definition) {
     object3D.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(object3D);
     const isClimbable = definition?.behaviours?.some((b) => b.type === "ladder");
-    if (isClimbable || box.min.y >= COLLISION_HEIGHT_LIMIT) {
-      this.footprints.delete(instanceId); // climbable (no solid collision at all — see above), or entirely above head height, same rule wall headers already follow
-    } else {
-      this.footprints.set(instanceId, box);
+    if (isClimbable) {
+      this.footprints.delete(instanceId); // no solid collision at all — see above
+      this.collisionBoxes.delete(instanceId);
+      return;
     }
+
+    const overallBox = new THREE.Box3().setFromObject(object3D);
+    if (overallBox.min.y >= COLLISION_HEIGHT_LIMIT) {
+      this.footprints.delete(instanceId); // entirely above head height, same rule wall headers already follow
+    } else {
+      this.footprints.set(instanceId, overallBox);
+    }
+
+    // Every child `compileDefinition()` builds carries its own
+    // `userData.partId` — the signal that this is a predictable compiled
+    // piece, safe to split into one real box per part, rather than an
+    // imported model's own arbitrary hierarchy (which keeps a single
+    // combined box, exactly as before this phase).
+    const isCompiled = object3D.children.length > 0 && object3D.children.every((child) => child.userData?.partId !== undefined);
+    if (isCompiled) {
+      const boxes = [];
+      for (const child of object3D.children) {
+        const partBox = new THREE.Box3().setFromObject(child);
+        if (partBox.min.y >= COLLISION_HEIGHT_LIMIT) continue; // this specific part is entirely above head height — same rule, applied per part
+        boxes.push(partBox);
+      }
+      this.collisionBoxes.set(instanceId, boxes);
+    } else {
+      this.collisionBoxes.set(instanceId, overallBox.min.y >= COLLISION_HEIGHT_LIMIT ? [] : [overallBox]);
+    }
+
+    this._updateInteractionHeight(instanceId, overallBox);
+  }
+
+  /** Version 3, Phase 5 — "a placed door's interaction point is too low."
+   *  See `InteractableComponent`'s own `interactionHeightOffset` comment
+   *  for the full root cause; this is where it actually gets set, once
+   *  per footprint update, from the instance's own real geometry — roughly
+   *  chest height, capped so a very tall object doesn't push the anchor
+   *  absurdly high, and naturally small for a genuinely short object
+   *  (a switch plate doesn't need much of an offset to already be about
+   *  right). A no-op for anything without an `InteractableComponent`
+   *  (most World Objects), so this costs nothing for the common case. */
+  _updateInteractionHeight(instanceId, overallBox) {
+    const interactable = this.liveInstances.get(instanceId)?.entity.getComponent(InteractableComponent);
+    if (!interactable) return;
+    if (!Number.isFinite(overallBox.min.y) || !Number.isFinite(overallBox.max.y)) return;
+    const height = overallBox.max.y - overallBox.min.y;
+    interactable.interactionHeightOffset = Math.min(height * 0.5, 1.0);
   }
 
   _respawn(instance) {

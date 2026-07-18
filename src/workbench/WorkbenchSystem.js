@@ -12,6 +12,11 @@ const WB_REVEAL_START = 0.3;
 const OUT_DURATION = 0.32;
 const IN_DURATION = 0.45;
 const OUT_TO_IN_DELAY_MS = (OUT_DURATION + 0.05) * 1000;
+// Version 3, Phase 6 ("The Workshop Remembers") — "as time goes on, the
+// things on the workbench move/change." A project untouched this long
+// reads as genuinely abandoned, not just "not today's focus" — a project
+// worked on last week shouldn't look neglected.
+const DUST_THRESHOLD_DAYS = 14;
 
 /**
  * WorkbenchSystem
@@ -30,6 +35,16 @@ const OUT_TO_IN_DELAY_MS = (OUT_DURATION + 0.05) * 1000;
  * `clipboardMesh` (what the panel projects itself onto). Everything about
  * *which* project is current, how its presence resolves from metadata, and
  * how transitions play out lives here.
+ *
+ * **Version 3, Phase 6 ("The Workshop Remembers")** — the current
+ * project's own presence now quietly ages: `_isStale()`/`_applyDust()`
+ * check `ProjectsStore`'s already-real `updatedAt` and, once a project
+ * has genuinely sat untouched past `DUST_THRESHOLD_DAYS`, desaturate its
+ * presence items' own materials on the next rebuild. No new persisted
+ * state — the same "quiet evidence of time passed, backed by data that
+ * already exists" standard `docs/ROADMAP_V3.md`'s own Phase 6 brief asks
+ * for, read from a timestamp `ProjectsStore.update()` was already
+ * stamping on every edit regardless.
  */
 export class WorkbenchSystem {
   constructor(deps) {
@@ -181,12 +196,49 @@ export class WorkbenchSystem {
     return template;
   }
 
+  /** Captured *before* `_resolvePresenceArray()` runs — resolving a
+   *  brand-new project's presence template for the first time writes
+   *  `presence` onto the store, which bumps `updatedAt` right as this
+   *  method starts; checking staleness after that would erase the very
+   *  signal it's meant to read, right when a long-neglected project first
+   *  becomes current again. */
+  _isStale(project) {
+    if (!project.updatedAt) return false;
+    const daysSince = (Date.now() - new Date(project.updatedAt).getTime()) / 86400000;
+    return daysSince >= DUST_THRESHOLD_DAYS;
+  }
+
+  /** "As time goes on, the things on the workbench move/change" — a
+   *  subtle desaturate-and-flatten pass over a presence item's own
+   *  materials, standing in for dust settling on something nobody's
+   *  touched in a while. Clones each mesh's material first: every
+   *  material here comes from `PlaceholderFactory.js`'s own shared cache
+   *  (keyed by colour), so mutating one in place would dull every other
+   *  object in the room using that exact same cached instance, not just
+   *  this one project's own presence. */
+  _applyDust(object3D) {
+    object3D.traverse((child) => {
+      if (!child.isMesh || !child.material) return;
+      const material = child.material.clone();
+      if (material.color) {
+        const hsl = { h: 0, s: 0, l: 0 };
+        material.color.getHSL(hsl);
+        material.color.setHSL(hsl.h, hsl.s * 0.35, Math.min(0.85, hsl.l * 0.9 + 0.12));
+      }
+      if (typeof material.roughness === "number") material.roughness = Math.min(1, material.roughness + 0.25);
+      child.material = material;
+    });
+  }
+
   _resolveAndBuildItems(project) {
+    const isDusty = this._isStale(project);
     const descriptors = this._resolvePresenceArray(project);
     const built = [];
     for (const descriptor of descriptors) {
       const result = buildPresenceItem(descriptor);
-      if (result) built.push({ ...descriptor, object3D: result.object3D, size: result.size });
+      if (!result) continue;
+      if (isDusty) this._applyDust(result.object3D);
+      built.push({ ...descriptor, object3D: result.object3D, size: result.size });
     }
     const assignments = assignSlots(built);
     for (const { item, slot } of assignments) {

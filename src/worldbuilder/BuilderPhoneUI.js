@@ -30,6 +30,7 @@
  */
 import { getConstructionGroup, CONSTRUCTION_GROUP_ORDER } from "./ConstructionLibrary.js";
 import { TERRAIN_MATERIALS } from "../systems/TerrainSystem.js";
+import { StorageUtils } from "../utils/StorageUtils.js";
 
 export class BuilderPhoneUI {
   constructor(rootEl, callbacks) {
@@ -131,6 +132,7 @@ export class BuilderPhoneUI {
     }
 
     if (this._activeTab === "models") this.screen.appendChild(this._buildImportModelRow());
+    if (this._activeTab === "blueprints") this.screen.appendChild(this._buildImportBlueprintRow());
 
     const grid = document.createElement("div");
     grid.className = "builder-phone-grid";
@@ -155,7 +157,7 @@ export class BuilderPhoneUI {
     if (this._activeTab !== "construction") {
       const cardsGrid = document.createElement("div");
       cardsGrid.className = "builder-phone-cards-grid";
-      for (const def of items) cardsGrid.appendChild(this._buildGridCard(def, source));
+      for (const def of items) cardsGrid.appendChild(source === "blueprint" ? this._buildBlueprintCard(def) : this._buildGridCard(def, source));
       grid.appendChild(cardsGrid);
       this.screen.appendChild(grid);
       return;
@@ -243,6 +245,74 @@ export class BuilderPhoneUI {
     importBtn.addEventListener("click", () => input.click());
 
     row.append(importBtn, input);
+    return row;
+  }
+
+  /** Version 3, Phase 7 ("Sharing the Workshop") — a Blueprint's own card
+   *  can't reuse `_buildGridCard()` unchanged: that one is a single
+   *  `<button>` (click anywhere to arm it), and a Blueprint is the one
+   *  library kind here that also needs its own individual Export action
+   *  — buttons can't nest inside buttons. Same look, same arm-on-click
+   *  behaviour for the swatch/name/category area; a small Export button
+   *  sits alongside it instead of inside it. */
+  _buildBlueprintCard(def) {
+    const card = document.createElement("div");
+    card.className = "builder-phone-card";
+
+    const armArea = document.createElement("button");
+    armArea.type = "button";
+    armArea.className = "builder-phone-card-arm-area";
+    const swatch = document.createElement("div");
+    swatch.className = "builder-phone-card-swatch";
+    swatch.style.background = def.objects?.[0]?.colorOverride ?? "#8d8577";
+    const name = document.createElement("span");
+    name.className = "builder-phone-card-name";
+    name.textContent = def.name;
+    const category = document.createElement("span");
+    category.className = "builder-phone-card-category";
+    category.textContent = `${def.objects?.length ?? 0} piece${def.objects?.length === 1 ? "" : "s"}`;
+    armArea.append(swatch, name, category);
+    armArea.addEventListener("click", () => this.callbacks.onArmDefinition(def.id, "blueprint"));
+
+    const exportBtn = document.createElement("button");
+    exportBtn.type = "button";
+    exportBtn.className = "builder-phone-card-export";
+    exportBtn.textContent = "Export";
+    exportBtn.title = "Save this Blueprint as a file to share";
+    exportBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const exported = this.callbacks.onExportBlueprint(def.id);
+      if (exported) StorageUtils.downloadJSON(`${def.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "blueprint"}.json`, exported);
+    });
+
+    card.append(armArea, exportBtn);
+    return card;
+  }
+
+  /** The Blueprint counterpart to `_buildImportModelRow()` above — a
+   *  Blueprint export is plain JSON, not a binary model file, so this
+   *  uses the shared `StorageUtils.uploadJSON()` file-picker-and-parse
+   *  primitive directly rather than reading a raw file and parsing it
+   *  itself. */
+  _buildImportBlueprintRow() {
+    const row = document.createElement("div");
+    row.className = "builder-phone-history-bar";
+
+    const importBtn = document.createElement("button");
+    importBtn.type = "button";
+    importBtn.className = "builder-phone-small-button";
+    importBtn.textContent = "Import Blueprint…";
+    importBtn.addEventListener("click", async () => {
+      try {
+        const data = await StorageUtils.uploadJSON();
+        this.callbacks.onImportBlueprint(data);
+      } catch (err) {
+        if (err.message === "No file selected") return;
+        window.alert(err.message || "Couldn't import that Blueprint.");
+      }
+    });
+
+    row.appendChild(importBtn);
     return row;
   }
 

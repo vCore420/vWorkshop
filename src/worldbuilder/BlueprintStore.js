@@ -1,4 +1,14 @@
 import { EventBus } from "../core/EventBus.js";
+import { DEFAULT_BLUEPRINTS } from "./DefaultBlueprints.js";
+
+/** A well-formed offset array or a safe fallback — the same "don't trust
+ *  the file" reasoning `BodyCompiler.js`'s own `normalizedVec3()` already
+ *  applies to a Being's body parts, applied here to the one field of a
+ *  Blueprint object entry that would otherwise reach placement math with
+ *  `undefined` in it. */
+function normalizedOffset(value) {
+  return Array.isArray(value) && value.length === 3 && value.every((n) => typeof n === "number" && Number.isFinite(n)) ? value : [0, 0, 0];
+}
 
 /**
  * BlueprintStore
@@ -26,12 +36,25 @@ import { EventBus } from "../core/EventBus.js";
  * exists as a genuinely useful quick option when only a single object is
  * selected, not a compromise being carried forward — sometimes "grab
  * everything nearby" really is faster than selecting each piece by hand.
+ *
+ * **Version 3, Phase 5 ("Beyond One Building") — three starter interiors,
+ * seeded by default.** "So the player can see that, by default, good
+ * things can be made with the default building blocks — to give the
+ * player ideas on what is capable." See `DefaultBlueprints.js` for the
+ * three presets themselves. Seeded directly in the constructor (a
+ * brand-new session never even reaches `load()` at all — see
+ * `PersistenceSystem._loadFromStorage()`'s own early return when there's
+ * no save yet) and preserved by `load()` unless the player has *any*
+ * real saved blueprint data of their own, custom or otherwise — so a
+ * returning player who's never touched the feature still gets the
+ * starter set, while anyone who's made (or deliberately deleted) their
+ * own is respected exactly as much either way.
  */
 export class BlueprintStore {
   constructor() {
     this.events = new EventBus();
     /** @type {Record<string, object>} */
-    this.blueprints = {};
+    this.blueprints = { ...DEFAULT_BLUEPRINTS };
   }
 
   /** `objects` is `[{definitionId, definitionSource, offset: [x,y,z],
@@ -81,6 +104,62 @@ export class BlueprintStore {
     return Object.values(this.blueprints).sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  /** Version 3, Phase 7 ("Sharing the Workshop") — "let creations
+   *  travel... as shareable files." The same small envelope shape
+   *  `ResidentProfileStore.exportProfile()`/`ExpressionSetStore
+   *  .exportSet()` already established (a `type` tag so a future import
+   *  can tell one Workshop export apart from another and say so plainly,
+   *  rather than failing to parse silently) — deliberately not
+   *  `BeingLibrary`'s own older string-in/string-out convention; this
+   *  returns/accepts a plain object, the same as those two, so the UI
+   *  side can use the shared `StorageUtils.downloadJSON()`/`uploadJSON()`
+   *  primitives directly instead of hand-rolling file-reading. A
+   *  Blueprint is already genuinely shareable as-is — its own `objects`
+   *  array references construction pieces and Builder object definitions
+   *  by id, which is exactly why an *imported* Blueprint referencing a
+   *  Builder-authored (not Construction Library) object that doesn't
+   *  exist on the receiving Workshop will simply place nothing for that
+   *  one entry — the same honest "missing dependency" case
+   *  `docs/ASSETS.md`'s own validation section already names, not a new
+   *  problem this file needs to solve. */
+  exportBlueprint(id) {
+    const blueprint = this.get(id);
+    if (!blueprint) return null;
+    return { type: "workshop-blueprint", version: 1, exportedAt: new Date().toISOString(), blueprint: { name: blueprint.name, objects: blueprint.objects } };
+  }
+
+  /** Never trusts the file — every object entry is individually
+   *  normalised, the same "a missing/malformed field gets a safe
+   *  default, not a crash" standard `BodyCompiler.compileBody()` now
+   *  holds itself to for the identical reason (a bad `offset` array here
+   *  would otherwise reach `BuildModeSystem._confirmGhost()`'s own
+   *  placement math with `undefined` in it). Always creates a genuinely
+   *  new blueprint via `create()` — importing is additive, never
+   *  overwrites anything by id, the same instinct every other import in
+   *  this codebase already follows. */
+  importBlueprint(data) {
+    if (!data || typeof data !== "object") throw new Error("That file doesn't look like a Workshop Blueprint.");
+    if (data.type && data.type !== "workshop-blueprint") {
+      throw new Error(data.type === "workshop-backup" ? "That's a whole Workshop backup file, not a Blueprint — import it from Settings instead." : "That file doesn't look like a Workshop Blueprint.");
+    }
+    const source = data.blueprint ?? data; // tolerate a bare {name, objects} too, not only the wrapped envelope
+    if (!source || typeof source !== "object" || !Array.isArray(source.objects)) {
+      throw new Error("That file doesn't look like a Workshop Blueprint.");
+    }
+    const objects = source.objects
+      .filter((o) => o && typeof o === "object" && typeof o.definitionId !== "undefined")
+      .map((o) => ({
+        definitionId: o.definitionId,
+        definitionSource: o.definitionSource === "construction" ? "construction" : "library",
+        offset: normalizedOffset(o.offset),
+        rotationY: typeof o.rotationY === "number" && Number.isFinite(o.rotationY) ? o.rotationY : 0,
+        scale: typeof o.scale === "number" && Number.isFinite(o.scale) && o.scale > 0 ? o.scale : 1,
+        colorOverride: typeof o.colorOverride === "string" ? o.colorOverride : null,
+      }));
+    if (objects.length === 0) throw new Error("That Blueprint doesn't contain anything to place.");
+    return this.create(source.name ? `${source.name} (imported)` : "Imported Blueprint", objects);
+  }
+
   _emitChanged() {
     this.events.emit("blueprints:changed");
     this.events.emit("persistence:saveRequested");
@@ -92,8 +171,15 @@ export class BlueprintStore {
   }
 
   load(data) {
-    if (!data) return;
-    this.blueprints = data.blueprints ?? {};
+    if (!data) return; // no envelope reached this far at all — the constructor's own seeded defaults stand exactly as they are
+    const saved = data.blueprints ?? {};
+    // Any real saved blueprint data — the player's own, or a previous
+    // session's already-saved copy of the starter set — is respected
+    // exactly as-is, including if every default was deliberately
+    // deleted. Genuinely zero saved blueprints (an old save that
+    // predates this feature, or a fresh provider entry) re-seeds the
+    // starter set rather than leaving a returning player with nothing.
+    this.blueprints = Object.keys(saved).length > 0 ? saved : { ...DEFAULT_BLUEPRINTS };
     this.events.emit("blueprints:changed");
   }
 }

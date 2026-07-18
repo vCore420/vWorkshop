@@ -40,6 +40,7 @@ const DIRT_COLOR = "#6b5238";
 const CONCRETE_COLOR = "#b8b4ac";
 const SOIL_COLOR = "#4a3826";
 const FLAME_COLOR = "#ff9040";
+const GLASS_COLOR = "#bfe6ff"; // matches Materials.glass()'s own default — same glass the Workshop's own windows use
 
 function piece({ id, name, description, parts, behaviours = [] }) {
   return {
@@ -243,6 +244,20 @@ export const CONSTRUCTION_PIECES = [
       { id: "sill", type: "box", position: [0, 0.3, 0], rotationY: 0, scale: [2.3, 0.6, 0.2], color: RAW_MATERIAL_COLOR },
       { id: "header", type: "box", position: [0, 2.65, 0], rotationY: 0, scale: [2.3, 0.5, 0.2], color: RAW_MATERIAL_COLOR },
     ],
+  }),
+
+  piece({
+    id: "windowPane",
+    name: "Window Pane",
+    description: "A real glazing pane sized to seal a Window opening — pair it with a Window piece the same way a Door pairs with a Doorway, if the opening should hold back weather and sound rather than stay open.",
+    parts: [{ id: "glass", type: "box", position: [0, 1.25, 0], rotationY: 0, scale: [1.0, 2.5, 0.05], color: GLASS_COLOR, materialType: "glass" }],
+  }),
+
+  piece({
+    id: "largeWindowPane",
+    name: "Large Window Pane",
+    description: "A real glazing pane sized to seal a Large Window opening — the same pairing idea as Window Pane, scaled up.",
+    parts: [{ id: "glass", type: "box", position: [0, 1.4, 0], rotationY: 0, scale: [2.3, 2.8, 0.05], color: GLASS_COLOR, materialType: "glass" }],
   }),
 
   piece({
@@ -668,7 +683,8 @@ export const CONSTRUCTION_GROUPS = {
   cube: "Structural", plane: "Structural", wall: "Structural", halfWall: "Structural", cornerWall: "Structural",
   floor: "Structural", ceiling: "Structural", roof: "Structural", roofCorner: "Structural", pillar: "Structural",
   beam: "Structural", stairs: "Structural", ladder: "Structural", foundation: "Structural", railing: "Structural",
-  doorway: "Openings", door: "Openings", doubleDoor: "Openings", window: "Openings", largeWindow: "Openings", archway: "Openings",
+  doorway: "Openings", door: "Openings", doubleDoor: "Openings", window: "Openings", windowPane: "Openings",
+  largeWindow: "Openings", largeWindowPane: "Openings", archway: "Openings",
   table: "Workshop", bench: "Workshop", shelf: "Workshop", cabinet: "Workshop", storageCrate: "Workshop",
   light: "Utilities", switch: "Utilities", sign: "Utilities", fence: "Utilities", gate: "Utilities", ramp: "Utilities", mailbox: "Utilities",
   tree: "Nature", bush: "Nature", flower: "Nature", rock: "Nature", log: "Nature", grassPatch: "Nature", gardenBed: "Nature",
