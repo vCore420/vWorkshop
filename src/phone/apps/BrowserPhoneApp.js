@@ -17,7 +17,7 @@ export function createBrowserPhoneApp({ pageRegistry, browserStore }) {
   return {
     id: "browser",
     label: "Browser",
-    glyph: "\uD83C\uDF10",
+    glyph: "browser",
     mount(container) {
       const listView = document.createElement("div");
       const pageView = document.createElement("div");

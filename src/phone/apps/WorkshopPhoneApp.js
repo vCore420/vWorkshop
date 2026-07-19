@@ -13,7 +13,7 @@ export function createWorkshopPhoneApp({ environmentSystem, timeOfDaySystem, mus
   return {
     id: "workshop",
     label: "Workshop",
-    glyph: "\uD83C\uDFE1",
+    glyph: "workshop",
     mount(container) {
       const heading = document.createElement("h2");
       heading.textContent = "Workshop";

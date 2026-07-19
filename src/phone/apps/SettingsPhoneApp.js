@@ -12,7 +12,7 @@ export function createSettingsPhoneApp({ settingsStore }) {
   return {
     id: "settings",
     label: "Settings",
-    glyph: "\u2699\uFE0F",
+    glyph: "settings",
     mount(container) {
       const heading = document.createElement("h2");
       heading.textContent = "Settings";

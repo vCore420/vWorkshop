@@ -238,6 +238,98 @@ const LADDER_CLIMB_CLIP = {
   ],
 };
 
+// Version 3, Phase 10 ("Real Assets, Honestly Introduced") — until now the
+// Emote Wheel (`EmoteWheelSystem.js`, `docs/PLAYER.md`'s own "plays
+// assets, decides nothing" section) was genuinely empty on a fresh
+// Workshop: it lists every clip whose `category !== "movement"`, and
+// none existed until a player built one by hand in the Animation
+// Editor. These four are the same kind of thing `DefaultBlueprints.js`
+// already is for the Builder Library — permanent, hand-authored content
+// seeded once, in the exact shape a player-made clip already has, not a
+// different code path the Emote Wheel has to special-case. Every pose
+// below uses the same pre-negation authoring convention `applyPose()`'s
+// own comment documents (X and Z are what get negated on the live rig;
+// Y is applied as authored), following `CROUCH_CLIP`'s own confirmed
+// sign for a forward torso lean, and `JUMP_CLIP`'s own confirmed sign
+// for a mirrored outward arm spread, rather than guessing a new one.
+const WAVE_CLIP = {
+  id: "default-wave",
+  name: "Wave",
+  description: "A friendly raised-hand wave, three beats before lowering.",
+  category: "emote",
+  loop: false,
+  speed: 1,
+  frames: [
+    frame(0.3, { upperArmRight: [1.5, 0, 0.5], lowerArmRight: [1.1, 0, 0], handRight: [0, 0.4, 0] }),
+    frame(0.25, { upperArmRight: [1.5, 0, 0.5], lowerArmRight: [1.1, 0, 0], handRight: [0, -0.5, 0] }),
+    frame(0.25, { upperArmRight: [1.5, 0, 0.5], lowerArmRight: [1.1, 0, 0], handRight: [0, 0.5, 0] }),
+    frame(0.25, { upperArmRight: [1.5, 0, 0.5], lowerArmRight: [1.1, 0, 0], handRight: [0, -0.5, 0] }),
+    frame(0.3, { upperArmRight: [0, 0, 0], lowerArmRight: [0, 0, 0], handRight: [0, 0, 0] }),
+  ],
+};
+
+const CLAP_CLIP = {
+  id: "default-clap",
+  name: "Clap",
+  description: "Three quick claps, hands meeting and parting in front of the chest.",
+  category: "emote",
+  loop: false,
+  speed: 1,
+  frames: [
+    frame(0.12, { upperArmLeft: [1.0, 0, -0.5], upperArmRight: [1.0, 0, 0.5], lowerArmLeft: [1.3, 0, 0], lowerArmRight: [1.3, 0, 0] }),
+    frame(0.12, { upperArmLeft: [1.0, 0, -0.35], upperArmRight: [1.0, 0, 0.35], lowerArmLeft: [1.2, 0, 0], lowerArmRight: [1.2, 0, 0] }),
+    frame(0.12, { upperArmLeft: [1.0, 0, -0.5], upperArmRight: [1.0, 0, 0.5], lowerArmLeft: [1.3, 0, 0], lowerArmRight: [1.3, 0, 0] }),
+    frame(0.12, { upperArmLeft: [1.0, 0, -0.35], upperArmRight: [1.0, 0, 0.35], lowerArmLeft: [1.2, 0, 0], lowerArmRight: [1.2, 0, 0] }),
+    frame(0.12, { upperArmLeft: [1.0, 0, -0.5], upperArmRight: [1.0, 0, 0.5], lowerArmLeft: [1.3, 0, 0], lowerArmRight: [1.3, 0, 0] }),
+    frame(0.3, { upperArmLeft: [0, 0, 0], upperArmRight: [0, 0, 0], lowerArmLeft: [0, 0, 0], lowerArmRight: [0, 0, 0] }),
+  ],
+};
+
+const BOW_CLIP = {
+  id: "default-bow",
+  name: "Bow",
+  description: "A courteous forward bow, held a moment before rising back up.",
+  category: "emote",
+  loop: false,
+  speed: 1,
+  frames: [
+    frame(0.35, { torso: [-0.9, 0, 0], head: [-0.25, 0, 0] }),
+    frame(0.5, { torso: [-0.9, 0, 0], head: [-0.25, 0, 0] }),
+    frame(0.35, { torso: [0, 0, 0], head: [0, 0, 0] }),
+  ],
+};
+
+const DANCE_CLIP = {
+  id: "default-dance",
+  name: "Dance",
+  description: "A loose, bouncy side-to-side step — keeps going until movement or another gesture interrupts it.",
+  category: "emote",
+  loop: true,
+  speed: 1,
+  frames: [
+    frame(0.3, {
+      torso: [0, 0.2, 0.18], head: [0, 0.15, 0],
+      upperArmLeft: [0.7, 0, -0.4], upperArmRight: [0.2, 0, 0.15],
+      upperLegLeft: [-0.25, 0, 0], upperLegRight: [0.15, 0, 0],
+    }),
+    frame(0.25, {
+      torso: [0, 0, 0], head: [0, 0, 0],
+      upperArmLeft: [0.4, 0, 0], upperArmRight: [0.4, 0, 0],
+      upperLegLeft: [0, 0, 0], upperLegRight: [0, 0, 0],
+    }),
+    frame(0.3, {
+      torso: [0, -0.2, -0.18], head: [0, -0.15, 0],
+      upperArmLeft: [0.2, 0, -0.15], upperArmRight: [0.7, 0, 0.4],
+      upperLegLeft: [0.15, 0, 0], upperLegRight: [-0.25, 0, 0],
+    }),
+    frame(0.25, {
+      torso: [0, 0, 0], head: [0, 0, 0],
+      upperArmLeft: [0.4, 0, 0], upperArmRight: [0.4, 0, 0],
+      upperLegLeft: [0, 0, 0], upperLegRight: [0, 0, 0],
+    }),
+  ],
+};
+
 export const DEFAULT_ANIMATION_CLIPS = [
   IDLE_CLIP,
   WALK_CLIP,
@@ -247,6 +339,10 @@ export const DEFAULT_ANIMATION_CLIPS = [
   LAND_CLIP,
   CROUCH_CLIP,
   LADDER_CLIMB_CLIP,
+  WAVE_CLIP,
+  CLAP_CLIP,
+  BOW_CLIP,
+  DANCE_CLIP,
 ];
 
 /** Movement state (from CameraSystem) -> the default clip id played for

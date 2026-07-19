@@ -15,7 +15,7 @@ export function createWardrobePhoneApp({ appearanceStore, outfitStore }) {
   return {
     id: "wardrobe",
     label: "Wardrobe",
-    glyph: "\uD83D\uDC55",
+    glyph: "wardrobe",
     mount(container) {
       const heading = document.createElement("h2");
       heading.textContent = "Wardrobe";

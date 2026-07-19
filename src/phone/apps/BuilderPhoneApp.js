@@ -14,7 +14,7 @@ export function createBuilderPhoneApp({ buildModeSystem }) {
   return {
     id: "builder",
     label: "Builder",
-    glyph: "\uD83D\uDD28",
+    glyph: "builder",
     mount(container) {
       buildModeSystem.mountUI(container);
       return () => buildModeSystem.unmountUI();

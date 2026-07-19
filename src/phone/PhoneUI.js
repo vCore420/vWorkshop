@@ -1,3 +1,5 @@
+import { iconMarkup } from "../utils/ProceduralIcons.js";
+
 /**
  * PhoneUI
  * ---------
@@ -118,9 +120,13 @@ export class PhoneUI {
   }
 
   /** "Display applications as a simple grid of icons... the design
-   *  should remain minimal, clear, readable, comfortable." Every icon is
-   *  a plain button — an emoji glyph and a label, nothing trying to look
-   *  like Android or iOS. */
+   *  should remain minimal, clear, readable, comfortable." Version 3,
+   *  Phase 10 ("Real Assets, Honestly Introduced") gave `iconMarkup()`
+   *  a real drawn mark for every first-party app's own `glyph`;
+   *  anything it doesn't recognise (a third-party plugin's own literal
+   *  emoji) falls back to printing `glyph` as plain text, exactly as
+   *  this always did. Every icon is a plain button — an icon and a
+   *  label, nothing trying to look like Android or iOS. */
   showHome(apps) {
     this.setTitle("Workshop", true);
     this.content.innerHTML = "";
@@ -132,7 +138,9 @@ export class PhoneUI {
       tile.className = "workshop-phone-app-tile";
       const glyph = document.createElement("span");
       glyph.className = "workshop-phone-app-glyph";
-      glyph.textContent = app.glyph ?? "\u25A1";
+      const icon = iconMarkup(app.glyph);
+      if (icon) glyph.innerHTML = icon;
+      else glyph.textContent = app.glyph ?? "\u25A1";
       const label = document.createElement("span");
       label.className = "workshop-phone-app-label";
       label.textContent = app.label;

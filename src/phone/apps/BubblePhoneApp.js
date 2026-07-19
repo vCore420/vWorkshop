@@ -14,7 +14,7 @@ export function createBubblePhoneApp({ residentProfileStore, residentController,
   return {
     id: "bubble",
     label: "Bubble",
-    glyph: "\uD83E\uDEE7",
+    glyph: "bubble",
     mount(container) {
       const profile = residentProfileStore.getActive();
       const heading = document.createElement("h2");

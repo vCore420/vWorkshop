@@ -1,5 +1,6 @@
 import { EventBus } from "../core/EventBus.js";
 import { DEFAULT_BODY_MODEL } from "./BodyModels.js";
+import { DEFAULT_OUTFITS } from "./DefaultOutfits.js";
 
 let _nextId = 1;
 
@@ -20,12 +21,31 @@ let _nextId = 1;
  * switch models too, not just apply mismatched numbers to the wrong
  * proportions. `WardrobeApp.js` is what actually does that switch, using
  * this field to know it's needed.
+ *
+ * **Version 3, Phase 10 ("Real Assets, Honestly Introduced") — six
+ * starter outfits, seeded by default.** See `DefaultOutfits.js` for the
+ * presets themselves; string ids (`"default-outfit-..."`) rather than
+ * this store's own auto-incrementing numeric ids, so they can never
+ * collide with a player-created outfit's own id. Seeded directly here in
+ * the constructor, the same timing `BlueprintStore.js` already
+ * established (a brand-new session never reaches `load()` at all).
+ * **Deliberately not reseeded on an empty `load()`**, unlike
+ * `BlueprintStore.load()`'s own "genuinely zero saved data re-seeds the
+ * starter set" rule — the Settings app's Danger Zone promises "every
+ * saved outfit deleted... this can't be undone" for Reset Player Data
+ * (see `SettingsApp.js`), and silently bringing the defaults back on the
+ * next reload would break that promise outright. `load()` below already
+ * gets this right without any special-casing: it only ever *replaces*
+ * `this.outfits` when a save genuinely contains an `outfits` key
+ * (`data.outfits` truthy, including a real empty array) — a save that
+ * predates this feature entirely (`data.outfits` is `undefined`) leaves
+ * the constructor's own seeded defaults standing untouched.
  */
 export class OutfitStore {
   constructor() {
     this.events = new EventBus();
-    /** @type {Array<{id:number, name:string, appearance:object, bodyModelId:string, createdAt:string, updatedAt:string}>} */
-    this.outfits = [];
+    /** @type {Array<{id:number|string, name:string, appearance:object, bodyModelId:string, createdAt:string, updatedAt:string}>} */
+    this.outfits = [...DEFAULT_OUTFITS];
   }
 
   create(name, appearance, bodyModelId = DEFAULT_BODY_MODEL) {

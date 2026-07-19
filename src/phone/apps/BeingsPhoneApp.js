@@ -26,7 +26,7 @@ export function createBeingsPhoneApp({ beingLibrary, beingInstanceStore, beingSp
   return {
     id: "beings",
     label: "Beings",
-    glyph: "\uD83E\uDDDC",
+    glyph: "beings",
     mount(container) {
       const heading = document.createElement("h2");
       heading.textContent = "Beings";

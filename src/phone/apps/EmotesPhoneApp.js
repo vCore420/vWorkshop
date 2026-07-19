@@ -18,7 +18,7 @@ export function createEmotesPhoneApp({ animationLibraryStore, playerAnimationSys
   return {
     id: "emotes",
     label: "Emotes",
-    glyph: "\uD83D\uDC4B",
+    glyph: "emotes",
     mount(container) {
       const heading = document.createElement("h2");
       heading.textContent = "Emotes";

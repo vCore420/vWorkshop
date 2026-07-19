@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { terrainDetailTexture } from "../utils/ProceduralTexture.js";
 
 const TERRAIN_SIZE = 200; // metres — the Workshop's entire primary ground, not a small patch layered above a second one; see this file's own module comment
 const TERRAIN_SEGMENTS = 100; // 2m resolution — coarser than the original 1m (see module comment's own note on the trade-off), still fine enough for real sculpting
@@ -154,7 +155,17 @@ export class TerrainSystem {
     this._writeAllPositionsAndColors();
     geometry.computeVertexNormals();
 
-    const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 });
+    // Version 3, Phase 10 ("Real Assets, Honestly Introduced") — a fine
+    // neutral detail texture, multiplied under the existing vertex-colour
+    // paint (MeshStandardMaterial does this automatically once both `map`
+    // and `vertexColors` are set — no shader work). One tile per grid
+    // cell (TERRAIN_SIZE / TERRAIN_SEGMENTS = 2m), so the detail reads at
+    // roughly the same scale the terrain is actually edited at. See
+    // `terrainDetailTexture()`'s own comment for why it's neutral rather
+    // than grass-tinted — it sits under all seven paintable materials.
+    const detailTexture = terrainDetailTexture();
+    detailTexture.repeat.set(TERRAIN_SEGMENTS, TERRAIN_SEGMENTS);
+    const material = new THREE.MeshStandardMaterial({ vertexColors: true, map: detailTexture, roughness: 0.95, metalness: 0 });
     this.mesh = new THREE.Mesh(geometry, material);
     this.mesh.receiveShadow = true;
     this.mesh.castShadow = false;
@@ -205,8 +216,15 @@ export class TerrainSystem {
     // Grass green (TERRAIN_MATERIALS[0]'s own colour) — matches the
     // editable patch's own default, unedited vertex colour exactly, so
     // the join reads as one continuous lawn, not two different greens
-    // meeting at a line.
-    const material = new THREE.MeshStandardMaterial({ color: MATERIAL_COLOR[0], roughness: 0.95, metalness: 0 });
+    // meeting at a line. Carries the same detail texture as the main
+    // mesh, at the same real-world tile density (the skirt is
+    // SKIRT_OUTER_SIZE/TERRAIN_SIZE = 10x larger, so 10x the repeat) —
+    // an untextured skirt butting up against a textured patch would read
+    // as a visible seam right at the join, not one continuous ground.
+    const skirtDetailTexture = terrainDetailTexture();
+    const skirtRepeat = TERRAIN_SEGMENTS * (SKIRT_OUTER_SIZE / TERRAIN_SIZE);
+    skirtDetailTexture.repeat.set(skirtRepeat, skirtRepeat);
+    const material = new THREE.MeshStandardMaterial({ color: MATERIAL_COLOR[0], map: skirtDetailTexture, roughness: 0.95, metalness: 0 });
     this.skirtMesh = new THREE.Mesh(geometry, material);
     this.skirtMesh.position.set(0, -0.03, 0); // exactly coplanar with the main terrain mesh's own baseline — see that mesh's own comment on why -0.03, not 0
     this.skirtMesh.receiveShadow = true;
