@@ -147,7 +147,12 @@ the precedents), and a real playtest of the touched workflow in a
 browser (`python3 -m http.server 8000`). If Version 3 introduces logic
 complex enough to want real unit tests (the formula evaluator and save
 migrations are the standing candidates), that decision should be its own
-phase, not a side effect.
+phase, not a side effect. **Read `.claude/DEV_NOTES.md` before a browser
+playtest, not after one goes sideways** — it names real dev-environment
+gotchas (Service Worker/ES-module staleness, screenshot reliability, how
+to drive the live engine and mount app UI directly for verification) that
+have already cost real time to diagnose once; it is kept up to date for
+exactly this reason.
 
 ## Before you finish any change
 

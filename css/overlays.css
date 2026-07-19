@@ -255,14 +255,30 @@
 
 /* ---------- Wardrobe overlay material ---------- */
 /* Reuses the exact same createWardrobeApp() the computer's Wardrobe app
-   mounts — see src/ui/overlays/WardrobeOverlay.js. Sized generously
-   (rather than the smaller panel material other furniture uses) since
-   its split preview/form layout needs real room to breathe. */
+   mounts — see src/ui/overlays/WardrobeOverlay.js. Version 3, Phase 9
+   ("Creative Flow") — this used to be sized generously (880x600, well
+   past every other furniture panel's own scale) on the theory that the
+   split preview/form layout needed the extra room; playtesting instead
+   read this as "noticeably rougher... closer to an early prototype than
+   something built for the player." The layout itself never actually
+   needed that width: `.builder-preview` (css/builder.css) is a fixed
+   220px, and `.builder-form` already flexes down to whatever's left
+   (`flex: 1; min-width: 0`) — the oversized panel was masking a layout
+   that already adapts, not compensating for one that couldn't. Now the
+   same *width* as the standard `.overlay--panel` material (560px) — the
+   same scale every other piece of furniture already uses, `display:
+   flex` kept since Wardrobe's own content is the side-by-side split,
+   unlike panel's simple vertical stack. Height stays a definite value
+   (not `max-height`, unlike the plain `.overlay--panel` material) —
+   `.builder-root`'s own `height: 100%` (css/builder.css) needs a real
+   height to resolve against to fill this panel correctly; swapping to
+   `max-height` alone would leave it sizing to content instead, with
+   nothing forcing the preview/form split to actually fill the space. */
 .overlay--wardrobe {
   background: rgba(10, 8, 6, 0.72);
 }
 .overlay--wardrobe .overlay-panel {
-  width: min(880px, 92vw);
+  width: min(560px, 90vw);
   height: min(600px, 84vh);
   background: linear-gradient(180deg, var(--wood-mid), var(--wood-dark));
   border-radius: var(--radius-lg);
@@ -312,6 +328,12 @@
   margin: 0 0 var(--space-2);
   color: var(--teal-bright);
   flex-shrink: 0;
+  /* Version 3, Phase 8a — room for the context-usage toggle button
+     (.resident-usage-button) as a second child, right-aligned. */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 .overlay--companion .resident-conversation-messages {
   max-height: none;
@@ -634,6 +656,12 @@
   font-size: var(--text-sm);
   line-height: 1.5;
   white-space: pre-wrap;
+  /* Version 3, Phase 8a — caps one long message at ~4 visible lines with
+     its own scrollbar, so a long reply can't push the rest of the
+     conversation out of view. In em units (relative to this element's
+     own font-size/line-height) rather than a hardcoded px value. */
+  max-height: calc(1.5em * 4);
+  overflow-y: auto;
 }
 .resident-message-player {
   align-self: flex-end;
@@ -679,6 +707,64 @@
   color: var(--paper-dark);
   margin: 2px 0 0 4px;
   font-style: italic;
+}
+/* Version 3, Phase 8b — a Workshop Function's own honest "Bubble did X"
+   note, distinct from a chat bubble the same way the error row above is —
+   quiet, small, never claiming to be something the resident said. */
+.resident-function-note {
+  font-size: var(--text-xs);
+  color: var(--teal-bright);
+  margin: -2px 0 0 4px;
+  font-style: italic;
+}
+/* Version 3, Phase 8a — a failed turn's own row, distinct from an
+   ordinary chat bubble so it doesn't read as something Bubble actually
+   said. Same error colour .environment-status-error already uses. */
+.resident-message-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: #e0a084;
+  padding: 4px 6px;
+}
+.resident-message-error button {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background: rgba(224, 160, 132, 0.15);
+  border: 1px solid rgba(224, 160, 132, 0.4);
+  color: #e0a084;
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.resident-message-error button:hover { background: rgba(224, 160, 132, 0.28); }
+/* Version 3, Phase 8a — the small "ⓘ" toggle in the heading, and the
+   popup it shows/hides. Plain document flow, not absolutely positioned —
+   consistent with the rest of this small companion card. */
+.resident-usage-button {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background: transparent;
+  border: 1px solid rgba(127, 216, 196, 0.4);
+  color: var(--teal-bright);
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.resident-usage-button:hover { background: rgba(127, 216, 196, 0.12); }
+.resident-usage-popup {
+  font-size: var(--text-xs);
+  color: var(--paper-dark);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin: 0 0 var(--space-2);
+  line-height: 1.4;
 }
 .resident-conversation-input-row {
   display: flex;

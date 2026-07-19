@@ -105,6 +105,14 @@ shell.
   from the idle-location ease-travel system that's tuned for occasional,
   slow journeys instead). Built against the resident stores generically
   enough that a future second resident would already work here.
+  Version 3, Phase 8b added a fourth `playerCommand` value, `"goto"` —
+  not a Phone button (there's no player-facing reason to type raw
+  coordinates), only ever set by `ResidentController.goTo(position)`, the
+  one-time errand the `moveTo` Workshop Function uses (see docs/AI.md's
+  own "Workshop Functions" section). Same shape as the other three:
+  `update()` keeps stepping toward the target every frame until close
+  enough to count as arrived, then clears itself back to ordinary
+  autonomous wandering, exactly like Return Home already does.
 - **Browser** — Workshop docs and bookmarks/saved pages, rendered inline
   via the exact `{title, html}` shape `PageRegistry.resolve()` already
   produces for the full computer Browser; ordinary external links (like

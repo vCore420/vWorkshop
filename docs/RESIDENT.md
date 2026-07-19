@@ -279,6 +279,47 @@ later phase's concern (see `docs/AI.md`'s own "Memory Configuration"
 section), not something to half-build ahead of a real memory system
 existing to use it.
 
+**The conversation surface itself, refined (Version 3, Phase 8a —
+"Bubble Gains Hands," chat-surface half).** Five small, real pieces of
+friction closed, all client-side, none changing what's actually sent to
+Ollama:
+
+- **A long message caps at four visible lines** with its own scrollbar
+  (`.resident-message`'s own `max-height`, `css/overlays.css`) rather
+  than growing indefinitely and pushing the rest of the conversation out
+  of the card's small footprint.
+- **A reply reveals word-by-word** once it's fully back —
+  `ResidentConnection.sendMessage()` still asks Ollama for a single,
+  complete response (`stream: false`, unchanged); the reveal is a purely
+  client-side `revealReply()` loop in `ResidentConversation.js`, mutating
+  one history entry in place and re-rendering on every word. Real token
+  streaming was deliberately not built for this — nothing in the stack
+  parses a streamed response anywhere yet, and faking the reveal on an
+  already-complete string is the same visible effect for a fraction of
+  the risk.
+- **A failed send gets a real Retry**, not a fake apology bubble mixed
+  into the conversation. `send(retryText)` — called with no argument for
+  an ordinary send, or with the original text from the error row's own
+  Retry button — never re-pushes a duplicate player message, since the
+  first attempt already added it to history.
+- **Up/Down in the input cycles through this session's own sent
+  messages** — the same convention a terminal already uses. Arrowing
+  back down past the most recent one restores whatever was still being
+  typed, rather than leaving a blank input.
+- **A small "ⓘ" toggle shows Ollama's own usage counts for the last
+  turn** — `prompt_eval_count`/`eval_count`, previously read off the
+  `/api/chat` response and silently discarded (see
+  `ResidentConnection.js`'s own comment), now returned alongside
+  `content`. Framed honestly as "last turn only" — Ollama doesn't report
+  a running conversation total, so the popup doesn't claim to show one.
+
+All five apply only to the real, physical walk-up conversation. Mission
+Control's own Resident Sandbox chat (`AIApp.js`) is unaffected — same
+`sendMessage()` call, same new return shape (destructures just
+`content`), no reveal/history/retry/usage UI, since that surface exists
+specifically for testing prompts quickly, not for the conversational
+experience these five changes are about.
+
 ## Offline behaviour
 
 "If Ollama is unavailable: the resident should remain inside the

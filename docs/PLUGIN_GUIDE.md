@@ -287,8 +287,12 @@ export function myAssetPlugin() {
           tags: ["example"],
           thumbnail: buildSwatchThumbnail([item.color]),
         }),
-        // getDependencies(item) and validateItem(item) are both optional
-        // too — see AssetService.js's own comment for what each does.
+        // getDependencies(item), validateItem(item), and exportItem(item)
+        // are all optional too — see AssetService.js's own comment for
+        // what each does. exportItem (Version 3, Phase 7) returns a
+        // plain {type, version, exportedAt, ...} envelope and gets a real
+        // Export button on the item's own generic detail page for free —
+        // see docs/ASSETS.md's own "Export" section.
       });
     },
   };

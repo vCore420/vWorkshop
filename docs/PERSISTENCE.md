@@ -144,9 +144,10 @@ sharing one shape rather than each growing ad hoc:
 - **A single AI profile** — `ResidentProfileStore.exportProfile()`/
   `importProfile()`, in AI Mission Control's own Profiles section. A
   named resident's entire configuration — identity, model/provider,
-  behaviour tuning, traits, memory and embodiment settings — as its own
-  small, genuinely shareable file, independent of anything else in a
-  given Workshop's save data.
+  behaviour tuning, traits, memory, embodiment settings, and (Version 3,
+  Phase 8b) which Workshop Functions it's granted — as its own small,
+  genuinely shareable file, independent of anything else in a given
+  Workshop's save data.
 - **A single Expression Set** (Workshop Personality phase) —
   `ExpressionSetStore.exportSet()`/`importSet()`, in AI Mission
   Control's own new Expressions section — a "pack" of hand-drawn pixel

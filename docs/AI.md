@@ -46,8 +46,9 @@ responsibilities where appropriate." Concretely, in `src/ai/`:
   and what's known about them.
 - **`ResidentProfileStore.js`** — the CRUD store for named profiles, each
   one the *entire* description of a resident (identity, provider, model,
-  intelligence tuning, behaviour dials, traits, memory, embodiment) in
-  one place.
+  intelligence tuning, behaviour dials, traits, memory, embodiment, and —
+  Version 3, Phase 8b — which Workshop Functions it's granted) in one
+  place.
 - **`ProviderRegistry.js`** *(new this phase)* — "please begin preparing
   Mission Control for additional providers." A plain, static list —
   Ollama (the only one actually functional), LM Studio, OpenAI,
@@ -237,8 +238,12 @@ to match the brief's own grouping — "Behaviour" now names something
 distinct (see below). Temperature, Creativity, Determinism (0–1 sliders),
 Context Size and Maximum Response Length remain ordinary Ollama
 generation parameters, stored on `behaviourConfig` and already applied to
-every real conversation turn via `ResidentConnection.sendMessage()`
-(unchanged this phase). The one-off Connection Test still sends a fixed
+every real conversation turn via `ResidentConnection.sendMessage()` —
+its request shape is unchanged; Version 3, Phase 8a only extended what
+it *returns* (`{content, promptEvalCount, evalCount}` instead of a bare
+string), specifically so Context Size could be shown against a real
+usage count in the conversation overlay's own new popup — see
+docs/RESIDENT.md's own account of that. The one-off Connection Test still sends a fixed
 prompt with none of them applied, since there's little to tune about a
 single "Hello."
 
@@ -315,6 +320,113 @@ genuinely active — Embodiment Type (five real shapes plus a reserved
 changed this phase beyond how it now composes with the new Behaviour
 dials (Energy/Calmness both feed into the same movement math Idle
 Behaviour already influences).
+
+## Workshop Functions (Version 3, Phase 8b — "Bubble Gains Hands")
+
+"We should be able to give the same functionality calls to any resident
+via Mission Control when making a profile, but Bubble gets them all by
+default, we should however be able to toggle what ones Bubble has in
+their own profile too, always making everything open, accessible and
+controllable." There's no special-cased "Bubble" anywhere in
+`ResidentProfileStore` — every profile, hers included, defaults to every
+Workshop Function granted (`WorkshopFunctions.js`'s own
+`defaultFunctionsConfig()`), and Mission Control's new "Workshop
+Functions" section (right after Embodiment) is the identical per-profile
+toggle list for any resident, one checkbox per function, each carrying
+the exact `label`/`description` also sent to Ollama's own `tools`
+request — one description, never two copies drifting apart.
+
+**Nine built-in functions, a fixed table the Workshop itself owns:**
+`moveTo` (ground-plane only — height isn't something a resident
+controls), `getPlayerPosition`, `getNearbyObjects`/`getNearbyBeings`
+(both centred on the player, capped at 10 results), `setWeather`/
+`setTimeOfDay`/`setLights`, `musicControl` (play/pause/next/previous/
+setVolume, one function rather than five), and `placeObject` (a
+Construction piece, saved object, Blueprint, or Being, resolved by
+free-text name against whatever the library currently contains — a
+static id enum baked into the schema would go stale the moment a player
+builds something new, and would bloat every single request besides).
+The resident only ever supplies a function *name* and *arguments* —
+never code; see `WorkshopFunctions.js`'s own comment for the full
+"fixed table, no `eval`" reasoning, echoing the roadmap's own Risks
+paragraph almost verbatim.
+
+**Coordinates are clamped, not validated against real collision** — the
+Builder itself has no pre-placement bounds/overlap gate to reuse
+(confirmed by reading `BuildModeSystem._confirmGhost()`: collision boxes
+are computed *after* spawn, for player-movement collision, never as a
+placement gate), so a wildly out-of-range coordinate is clamped to a
+generous but bounded world extent instead — a genuinely new,
+deliberately conservative safety net, not a corner cut relative to what
+ordinary Builder placement already guarantees.
+
+**Real tool-calling against Ollama** (`ResidentConnection.sendMessage()`,
+new optional fourth `dispatcher` argument): builds Ollama's own `tools`
+request field from whichever functions the active profile has granted,
+and — only if the response actually contains `tool_calls` — runs the
+standard loop (invoke, feed results back as `tool`-role messages, ask
+again), capped at four rounds so a model that never stops calling
+functions can't hang a conversation turn forever. Without a dispatcher,
+or a profile with nothing granted, this is exactly the single request it
+always was.
+
+**The Resident Sandbox below deliberately does *not* get a dispatcher**
+— its own doc, right below, already promises "nothing typed below
+reaches the real conversation or its memory," and a Workshop Function is
+a real, permanent effect (the lights genuinely switch off). Wiring
+function-calling into an "isolated" surface would quietly break that
+promise the moment a granted function fired. Testing what a resident can
+*do*, as opposed to what it says, means the real conversation, by
+design. The Sandbox *does* get the read-only Workshop-knowledge
+grounding below (`worldAwareness`), since that has no side effects to
+worry about.
+
+**A short line of real Workshop knowledge, distinct from acting on it**
+(`ResidentContext.buildWorldKnowledgeLine()`) — "Bubble should be
+allowed access to basic workshop knowledge too... believe it's the one
+true source of a world." `WorldAwareness.snapshot()` has existed since
+Version 3, Phase 6 and was already wired to `ResidentController`, but
+nothing ever actually read it into a conversation until now — a short,
+selective line (current time-of-day bucket, weather, whether music is
+playing, active project count), not the whole snapshot dumped into the
+prompt, the same "three perfect touches over thirty" restraint Phase 6's
+own risk note already named. Deliberately separate from the
+function-calling mechanism above: this is what a resident *knows*
+without asking, a Workshop Function is what it *does*.
+
+**Verified live**: every function's dispatcher `invoke()` call tested
+directly against the real Workshop systems (weather/time/lights/music
+state genuinely changed; a Construction piece, a Blueprint, and a placed
+Being all spawned live and were independently confirmed via
+`getNearbyObjects`/`getNearbyBeings`; out-of-range coordinates correctly
+clamped; an unknown function name and an unknown weather id both
+returned honest `{error}` results rather than throwing). The
+tool-calling loop itself was verified with a scripted fake `fetch`
+covering both a real multi-round exchange (call a function, receive its
+result, reply in text) and the round cap (a mock that always requests
+another function call was confirmed to stop at exactly
+`MAX_TOOL_ROUNDS`). A real request against a locally running Ollama
+server (model `ornith:9b`, whose own reported capabilities include
+`"tools"`) confirmed the plain, no-function request path completes
+correctly in well under the connection's own generous timeout; a genuine
+end-to-end "ask the resident to turn a Workshop Function on and see if
+the model actually chooses to call it" exchange was still in flight
+when this pass closed, a known caveat named honestly rather than
+claimed — see `docs/ROADMAP.md`'s own Phase 8b account.
+
+**One genuine bug caught only by driving real per-frame movement rather
+than trusting the first frame's state** (see `.claude/DEV_NOTES.md`'s
+own standing warning about exactly this): `ResidentController`'s own
+arrival check for `moveTo` originally compared full 3D distance, but
+`ResidentMovement.stepToward()` deliberately moves along the ground
+plane only (it zeroes the Y component of its own direction vector) —
+whenever a target's Y didn't closely match the resident's own natural
+resting height, the distance could never drop below the arrival
+threshold, leaving "goto" mode stuck active forever. Fixed by comparing
+horizontal (X/Z) distance only, matching how movement actually happens;
+`moveTo`'s own schema was simplified to drop `y` entirely as part of the
+same fix, since a resident's height was never something either the
+function or the model should have been asked to control.
 
 ## Resident Sandbox
 

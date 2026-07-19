@@ -220,7 +220,108 @@ Builder object already can.
 would render — validation needs the same care `PluginManifest`
 already shows. Versioned schemas from day one, or migrations multiply.
 
-## Phase 8 V3.0.8 — Creative Flow (thinking without friction)
+## Phase 8 V3.0.8 — Bubble Gains Hands (Mission Control, extended)
+
+**Purpose:** two related threads, both scoped from a dedicated set of
+post-v3.0.7 notes (`Notes_Post_v3.0.7.md`) rather than Version 2
+carry-over. First, close a handful of real friction points in Bubble's
+own conversation surface. Second — the larger half — let a resident's
+*capabilities*, not just its identity, be configured from Mission
+Control: named, sandboxed Workshop functions a resident can be granted
+(move to a coordinate, check the weather, flip a light), with the
+ability to author new ones and share them the same way Phase 7 just
+made Blueprints and Calculators shareable.
+
+**Why it matters:** Phase 6 already grounded Bubble in what's genuinely
+happening in the Workshop (`WorldEventLog`, `WorldAwareness`,
+`ConversationMemory`); Phase 7 already made every Workshop creation
+exportable. Neither gave a resident anything to *do* — everything Bubble
+knows stays read-only, and every tool Mission Control offers configures
+who a resident is, never what it can act on. This phase is the natural
+join of those two: acting capability, built and shared through the
+identical mechanisms this project just finished proving out.
+
+**Systems involved:** `src/resident/` (`ResidentConversation.js`,
+`ConversationMemory`, `ResidentContext`/`PromptComposer.js`), `src/ai/`
+(the AI connection layer any function-calling plumbing sits on top of),
+AI Mission Control's own Profiles section (`residentsPage`), the systems
+a granted function would actually call into —
+`WorldObjectsSystem`/`BuildModeSystem`/`BeingSpawnerSystem` (placement),
+`EnvironmentSystem`/`TimeOfDaySystem` (weather/time), `LightingSystem`
+(the Workshop's own lights), `MusicSystem` (playback) — and
+`AssetService`/`StorageUtils` for exporting/importing custom functions,
+reusing Phase 7's envelope pattern rather than inventing a second one.
+
+**A. Bubble's conversation surface.** Real, ordinary chat-UX friction,
+closed rather than left to accumulate: long messages wrap instead of
+overflowing, capped at roughly four visible lines before a vertical
+scrollbar appears (deliberately compact, matching Phase 6's own small
+"companion" card rather than growing it back into a panel); Bubble's own
+replies reveal word-by-word rather than appearing all at once, for a
+more natural conversational rhythm; a failed prompt can be retried
+without retyping it; the Up/Down arrow keys cycle back through a
+player's own previously-sent messages in the input, the same convention
+a terminal already uses; and a small, dismissible popup surfaces how
+much of the active conversation's own context budget is currently used,
+for anyone curious rather than caught out by it.
+
+**B. Granting a resident real Workshop capabilities.** A new concept —
+call it a **Workshop Function** — a named, sandboxed capability a
+resident can be granted, toggled per-resident from Mission Control's own
+Profiles section (the natural home, since that's already where a
+resident's configuration lives). Named starting capabilities from the
+brief: move to a specific coordinate; fetch the player's own current
+coordinates; fetch nearby objects' and other Beings' coordinates; change
+the weather or time of day on request; switch the Workshop's own lights
+on or off; and, one tier deeper, place a Construction piece, a
+Blueprint, or a Being at a location — resolved using the same
+coordinate-lookup functions above, not a separate placement path. Basic
+Music Player controls (play/pause/skip/volume) round out the starting
+set. Beyond the built-ins: the ability to *author* a new Workshop
+function from Mission Control, which then becomes just as real a
+Workshop asset as anything else Phase 7 made shareable — saved,
+exported, and imported through `AssetService`'s own `exportItem`
+mechanism, not a parallel one.
+
+**The one hard constraint, named explicitly and non-negotiable:** no
+function may do anything outside the Workshop's own parameters — every
+capability stays inside the Workshop's existing systems and this browser
+tab, nothing reaching a real filesystem, a real network call, or any
+other real-world effect. The same boundary `PluginManifest`'s own
+capability model already draws for plugins is the standard to hold this
+to, not a new, looser one.
+
+**Bubble's own grounding, distinct from acting on the world.** Alongside
+capability, Bubble should have access to "basic workshop knowledge" —
+described in the brief as wanting Bubble treated as the one true source
+of the world it's in, not a generic outside chatbot. This is a
+`PromptComposer.js`/`ResidentContext` concern (real, current Workshop
+facts folded into what Bubble reasons from), deliberately separate from
+the function-calling mechanism above — knowledge is what Bubble *knows*,
+functions are what Bubble can *do*, and the two shouldn't be conflated
+into one mechanism.
+
+**Opportunities:** Mission Control stops being only "configure who
+Bubble is" and becomes "configure what Bubble can do" too — a genuine
+expansion of its existing role rather than a new, competing surface.
+Once one resident can act through named, sandboxed functions, every
+future resident inherits the same mechanism for free.
+
+**Risks:** the highest-stakes phase proposed so far, and the risk is
+specific: sandboxing has to be real and enforced at the function layer
+itself, not just documented intent — a malformed or malicious custom
+function is the first *executed*, not merely rendered, untrusted data
+the Workshop would handle, a materially bigger risk than Phase 7's
+import validation. Movement and placement functions specifically need to
+reuse existing collision/bounds checks rather than a parallel, less
+careful path. Scope discipline matters as much as safety: ship the named
+built-in capability list first; "author your own function" is powerful
+enough that it may deserve its own later milestone rather than landing
+in the same pass. And the tone risk Phase 6 already named carries over
+unchanged — a resident that can act on everything stops feeling like the
+Workshop's own resident and starts feeling like an assistant bolted on.
+
+## Phase 9 V3.0.9 — Creative Flow (thinking without friction)
 
 **Purpose:** refine the entire creative workflow so ideas move naturally throughout the Workshop without interrupting momentum.
 
@@ -252,7 +353,7 @@ point, and Phase 1 has already shipped.
 
 **Risks / considerations:** Every workflow improvement should reduce friction without reducing intention. Simplicity should never come at the expense of understanding.
 
-## Phase 9 V3.0.9 — Real Assets, Honestly Introduced
+## Phase 10 V3.1.0 — Real Assets, Honestly Introduced
 
 **Purpose:** begin the long-promised placeholder-to-real transition —
 `assets/README.md`'s own plan, executed for one coherent slice
@@ -283,12 +384,23 @@ and lighting — originally flagged against Phase 2's own environmental
 polish, relocated here since it's really the same "placeholder reads
 as placeholder" problem this phase already exists to solve, and Phase 2
 has already shipped.
+As well Doors placed by the builder povit upon interaction from the 
+center of the door and not from one side to "hinge" it
+the beings, wardrobe and emotes should gain a small fewe default entries, 
+3-5 of each like we see for blueprints in buildings, some basic beings 
+like cat, dog, person. some basic wardobe stles, a few different shapped 
+males and females with different colour pallets suited for both distitave 
+genders and more generless entries, i would also like one respectful tastful 
+nod to the transgender colour pallet by making one of the default female 
+presets reprsent this. and a few basic animations for the emote 
+wheel spicifaclly, wave, dance, clap ect 
+
 
 **Risks:** binary assets end the "everything generated in code" purity
 — cross that line deliberately, in the docs as well as the repo, or
 not at all.
 
-## Phase 10 V3.1.0 — Workshop Character (a place with its own personality)
+## Phase 11 V3.1.1 — Workshop Character (a place with its own personality)
 
 **Purpose:** strengthen the Workshop's identity until returning to it feels like returning somewhere familiar rather than launching an application.
 
@@ -300,13 +412,15 @@ It is the accumulated personality that emerges when many small systems consisten
 
 Different Workshops should naturally begin feeling different because of the choices made within them rather than through cosmetic customisation alone.
 
+However one Solid request for this phase is to place one of out small pot plants on the book shelf somewhere where it doesnt interfare with the books on the shelf
+
 **Systems involved:** Bubble, Residents, WorldAwareness, ConversationMemory, WeatherSystem, AudioSystem, LightingSystem, ProjectsStore, Browser, environmental storytelling.
 
 **Opportunities it creates:** The Workshop becomes increasingly recognisable as *your* Workshop through accumulated history rather than progression systems or unlocks.
 
 **Risks / considerations:** Personality should emerge naturally from existing systems. Resist introducing artificial personalisation mechanics where genuine continuity achieves the same result more honestly.
 
-## Phase 11 V3.1.1 — Accessibility & Comfort Pass
+## Phase 12 V3.1.2 — Accessibility & Comfort Pass
 
 **Purpose:** a dedicated pass on who can actually inhabit the place:
 keyboard-only reach for every panel, focus order, screen-reader labels
@@ -338,12 +452,16 @@ Chromium-only file-system API — Firefox and Safari players can't load
 their own library at all; a fallback path (even one that trades away
 live-folder persistence) would bring the feature to every browser
 rather than one.
+Sound abient sounds seem to sometimes get left over once the workshop 
+application is closed, my computer is left playing some churpping sounds 
+long after the browser is closed, is this at all something that can be 
+looked at on the workshops end?
 
 **Risks:** the 3D world itself has hard limits a pass can't erase — be
 honest in the docs about what is and isn't achievable, in the
 project's own tradition.
 
-## Phase 12 V3.1.2 — The Phone Becomes a Device
+## Phase 13 V3.1.3 — The Phone Becomes a Device
 
 **Purpose:** grow the Phone from a functional menu surface into
 something that actually feels like carrying a device — its own settings
@@ -363,7 +481,7 @@ standard to hold each app to individually, not just the shell.
 (both its Phone-facing and PC-facing surfaces), each individual Phone
 app.
 
-**Opportunities it creates:** a natural extension of Phase 10's "your
+**Opportunities it creates:** a natural extension of Phase 11's "your
 Workshop" identity — a phone a player has actually customised is a
 small, concrete way ownership shows up, without drifting into gameplay
 progression. It also gives every future Phone app a bar to clear: feel
@@ -382,14 +500,14 @@ like its own app, not a reskinned shared template.
   both the PC and the Phone — the same setting, both surfaces.
 
 **Risks / considerations:** this is cosmetic-adjacent territory the way
-Phase 10 explicitly warns against — the difference worth holding onto
+Phase 11 explicitly warns against — the difference worth holding onto
 is that these are *player-chosen* settings (a wallpaper picked, a
 format preferred), not systems inventing personality on the player's
 behalf. Keep the scope to genuine device-feel (settings depth,
 transitions, per-app distinctness), not a theming engine for its own
 sake.
 
-## Phase 13 V3.1.3 — Further Environmental Polish (the room, revisited)
+## Phase 14 V3.1.4 — Further Environmental Polish (the room, revisited)
 
 **Purpose:** carry forward the environmental, furniture, and geometry
 playtesting notes that would have belonged in Phase 2 or Phase 5 had

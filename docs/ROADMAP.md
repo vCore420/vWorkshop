@@ -3941,6 +3941,144 @@ against real store data, confirming the DOM restructuring (the new
 `<div>`-wrapped card) renders and behaves correctly with no nested-button
 issue.
 
+## Version 3 — Phase 8a — Bubble Gains Hands, Conversation Surface (v3.0.8a)
+
+**Goal:** the first of two milestones under Phase 8 ("Bubble Gains
+Hands") — five small, real pieces of friction in Bubble's own
+conversation overlay, closed before the phase's much larger second half
+(granting residents sandboxed Workshop Functions, deliberately
+milestoned separately). See `docs/ROADMAP_V3.md`'s own Phase 8 entry for
+the original two-part brief.
+
+**Investigation first found the AI stack more limited than the brief
+assumed, in ways that shaped scope.** Only Ollama is real (OpenAI/
+Anthropic remain honestly inert, per `docs/AI.md`); every request is
+`stream: false` — there is no streaming anywhere in the stack to build
+on. "Bubble's replies should display word for word" was built as a
+purely client-side reveal of an already-complete string rather than real
+token streaming — the same visible effect, none of the risk of adding
+real streaming parsing to a call site nothing else depends on yet.
+
+**Five changes, all in `ResidentConversation.js`/`ResidentConnection.js`/
+`css/overlays.css`, none touching what's actually sent to Ollama:** a
+long message now caps at four visible lines with its own scrollbar
+(`.resident-message`'s own `max-height`, expressed in `em` so it tracks
+the element's own font-size rather than a hardcoded pixel guess); a
+reply reveals word-by-word via a new `revealReply()` loop that mutates
+one history entry in place; a failed send gets a real, distinct error
+row with a Retry button instead of a fake apology bubble mixed into the
+conversation, and Retry never re-pushes a duplicate player message; the
+input's Up/Down arrows cycle through the session's own sent messages,
+restoring an in-progress draft once arrowed back past the most recent
+one; and a small "ⓘ" toggle surfaces Ollama's own `prompt_eval_count`/
+`eval_count` for the last turn against the profile's own context size —
+previously read off every response and silently discarded — worded
+honestly as "last turn only," since Ollama doesn't report a running
+conversation total.
+
+`ResidentConnection.sendMessage()` now returns `{content,
+promptEvalCount, evalCount}` instead of a bare string — its one other
+caller, Mission Control's own Resident Sandbox test chat (`AIApp.js`),
+was updated to destructure `content` and is otherwise unaffected; two
+stale "unchanged this phase" comments referring to this exact method,
+left over from an earlier phase, were corrected in the same pass rather
+than left to mislead the next reader.
+
+**Verified live** by mounting `createResidentConversationOverlay()`
+directly against a detached container with a scriptable fake
+`residentConnection` (no real Ollama server in this environment) —
+confirmed the word-by-word reveal completes correctly and re-enables
+Send only once finished; the usage popup shows the exact expected
+wording and numbers; Up/Down recalls sent messages and restores an
+in-progress draft; a genuinely failing `sendMessage()` produces the
+distinct error row with no fake bubble, and clicking Retry resends the
+identical text without duplicating the player's own message; and
+disposing the overlay mid-reveal (closing the conversation while Bubble
+is still "typing") stops the reveal cleanly with no console errors,
+confirming the `disposed`/`revealToken` guard actually works. The
+`.resident-message` computed `max-height` measured exactly 84px — 1.5em
+× 4 at this card's 14px font-size, i.e. genuinely four lines, not an
+approximation.
+
+## Version 3 — Phase 8b — Bubble Gains Hands, Workshop Functions (v3.0.8b)
+
+**Goal:** the second, larger half of Phase 8 — granting residents
+sandboxed Workshop Functions from Mission Control, all-granted-by-
+default and individually toggleable per profile, Bubble's own included.
+See `docs/ROADMAP_V3.md`'s own Phase 8 entry and `docs/AI.md`'s new
+"Workshop Functions" section for the full account.
+
+**A fixed, Workshop-owned function table** (`WorkshopFunctions.js`) —
+nine functions (move, read player/nearby-object/nearby-Being
+coordinates, weather, time, lights, music, and a name-resolved
+place-anything function) dispatched through a table the Workshop itself
+owns; a resident only ever supplies a name and arguments, never code.
+Threaded through `ResidentProfileStore` the identical nested-merge/
+export/import pattern every other profile section already uses — a
+`functions` field travels through Phase 7's export/import for free.
+Real Ollama tool-calling added to `ResidentConnection.sendMessage()`
+(a new optional fourth `dispatcher` argument): builds the `tools`
+request from whichever functions a profile has granted, and runs a
+capped, multi-round call/result/reply loop only when Ollama's own
+response actually contains `tool_calls` — an ordinary conversation turn
+is byte-for-byte unchanged. Mission Control gained a new "Workshop
+Functions" toggle section, and the conversation overlay gained a small,
+honest "Bubble used: Turn the lights on or off" transparency line
+whenever a function actually fires.
+
+**Also completed in this pass, from the original brief's own third
+strand**: `WorldAwareness.snapshot()` (built in Phase 6, never actually
+read into a conversation until now) is wired into
+`ResidentContext.buildConversationContext()`/`PromptComposer
+.composeSystemPrompt()` as a short, selective line of real Workshop
+knowledge — current time, weather, whether music is playing, active
+project count — deliberately kept separate from the function-calling
+mechanism: knowledge is what a resident *knows*, a function is what it
+*does*.
+
+**A deliberate scope decision, caught mid-implementation**: the Resident
+Sandbox does *not* get a dispatcher, even though it was tempting to wire
+in for symmetry. Its own doc already promises "nothing typed below
+reaches the real conversation or its memory" — a Workshop Function is a
+real, permanent effect, so granting it there would have quietly broken
+that isolation the moment a function actually fired. The Sandbox does
+get the read-only knowledge grounding, since that has no side effects.
+
+**A real bug, caught only by driving actual per-frame movement rather
+than trusting the first frame's own state** — `ResidentController`'s
+`moveTo` arrival check originally compared full 3D distance, but
+`ResidentMovement.stepToward()` deliberately moves along the ground
+plane only. Whenever a target's own Y didn't closely match the
+resident's natural resting height, the distance could never cross the
+arrival threshold, leaving "goto" mode stuck forever. Fixed by comparing
+horizontal distance only, and by simplifying `moveTo`'s own schema to
+drop `y` entirely — a resident's height was never something either the
+function or the model should have controlled.
+
+**Verified live, extensively**: every function's `invoke()` tested
+directly against real Workshop systems (weather/time/lights/music
+state genuinely changed; a Construction piece, a Blueprint, and a placed
+Being all spawned live, independently confirmed via
+`getNearbyObjects`/`getNearbyBeings`; out-of-range coordinates correctly
+clamped; unknown function/weather ids returned honest errors rather than
+throwing); the profile's own `functions` field confirmed nested-merging,
+exporting, and importing correctly; the Mission Control toggle section
+mounted and clicked directly, confirmed updating the real profile; the
+conversation overlay's transparency line confirmed rendering the correct
+wording for both a successful and a failed function call; the
+tool-calling loop's own protocol handling verified with a scripted fake
+`fetch` (a real multi-round call/result/reply exchange, and the round
+cap stopping a mock that never stops requesting functions at exactly
+`MAX_TOOL_ROUNDS`). Finally, tested against the user's own real, locally
+running Ollama server with `ornith:9b` (a model whose reported
+capabilities include `tools`): asked in plain conversation to "turn the
+lights on," the resident genuinely chose to call `setLights` — the
+Workshop's own lights turned on for real, confirmed independently via
+`lightingSystem.lightsOn` before the assistant's own reply was even
+read back — the first fully real, unscripted confirmation that a local
+model can and will use a granted Workshop Function correctly through
+this exact pipeline.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

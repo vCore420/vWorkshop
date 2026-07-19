@@ -199,6 +199,28 @@
   text-align: center;
 }
 
+/* Version 3, Phase 9 ("Creative Flow") — a live text filter for the
+   Saved Objects/Imported Models/Blueprints tabs, shown whenever a tab has
+   more than one item. No flex siblings here (unlike
+   `.builder-phone-row input[type="number"]`'s own case) — just an
+   ordinary `width: 100%` with `box-sizing: border-box` so the input's own
+   padding/border don't push it past this narrow ~268px screen's width. */
+.builder-phone-search-row {
+  margin-bottom: var(--space-2);
+}
+.builder-phone-search-row input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--paper-dark);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  padding: 5px 8px;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+}
+.builder-phone-search-row input:focus { outline: none; border-color: var(--wood-mid); }
+
 /* ---------- Ghost screen (placing / moving) ---------- */
 .builder-phone-hint {
   font-size: var(--text-xs);

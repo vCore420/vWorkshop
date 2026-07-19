@@ -1419,4 +1419,65 @@ the Builder Phone/Tools panel UI mounted and driven directly against
 real data. See `docs/ROADMAP.md`'s own Phase 7 account for the complete
 story.
 
+**Version 3, Phase 8a — Bubble Gains Hands, Conversation Surface
+(v3.0.8a)** — the first of Phase 8's two milestones, five small pieces
+of friction closed in Bubble's own conversation overlay: a long message
+now caps at four visible lines with its own scrollbar; a reply reveals
+word-by-word, purely client-side (Ollama is never asked to stream — the
+whole stack turned out to have no streaming support to build on, so this
+fakes the same effect on an already-complete response rather than adding
+real streaming risk); a failed send gets a genuine Retry button instead
+of a fake apology bubble; Up/Down in the input cycles through the
+session's own sent messages; and a small toggle surfaces Ollama's own
+token-usage counts for the last turn, previously read and silently
+discarded, worded honestly as "last turn only" rather than a running
+total Ollama doesn't actually provide. `ResidentConnection.sendMessage()`
+now returns `{content, promptEvalCount, evalCount}` instead of a bare
+string — its one other caller, Mission Control's own Resident Sandbox,
+was updated to match. Verified live by mounting the real conversation
+overlay against a detached container with a scriptable fake connection
+(no Ollama server in this environment), including a genuinely failing
+send, a successful Retry with no duplicate message, and disposing the
+overlay mid-reveal to confirm the reveal stops cleanly rather than
+throwing. Phase 8's second, larger milestone — granting residents
+sandboxed Workshop Functions from Mission Control — is deliberately
+separate, not yet started. See `docs/ROADMAP.md`'s own Phase 8a account
+for the complete story.
+
+**Version 3, Phase 8b — Bubble Gains Hands, Workshop Functions
+(v3.0.8b)** — the second, larger half: nine Workshop Functions (move,
+read player/nearby-object/nearby-Being coordinates, weather, time,
+lights, music, name-resolved placement) dispatched through a fixed,
+Workshop-owned table (`WorkshopFunctions.js`) a resident only ever calls
+by name and arguments, never code — real Ollama tool-calling added to
+`ResidentConnection.sendMessage()`, granted per-profile from a new
+Mission Control section, all-granted-by-default with no special-cased
+"Bubble" anywhere in the store, exactly matching "give the same
+functionality to any resident, but Bubble gets them all by default,
+stay toggleable" as asked. `WorldAwareness`'s own knowledge snapshot —
+built in Phase 6, never actually read into a conversation until now —
+is wired into the system prompt as a short grounding line, deliberately
+kept separate from function-calling: knowledge is what a resident
+*knows*, a function is what it *does*. A real bug was caught only by
+driving actual per-frame movement rather than trusting the first
+frame's state: the `moveTo` arrival check compared full 3D distance
+against a resident's movement that only ever moves horizontally, which
+could leave "goto" mode stuck forever whenever a target's Y didn't
+match the resident's own resting height — fixed at the root (horizontal
+distance only, `y` dropped from the function's own schema entirely). A
+scope decision was also caught and reversed mid-implementation: wiring
+the dispatcher into the Resident Sandbox for symmetry would have quietly
+broken that surface's own documented "nothing here has real side
+effects" promise, so the Sandbox keeps read-only knowledge grounding
+only, no function execution. Verified live and extensively — every
+function tested directly against real Workshop systems, the profile
+field's nested-merge/export/import, the Mission Control toggle UI, the
+conversation overlay's transparency line, and the tool-calling loop's
+own protocol (including its round cap) via a scripted fake connection —
+and, finally, against the user's own real, locally running Ollama
+server with `ornith:9b`: asked in plain conversation to turn the lights
+on, the resident genuinely chose to call the real `setLights` function
+and the Workshop's own lights turned on for real. See `docs/ROADMAP.md`'s
+own Phase 8b account for the complete story.
+
 </details>
