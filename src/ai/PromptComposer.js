@@ -17,12 +17,13 @@
  * `AIApp.js`'s own Advanced preview needs stays exactly as it was (calling
  * this with one argument), while `ResidentConversation.js` can now pass
  * live, runtime context (the resident's own selected traits, its
- * accumulated preferences, a handful of curiosity notes, a few
- * remembered things about the player) without this function's core
- * contract changing shape. "Extend with an optional argument before
- * reaching for a new file" — this project's own stated habit (see the
- * README's "Advice to whoever continues this") — applied to a function
- * signature, not just a store.
+ * accumulated preferences, a short line of real Workshop knowledge since
+ * Version 3 Phase 8b, a handful of curiosity notes, a few remembered
+ * things about the player) without this function's core contract
+ * changing shape. "Extend with an optional argument before reaching for
+ * a new file" — this project's own stated habit (see the README's
+ * "Advice to whoever continues this") — applied to a function signature,
+ * not just a store.
  */
 export function composeSystemPrompt(profile, context = null) {
   if (!profile) return "";
@@ -40,6 +41,7 @@ export function composeSystemPrompt(profile, context = null) {
 
   if (context?.personalityLine) lines.push(context.personalityLine);
   if (context?.preferenceLine) lines.push(context.preferenceLine);
+  if (context?.worldKnowledgeLine) lines.push(context.worldKnowledgeLine);
   if (context?.curiosityNotes?.length) lines.push(`Things you might have noticed recently: ${context.curiosityNotes.join(" ")}`);
   if (context?.memoryNotes?.length) lines.push(`A few things you remember about the player: ${context.memoryNotes.join(" ")}`);
 

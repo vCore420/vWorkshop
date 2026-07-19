@@ -4,9 +4,14 @@
  * A single source of truth for "creative projects", viewed several
  * different ways by different physical objects:
  *
- *   - The pinboard shows every project, grouped by status ("planning" is
- *     the default when it doesn't fit anywhere else yet) — this is where
- *     ideas get captured before they're being worked on.
+ *   - The pinboard shows every project that isn't `"done"` yet
+ *     ("planning" is the default when it doesn't fit anywhere else yet)
+ *     — this is where ideas get captured and actively worked on. A
+ *     project marked `"done"` comes off the board (see
+ *     `PinboardOverlay.js`'s own comment, Version 3 Phase 9) — it isn't
+ *     deleted, it simply belongs to the Archive from that point on,
+ *     rather than staying pinned indefinitely alongside genuinely active
+ *     planning.
  *   - The workbench shows exactly one project at a time — "current creative
  *     focus" — as a physical arrangement of objects, not a list. See
  *     src/workbench/ and docs/WORKBENCH.md. `kind` and `presence` exist on

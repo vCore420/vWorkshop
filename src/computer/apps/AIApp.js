@@ -8,6 +8,7 @@ import { buildConversationContext } from "../../resident/ResidentContext.js";
 import { getIdleLocation } from "../../resident/ResidentMovement.js";
 import { StorageUtils } from "../../utils/StorageUtils.js";
 import { EXPRESSION_TYPES, EXPRESSION_GRID_SIZE } from "../../resident/ExpressionTypes.js";
+import { WORKSHOP_FUNCTIONS } from "../../ai/WorkshopFunctions.js";
 
 const STATUS_LABELS = {
   connected: "Connected",
@@ -22,8 +23,9 @@ const STATUS_LABELS = {
  * Instead, it should become the place where Workshop residents are
  * understood, configured and nurtured." Every section here edits a
  * `ResidentProfileStore` profile (identity, intelligence, behaviour,
- * memory, embodiment) or reads from the systems that make the resident
- * this profile describes actually real in the room —
+ * memory, embodiment, and — Version 3, Phase 8b — which Workshop
+ * Functions it's granted) or reads from the systems that make the
+ * resident this profile describes actually real in the room —
  * `AIConnectionManager`/`ModelRegistry` for the connection itself,
  * `residentBehaviour`/`residentState`/`conversationMemory` for what
  * Bubble is *currently* doing. This file coordinates all of them but
@@ -33,9 +35,9 @@ const STATUS_LABELS = {
  * "Avoid making this feel like configuring software. Instead, make it
  * feel like preparing another presence." Section order: status, health,
  * connection, model, profiles, identity, traits, intelligence,
- * behaviour, memory, embodiment, sandbox, advanced, connection test —
- * *who this resident is* and *how it's doing right now* both come before
- * the numeric tuning knobs, not after.
+ * behaviour, memory, embodiment, functions, expressions, sandbox,
+ * advanced, connection test — *who this resident is* and *how it's doing
+ * right now* both come before the numeric tuning knobs, not after.
  */
 export function createAIApp({
   aiConnectionManager,
@@ -53,6 +55,7 @@ export function createAIApp({
   environmentSystem = null,
   timeOfDaySystem = null,
   worldEventLog = null,
+  worldAwareness = null,
 }) {
   return {
     id: "ai",
@@ -137,6 +140,7 @@ export function createAIApp({
           form.appendChild(buildBehaviourDialsSection(profile));
           form.appendChild(buildMemorySection(profile));
           form.appendChild(buildEmbodimentSection(profile));
+          form.appendChild(buildFunctionsSection(profile));
           form.appendChild(buildExpressionsSection(profile));
           form.appendChild(buildSandboxSection(profile));
           form.appendChild(buildAdvancedSection(profile));
@@ -514,14 +518,60 @@ export function createAIApp({
         return section;
       }
 
+      /** Version 3, Phase 8b ("Bubble Gains Hands") — "we should be able
+       *  to give the same functionality calls to any resident via
+       *  Mission Control when making a profile, but Bubble gets them all
+       *  by default, we should however be able to toggle what ones
+       *  Bubble has in their own profile too, always making everything
+       *  open, accessible and controllable." There's no special-cased
+       *  "Bubble" anywhere in this store — every profile defaults to
+       *  every function granted (`defaultFunctionsConfig()`,
+       *  `WorkshopFunctions.js`), and this section is the identical
+       *  toggle for every profile alike, Bubble's included. Each
+       *  function's own `label`/`description` come straight from
+       *  `WORKSHOP_FUNCTIONS`, the same schema Ollama's own `tools`
+       *  request is built from — one description, shown here and sent to
+       *  the model, never two copies to keep in sync. */
+      function buildFunctionsSection(profile) {
+        const section = document.createElement("div");
+        section.className = "builder-section";
+        section.appendChild(sectionHeading("Workshop Functions"));
+        const hint = document.createElement("p");
+        hint.className = "app-subtitle";
+        hint.textContent = "What this resident is actually allowed to do in the Workshop, beyond talking — move, check or change the weather and time, control the lights and music, place things. Every function stays inside the Workshop itself.";
+        section.appendChild(hint);
+
+        const granted = profile.functions.granted;
+        const list = document.createElement("div");
+        list.className = "ai-trait-list";
+        for (const fn of WORKSHOP_FUNCTIONS) {
+          const row = document.createElement("label");
+          row.className = "panel-row ai-trait-row";
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.checked = granted[fn.id] !== false;
+          checkbox.addEventListener("change", () => {
+            updateActive({ functions: { granted: { [fn.id]: checkbox.checked } } });
+          });
+          const text = document.createElement("span");
+          text.textContent = `${fn.label} — ${fn.description}`;
+          row.append(checkbox, text);
+          list.appendChild(row);
+        }
+        section.appendChild(list);
+        return section;
+      }
+
       /** "Continue expanding resident intelligence settings... Identity,
        *  Purpose, Personality, Behaviour, Conversation style, Temperature,
        *  Context length... these settings should now genuinely influence
        *  Bubble's behaviour." The free-text identity fields above already
        *  reach the system prompt (`PromptComposer.composeSystemPrompt()`);
        *  the numeric settings below already reach real conversation turns
-       *  (`ResidentConnection.sendMessage()`, unchanged this phase) — this
-       *  section is named to match the brief's own "Intelligence"
+       *  (`ResidentConnection.sendMessage()` — its *request* shape is
+       *  unchanged; Version 3, Phase 8a only extended what it returns,
+       *  see that file's own comment) — this section is named to match
+       *  the brief's own "Intelligence"
        *  grouping rather than reusing "Behaviour," which now names
        *  something distinct (see `buildBehaviourDialsSection()` below). */
       function buildIntelligenceSection(profile) {
@@ -1067,12 +1117,21 @@ export function createAIApp({
           try {
             const context = buildConversationContext(
               profile,
-              { residentCuriosity, residentPreferences, playerPatternMemory, conversationMemory, worldObjectsStore, environmentSystem, timeOfDaySystem, worldEventLog },
+              { residentCuriosity, residentPreferences, playerPatternMemory, conversationMemory, worldObjectsStore, environmentSystem, timeOfDaySystem, worldEventLog, worldAwareness },
               { mutateCuriosity: false }
             );
             const systemPrompt = composeSystemPrompt(profile, context);
-            const reply = await residentConnection.sendMessage(profile, sandboxHistory, systemPrompt);
-            sandboxHistory.push({ role: "assistant", content: reply || "\u2026" });
+            // Version 3, Phase 8b — deliberately *not* passed a
+            // functionDispatcher. This section's own doc comment already
+            // promises "nothing typed below reaches the real
+            // conversation or its memory" — a Workshop Function is a
+            // real, permanent effect (lights actually switch off, an
+            // object actually gets placed), so wiring it in here would
+            // quietly break that isolation the moment a granted function
+            // fires, not extend it. Testing what a resident can *do*
+            // still means the real conversation, by design.
+            const { content } = await residentConnection.sendMessage(profile, sandboxHistory, systemPrompt);
+            sandboxHistory.push({ role: "assistant", content: content || "\u2026" });
           } catch {
             sandboxHistory.push({ role: "assistant", content: "(couldn't reach the model just now \u2014 try again in a moment)" });
           }

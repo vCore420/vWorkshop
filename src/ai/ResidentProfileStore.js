@@ -4,6 +4,7 @@ import { defaultEmbodimentConfig, normalizeEmbodimentConfig } from "./Embodiment
 import { defaultTraitConfig, normalizeTraitConfig } from "./TraitConfiguration.js";
 import { defaultDialsConfig, normalizeDialsConfig } from "./BehaviourDialsConfiguration.js";
 import { DEFAULT_PROVIDER_ID, normalizeProviderId } from "./ProviderRegistry.js";
+import { defaultFunctionsConfig, normalizeFunctionsConfig } from "./WorkshopFunctions.js";
 
 const DEFAULT_BEHAVIOUR_CONFIG = {
   temperature: 0.7,
@@ -28,12 +29,13 @@ const DEFAULT_IDENTITY = {
  * "This allows multiple AI personalities to be configured... Profiles
  * should persist between Workshop sessions." Each profile is the *entire*
  * description of one possible future resident — identity, which model it
- * uses, behaviour tuning, its long-term personality traits, and its
- * memory/embodiment settings (increasingly real, no longer purely inert —
- * see docs/RESIDENT.md) — all in one place, so switching the active
- * profile is switching everything about who's being prepared at once, the
- * same way switching outfits in the Wardrobe switches everything about
- * how the player looks at once.
+ * uses, behaviour tuning, its long-term personality traits, its
+ * memory/embodiment settings, and (Version 3, Phase 8b) which Workshop
+ * Functions it's actually allowed to call (increasingly real, no longer
+ * purely inert — see docs/RESIDENT.md) — all in one place, so switching
+ * the active profile is switching everything about who's being prepared
+ * at once, the same way switching outfits in the Wardrobe switches
+ * everything about how the player looks at once.
  *
  * "The future AI Resident should simply consume these configurations
  * rather than implementing its own copies" — this store, plus
@@ -76,6 +78,11 @@ export class ResidentProfileStore {
       traits: defaultTraitConfig(),
       memory: defaultMemoryConfig(),
       embodiment: defaultEmbodimentConfig(),
+      // Version 3, Phase 8b ("Bubble Gains Hands") — every function
+      // defaults to granted. There's no code-level notion of "Bubble" as
+      // a special resident; every profile, hers included, starts the
+      // same way and stays individually toggleable from Mission Control.
+      functions: defaultFunctionsConfig(),
       // Workshop Personality phase — "future residents may have
       // different expression sets." The identical "a plain id, resolved
       // against a separate store elsewhere" shape `provider`/`model`
@@ -108,6 +115,7 @@ export class ResidentProfileStore {
     copy.traits = { ...source.traits, selected: [...source.traits.selected] };
     copy.memory = { ...source.memory, categories: { ...source.memory.categories } };
     copy.embodiment = { ...source.embodiment };
+    copy.functions = { ...source.functions, granted: { ...source.functions.granted } };
     copy.expressionSetId = source.expressionSetId ?? "default";
     this.profiles[copy.id] = copy;
     this.activeProfileId = copy.id;
@@ -176,7 +184,10 @@ export class ResidentProfileStore {
         const mergedCategories = normalizeMemoryCategories({ ...profile.memory.categories, ...(value.categories ?? {}) });
         profile.memory = normalizeMemoryConfig({ ...profile.memory, ...value, categories: mergedCategories });
       } else if (key === "embodiment") profile.embodiment = normalizeEmbodimentConfig({ ...profile.embodiment, ...value });
-      else if (key === "provider") profile.provider = normalizeProviderId(value);
+      else if (key === "functions") {
+        const mergedGranted = { ...profile.functions.granted, ...(value.granted ?? {}) };
+        profile.functions = normalizeFunctionsConfig({ ...profile.functions, ...value, granted: mergedGranted });
+      } else if (key === "provider") profile.provider = normalizeProviderId(value);
       else profile[key] = value;
     }
     profile.updatedAt = new Date().toISOString();
@@ -241,6 +252,12 @@ export class ResidentProfileStore {
     profile.traits = normalizeTraitConfig(source.traits);
     profile.memory = normalizeMemoryConfig(source.memory);
     profile.embodiment = normalizeEmbodimentConfig(source.embodiment);
+    // Version 3, Phase 8b — an imported profile's own granted functions
+    // travel with it, normalised the same defensive way every other
+    // field here is; an older export with no `functions` field at all
+    // simply gets today's all-granted default, same as a brand new
+    // profile would.
+    profile.functions = normalizeFunctionsConfig(source.functions);
     // Carried over honestly, not resolved against anything here — this
     // store has no reference to ExpressionSetStore.js, and shouldn't
     // need one just to import a profile. If the referenced set doesn't
@@ -272,6 +289,7 @@ export class ResidentProfileStore {
     for (const profile of Object.values(this.profiles)) {
       profile.memory = normalizeMemoryConfig(profile.memory);
       profile.embodiment = normalizeEmbodimentConfig(profile.embodiment);
+      profile.functions = normalizeFunctionsConfig(profile.functions);
       profile.traits = normalizeTraitConfig(profile.traits);
       profile.provider = normalizeProviderId(profile.provider);
       profile.identity = { ...DEFAULT_IDENTITY, ...profile.identity };
