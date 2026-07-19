@@ -28,8 +28,10 @@ const ACTIVITY_LABELS = {
  * movement/awareness/expression. `buildConversationContext()` is the
  * system-prompt-facing counterpart: personality (now both traits *and*
  * dials, combined into one line), accumulated preferences (gated by
- * Memory's own category toggles), curiosity notes, and remembered
- * things about the player.
+ * Memory's own category toggles), curiosity notes, remembered things
+ * about the player, and (Version 3, Phase 8b) a short line of real,
+ * current Workshop knowledge from `WorldAwareness` — see
+ * `buildWorldKnowledgeLine()` below.
  */
 
 export function getPersonalityModifiers(profile) {
@@ -41,6 +43,26 @@ function buildPersonalityLine(profile) {
   const dialLine = getDialModifiers(profile?.behaviourConfig?.dials).conversationStyleLine;
   const combined = [traitLine, dialLine].filter(Boolean).join(" ");
   return combined || null;
+}
+
+/** Version 3, Phase 8b ("Bubble Gains Hands") — "Bubble should be allowed
+ *  access to basic workshop knowledge too... believe it's the one true
+ *  source of a world." `WorldAwareness.snapshot()` already existed
+ *  (Version 3, Phase 6) and was already wired to `ResidentController`,
+ *  but nothing ever actually read it into a conversation — this is that
+ *  wiring, not a new knowledge source. Deliberately short and selective
+ *  rather than dumping the whole snapshot into the prompt — a handful of
+ *  concrete, current facts, the same "three perfect touches over thirty"
+ *  restraint Phase 6's own risk note already named. Distinct from
+ *  Workshop Functions (`WorkshopFunctions.js`): this is what Bubble
+ *  *knows* without asking; a Function is something Bubble *does*. */
+function buildWorldKnowledgeLine(worldAwareness) {
+  if (!worldAwareness) return null;
+  const snap = worldAwareness.snapshot();
+  const bits = [`it's currently ${snap.time.bucket}`, `the weather is ${(WEATHER_STATES[snap.weather.id]?.label ?? snap.weather.id).toLowerCase()}`];
+  if (snap.music?.isPlaying && snap.music.songTitle) bits.push(`"${snap.music.songTitle}" is playing`);
+  if (snap.activeProjects?.length) bits.push(`the player has ${snap.activeProjects.length} active project${snap.activeProjects.length === 1 ? "" : "s"} on the workbench`);
+  return `You know the Workshop itself first-hand, right now: ${bits.join(", ")}.`;
 }
 
 function buildPreferenceLine(profile, { residentPreferences }) {
@@ -70,7 +92,7 @@ function buildPreferenceLine(profile, { residentPreferences }) {
  *  why a sandbox preview must never consume the real "something new was
  *  built" note. */
 export function buildConversationContext(profile, deps, { mutateCuriosity = true } = {}) {
-  const { residentCuriosity, residentPreferences, playerPatternMemory, conversationMemory, worldObjectsStore, environmentSystem, timeOfDaySystem, worldEventLog } = deps;
+  const { residentCuriosity, residentPreferences, playerPatternMemory, conversationMemory, worldObjectsStore, environmentSystem, timeOfDaySystem, worldEventLog, worldAwareness } = deps;
   const curiosityNotes = residentCuriosity
     ? residentCuriosity.gatherNotes({ worldObjectsStore, environmentSystem, timeOfDaySystem, residentPreferences, playerPatternMemory, mutate: mutateCuriosity })
     : [];
@@ -88,6 +110,7 @@ export function buildConversationContext(profile, deps, { mutateCuriosity = true
   return {
     personalityLine: buildPersonalityLine(profile),
     preferenceLine: buildPreferenceLine(profile, { residentPreferences }),
+    worldKnowledgeLine: buildWorldKnowledgeLine(worldAwareness),
     curiosityNotes: [...curiosityNotes, ...worldEventNotes],
     memoryNotes: memoryEnabled ? conversationMemory?.mostRelevant() ?? [] : [],
   };

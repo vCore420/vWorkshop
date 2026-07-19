@@ -105,8 +105,10 @@ export class ResidentController {
     // ordinary autonomous wandering, "stay" simply skips ever picking a
     // new idle destination, "follow" steps toward the player every frame
     // instead. Return Home isn't a persistent mode at all — see
-    // returnHome() below.
-    this.playerCommand = null; // null | "stay" | "follow"
+    // returnHome() below. "goto" is Version 3, Phase 8b's own addition —
+    // see goTo() below.
+    this.playerCommand = null; // null | "stay" | "follow" | "goto"
+    this._goToTarget = null; // THREE.Vector3 — only set while playerCommand === "goto"
   }
 
   init(engine) {
@@ -441,6 +443,20 @@ export class ResidentController {
     this.playerCommand = "follow";
   }
 
+  /** Version 3, Phase 8b ("Bubble Gains Hands") — the one Workshop
+   *  Function with no existing single-call equivalent (unlike
+   *  `travelTo()`, which only ever accepts one of the fixed
+   *  `IDLE_LOCATIONS`, not an arbitrary point). A one-time request, the
+   *  same shape as `followMe()`: `update()`'s own "goto" branch below
+   *  keeps calling `ResidentMovement.stepToward()` every frame toward
+   *  `_goToTarget` until close enough to count as arrived, then clears
+   *  itself back to ordinary autonomous wandering — never a *persistent*
+   *  mode the way Follow Me is. */
+  goTo(position) {
+    this.playerCommand = "goto";
+    this._goToTarget = position instanceof THREE.Vector3 ? position.clone() : new THREE.Vector3(position.x, position.y, position.z);
+  }
+
   /** "Return Home" — not a persistent mode at all, just a one-time
    *  request: clears whatever command was active and starts an ordinary
    *  idle-location journey toward the very first idle location
@@ -487,6 +503,27 @@ export class ResidentController {
     const isConversing = this.residentBehaviour.mode === "conversing";
     if (this.playerCommand === "follow" && rawPlayerDistance !== null && rawPlayerDistance > FOLLOW_DISTANCE) {
       this.movement.stepToward(this._playerPos, dt);
+    } else if (this.playerCommand === "goto" && this._goToTarget) {
+      // Version 3, Phase 8b — a one-time errand, not a persistent mode:
+      // once close enough to count as arrived, clears itself back to
+      // null so the very next frame falls through to ordinary
+      // autonomous wandering below, the same way Return Home's own
+      // one-time travelTo() naturally resumes wandering on arrival.
+      // Horizontal distance only, matching stepToward()'s own movement
+      // (it deliberately zeroes the Y component of its own direction
+      // vector) — a real bug caught in verification: a full 3D distance
+      // check here could never drop below the threshold when the
+      // target's own Y didn't closely match the resident's natural
+      // resting height, since nothing ever moves it vertically to close
+      // that gap, leaving "goto" stuck active forever.
+      const dx = this._goToTarget.x - this.movement.currentPosition.x;
+      const dz = this._goToTarget.z - this.movement.currentPosition.z;
+      if (Math.hypot(dx, dz) < 0.15) {
+        this.playerCommand = null;
+        this._goToTarget = null;
+      } else {
+        this.movement.stepToward(this._goToTarget, dt);
+      }
     } else if (!isConversing && this.playerCommand !== "stay") {
       const currentId = this.residentState.idleLocationId;
       const newId = this.movement.maybePickNewLocation(dt, currentId, this._windowWatchWeights());
