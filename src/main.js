@@ -1146,8 +1146,6 @@ workbenchSystem.finalizeInitialState();
 await musicSystem.finalizeInitialState(); // async: checks each library root's still-live permission state
 await playerCharacterSystem.finalizeInitialState(); // async: resolves any part textures before the first rig build
 engine.start();
-window.__debugEngine = engine; // TEMP verification hook — removed before this pass closes
-window.__debugStores = { projectsStore, objectLibraryStore, blueprintStore, worldObjectsStore, modelLibrary, appearanceStore, outfitStore, textureStore, buildModeSystem, worldObjectsSystem }; // TEMP verification hook — removed before this pass closes
 
 // Workshop Refinement phase (Pass A) — the other half of the entry
 // screen wiring above. If the button was already pressed while this was

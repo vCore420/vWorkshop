@@ -19,7 +19,6 @@ export function createWardrobeOverlay({ appearanceStore, outfitStore, textureSto
   return {
     materialClass: "wardrobe",
     mount(panelEl) {
-      panelEl.classList.add("wardrobe-overlay-panel");
       return wardrobeApp.mount(panelEl);
     },
   };

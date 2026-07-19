@@ -295,6 +295,45 @@ export function metalBrushedTexture(base = "#9a978f") {
   return texture;
 }
 
+/** Version 3, Phase 10 ("Real Assets, Honestly Introduced") — a fine,
+ *  neutral speckle for `TerrainSystem.js`'s own ground mesh, following
+ *  `concreteTexture()`/`corkTexture()`'s exact technique (randomly
+ *  placed, randomly sized, low-alpha dots). Deliberately **not**
+ *  grass-tinted, unlike its name might suggest at a glance — the
+ *  terrain paints seven different materials (grass, dirt, rock, sand,
+ *  gravel, mud, path — see `TERRAIN_MATERIALS`) by vertex colour alone,
+ *  and this texture sits underneath *all seven* as one shared `map`,
+ *  multiplied against whichever vertex colour is actually painted there
+ *  (`MeshStandardMaterial` already does this multiply automatically
+ *  once both `map` and `vertexColors` are set — no shader work needed,
+ *  same as this whole file's own standing rule). A near-white, barely-
+ *  tinted base with both lighter and darker speckle keeps that multiply
+ *  close to neutral for every material, not just grass — true per-
+ *  material splat texturing (grass looking like *grass*, sand looking
+ *  like *sand*) is a real, bigger project deliberately left for later;
+ *  see `docs/WORLD.md`'s own "Terrain painting" paragraph, now updated
+ *  to describe this honestly rather than left claiming no texture is
+ *  involved at all. */
+export function terrainDetailTexture() {
+  const canvas = makeCanvas(256);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#e4e0d2";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  for (let i = 0; i < 900; i++) {
+    const shade = Math.random() > 0.5 ? "0,0,0" : "255,255,255";
+    const v = 0.04 + Math.random() * 0.1;
+    ctx.fillStyle = `rgba(${shade},${v})`;
+    ctx.beginPath();
+    ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, 1 + Math.random() * 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  configureFlatTexture(texture);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 /** Horizontal lapped-board siding, for the workshop's exterior walls. */
 export function sidingTexture(base = "#5a4a3d") {
   const canvas = makeCanvas(256);
