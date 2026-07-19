@@ -34,8 +34,14 @@ workbench need that; see those objects' own docs for why).
   inventory system behind it; the interaction says so directly rather
   than faking one.
 - **`Pinboard.js`** — a wall-mounted corkboard reflecting every project
-  in `ProjectsStore` regardless of status, the fuller picture next to
-  the Workbench's own narrower "what's currently active" view.
+  in `ProjectsStore` that isn't finished yet (planning and active alike),
+  the fuller picture next to the Workbench's own narrower "what's
+  currently active" view. Version 3, Phase 9 ("Creative Flow") stopped
+  showing `"done"` projects here — a long-running Workshop's cork board
+  would otherwise accumulate months of finished notes alongside
+  genuinely active planning, duplicating the Archive (`ArchiveOverlay.js`),
+  which already exists specifically to hold finished work. See
+  `PinboardOverlay.js`'s own comment for the full reasoning.
 - **`Wardrobe.js`** — a physical entry point into the exact same
   Wardrobe app the computer already has (see its own file comment for
   why there's deliberately no second appearance system here), plus a

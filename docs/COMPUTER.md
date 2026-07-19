@@ -105,7 +105,11 @@ would only need their positioning call swapped, not their structure.
   `src/entities/furniture/registry.js`'s pattern exactly: a list of
   factories, each `(deps) => { id, label, glyph, mount(container, ctx) }`,
   plus `registerAppFactory()` for a plugin to add its own tab. See
-  `docs/PLUGIN_GUIDE.md`.
+  `docs/PLUGIN_GUIDE.md`. `WorkstationPanel.js`'s own rail renders
+  `glyph` through `ProceduralIcons.js`'s `iconMarkup()` for every
+  Workshop-owned app, falling back to plain text for anything it
+  doesn't recognise — see `docs/PHONE.md`'s own "Home Screen" section
+  for the full account, identical on both surfaces.
 - **Events.** The entire public surface between the computer and the rest
   of the workshop is: `computer:activate`, `computer:deactivate`, and
   (internal to the panel/system pair) `computer:appChanged`. Everything else

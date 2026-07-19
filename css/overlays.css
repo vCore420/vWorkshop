@@ -256,24 +256,37 @@
 /* ---------- Wardrobe overlay material ---------- */
 /* Reuses the exact same createWardrobeApp() the computer's Wardrobe app
    mounts — see src/ui/overlays/WardrobeOverlay.js. Version 3, Phase 9
-   ("Creative Flow") — this used to be sized generously (880x600, well
-   past every other furniture panel's own scale) on the theory that the
-   split preview/form layout needed the extra room; playtesting instead
-   read this as "noticeably rougher... closer to an early prototype than
-   something built for the player." The layout itself never actually
-   needed that width: `.builder-preview` (css/builder.css) is a fixed
-   220px, and `.builder-form` already flexes down to whatever's left
-   (`flex: 1; min-width: 0`) — the oversized panel was masking a layout
-   that already adapts, not compensating for one that couldn't. Now the
-   same *width* as the standard `.overlay--panel` material (560px) — the
-   same scale every other piece of furniture already uses, `display:
-   flex` kept since Wardrobe's own content is the side-by-side split,
-   unlike panel's simple vertical stack. Height stays a definite value
-   (not `max-height`, unlike the plain `.overlay--panel` material) —
-   `.builder-root`'s own `height: 100%` (css/builder.css) needs a real
-   height to resolve against to fill this panel correctly; swapping to
-   `max-height` alone would leave it sizing to content instead, with
-   nothing forcing the preview/form split to actually fill the space. */
+   ("Creative Flow") — playtesting read this overlay as "noticeably
+   rougher... closer to an early prototype than something built for the
+   player," and the first-guess fix (just shrink the declared width from
+   880px down to the standard panel's own 560px) turned out not to be the
+   real bug at all: live measurement showed the panel rendering at
+   1280px regardless of what width was declared here. The actual root
+   cause was two compounding mistakes, only visible once actually
+   measured rather than reasoned about from the CSS alone:
+     1. `WardrobeOverlay.js`'s own `mount()` added a second class,
+        `wardrobe-overlay-panel`, onto the *same* element this rule
+        targets — and that class's own (now-removed) rule declared
+        `flex: 1`. Since this panel is itself a flex child of `.overlay`
+        (`align-items/justify-content: center`), `flex: 1`'s implicit
+        `flex-basis: 0%` overrode the `width` declared here entirely,
+        letting the panel grow to fill nearly the whole viewport no
+        matter what width this rule asked for.
+     2. `display: flex` here had no `flex-direction`, defaulting to
+        `row` — so the `<h2>` heading and `.builder-root` (the two
+        children `WardrobeApp.js`'s own mount() appends directly into
+        this panel) laid out side by side rather than stacked. Measured
+        live: the heading rendered as a squeezed 114px-wide column
+        stretched to the panel's full height, with `.builder-root`
+        beside it, not above it.
+   Fixed by removing the conflicting class/rule entirely (this panel
+   never needed to flex-grow — every other overlay material's own panel
+   just takes its explicit width/height and lets `.overlay`'s own
+   centering do the rest) and adding the missing `flex-direction:
+   column` so the heading actually stacks above the split preview/form
+   layout the way it visually always should have. Width now matches the
+   standard `.overlay--panel` material (560px) — the same scale every
+   other piece of furniture already uses. */
 .overlay--wardrobe {
   background: rgba(10, 8, 6, 0.72);
 }
@@ -286,10 +299,7 @@
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   padding: var(--space-3);
   display: flex;
-}
-.wardrobe-overlay-panel {
-  flex: 1;
-  min-height: 0;
+  flex-direction: column;
 }
 
 /* ---------- Companion overlay material (the resident) ---------- */

@@ -4079,6 +4079,299 @@ read back — the first fully real, unscripted confirmation that a local
 model can and will use a granted Workshop Function correctly through
 this exact pipeline.
 
+## Version 3 — Phase 9 — Creative Flow (v3.0.9)
+
+**Goal:** "refine the entire creative workflow so ideas move naturally
+throughout the Workshop without interrupting momentum... not about
+adding new tools... making existing tools disappear into the creative
+process." See `docs/ROADMAP_V3.md`'s own Phase 9 entry for the original
+brief, including its two named playtesting notes.
+
+**Investigation split two ways**: a precise root-cause pass on the
+brief's own flagged reselection bug, and a broader survey of Browser,
+Notebook, Pin Board, Phone navigation, the Builder Library, and every
+overlay's own structural pattern, against "existing management surfaces
+should comfortably accommodate growing libraries without obscuring or
+hiding functionality." The survey confirmed Phone navigation and
+Browser navigation are both already consistent and needed no changes —
+worth saying plainly, per this project's own "say what's already fine"
+habit — and found four genuine, on-brief items.
+
+**Imported-model reselection, finally fixed.** `_resolveWorldObjectDefinition()`
+was missing the `"importedModel"` branch the already-correct, more
+general `_resolveDefinition()` had — clicking a placed imported model
+resolved a `null` definition, which `_showSingleSelection()` treats as
+an invalid selection, silently bouncing back to the library screen.
+Drag/group-select never called this method at all, which is exactly why
+a group-select containing the model "worked." Fixed by making the
+narrower resolver delegate to the correct one instead of maintaining a
+second, incomplete copy — closing the last real gap in Phase 1's own
+"imported objects should behave as first-class objects" promise. The
+identical gap in `_startMoveSelected()` was fixed in the same pass.
+
+**Pin Board decluttered.** The cork board showed every project
+regardless of status, so a finished project stayed pinned forever,
+duplicating the Archive (which already exists specifically for finished
+work) — real clutter in a long-running Workshop. `done` projects now
+leave the board the moment they're marked done, never deleted, simply no
+longer pinned; `ProjectsStore.js`'s own doc comment, which claimed
+status-grouping that was never actually implemented, was corrected to
+match.
+
+**Builder Phone search filter.** The Construction tab already solved
+"the catalog outgrew a flat grid" with category grouping; Saved
+Objects/Imported Models/Blueprints never got an equivalent, and Saved
+Objects specifically has no natural ceiling in a long save. A live
+text-search filter now covers all three — grouping wasn't an option that
+worked uniformly (only Saved Objects have a category field) — following
+the exact "re-render only the results, never the input" pattern the
+Browser's own Unified Search page already established, so typing never
+drops focus mid-search the way a full screen rebuild would.
+
+**Wardrobe's overlay, genuinely fixed rather than just resized.** The
+first-guess fix (shrink the declared 880px width to the standard 560px)
+turned out not to be the real bug at all — live measurement showed the
+panel rendering at nearly full viewport width regardless of what was
+declared. The actual cause was two compounding CSS mistakes only visible
+once measured: a stray `flex: 1` on a second class applied to the same
+panel element silently overrode its own declared width entirely, and a
+missing `flex-direction: column` laid the heading and the split
+preview/form content out side by side instead of stacked. Both fixed at
+the root; see `css/overlays.css`'s own `.overlay--wardrobe` comment for
+the complete account.
+
+**Verified live throughout, including one caught-in-the-act correction**:
+initial reselection testing via a naive `ModelLibrary.add()` call
+returned just an id string, not an object — a test-script bug, not a
+real one, caught by re-checking the store's own method signature before
+trusting a `null` result. Every fix was then verified against the real
+mechanism it touches — a real imported-model instance selected through
+the actual `BuildModeSystem`, confirming both the resolved definition
+and the rendered selection screen; a Pin Board mounted against real
+`ProjectsStore` data, confirming both the initial filter and live
+removal on status change; the Builder Phone search filter mounted and
+typed into directly, confirming the same input DOM node persists across
+keystrokes (no focus loss) and that Construction's own grouping was
+untouched; and the Wardrobe overlay mounted against the exact DOM
+structure `OverlayManager` builds, with real `getBoundingClientRect()`
+measurements — width, child stacking order, and a full sweep for any
+element overflowing the form's own bounds — rather than assumed correct
+from reading the CSS.
+
+## Version 3 — Phase 10 — Real Assets, Honestly Introduced (v3.1.0)
+
+**Goal:** move the Workshop past its "prototype" feel in a handful of
+specific, honestly-scoped places, without abandoning the zero-binary-
+asset discipline that's held since Version 1. See `docs/ROADMAP_V3.md`'s
+own Phase 10 entry for the original seven-milestone brief. The user's
+own guidance, given at approval time, shaped the final scope directly:
+"I do really like that we are keeping this project very asset free...
+we should only do this if it is absolutely necessary and the Workshop
+would genuinely benefit from it... only basic things at most, like
+small sounds, textures or small models." Milestones 1–6 (all
+procedural, zero binary assets) were built; Milestone 7 (real recorded
+audio) was deliberately **not** started — see its own note at the end
+of this account.
+
+**Milestone 1 — Door hinge, a real edge pivot.** `DoorBehaviour.js`'s
+own comment had named this gap since Phase 5: swinging rotated the
+whole compiled object around its own origin, not a true hinge edge — a
+limitation Phase 14's own brief (`docs/ROADMAP_V3.md`) named again,
+independently, as the same thing observed from the player's side.
+Solved once here rather than twice: a new `hingeOffset` property
+repositions the object on every toggle so a point offset from its own
+origin — the true hinge edge — stays fixed in world space, instead of
+the object spinning in place around its centre. `hingeOffset: 0` (the
+default) reproduces the old behaviour exactly, so every door placed
+before this existed is unaffected. Verified directly against the real
+registered `"door"` behaviour with real Three.js vectors: the hinge
+point measured zero drift under rotation for both a positive and a
+negative offset, and the zero-offset case matched the old rotate-in-
+place output bit-for-bit.
+
+**Milestone 2 — Default Emotes.** The Emote Wheel (`EmoteWheelSystem.js`)
+lists every clip whose `category !== "movement"` — genuinely empty on a
+fresh Workshop until now, since nothing had ever seeded one. Four new
+hand-authored clips (Wave, Clap, Bow, Dance) join `AnimationClips.js`'s
+own `DEFAULT_ANIMATION_CLIPS`, the same permanent-seeded-data pattern
+`DefaultBlueprints.js` already established — zero new plumbing needed,
+since `AnimationLibraryStore.all()` already spreads that array
+directly. Verified by playing all four through the real
+`PlayerAnimationSystem` for their full duration (no errors, no NaN
+rotation on any pivot) and by opening the real Emote Wheel UI and
+confirming all four appear as clickable buttons.
+
+**Milestone 3 — Default Outfits.** Six starter outfits
+(`DefaultOutfits.js`) for the Wardrobe rail: Work Overalls, Pinstripe
+Vest (masculine), Rose Blouse, Sundress (feminine), Pride Jumpsuit,
+Field Jacket (both gender-neutral in styling) — the Pride Jumpsuit
+blocks the trans pride flag's three colours across torso/arms/legs as a
+soft, deliberate palette choice, per the user's own request. Seeded
+directly in `OutfitStore`'s constructor with stable string ids, the
+same timing `BlueprintStore.js` already uses. **Deliberately does not
+reseed on an empty `load()`**, unlike `BlueprintStore`'s own rule — the
+Settings app's Danger Zone already promises "every saved outfit
+deleted... this can't be undone," and silently bringing the defaults
+back on the next reload would break that promise; `load()`'s existing
+logic already gets this right without any special-casing, once
+defaults exist to seed in the first place. Verified end to end: the
+real `WardrobeApp` UI, mounted against a detached container, lists all
+six; clicking "Wear" on the Pride Jumpsuit correctly changed the live
+`PlayerAppearanceStore`'s torso colour and set `currentOutfitId`; and
+`buildCharacter()` produced a valid, NaN-free 14-mesh rig for all six.
+
+**Milestone 4 — Default Beings.** Three starter Beings
+(`DefaultBeings.js`), all built from primitive body parts, none
+imported: Person (fully rigged — all 14 `WorkshopSkeleton.WORKSHOP_JOINTS`
+tagged, its right side generated from the hand-placed left side via
+`BodyCompiler.mirrorSubtree()`, the same tool the Being Creator's own
+"Mirror" button uses), and Cat/Dog (deliberately unrigged — the shared
+Workshop joint vocabulary only names biped joints, so a quadruped's own
+legs and tail have nowhere honest to map to; see the new "Known
+simplifications" entry in `docs/BEINGS.md` this milestone added).
+Seeded in `BeingLibrary`'s constructor and reseeded on a genuinely
+empty `load()` — the same rule `BlueprintStore.js` uses, appropriate
+here since (unlike Outfits) there's no Danger Zone promise anywhere
+that deleting every Being is permanent. Verified live end to end,
+including the deepest check this phase did: all three spawned through
+the real `BeingController`, ran 120 real update ticks (2 simulated
+seconds, movement and Person's retargeted idle/walk animation both
+live), zero errors, zero NaN anywhere in any runtime's transform.
+
+**Milestone 5 — Ground texture detail layer.** `TerrainSystem.js`'s
+ground was pure flat vertex-colour painting across seven materials
+(grass/dirt/rock/sand/gravel/mud/path) — no generator for this existed
+anywhere in `ProceduralTexture.js` at all, a bigger gap than "add detail
+to an existing one." A new `terrainDetailTexture()` (following
+`concreteTexture()`/`corkTexture()`'s exact speckle technique)
+generates one shared, deliberately neutral fine-speckle texture, set as
+`map` alongside the terrain material's existing `vertexColors: true` —
+`MeshStandardMaterial` multiplies the two together automatically, so
+this is still no shader work, just one `map` on an already-existing
+material. Applied to both the editable 200m patch and the surrounding
+non-editable skirt, at matching real-world tile density, so the join
+between them stays seamless. Still genuinely not per-material splat
+texturing (grass doesn't look like grass blades) — `docs/WORLD.md`'s
+own "Terrain painting" paragraph was updated to describe this honestly.
+Verified by sampling the actual generated canvas pixels through the
+live material (confirmed real variance around the intended near-white
+base, on both meshes, at the intended repeat density) rather than
+trusting the code alone.
+
+**Milestone 6 — Procedural icon set.** Every Workshop-owned Phone/
+Computer app used a plain Unicode emoji as its own `glyph` — the icon
+*frame* had real Workshop styling from an earlier phase, the pictogram
+inside it never did. `ProceduralIcons.js` draws fourteen small, hand-
+authored line-icon marks (`viewBox="0 0 24 24"`, `currentColor`,
+generated as markup strings — no binary assets); nineteen first-party
+app registrations across both Phone and Computer now name one of those
+kinds instead of an emoji. **The Plugin SDK's own documented contract
+— `glyph` as "any character" — is deliberately unaffected**:
+`iconMarkup()` returns `null` for anything it doesn't recognise, and
+both render call sites (`PhoneUI.js`/`WorkstationPanel.js`) fall back to
+the exact original "print `glyph` as text" behaviour in that case. The
+shipped example plugin (`workshopToolkitPlugin.js`) deliberately keeps
+its own literal emoji rather than adopting one of this file's internal
+kind ids, so it keeps demonstrating the real, stable contract a plugin
+author can actually rely on. Verified live and conclusively: the real
+mounted Phone home screen showed real drawn icons for 8 of its 9 apps,
+and the 9th — the real, active Toolkit example plugin — correctly fell
+back to its own emoji; the real Computer rail showed real drawn icons
+for all 11 of its apps; zero console errors throughout.
+
+**A caching detour worth naming.** Verifying Milestones 3–6 repeatedly
+hit a module-graph staleness this session's own established `navigate(url,
+{force: true})` fix did not resolve, even combined with a Service-Worker
+unregister and cache clear, even in a brand-new tab. The reliable fix
+was a fresh port per verification round (`.claude/launch.json`,
+matching `DEV_NOTES.md`'s own existing "fresh origin sidesteps every
+caching layer" guidance) — that note has been extended with the
+specific new finding for the next session that hits it.
+
+**Milestone 7 — real audio assets — was not started.** The user's own
+words, quoted above, set a real bar: only if the Workshop would
+*genuinely* benefit from moving past "prototype," and only small,
+basic assets even then. `AudioSynth.js` remains 100% synthetic
+(oscillators, filtered noise) with zero audio files, exactly as before
+this phase — a deliberate deferral, not an oversight, pending an actual
+case that clears that bar.
+
+## Version 3 — Phase 10b — Being Creator, Beyond the Prototype, Wave 1 (v3.1.0b)
+
+**Goal:** the user, after Phase 10 shipped, named the Being Creator
+directly as still feeling like a prototype — "making it hard to set up
+clean looking rigged beings" — and asked for it to become "a more
+advanced model creator/editor." Investigation (a full read of
+`BeingCreatorApp.js`, `BodyCompiler.js`, and `PreviewRenderer.js`, plus a
+comparison against `BuilderApp.js`) turned up real, specific causes, not
+just a vague feeling — see below. The resulting plan split into three
+waves, each its own pass: **Wave 1 (this account) — core architecture**;
+Wave 2 — authoring UX (click-to-select, joint markers, numeric fields,
+hierarchy collapse, drag-and-drop re-parenting, per-part materials);
+Wave 3 — non-biped rigging. The user chose the deeper option on both of
+the two genuine forks this investigation surfaced: a real pivot/mesh
+split over a lighter authoring-only helper, and including non-biped
+rigging rather than deferring it again.
+
+**A real, previously-undetected bug, found while investigating.**
+`BodyCompiler.compileBody()` used to build one `THREE.Mesh` per body
+part, doing double duty as both "the joint" and "the visible box," with
+every *child* part parented to that same mesh. `THREE.Object3D`'s own
+`scale` applies to its children's local coordinates, not just its own
+geometry — so a child part's authored `position` was being silently
+multiplied by whatever scale its own parent happened to have. Confirmed
+live, before touching any code: the default Person's own compiled head
+sat 0.38m above the torso, not the 0.53m its own data said, and the
+shoulders sat at ±0.166m, not the intended ±0.32m — a torso scaled to
+`[0.52, 0.72, 0.32]` pulling every child in toward the origin by that
+same fraction. This wasn't a hypothetical concern raised to justify the
+rewrite; it's the concrete, measured reason "clean looking rigged
+beings" was genuinely hard, on top of being architecturally different
+from `PlayerCharacter.js`'s own correct pivot-based rig.
+
+**The fix: every part is now two nodes, not one.** A pivot (a
+`THREE.Group` — still what `position`/`rotation`/`jointName` describe,
+still what any *child* part parents to, unaffected by any scale, exactly
+like `PlayerCharacter.js`'s own shoulder/elbow/wrist pivots) carrying one
+mesh, offset from that pivot by a new, optional `meshOffset` field.
+`meshOffset` defaults to `[0, 0, 0]` — every part saved before this
+phase (including every one of Phase 10's own default Beings) renders
+exactly where it always visually sat, just now correctly unscaled by
+its parent's own scale, which is a genuine visual *correction* for
+existing content, not merely an invisible re-architecture: the default
+Person, completely unedited since Phase 10, now renders at its
+originally-intended proportions for the first time, verified against
+the exact numbers it was originally authored with. `mirrorSubtree()`
+and `makeDefaultBodyPart()` both updated to carry the new field
+correctly (mirrored the same way `position` already is, X negated).
+
+**The editor's own payoff: "Hang Below Pivot."** A single button in the
+part editor sets `meshOffset` to `[0, -scale.y/2, 0]` — a limb's shape
+hanging directly beneath its own joint, computed fresh from whatever the
+part's current Scale already is, rather than the hand-computed
+segment-midpoint arithmetic authoring a clean-looking rig used to
+require (the exact math this session's own default Person needed by
+hand, now automated). The manual `meshOffset` slider row stays available
+underneath for anything the one-click case doesn't cover.
+
+**Verified live and thoroughly, at every level.** The measured bug
+(before any fix) and its correction (after) were both confirmed against
+real compiled mesh world-positions, not code inspection alone. All
+three of Phase 10's own default Beings recompile with zero errors and
+zero NaN geometry. The full `BeingController` spawn → 120 real update
+ticks → despawn cycle was re-run in full (movement and Person's
+retargeted idle/walk animation both live), confirming `skeletonMap` now
+correctly holds pivot `Group` nodes for all 14 joints rather than mesh
+nodes, with `AnimationRetargeting.applyPoseToMappedSkeleton()` unaffected
+either way (it only ever sets `.quaternion`, never anything mesh-
+specific). The real Being Creator UI itself was mounted and driven
+directly: loading the real "Person" definition, selecting a part in the
+3D preview's selection-highlight path (which specifically traverses for
+`isMesh`, now one level deeper than before), and clicking "Hang Below
+Pivot" on a freshly added part — confirmed the button computes the
+right value, the form re-renders with it, and the part selection
+survives the re-render.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

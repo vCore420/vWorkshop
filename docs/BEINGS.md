@@ -123,7 +123,7 @@ array was never built for: a genuine parent-child hierarchy and full
 three-axis rotation per part.
 
 **A body part is `{id, name, parentId, jointName, shape, position,
-rotation, scale, color}`.** Four primitive shapes — Cube, Sphere,
+rotation, scale, meshOffset, color}`.** Four primitive shapes — Cube, Sphere,
 Cylinder, Capsule (`THREE.CapsuleGeometry`, available since Three.js
 r142; this Workshop runs r164) — each built once as a cached, unit-sized
 geometry and reused across every part that needs it, exactly
@@ -173,8 +173,34 @@ part and everything parented beneath it, honestly, rather than leaving
 orphaned children behind. Every transform field (position, rotation —
 shown in degrees for readability, converted to/from the radians actually
 stored, the same convention the Animation Editor already established —
-and scale) is three sliders in a row, immediate, no separate "apply"
-step.
+scale, and mesh offset) is three sliders in a row, immediate, no
+separate "apply" step.
+
+**Version 3, Phase 10b ("Being Creator, Beyond the Prototype") — a real
+pivot, separate from the mesh it carries.** Every part used to be a
+single `THREE.Mesh` doing double duty as both "the joint" and "the
+visible box" — a genuine, previously-undetected bug followed directly
+from that: a `THREE.Object3D`'s own `scale` applies to its *children's*
+local coordinates too, not just its own geometry, so a child part's
+authored `position` was silently multiplied by whatever scale its
+parent happened to have. Confirmed live against the default Person's
+own compiled positions (Version 3, Phase 10): the head rendered 0.38m
+above the torso, not the 0.53m its own data said, and the shoulders sat
+at ±0.166m, not the intended ±0.32m — every multi-part hierarchy with a
+non-uniformly-scaled parent was quietly distorted this way. Every part
+is now two nodes: a pivot (still what `position`/`rotation`/`jointName`
+describe, and still what a *child* part parents to — unaffected by any
+scale, exactly like `PlayerCharacter.js`'s own shoulder/elbow/wrist
+pivots) carrying one mesh, offset from that pivot by the new
+`meshOffset` field. **`meshOffset` defaults to `[0, 0, 0]`** — every
+part saved before this phase renders exactly where it always visually
+sat, just now correctly unscaled by its parent, which is a genuine
+visual *correction* for existing content, not merely an invisible
+re-architecture (the default Person, unedited since Phase 10, now
+renders at its originally-*intended* proportions for the first time).
+The editor's own "Hang Below Pivot" button is the common case made one
+click — a limb's shape sitting directly beneath its own joint, sized to
+whatever the part's current Scale already is.
 
 **Selecting a part directly from the 3D preview, collapsing hierarchy
 branches, and true drag-and-drop re-parenting are all honest, deliberate
@@ -445,6 +471,21 @@ Workshop's own `ModelLibrary`, which an imported file has no access to at
 all; the imported Being simply starts with `ModelLoader`'s own honest
 placeholder shape until a real model is chosen for it here.
 
+**Version 3, Phase 10 ("Real Assets, Honestly Introduced") — three
+starter Beings, seeded by default.** See `DefaultBeings.js`: Person (a
+fully-rigged primitive body, every one of the 14 Workshop joints tagged,
+its right side built by handing the hand-placed left side to
+`BodyCompiler.mirrorSubtree()` — the same tool the Being Creator's own
+"Mirror" button uses — rather than hand-duplicating it), and Cat/Dog
+(primitive bodies with every `jointName` left `null` — see that file's
+own comment for why a quadruped can't honestly use the biped-only
+`WORKSHOP_JOINTS` vocabulary). Seeded in the constructor and reseeded on
+a genuinely empty `load()`, the same rule `BlueprintStore.js` already
+established for Blueprints — unlike `OutfitStore.js`'s own default
+outfits, there's no Settings Danger Zone promise anywhere that
+"deleting every Being" is permanent, so nothing here needs the
+exception that store carries.
+
 ## Being Spawner & Manager (the Phone)
 
 **Corrected from an earlier version of this document**, which described
@@ -573,6 +614,15 @@ needs to be roughly current at save time.
   parts, which stay flat-colour-only for the identical "keep the field
   set uniform across every primitive type" reasoning `ObjectCompiler.js`'s
   own comment already gives.
+- **No joint vocabulary for anything but a biped** —
+  `WorkshopSkeleton.WORKSHOP_JOINTS` names head/torso and six left/right
+  limb pairs; a quadruped's own legs and tail have nowhere honest to map
+  to, so a primitive Cat or Dog (see `DefaultBeings.js`, Version 3, Phase
+  10) is real, hand-posed geometry with every `jointName` left `null` —
+  static art, not something any animation clip can ever drive. A future
+  non-biped joint set (or a "static art, no rig at all" mode that stops
+  implying every Being ought to have one) is real future work, not
+  attempted here.
 
 ## Future extension points
 

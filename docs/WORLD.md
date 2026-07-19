@@ -761,9 +761,19 @@ feels like a slope, not a staircase of flat triangles.
 **Terrain painting** — plain vertex colours (`grass`, `dirt`, `rock`,
 `sand`, `gravel`, `mud`, `path`), blended by ordinary linear
 interpolation between the existing and new colour at paint time. No
-texture splatting, no shader work — the same "genuinely real,
-deliberately simple" standard `AnimationPlayback.js`'s own Euler-lerp
-interpolation already holds itself to.
+*shader* work — the same "genuinely real, deliberately simple" standard
+`AnimationPlayback.js`'s own Euler-lerp interpolation already holds
+itself to. Version 3, Phase 10 ("Real Assets, Honestly Introduced")
+added one shared, neutral fine-speckle texture (`ProceduralTexture.js`'s
+own `terrainDetailTexture()`) under all seven materials at once —
+`MeshStandardMaterial` multiplies `map` and vertex colour together
+automatically, so this is still no shader work, just one `map` on an
+already-existing material. Still genuinely **not** per-material splat
+texturing — grass doesn't look like grass blades, sand doesn't look
+like sand grains, every material gets the identical detail pattern
+under its own flat colour — a real, bigger project deliberately left
+for later, now that there's an actual example of the difference to
+judge it against rather than nothing at all.
 
 **Walking on it is real, not just visual.** `CameraSystem.
 _computeGroundHeight()` now queries `TerrainSystem.getHeightAt()` as its

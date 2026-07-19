@@ -335,6 +335,44 @@ same "a system reaches into furniture's own userData for something it
 cares about" pattern `LightingSystem` already uses to find the workbench's
 lamp socket.
 
+**The overlay panel itself was quietly broken (Version 3, Phase 9 —
+"Creative Flow").** Playtesting read the physical wardrobe's own overlay
+as "noticeably rougher... closer to an early prototype than something
+built for the player." The first-guess fix — the panel's own declared
+width (880px, well past every other furniture panel's own ~560px scale)
+was simply too generous — turned out not to be the real bug: live
+measurement showed the panel rendering at roughly full viewport width no
+matter what was declared. Two compounding CSS mistakes, both invisible
+from reading the CSS alone:
+
+1. `WardrobeOverlay.js`'s own `mount()` added a second class onto the
+   same panel element the material rule already targeted, and that
+   class's own rule set `flex: 1`. Since the panel is itself a flex
+   child of the outer `.overlay` (centred, not stretched), `flex: 1`'s
+   implicit `flex-basis: 0%` silently overrode the declared `width`
+   entirely, letting the panel grow to fill nearly the whole screen
+   regardless of what width `.overlay--wardrobe .overlay-panel` asked
+   for.
+2. That same rule's `display: flex` never declared a `flex-direction`,
+   defaulting to `row` — so the `<h2>` heading and `.builder-root` (the
+   two children `WardrobeApp.js`'s own `mount()` appends directly into
+   the panel) laid out side by side rather than stacked. Measured live:
+   the heading rendered as a squeezed ~114px-wide column stretched to
+   the panel's full height, with the split preview/form layout beside
+   it, not below it.
+
+Fixed by removing the conflicting class/rule entirely (the panel never
+needed to flex-grow — every other overlay material's own panel just
+takes its explicit width/height and lets `.overlay`'s own centring do
+the rest) and adding the missing `flex-direction: column`. The panel now
+genuinely renders at the same 560px width every other piece of furniture
+already uses, with the heading correctly stacked above the split
+preview/form layout — verified live with real DOM measurements (panel
+width, child positions, and a full sweep for any element overflowing
+the form's own bounds), not assumed from the CSS. See
+`css/overlays.css`'s own `.overlay--wardrobe` comment for the complete
+account.
+
 **The wardrobe was completely unreachable when first added ("Living
 Refinement" — see docs/ROADMAP.md).** The same root cause
 docs/REFINEMENT.md's front-door fix had already diagnosed once: its
@@ -547,6 +585,26 @@ Adding a third model later is one more entry in `BodyModels.js`'s own
 `BODY_MODELS` object — its own base dimensions, its own default
 appearance — and nothing else in the player architecture changes.
 
+**Version 3, Phase 10 ("Real Assets, Honestly Introduced")** gave the
+Wardrobe rail six starter outfits (`DefaultOutfits.js`), the same
+seeded-by-default treatment `DefaultBlueprints.js` already gave the
+Builder Library and `AnimationClips.js`'s new default emotes just gave
+the Emote Wheel. `OutfitStore`'s constructor seeds them directly
+(string ids, `"default-outfit-..."`, so they can never collide with a
+player-created outfit's own auto-incrementing numeric id) — but
+deliberately, unlike `BlueprintStore.load()`'s own "reseed when
+genuinely empty" rule, `OutfitStore.load()` does *not* bring them back
+once a save's own `outfits` key is a real (even empty) array. The
+Settings app's "Reset Player Data" already promises "every saved outfit
+deleted... this can't be undone"; reseeding on the next load would
+quietly break that. See `OutfitStore.js`'s own comment for the full
+reasoning. Every outfit's `head`/`hand` colour matches its own body
+model's stock skin tone rather than inventing a new one — wearing an
+outfit changes clothing, not who's wearing it — and one, the Pride
+Jumpsuit, blocks the trans pride flag's three colours across
+torso/arms/legs as a soft, deliberate palette choice, not literal
+stripes (this rig has no per-part texture, only one flat colour each).
+
 ### The Animation System: movement requests, this system decides
 
 **"The movement controller should simply request animations from the
@@ -678,6 +736,15 @@ open as a persistent menu, and briefly locks movement/look while open
 (the same `CameraSystem.lock()`/`unlock()` every overlay already uses) so
 the mouse can click a button — given how briefly it's ever open, this
 reads as a quick glance down at a gesture list, not a mode switch.
+
+**Version 3, Phase 10 ("Real Assets, Honestly Introduced")** gave the
+wheel real default content — `AnimationClips.js`'s own `DEFAULT_ANIMATION_CLIPS`
+now includes four hand-authored `category: "emote"` clips (Wave, Clap,
+Bow, Dance), the same permanent-seeded-data pattern
+`DefaultBlueprints.js` already established for the Builder Library. A
+fresh Workshop's wheel previously always showed "No gestures yet" until
+a player made one in the Animation Editor; it now opens with four
+already there, alongside anything a player has since added.
 
 ### Architecture: four systems, no direct dependencies between them
 

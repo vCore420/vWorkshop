@@ -452,10 +452,6 @@ Chromium-only file-system API — Firefox and Safari players can't load
 their own library at all; a fallback path (even one that trades away
 live-folder persistence) would bring the feature to every browser
 rather than one.
-Sound abient sounds seem to sometimes get left over once the workshop 
-application is closed, my computer is left playing some churpping sounds 
-long after the browser is closed, is this at all something that can be 
-looked at on the workshops end?
 
 **Risks:** the 3D world itself has hard limits a pass can't erase — be
 honest in the docs about what is and isn't achievable, in the

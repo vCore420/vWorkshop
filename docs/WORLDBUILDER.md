@@ -795,16 +795,38 @@ entirely on custom objects":
 
 **Double Door and Gate both make the same honest simplification the
 original Door already did**: `DoorBehaviour` swings the *entire* compiled
-object by a fixed angle around its own origin — it has no concept of
-"which part is the door leaf" or a true edge hinge (see that behaviour's
-own comment). A double door built from two side-by-side panels therefore
-swings open as one rigid double-wide unit, not two independently-hinged
-leaves the way the workshop's own French doors do. Building genuinely
-independent leaves would mean either two separate placed objects or a
-real "hinge offset" property on the behaviour itself — a reasonable
-future enhancement (see "Future extension points" below), not attempted
-here for the sake of staying inside the existing behaviour system rather
-than special-casing one construction piece.
+object as one piece — it has no concept of "which part is the door
+leaf." Version 3, Phase 10 ("Real Assets, Honestly Introduced") gave it
+a real `hingeOffset` property (see that behaviour's own comment), so the
+whole object can now pivot at a true edge instead of spinning around its
+own origin — but that's still one edge for the *whole* compiled object.
+A double door built from two side-by-side panels therefore still swings
+open as one rigid double-wide unit pivoting at one shared edge, not two
+independently-hinged leaves the way the workshop's own French doors do.
+Building genuinely independent leaves would still mean two separate
+placed objects, each with its own hinge — not attempted here for the
+sake of staying inside the existing behaviour system rather than
+special-casing one construction piece.
+
+**A live search filter for the other three tabs (Version 3, Phase 9 —
+"Creative Flow").** Construction's own seven-group organisation above
+solved "the catalog has grown well past its original size" for that one
+tab, but Saved Objects/Imported Models/Blueprints — the other three tabs
+on the same screen — never got an equivalent treatment, and Saved
+Objects specifically has no natural ceiling in a long-running save (a
+player can create as many as they like, and none of them have a
+predefined category the way a Construction piece does). Grouping by
+category wasn't an option that works uniformly across all three — only
+`ObjectLibraryStore` items carry one; Blueprints and Models don't — so
+`BuilderPhoneUI.js` gained a plain text search-by-name filter instead,
+shown whenever the active tab has more than one item. It follows the
+exact "re-render only the results, never the input itself" pattern the
+Browser's own Unified Search page already established
+(`WorkshopPages.js`'s own `searchPage()`) — a full `showLibraryScreen()`
+rebuild on every keystroke would recreate the `<input>` each time and
+drop focus/cursor position mid-type, so only the cards grid re-renders
+on `input`. The query resets whenever the active tab changes, so an old
+search from Blueprints never silently empties the Models tab.
 
 ## A third source: Imported Models (Workshop Workflow phase)
 
@@ -845,6 +867,29 @@ still genuinely true, unaffected by either fix: `modelLibrary` is a real
 much as by the Builder — importing from within the Builder just means a
 Builder-only session never needs to detour through a different app to
 reach a capability that was always meant to be shared.
+
+**Version 3, Phase 9 ("Creative Flow") — the last gap in "imported
+objects should behave as first-class Workshop objects" was reselection
+itself.** A placed imported model's own raycast/hit-identification was
+always correct (`_identifyHit()` walks up the parent chain to the
+entity's own `userData.entityId`, set once on the wrapping `THREE.Group`
+`_buildObject3D()` creates for an imported model — see that method's own
+comment — and stays correct regardless of the real geometry swapping in
+underneath it). The actual bug was one step later:
+`_resolveWorldObjectDefinition()` only ever checked `"construction"`
+before falling through to `objectLibraryStore.get()`, silently returning
+`null` for `"importedModel"`. `_showSingleSelection()` treats a missing
+definition as an invalid selection and bounces back to the library
+screen — so clicking a placed imported model on its own did nothing at
+all, from the player's own side. Multi/drag-select never calls this
+method (it only reads counts/`groupId`), which is exactly why a
+group-select that happened to include the model "worked." Fixed by
+making `_resolveWorldObjectDefinition()` a thin wrapper over
+`_resolveDefinition()` — the already-correct, more general resolver
+`_armDefinition()`/`_confirmGhost()` already used — rather than
+maintaining a second, incomplete copy of the same lookup. The identical
+missing branch also affected `_startMoveSelected()`; fixed the same way,
+in the same pass.
 
 ## Known simplifications (by design, for this phase)
 
@@ -891,11 +936,6 @@ reach a capability that was always meant to be shared.
 
 ## Future extension points
 
-- **A real hinge-offset property for Door** — would let Double Door (and
-  any custom object with two door-shaped parts) swing as genuinely
-  independent leaves instead of one rigid double-wide unit — see the
-  Construction Library section above for the honest limitation this
-  would resolve.
 - **A thumbnail per shape/library item**, rendered once and cached,
   rather than a flat colour swatch in the Builder Phone's grid and the
   Builder app's own toolbar — would need its own small offscreen

@@ -71,13 +71,28 @@ on the same keystroke.
 
 "Display applications as a simple grid of icons... the design should
 remain minimal, clear, readable, comfortable... support future
-applications without redesign." A plain CSS grid of buttons — an emoji
-glyph and a label. Adding a ninth app needs no layout change at all.
-Interface & Design Refinement phase — each glyph now sits on a real
+applications without redesign." A plain CSS grid of buttons — an icon
+and a label. Adding a ninth app needs no layout change at all.
+Interface & Design Refinement phase — each icon now sits on a real
 rounded-square icon tile with its own gradient and a small lift on
 hover, on a soft wallpaper gradient rather than a flat surface; see
 this phase's own "Craftsmanship" section below for the rest of the
 shell.
+
+**Version 3, Phase 10 ("Real Assets, Honestly Introduced")** — `glyph`
+used to always mean a literal emoji character, and that's still true
+for anything `ProceduralIcons.js`'s own `iconMarkup()` doesn't
+recognise. Every Workshop-owned app's own `glyph` now names one of
+`iconMarkup()`'s hand-drawn kinds instead (a small, coherent line-icon
+language, generated in code — no binary assets, following
+`assets/README.md`'s own standing rule); `showHome()` renders that
+markup when recognised, falling back to plain text otherwise. A
+third-party plugin's own `glyph` — still documented in
+`docs/PLUGIN_SDK.md`/`docs/PLUGIN_GUIDE.md` as "any character" — keeps
+working exactly as it always did, unaffected: `workshopToolkitPlugin.js`
+(the shipped example) deliberately still uses a literal emoji rather
+than one of this file's own internal kind ids, precisely so it keeps
+demonstrating the real, stable contract a plugin author can rely on.
 
 ## The Applications
 

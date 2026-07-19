@@ -1480,4 +1480,100 @@ on, the resident genuinely chose to call the real `setLights` function
 and the Workshop's own lights turned on for real. See `docs/ROADMAP.md`'s
 own Phase 8b account for the complete story.
 
+**Version 3, Phase 9 — Creative Flow (v3.0.9)** — "refine the entire
+creative workflow... not about adding new tools... making existing tools
+disappear into the creative process." Investigation split into a
+precise root-cause pass on the brief's own flagged reselection bug and a
+broader survey of Browser, Notebook, Pin Board, Phone navigation, and
+the Builder Library — Phone and Browser navigation both came back
+already consistent, worth saying plainly rather than fixing what wasn't
+broken. Four real, on-brief fixes: an imported model placed as a World
+Object couldn't be individually reselected — `_resolveWorldObjectDefinition()`
+was missing the `"importedModel"` branch the already-correct
+`_resolveDefinition()` had, silently bouncing the selection back to the
+library screen — fixed by delegating to the correct resolver instead of
+maintaining a second, incomplete copy, closing the last real gap in
+Phase 1's own "imported objects should behave as first-class objects"
+promise. The Pin Board no longer shows finished projects forever,
+duplicating the Archive; a `done` project now simply leaves the board.
+The Builder Phone's Saved Objects/Models/Blueprints tabs gained a live
+search filter, extending the same "catalog outgrew a flat grid"
+treatment Construction already had, using the exact "re-render only the
+results, never the input" pattern the Browser's own Unified Search page
+established so typing never drops focus. And the Wardrobe overlay's own
+"reads like an early prototype" roughness turned out not to be simply
+"too wide" — live measurement caught a genuinely broken layout (a stray
+`flex: 1` silently overriding the declared width entirely, plus a
+missing `flex-direction: column` laying the heading beside the content
+instead of above it), both fixed at the root rather than papered over
+with a smaller width number. See `docs/ROADMAP.md`'s own Phase 9 account
+for the complete story.
+
+**Version 3, Phase 10 — Real Assets, Honestly Introduced (v3.1.0)** —
+six of seven milestones, all procedural, zero binary assets, scoped
+directly by the user's own conservative guidance ("only if the Workshop
+would genuinely benefit... only basic things at most"). A real
+`hingeOffset` on `DoorBehaviour.js` closes a gap its own comment had
+named since Phase 5 (and Phase 14's brief named again, independently) —
+doors now pivot at a true edge instead of spinning around their own
+centre, with the zero-offset default reproducing the old behaviour
+bit-for-bit. Four hand-authored default emotes (Wave, Clap, Bow, Dance)
+give the Emote Wheel real content for the first time on a fresh
+Workshop. Six default outfits give the Wardrobe the same — including a
+Pride Jumpsuit, blocking the trans flag's three colours across the
+body — seeded with a deliberate exception to the usual "reseed when
+empty" rule, since the Settings Danger Zone already promises deleting
+every outfit is permanent. Three default Beings (Person, fully rigged
+via `BodyCompiler.mirrorSubtree()`; Cat and Dog, honestly unrigged,
+since the shared joint vocabulary has no vocabulary for a quadruped)
+give the Being Library the same starter-content treatment
+`DefaultBlueprints.js` already established, verified by actually
+spawning all three through the real `BeingController` for two real
+simulated seconds of movement and animation. A new, deliberately
+neutral `terrainDetailTexture()` gives the ground real fine-grain detail
+for the first time — multiplied under all seven paint materials at
+once via `MeshStandardMaterial`'s own `map`×`vertexColors` behaviour,
+still no shader work, still not true per-material splat texturing.
+Nineteen first-party Phone/Computer apps traded a plain emoji `glyph`
+for a real, hand-drawn `ProceduralIcons.js` mark — the Plugin SDK's own
+"`glyph` is any character" contract stays fully intact, confirmed live
+against the actual shipped example plugin correctly falling back to its
+own emoji. Milestone 7 (real recorded audio) was deliberately not
+started — `AudioSynth.js` stays 100% synthetic, pending an actual case
+that clears the user's own stated bar. See `docs/ROADMAP.md`'s own
+Phase 10 account for the complete story.
+
+**Version 3, Phase 10b — Being Creator, Beyond the Prototype, Wave 1
+(v3.1.0b)** — the user named the Being Creator directly as still
+feeling like a prototype after Phase 10 shipped; investigation (a full
+read of `BeingCreatorApp.js`, `BodyCompiler.js`, `PreviewRenderer.js`)
+found real, specific causes and a genuine, previously-undetected bug: a
+body part used to be one `THREE.Mesh` doing double duty as both "the
+joint" and "the visible box," with every child part parented to that
+same mesh — and a `THREE.Object3D`'s own `scale` applies to its
+children's coordinates too, not just its own geometry, so a child's
+authored position was silently multiplied by whatever scale its parent
+happened to have. Confirmed live before any fix: the default Person's
+own head sat 0.38m above the torso, not the intended 0.53m; the
+shoulders sat at ±0.166m, not ±0.32m. Fixed with a real pivot/mesh
+split — a `THREE.Group` pivot (unaffected by scale, exactly like
+`PlayerCharacter.js`'s own rig) carrying one mesh, offset by a new,
+optional `meshOffset` field defaulting to `[0, 0, 0]` — every part
+saved before this phase renders exactly where it always sat, just now
+correctly unscaled by its parent, a genuine visual correction rather
+than an invisible re-architecture (the default Person, unedited since
+Phase 10, now renders at its originally-intended proportions for the
+first time). A one-click "Hang Below Pivot" button in the editor
+automates the exact segment-midpoint arithmetic authoring a clean rig
+used to require by hand. Verified at every level: the bug and its fix
+both measured against real compiled world-positions (not just code
+inspection), all three default Beings recompiling with zero errors and
+zero NaN, a full `BeingController` spawn → animate → despawn cycle
+re-run end to end, and the real Being Creator UI itself mounted and
+driven directly — loading the real Person definition, selecting a part,
+and confirming "Hang Below Pivot" computes and applies the right value.
+Two more waves (authoring UX; non-biped rigging) remain, planned but not
+yet started. See `docs/ROADMAP.md`'s own Phase 10b account for the
+complete story.
+
 </details>
