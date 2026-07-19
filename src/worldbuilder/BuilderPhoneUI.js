@@ -45,6 +45,18 @@ export class BuilderPhoneUI {
     this._terrainMaterialId = "grass";
     this._terrainRadius = 4;
     this._terrainStrength = 0.6;
+    // Version 3, Phase 9 ("Creative Flow") — "existing management surfaces
+    // should comfortably accommodate growing libraries without obscuring
+    // or hiding functionality." Construction already solved this with
+    // category grouping once its own catalog outgrew a flat grid (see
+    // showLibraryScreen()'s own comment); Saved Objects/Imported Models/
+    // Blueprints never got an equivalent treatment, and Saved Objects
+    // specifically has no natural ceiling in a long-running save. A text
+    // filter, not grouping — Blueprints and Models have no category field
+    // to group by, so search-by-name is the one option that works
+    // uniformly across all three. Reset whenever the active tab changes,
+    // so an old query never silently empties a different tab's own list.
+    this._librarySearchQuery = "";
 
     // The Phone's own content container, handed straight in — no shell
     // of this class's own to build around it any more.
@@ -120,6 +132,7 @@ export class BuilderPhoneUI {
       btn.addEventListener("click", () => {
         if (this._activeTab === "terrain" && id !== "terrain") this.callbacks.onSetTerrainTool(null);
         this._activeTab = id;
+        this._librarySearchQuery = "";
         this.showLibraryScreen();
       });
       tabs.appendChild(btn);
@@ -155,6 +168,48 @@ export class BuilderPhoneUI {
     }
 
     if (this._activeTab !== "construction") {
+      // Version 3, Phase 9 — a live text filter, matching the exact
+      // "re-render only the results, never the input itself" pattern
+      // the Browser's own Unified Search page already established
+      // (WorkshopPages.js's own searchPage()) — a full showLibraryScreen()
+      // rebuild on every keystroke would recreate this <input> each time
+      // and drop focus/cursor position mid-type.
+      if (items.length > 1) {
+        const searchRow = document.createElement("div");
+        searchRow.className = "builder-phone-search-row";
+        const searchInput = document.createElement("input");
+        searchInput.type = "text";
+        searchInput.placeholder = "Search by name…";
+        searchInput.value = this._librarySearchQuery;
+        searchRow.appendChild(searchInput);
+        this.screen.appendChild(searchRow);
+
+        const cardsGrid = document.createElement("div");
+        cardsGrid.className = "builder-phone-cards-grid";
+        grid.appendChild(cardsGrid);
+        this.screen.appendChild(grid);
+
+        const renderCards = () => {
+          const query = this._librarySearchQuery.trim().toLowerCase();
+          const filtered = query ? items.filter((def) => def.name.toLowerCase().includes(query)) : items;
+          cardsGrid.innerHTML = "";
+          if (filtered.length === 0) {
+            const empty = document.createElement("div");
+            empty.className = "builder-phone-empty";
+            empty.textContent = `Nothing named “${this._librarySearchQuery.trim()}”.`;
+            cardsGrid.appendChild(empty);
+            return;
+          }
+          for (const def of filtered) cardsGrid.appendChild(source === "blueprint" ? this._buildBlueprintCard(def) : this._buildGridCard(def, source));
+        };
+        searchInput.addEventListener("input", () => {
+          this._librarySearchQuery = searchInput.value;
+          renderCards();
+        });
+        renderCards();
+        return;
+      }
+
       const cardsGrid = document.createElement("div");
       cardsGrid.className = "builder-phone-cards-grid";
       for (const def of items) cardsGrid.appendChild(source === "blueprint" ? this._buildBlueprintCard(def) : this._buildGridCard(def, source));

@@ -74,6 +74,7 @@ import { ResidentState } from "./resident/ResidentState.js";
 import { ResidentBehaviour } from "./resident/ResidentBehaviour.js";
 import { ResidentConnection } from "./resident/ResidentConnection.js";
 import { ResidentController } from "./resident/ResidentController.js";
+import { createWorkshopFunctionDispatcher } from "./ai/WorkshopFunctions.js";
 import { WorldAwareness } from "./world/WorldAwareness.js";
 import { WorldEventLog } from "./world/WorldEventLog.js";
 import { WorkshopEventLog } from "./host/WorkshopEventLog.js";
@@ -449,6 +450,28 @@ const worldAwareness = new WorldAwareness({
 });
 residentController.worldAwareness = worldAwareness;
 
+// Version 3, Phase 8b ("Bubble Gains Hands") — the fixed, Workshop-owned
+// function table every granted resident calls through (see
+// WorkshopFunctions.js's own comment). Constructed once every real
+// system/store it dispatches into already exists, the same "wire it up
+// once dependencies are ready" placement worldAwareness above already
+// follows.
+const workshopFunctionDispatcher = createWorkshopFunctionDispatcher({
+  engine,
+  cameraSystem,
+  worldObjectsStore,
+  worldObjectsSystem,
+  objectLibraryStore,
+  blueprintStore,
+  beingInstanceStore,
+  beingLibrary,
+  environmentSystem,
+  timeOfDaySystem,
+  lightingSystem,
+  musicSystem,
+  residentController,
+});
+
 // "Begin introducing lightweight world events... weather changing,
 // sunrise, sunset, music beginning... nothing should feel scripted.
 // Everything should simply feel like the world continuing." Each
@@ -584,6 +607,7 @@ const computerSystem = engine.addSystem(
     timeOfDaySystem,
     environmentSystem,
     worldEventLog,
+    worldAwareness,
     objectLibraryStore,
     worldObjectsStore,
     worldObjectsSystem,
@@ -778,6 +802,8 @@ overlayManager.register(
     environmentSystem,
     timeOfDaySystem,
     worldEventLog,
+    worldAwareness,
+    functionDispatcher: workshopFunctionDispatcher,
   })
 );
 overlayManager.register("window", createWindowOverlay({ environmentSystem, timeOfDaySystem }));
@@ -1120,6 +1146,8 @@ workbenchSystem.finalizeInitialState();
 await musicSystem.finalizeInitialState(); // async: checks each library root's still-live permission state
 await playerCharacterSystem.finalizeInitialState(); // async: resolves any part textures before the first rig build
 engine.start();
+window.__debugEngine = engine; // TEMP verification hook — removed before this pass closes
+window.__debugStores = { projectsStore, objectLibraryStore, blueprintStore, worldObjectsStore, modelLibrary, appearanceStore, outfitStore, textureStore, buildModeSystem, worldObjectsSystem }; // TEMP verification hook — removed before this pass closes
 
 // Workshop Refinement phase (Pass A) — the other half of the entry
 // screen wiring above. If the button was already pressed while this was

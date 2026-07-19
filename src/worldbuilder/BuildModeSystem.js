@@ -597,9 +597,20 @@ export class BuildModeSystem {
     this.ui.showGhostScreen(this._ghost.definition, "Move here", { allowRotate: false });
   }
 
+  /** Version 3, Phase 9 ("Creative Flow") — this used to hand-roll its own
+   *  two-branch lookup (`"construction"` or library), missing the
+   *  `"importedModel"` case `_resolveDefinition()` above already handles
+   *  correctly. That gap meant `_showSingleSelection()` (below) always
+   *  found `definition === null` for an imported model, treated the
+   *  selection as invalid, and silently bounced back to the library
+   *  screen — from the player's own side, clicking a placed imported
+   *  model simply did nothing. Multi/drag-select never called this
+   *  method at all, which is exactly why a group-select containing the
+   *  model "worked" while a single click on it alone didn't. Now a thin
+   *  wrapper over the one already-correct resolver, rather than a second
+   *  one to keep in sync by hand. */
   _resolveWorldObjectDefinition(instance) {
-    if (instance.definitionSource === "construction") return getConstructionPiece(instance.definitionId);
-    return this.objectLibraryStore.get(instance.definitionId);
+    return this._resolveDefinition(instance.definitionId, instance.definitionSource);
   }
 
   // -----------------------------------------------------------------

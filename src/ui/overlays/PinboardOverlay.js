@@ -1,9 +1,20 @@
 /**
  * createPinboardOverlay
  * ----------------------
- * "Walking to the pinboard opens project planning." Every project, any
- * status, editable in place — this is where ideas get captured before
- * they're active work on the bench.
+ * "Walking to the pinboard opens project planning." Ideas being captured
+ * or actively worked on, editable in place — this is where things live
+ * before they're finished. Version 3, Phase 9 ("Creative Flow") —
+ * "existing management surfaces should comfortably accommodate growing
+ * libraries without obscuring or hiding functionality." A cork board that
+ * never cleared a finished project would, in a long-running Workshop,
+ * accumulate months of "done" notes sitting alongside genuinely active
+ * planning — real clutter, and a straight duplication of the Archive
+ * (`ArchiveOverlay.js`), which already exists specifically to hold
+ * finished work. `done` projects now leave the board the moment they're
+ * marked done (the status `<select>` in `buildNote()` below is exactly
+ * how a project gets there) — they're never deleted, just no longer
+ * pinned here, the same way a real corkboard note comes down once the
+ * job it was for is actually finished.
  */
 export function createPinboardOverlay({ projectsStore }) {
   return {
@@ -19,7 +30,7 @@ export function createPinboardOverlay({ projectsStore }) {
 
       const render = () => {
         board.innerHTML = "";
-        for (const project of projectsStore.all()) {
+        for (const project of projectsStore.all().filter((p) => p.status !== "done")) {
           board.appendChild(buildNote(project, projectsStore));
         }
         const addBtn = document.createElement("div");
