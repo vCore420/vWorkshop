@@ -33,6 +33,37 @@ import { Materials } from "../utils/PlaceholderFactory.js";
  * drives a primitive body identically — see `docs/ANIMATION.md`'s own
  * "Shared Animation Architecture" section for why that's the same code
  * path either way.
+ *
+ * **Version 3, Phase 10b ("Being Creator, Beyond the Prototype") — a real
+ * pivot, separate from the mesh it carries.** Every part used to be a
+ * single `THREE.Mesh` doing double duty as both "the joint" and "the
+ * visible box" — `position`/`rotation` set directly on that one mesh,
+ * and every *child* part parented to that same mesh. That had a real,
+ * previously-undetected bug: a `THREE.Object3D`'s own `scale` applies to
+ * its children's local coordinates too, not just its own geometry — so a
+ * child's authored `position` was silently multiplied by whatever scale
+ * its parent mesh happened to have. A torso scaled to `[0.52, 0.72,
+ * 0.32]` quietly pulled every child's own offset in toward the origin by
+ * that same fraction; confirmed live (Version 3, Phase 10b's own
+ * investigation) against the default Person's own compiled mesh
+ * positions — the head rendered 0.38m above the torso, not the 0.53m its
+ * own authored data said, and the shoulders sat at ±0.166m, not the
+ * ±0.32m intended. Every part is now two nodes: a `THREE.Group` pivot
+ * (still what `position`/`rotation`/`jointName` describe, and still what
+ * every *child* part parents to — unaffected by any scale, exactly like
+ * `PlayerCharacter.js`'s own shoulder/elbow/wrist pivots) carrying one
+ * `THREE.Mesh` child, offset from that pivot by the new, optional
+ * `meshOffset` field. **`meshOffset` defaults to `[0, 0, 0]`** — a part
+ * with no `meshOffset` at all (every part saved before this phase)
+ * renders with its mesh centred exactly on its own pivot, the same
+ * place it always visually occupied — but now, correctly, unscaled by
+ * whatever its parent's own scale happens to be, which is a genuine
+ * visual *correction* for any existing multi-level hierarchy, not merely
+ * a re-architecture with no visible effect. `makeDefaultBodyPart()`'s
+ * own `meshOffset` stays the same neutral `[0, 0, 0]` default — a
+ * *helpful* non-zero default (a part that starts already hanging below
+ * its own pivot) is the Being Creator's own job, not this file's; see
+ * `BeingCreatorApp.js`'s "hang from pivot" action.
  */
 
 const geometryCache = new Map();
@@ -96,6 +127,12 @@ export function makeDefaultBodyPart(id, { parentId = null, shape = "box" } = {})
     position: [0, 0.3, 0],
     rotation: [0, 0, 0],
     scale: [0.3, 0.3, 0.3],
+    // Where the visible mesh sits relative to this part's own pivot —
+    // see compileBody()'s own comment. Neutral by construction (mesh
+    // centred on its own pivot); a *helpful* non-zero starting offset
+    // is BeingCreatorApp.js's own "hang from pivot" action's job, not
+    // this constructor's.
+    meshOffset: [0, 0, 0],
     color: "#8d8577",
   };
 }
@@ -151,38 +188,50 @@ function normalizedVec3(value, fallback) {
 export function compileBody(bodyParts) {
   const root = new THREE.Group();
   root.name = "body-root";
-  const nodesById = new Map();
+  const pivotsById = new Map();
 
+  // First pass: one pivot Group per part (what `position`/`rotation`
+  // describe, what a joint's animation actually rotates, and what any
+  // *child* part parents to — see this file's own module comment for
+  // why children parent to the pivot, never the mesh: a mesh's own
+  // `scale` must never leak into a child's coordinate space the way it
+  // used to). Every node needs to already exist before any of them can
+  // be attached to each other, regardless of which order they happen to
+  // appear in the array (a child is not guaranteed to come after its
+  // own parent) — the same reason the second, parenting pass below
+  // stays separate.
   for (const part of bodyParts) {
+    const pivot = new THREE.Group();
+    pivot.name = `${part.name || part.id}-pivot`;
+    pivot.userData.partId = part.id;
+    pivot.position.set(...normalizedVec3(part.position, [0, 0.3, 0]));
+    pivot.rotation.set(...normalizedVec3(part.rotation, [0, 0, 0]));
+    pivotsById.set(part.id, pivot);
+
     const geometry = (SHAPE_BUILDERS[part.shape] ?? unitBoxGeometry)();
     const mesh = new THREE.Mesh(geometry, Materials.matte(part.color));
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.name = part.name || part.id;
     mesh.userData.partId = part.id;
-    mesh.position.set(...normalizedVec3(part.position, [0, 0.3, 0]));
-    mesh.rotation.set(...normalizedVec3(part.rotation, [0, 0, 0]));
     mesh.scale.set(...normalizedVec3(part.scale, [0.3, 0.3, 0.3]));
-    nodesById.set(part.id, mesh);
+    mesh.position.set(...normalizedVec3(part.meshOffset, [0, 0, 0]));
+    pivot.add(mesh);
   }
 
-  // A second pass to parent them — every node needs to already exist
-  // before any of them can be attached to each other, regardless of
-  // which order they happen to appear in the array (a child is not
-  // guaranteed to come after its own parent).
   for (const part of bodyParts) {
-    const node = nodesById.get(part.id);
-    const parentNode = part.parentId ? nodesById.get(part.parentId) : null;
-    (parentNode ?? root).add(node);
+    const pivot = pivotsById.get(part.id);
+    const parentPivot = part.parentId ? pivotsById.get(part.parentId) : null;
+    (parentPivot ?? root).add(pivot);
   }
 
   const skeletonMap = {};
   const skeletonRest = {};
   for (const part of bodyParts) {
     if (!part.jointName) continue;
-    const node = nodesById.get(part.id);
-    skeletonMap[part.jointName] = node;
-    skeletonRest[part.jointName] = node.quaternion.clone();
+    const pivot = pivotsById.get(part.id);
+    skeletonMap[part.jointName] = pivot;
+    skeletonRest[part.jointName] = pivot.quaternion.clone();
   }
 
   return { root, skeletonMap, skeletonRest };
@@ -231,5 +280,9 @@ export function mirrorSubtree(bodyParts, partId) {
     position: [-part.position[0], part.position[1], part.position[2]],
     rotation: [part.rotation[0], -part.rotation[1], -part.rotation[2]],
     scale: [...part.scale],
+    // Same YZ-plane reflection as `position` — a part authored before
+    // this field existed has no `meshOffset` at all, so this falls back
+    // to the same neutral `[0, 0, 0]` `compileBody()` itself would.
+    meshOffset: (([x, y, z]) => [-x, y, z])(normalizedVec3(part.meshOffset, [0, 0, 0])),
   }));
 }

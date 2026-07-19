@@ -13,7 +13,7 @@ export function createProjectsApp({ projectsStore }) {
   return {
     id: "projects",
     label: "Projects",
-    glyph: "\uD83D\uDCCB",
+    glyph: "projects",
     mount(container) {
       const heading = document.createElement("h2");
       heading.textContent = "Projects";

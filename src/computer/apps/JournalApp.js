@@ -12,7 +12,7 @@ export function createJournalApp({ notesStore }) {
   return {
     id: "journal",
     label: "Journal",
-    glyph: "\uD83D\uDCDD",
+    glyph: "journal",
     mount(container) {
       const heading = document.createElement("h2");
       heading.textContent = "Journal";

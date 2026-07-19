@@ -1,5 +1,6 @@
 import { EventBus } from "../core/EventBus.js";
 import { normalizeMovementStyle, normalizeIdleBehaviour, normalizeAwarenessMode, normalizeInteractionBehaviour, normalizeBeingType } from "./BeingBehaviours.js";
+import { DEFAULT_BEINGS } from "./DefaultBeings.js";
 
 const DEFINITION_VERSION = 1; // bumped if the shape below ever changes in a way import() needs to know about
 
@@ -37,12 +38,24 @@ const DEFINITION_VERSION = 1; // bumped if the shape below ever changes in a way
  * `ModelAssetStore`, a primitive-built Being's own body genuinely
  * survives `exportDefinition()`/`importDefinition()` intact, carried over
  * exactly like every other plain field.
+ *
+ * **Version 3, Phase 10 ("Real Assets, Honestly Introduced") — three
+ * starter Beings, seeded by default.** See `DefaultBeings.js` for
+ * Person (rigged), Cat, and Dog (both unrigged — see that file's own
+ * comment for why). Seeded directly here in the constructor, then
+ * `load()` reseeds them the same "genuinely zero saved data re-seeds
+ * the starter set" way `BlueprintStore.load()` already does for
+ * Blueprints — unlike `OutfitStore.load()`'s own deliberate exception
+ * (see that file's own comment), there's no Settings Danger Zone action
+ * anywhere that promises "every Being deleted, permanently" for this
+ * store, so nothing here needs to honour a permanence guarantee that
+ * doesn't exist.
  */
 export class BeingLibrary {
   constructor() {
     this.events = new EventBus();
     /** @type {Record<string, object>} */
-    this.beings = {};
+    this.beings = Object.fromEntries(DEFAULT_BEINGS.map((b) => [b.id, b]));
   }
 
   _buildDefinition(name) {
@@ -187,8 +200,13 @@ export class BeingLibrary {
   }
 
   load(data) {
-    if (!data) return;
-    this.beings = data.beings ?? {};
+    if (!data) return; // no envelope reached this far at all — the constructor's own seeded defaults stand exactly as they are
+    const saved = data.beings ?? {};
+    // The same "genuinely zero saved data re-seeds the starter set"
+    // rule BlueprintStore.load() already uses — any real saved Being
+    // data (the player's own, or a previous session's already-saved
+    // copy of the starter set) is respected exactly as-is.
+    this.beings = Object.keys(saved).length > 0 ? saved : Object.fromEntries(DEFAULT_BEINGS.map((b) => [b.id, b]));
     for (const being of Object.values(this.beings)) {
       if (being.bodySource !== "primitives") being.bodySource = "model"; // a Being saved before this phase existed
       if (!Array.isArray(being.bodyParts)) being.bodyParts = [];

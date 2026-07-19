@@ -47,7 +47,7 @@ export function createBrowserApp({ browserStore, pageRegistry, hostManager }) {
   return {
     id: "browser",
     label: "Browser",
-    glyph: "\uD83C\uDF10",
+    glyph: "browser",
     mount(container) {
       const root = document.createElement("div");
       root.className = "browser-app";

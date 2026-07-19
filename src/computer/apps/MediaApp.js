@@ -16,7 +16,7 @@ export function createMediaApp({ musicSystem }) {
   return {
     id: "media",
     label: "Media",
-    glyph: "\u266A",
+    glyph: "media",
     mount(container) {
       const engine = musicSystem.engine;
       const heading = document.createElement("h2");

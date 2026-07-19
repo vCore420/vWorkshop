@@ -142,7 +142,7 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
   return {
     id: "settings",
     label: "Settings",
-    glyph: "\u2699",
+    glyph: "settings",
     mount(container) {
       const heading = document.createElement("h2");
       heading.textContent = "Settings";

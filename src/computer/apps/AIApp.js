@@ -60,7 +60,7 @@ export function createAIApp({
   return {
     id: "ai",
     label: "AI Control",
-    glyph: "\u2726",
+    glyph: "ai",
     mount(container) {
       const heading = document.createElement("h2");
       heading.textContent = "AI Mission Control";

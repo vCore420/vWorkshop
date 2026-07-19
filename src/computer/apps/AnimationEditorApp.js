@@ -58,7 +58,7 @@ export function createAnimationEditorApp({ appearanceStore, textureStore, animat
   return {
     id: "animationEditor",
     label: "Animation Editor",
-    glyph: "\u{1F3AC}",
+    glyph: "animation",
     mount(container) {
       const heading = document.createElement("h2");
       heading.textContent = "Animation Editor";

@@ -36,7 +36,7 @@ export function createBuilderApp({ objectLibraryStore, worldObjectsStore, worldO
   return {
     id: "builder",
     label: "Builder",
-    glyph: "\uD83D\uDEE0",
+    glyph: "builder",
     mount(container) {
       let draft = freshDraft();
       let highlightMaterial = null; // the one cloned material used to tint whichever part is selected — see refreshPreview()

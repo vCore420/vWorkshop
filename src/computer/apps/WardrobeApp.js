@@ -36,7 +36,7 @@ export function createWardrobeApp({ appearanceStore, outfitStore, textureStore, 
   return {
     id: "wardrobe",
     label: "Wardrobe",
-    glyph: "\u{1F455}",
+    glyph: "wardrobe",
     mount(container) {
       const heading = document.createElement("h2");
       heading.textContent = "Wardrobe";

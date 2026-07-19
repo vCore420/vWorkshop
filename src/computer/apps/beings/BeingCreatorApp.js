@@ -43,7 +43,7 @@ export function createBeingCreatorApp({ beingLibrary, modelLibrary, modelAssetSt
   return {
     id: "beingCreator",
     label: "Being Creator",
-    glyph: "\uD83E\uDDDC",
+    glyph: "beings",
     mount(container) {
       let draft = freshDraft();
       let editingId = null;
@@ -580,9 +580,15 @@ function buildPartEditor(draft, part, onChange, onPreviewChange) {
     : "Purely decorative \u2014 moves along with whatever it's parented to, but no animation targets it directly.";
   section.appendChild(jointHint);
 
+  const positionHint = document.createElement("p");
+  positionHint.className = "app-subtitle";
+  positionHint.textContent = "Position/Rotation describe this part's own joint \u2014 where it attaches to its parent, and what a Workshop animation actually rotates. Mesh Offset (below) moves the visible shape relative to that joint.";
+  section.appendChild(positionHint);
   section.appendChild(vectorRow("Position", part.position, -3, 3, 0.01, (v) => { part.position = v; onPreviewChange(); }));
   section.appendChild(vectorRow("Rotation", part.rotation.map((r) => r * RAD_TO_DEG), -180, 180, 1, (v) => { part.rotation = v.map((d) => d * DEG_TO_RAD); onPreviewChange(); }, "\u00b0"));
   section.appendChild(vectorRow("Scale", part.scale, 0.02, 2, 0.01, (v) => { part.scale = v; onPreviewChange(); }));
+
+  section.appendChild(buildMeshOffsetSection(part, onChange, onPreviewChange));
 
   const colorRow = document.createElement("div");
   colorRow.className = "panel-row";
@@ -596,6 +602,40 @@ function buildPartEditor(draft, part, onChange, onPreviewChange) {
   section.appendChild(colorRow);
 
   return section;
+}
+
+/** Version 3, Phase 10b ("Being Creator, Beyond the Prototype") —
+ *  authoring UI for `BodyCompiler.js`'s own new `meshOffset` field (see
+ *  its module comment for the full architecture story). "Hang Below
+ *  Pivot" is the common case made one click: a limb's shape sitting
+ *  directly beneath its own joint, sized to whatever this part's
+ *  current Scale already is — recomputed fresh every click, so
+ *  adjusting Scale first and pressing this after always matches. The
+ *  slider row underneath stays available for anything the one-click
+ *  case doesn't cover (a shape offset sideways or forward instead of
+ *  straight down, say). `onChange` (not just `onPreviewChange`) after
+ *  the button click, matching every other structural action in this
+ *  file (Add Part, Mirror, Rig Joint) — the slider row itself needs a
+ *  real re-render to show the values the button just computed, not just
+ *  a 3D preview refresh. */
+function buildMeshOffsetSection(part, onChange, onPreviewChange) {
+  const wrap = document.createElement("div");
+
+  const hangBtn = document.createElement("button");
+  hangBtn.type = "button";
+  hangBtn.className = "builder-small-button";
+  hangBtn.textContent = "Hang Below Pivot";
+  hangBtn.title = "Set Mesh Offset so this part's shape hangs directly below its own joint, sized to its current Scale.";
+  hangBtn.addEventListener("click", () => {
+    part.meshOffset = [0, -(part.scale[1] ?? 0) / 2, 0];
+    onPreviewChange();
+    onChange();
+  });
+  wrap.appendChild(hangBtn);
+
+  wrap.appendChild(vectorRow("Mesh Offset", part.meshOffset ?? [0, 0, 0], -3, 3, 0.01, (v) => { part.meshOffset = v; onPreviewChange(); }));
+
+  return wrap;
 }
 
 /** Three sliders in a row (X/Y/Z), for position/rotation/scale — the

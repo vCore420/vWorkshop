@@ -22,7 +22,7 @@ export function createToolsApp({ toolsStore, projectsStore, audioSystem }) {
   return {
     id: "tools",
     label: "Tools",
-    glyph: "\u{1F9F0}",
+    glyph: "tools",
     mount(container, { engine }) {
       const workbenchSystem = engine.getSystem(WorkbenchSystem);
       return mountToolsPanel(container, {

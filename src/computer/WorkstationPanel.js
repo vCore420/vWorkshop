@@ -1,3 +1,5 @@
+import { iconMarkup } from "../utils/ProceduralIcons.js";
+
 /**
  * WorkstationPanel
  * -----------------
@@ -10,6 +12,13 @@
  * Apps are mounted/unmounted through the same tiny contract OverlayManager
  * uses for full-screen overlays (`mount(container, ctx) -> dispose?`), so
  * the pattern should feel familiar if you've read src/ui/overlays/*.js.
+ *
+ * Version 3, Phase 10 ("Real Assets, Honestly Introduced") — the rail's
+ * own icon now comes from `iconMarkup(app.glyph)` when the app is a
+ * recognised first-party one; anything unrecognised (a third-party
+ * plugin's own literal emoji `glyph`) prints as plain text exactly as
+ * before. See `ProceduralIcons.js`'s own comment for why that fallback
+ * matters.
  */
 export class WorkstationPanel {
   constructor(rootEl, apps, engine) {
@@ -27,7 +36,8 @@ export class WorkstationPanel {
     for (const app of apps) {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.innerHTML = `<span class="rail-glyph">${app.glyph}</span><span>${app.label}</span>`;
+      const icon = iconMarkup(app.glyph);
+      btn.innerHTML = `<span class="rail-glyph">${icon ?? app.glyph}</span><span>${app.label}</span>`;
       btn.addEventListener("click", () => this.setActiveApp(app.id));
       this.rail.appendChild(btn);
       this.railButtons.set(app.id, btn);
