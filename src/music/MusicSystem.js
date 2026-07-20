@@ -1,5 +1,6 @@
 import { HandleStore } from "./HandleStore.js";
 import { scanRoot, resolveFile, resolveCoverFile } from "./LibraryScanner.js";
+import { buildMemoryDirectoryTree } from "./MemoryDirectoryHandle.js";
 
 const PLAY_COUNT_THRESHOLD_SECONDS = 20; // a skip within the first 20s doesn't count as "played"
 const COVER_CACHE_LIMIT = 60;
@@ -446,6 +447,38 @@ export class MusicSystem {
     this._rootHandleCache.set(rootId, handle);
     await this.rescanRoot(rootId);
     return rootId;
+  }
+
+  /** Version 3, Phase 12 ("Accessibility & Comfort Pass") — the
+   *  non-Chromium fallback for browsers `isScanningSupported()` says no
+   *  to. `files` is a plain `FileList`/array of `File`s from an
+   *  `<input type="file" webkitdirectory multiple>` picker, which every
+   *  browser supports even without the File System Access API —
+   *  `buildMemoryDirectoryTree()` turns it into an object that quacks
+   *  like a real directory handle, so `rescanRoot()` below (and
+   *  everything it calls) needed zero changes to accept one. See
+   *  `MemoryDirectoryHandle.js`'s own comment for the honest tradeoff:
+   *  this root can't be silently reopened next session the way a real
+   *  handle can, so it shows "needs re-selecting" instead of
+   *  "needs reconnecting" once this session ends. */
+  async addRootViaFileList(files, folderName) {
+    const rootId = this.libraryStore.addRoot(folderName || "Music Folder", "memory");
+    await this._applyFileListToRoot(rootId, files);
+    return rootId;
+  }
+
+  /** Re-picking the same folder for a "memory" root that's gone missing
+   *  since the last reload — reuses the existing `rootId` (rather than
+   *  creating a new root) specifically so favourites/playlists/play
+   *  counts tied to that root's own song ids survive, exactly the same
+   *  value a real handle's own `reconnectRoot()` already provides. */
+  async reconnectMemoryRoot(rootId, files) {
+    await this._applyFileListToRoot(rootId, files);
+  }
+
+  async _applyFileListToRoot(rootId, files) {
+    this._rootHandleCache.set(rootId, buildMemoryDirectoryTree(files));
+    await this.rescanRoot(rootId);
   }
 
   async rescanRoot(rootId) {

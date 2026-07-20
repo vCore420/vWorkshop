@@ -10,6 +10,16 @@
  * a plain colour swatch stands in for "a preview" on this quick,
  * portable surface. The full, live-preview editor stays exactly where
  * it already is — the Workshop computer.
+ *
+ * Version 3, Phase 13 ("The Phone Becomes a Device"), Wave 2 — "each app
+ * should read as distinctly itself." A closet reads as a grid of
+ * garments, not a scrolling list of rows, so outfits became cards: a
+ * genuine per-outfit colour (the torso part's own, the single most
+ * visually representative part of an outfit) instead of the identical
+ * placeholder swatch every outfit used to share regardless of what it
+ * actually looked like — "a preview," honestly, not just labelled as
+ * one. The whole card is the tap target (matching how the home screen's
+ * own app tiles already work), not a separate "Apply" button glued on.
  */
 export function createWardrobePhoneApp({ appearanceStore, outfitStore }) {
   return {
@@ -34,49 +44,61 @@ export function createWardrobePhoneApp({ appearanceStore, outfitStore }) {
       });
       container.appendChild(saveBtn);
 
-      const list = document.createElement("div");
-      list.className = "workshop-phone-list";
-      container.appendChild(list);
+      const grid = document.createElement("div");
+      grid.className = "workshop-phone-outfit-grid";
+      grid.setAttribute("role", "list");
+      container.appendChild(grid);
 
       function render() {
-        list.innerHTML = "";
+        grid.innerHTML = "";
         const outfits = outfitStore.all();
         if (outfits.length === 0) {
           const empty = document.createElement("p");
           empty.className = "app-subtitle";
           empty.textContent = "No saved outfits yet.";
-          list.appendChild(empty);
+          grid.appendChild(empty);
           return;
         }
-        for (const outfit of outfits) list.appendChild(buildRow(outfit));
+        for (const outfit of outfits) grid.appendChild(buildCard(outfit));
       }
 
-      function buildRow(outfit) {
-        const row = document.createElement("div");
-        row.className = "workshop-phone-list-row";
-        if (outfit.id === appearanceStore.currentOutfitId) row.classList.add("active");
+      /** One list item per outfit (`cell`, a plain non-interactive div —
+       *  the thing `role="list"` above actually expects as a child) each
+       *  containing one real, whole-card `<button>` — not `role="listitem"`
+       *  on the button itself, which would silently strip its own native
+       *  button semantics from assistive tech, the same way stacking an
+       *  unrelated role always does. */
+      function buildCard(outfit) {
+        const isActive = outfit.id === appearanceStore.currentOutfitId;
+        const cell = document.createElement("div");
+        cell.className = "workshop-phone-outfit-cell";
+        cell.setAttribute("role", "listitem");
+
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = "workshop-phone-outfit-card" + (isActive ? " active" : "");
+        if (isActive) card.setAttribute("aria-current", "true");
+        card.setAttribute("aria-label", isActive ? `${outfit.name} — currently worn` : `Apply ${outfit.name}`);
 
         const swatch = document.createElement("span");
-        swatch.className = "workshop-phone-swatch";
-        swatch.style.background = "var(--screen-glow)";
-        row.appendChild(swatch);
+        swatch.className = "workshop-phone-outfit-swatch";
+        swatch.style.background = outfit.appearance?.parts?.torso?.color ?? "var(--screen-glow)";
+        swatch.setAttribute("aria-hidden", "true");
+        card.appendChild(swatch);
 
         const name = document.createElement("span");
-        name.className = "workshop-phone-list-label";
+        name.className = "workshop-phone-outfit-name";
         name.textContent = outfit.name;
-        row.appendChild(name);
+        card.appendChild(name);
 
-        const applyBtn = document.createElement("button");
-        applyBtn.type = "button";
-        applyBtn.className = "workshop-phone-small-button";
-        applyBtn.textContent = "Apply";
-        applyBtn.addEventListener("click", () => {
+        card.addEventListener("click", () => {
           if (outfit.bodyModelId && outfit.bodyModelId !== appearanceStore.bodyModelId) appearanceStore.setBodyModel(outfit.bodyModelId);
           appearanceStore.setAppearance(outfit.appearance, outfit.id);
           render();
         });
-        row.appendChild(applyBtn);
-        return row;
+
+        cell.appendChild(card);
+        return cell;
       }
 
       render();

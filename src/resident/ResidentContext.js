@@ -65,6 +65,37 @@ function buildWorldKnowledgeLine(worldAwareness) {
   return `You know the Workshop itself first-hand, right now: ${bits.join(", ")}.`;
 }
 
+/** Version 3, Phase 11 ("Workshop Character") — "different Workshops
+ *  should naturally begin feeling different because of the choices made
+ *  within them." `WorldTimeService` already computes exactly "how long
+ *  was the player away" (`cappedElapsedSeconds`/`isFirstSession`) for
+ *  `ResidentController`/`BeingController` to reposition things
+ *  plausibly on load — this is the same, already-resolved value, simply
+ *  read into conversation too, rather than a second continuity
+ *  mechanism of its own. `PlayerPatternMemory.leadingWorkingHours()` was
+ *  fully implemented already (Version 3, "Residents should begin
+ *  remembering behavioural patterns") but called nowhere — genuinely
+ *  dead data until now, not a new signal invented for this line. */
+function describeGap(seconds) {
+  if (seconds < 60) return "just a moment";
+  if (seconds < 5 * 60) return "a few minutes";
+  if (seconds < 15 * 60) return "about ten minutes";
+  if (seconds < 45 * 60) return "about half an hour";
+  if (seconds < 90 * 60) return "about an hour";
+  if (seconds < 4 * 3600) return "a few hours";
+  return "most of a day";
+}
+
+function buildContinuityLine(worldTimeService, playerPatternMemory) {
+  if (!worldTimeService) return null;
+  const { isFirstSession, cappedElapsedSeconds } = worldTimeService.getContinuity();
+  if (isFirstSession) return "This is the very first time the player has opened this Workshop — you're meeting them for the first time.";
+  const bits = [`the player has just returned after ${describeGap(cappedElapsedSeconds)} away`];
+  const workingHours = playerPatternMemory?.leadingWorkingHours?.();
+  if (workingHours) bits.push(`they usually get to work in the ${workingHours}`);
+  return `You notice ${bits.join(", and ")}.`;
+}
+
 function buildPreferenceLine(profile, { residentPreferences }) {
   if (!residentPreferences) return null;
   const categories = profile?.memory?.categories;
@@ -92,7 +123,7 @@ function buildPreferenceLine(profile, { residentPreferences }) {
  *  why a sandbox preview must never consume the real "something new was
  *  built" note. */
 export function buildConversationContext(profile, deps, { mutateCuriosity = true } = {}) {
-  const { residentCuriosity, residentPreferences, playerPatternMemory, conversationMemory, worldObjectsStore, environmentSystem, timeOfDaySystem, worldEventLog, worldAwareness } = deps;
+  const { residentCuriosity, residentPreferences, playerPatternMemory, conversationMemory, worldObjectsStore, environmentSystem, timeOfDaySystem, worldEventLog, worldAwareness, worldTimeService } = deps;
   const curiosityNotes = residentCuriosity
     ? residentCuriosity.gatherNotes({ worldObjectsStore, environmentSystem, timeOfDaySystem, residentPreferences, playerPatternMemory, mutate: mutateCuriosity })
     : [];
@@ -111,6 +142,7 @@ export function buildConversationContext(profile, deps, { mutateCuriosity = true
     personalityLine: buildPersonalityLine(profile),
     preferenceLine: buildPreferenceLine(profile, { residentPreferences }),
     worldKnowledgeLine: buildWorldKnowledgeLine(worldAwareness),
+    continuityLine: buildContinuityLine(worldTimeService, playerPatternMemory),
     curiosityNotes: [...curiosityNotes, ...worldEventNotes],
     memoryNotes: memoryEnabled ? conversationMemory?.mostRelevant() ?? [] : [],
   };

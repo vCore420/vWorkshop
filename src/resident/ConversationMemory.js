@@ -36,17 +36,39 @@ const MAX_NOTES = 16;
  * (`docs/PERSISTENCE.md`'s own standard for Bubble's movement) applies
  * just as well here — three cheap regex checks, no second model call.
  *
- * Deliberately never registered with `PersistenceSystem` — this makes
- * `MemoryConfiguration.js`'s own "Session Only" mode true by construction
- * (nothing here ever reaches `localStorage`) rather than by a mode check
- * scattered through save/load. "Persistent" is treated identically for
- * now — genuine cross-session memory is still honest future work.
+ * **Version 3, Phase 11 ("Workshop Character")** — "Session Only" and
+ * "Persistent" used to be identical: this class was never registered
+ * with `PersistenceSystem` at all, so nothing here ever reached
+ * `localStorage` regardless of which mode a profile claimed. Now
+ * registered like any other plain store (`save()`/`load(data)`), but the
+ * mode check happens inside `save()` itself rather than at the
+ * registration site: `configurePersistence()` is given a small callback
+ * (mirroring `watchProjects()`'s own `getCategories` pattern) that reads
+ * whichever profile is active *at save time*, and `save()` only actually
+ * writes `notes` out when that profile's `memory.mode === "persistent"`
+ * — otherwise it writes an empty snapshot, so a "Session Only" resident's
+ * memory genuinely doesn't survive a reload, true to its own label,
+ * without a separate mode check anywhere else. Since this store is
+ * shared across every profile rather than segmented per-resident (same
+ * simplification `ResidentPreferences`/`PlayerPatternMemory` already
+ * make), "persistent" is decided by whichever profile happens to be
+ * active each time a save actually runs.
  */
 export class ConversationMemory {
   constructor() {
     this.notes = []; // [{key, category, lifetime, text, createdAt, lastMentionedAt, timesReinforced}]
     this._knownDoneProjectIds = new Set();
     this._projectsInitialized = false;
+    this._getMode = null;
+  }
+
+  /** Called once at wiring time (see `main.js`, alongside `watchProjects()`
+   *  just below) — `getMode()` should return the active profile's own
+   *  `memory.mode`. Kept as a callback rather than a snapshot for the
+   *  same reason `watchProjects()`'s `getCategories` is: the active
+   *  profile, and its mode, can change over the life of a session. */
+  configurePersistence(getMode) {
+    this._getMode = getMode;
   }
 
   _upsert(key, category, text) {
@@ -153,6 +175,24 @@ export class ConversationMemory {
   mostRelevant(n = 5) {
     this._purgeExpired();
     return [...this.notes].sort((a, b) => b.lastMentionedAt - a.lastMentionedAt).slice(0, n).map((note) => note.text);
+  }
+
+  // ---- persistence contract, read by PersistenceSystem ----
+  /** Only writes real notes out when the active profile's memory mode is
+   *  `"persistent"` — see the module comment above for why this check
+   *  lives here rather than at the registration site. Every other mode
+   *  (including "disabled", which shouldn't be accumulating notes at all)
+   *  persists an empty snapshot, overwriting whatever a previous,
+   *  since-changed "persistent" session may have left behind. */
+  save() {
+    if (this._getMode?.() !== "persistent") return { notes: [], knownDoneProjectIds: [] };
+    return { notes: this.notes, knownDoneProjectIds: [...this._knownDoneProjectIds] };
+  }
+
+  load(data) {
+    if (!data) return;
+    this.notes = data.notes ?? [];
+    this._knownDoneProjectIds = new Set(data.knownDoneProjectIds ?? []);
   }
 }
 

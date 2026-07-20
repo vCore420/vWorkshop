@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { damp, clamp, shortestAngleLerp, wrapAngle, lerp } from "../utils/MathUtils.js";
+import { prefersReducedMotion } from "../utils/motionPreference.js";
 import { DEFAULT_SPAWN } from "../data/layoutDefault.js";
 import { RoomLayoutSystem } from "./RoomLayoutSystem.js";
 import { FurnitureSystem } from "./FurnitureSystem.js";
@@ -338,7 +339,10 @@ export class CameraSystem {
     else if (!this.locked) this._updateWalk(dt);
 
     const thirdPersonActive = this.viewMode === "third" && this.mode === "walk";
-    this._viewBlend = damp(this._viewBlend, thirdPersonActive ? 1 : 0, 6, dt);
+    // Version 3, Phase 12 — the first/third-person switch is a real
+    // perspective change, not just a number easing; snap instead of
+    // ease under prefers-reduced-motion, same reasoning as _updateFocus.
+    this._viewBlend = prefersReducedMotion() ? (thirdPersonActive ? 1 : 0) : damp(this._viewBlend, thirdPersonActive ? 1 : 0, 6, dt);
     // Version 3, Phase 1 ("Completing Promises") — "crouching should
     // restore a comfortable first-person camera without animation
     // artefacts obscuring the view." Standing has always relied on a
@@ -376,7 +380,9 @@ export class CameraSystem {
    *  already looking at a screen. */
   _updateZoom(dt) {
     const held = this.mode === "walk" && !this.locked && (this.engine.input?.isHeld("zoom") ?? false);
-    this._zoomBlend = damp(this._zoomBlend, held ? 1 : 0, 8, dt);
+    // Version 3, Phase 12 — snap straight to the held/released FOV under
+    // prefers-reduced-motion rather than easing toward it.
+    this._zoomBlend = prefersReducedMotion() ? (held ? 1 : 0) : damp(this._zoomBlend, held ? 1 : 0, 8, dt);
     const fov = DEFAULT_FOV + (ZOOM_FOV - DEFAULT_FOV) * this._zoomBlend;
     if (Math.abs(this.engine.camera.fov - fov) > 0.01) {
       this.engine.camera.fov = fov;
@@ -727,8 +733,18 @@ export class CameraSystem {
     }
   }
 
+  /** Version 3, Phase 12 ("Accessibility & Comfort Pass") — this is the
+   *  one shared camera transition every "sit down" interaction in the
+   *  Workshop routes through (Computer, Workbench, Reading Chair alike
+   *  all just call `enterFocus()`/`exitFocus()`), so it's also the
+   *  single highest-leverage place to honour `prefers-reduced-motion`:
+   *  jumping straight to `_focusT = 1` collapses the 0.6s position/yaw/
+   *  pitch ease into the exact same final camera state, just without the
+   *  animated repositioning along the way — a big, sometimes-vertical,
+   *  sometimes-rotating camera move being exactly the kind of motion
+   *  this preference exists to avoid. */
   _updateFocus(dt) {
-    this._focusT = Math.min(1, this._focusT + dt / 0.6);
+    this._focusT = prefersReducedMotion() ? 1 : Math.min(1, this._focusT + dt / 0.6);
     const t = 1 - Math.pow(1 - this._focusT, 3); // ease-out cubic
 
     if (this._returning) {

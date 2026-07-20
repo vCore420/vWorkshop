@@ -31,7 +31,7 @@ import { EventBus } from "../core/EventBus.js";
 export class MusicLibraryStore {
   constructor() {
     this.events = new EventBus();
-    /** @type {Array<{id:string, name:string}>} */
+    /** @type {Array<{id:string, name:string, kind:string}>} */
     this.roots = [];
     /** @type {Record<string, {name:string, albumIds:string[]}>} */
     this.artists = {};
@@ -49,9 +49,15 @@ export class MusicLibraryStore {
 
   // ---- roots ----
 
-  addRoot(name) {
+  /** `kind` distinguishes a real, reopenable `FileSystemDirectoryHandle`
+   *  root ("handle", the default) from a Phase 12 fallback root built
+   *  from an ordinary file picker ("memory" — see
+   *  `MemoryDirectoryHandle.js`), which can't be silently reconnected
+   *  next session and needs its own "re-select" UI instead of
+   *  "reconnect" (see `LibraryManager.js`). */
+  addRoot(name, kind = "handle") {
     const id = `root-${Date.now()}-${Math.round(Math.random() * 1000)}`;
-    this.roots.push({ id, name });
+    this.roots.push({ id, name, kind });
     this._emitChanged();
     return id;
   }

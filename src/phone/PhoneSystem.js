@@ -42,8 +42,9 @@ import { formatClockTime } from "../utils/TimeFormat.js";
  * itself closed.
  */
 export class PhoneSystem {
-  constructor(apps) {
+  constructor(apps, settingsStore) {
     this.apps = apps; // [{id, label, glyph, mount(container)}], built once by apps/registry.js
+    this._settingsStore = settingsStore; // read directly for the status bar's own time-format preference — see TimeFormat.js's own comment
     this.isOpen = false;
     this.activeAppId = null; // null = home screen
     this._mountedDispose = null;
@@ -64,6 +65,13 @@ export class PhoneSystem {
       onGoHome: () => this.goHome(),
       onSelectApp: (id) => this.openApp(id),
     });
+
+    // Version 3, Phase 13 — applied once at startup and kept live on every
+    // `settings:changed`, not just when the Phone Settings/PC Settings
+    // controls themselves change it (either surface writes to the same
+    // `SettingsStore`, so one shared listener covers both).
+    this._applyAppearance();
+    if (this._settingsStore) this._settingsStore.events.on("settings:changed", () => this._applyAppearance());
 
     this._onKeyDown = (e) => {
       if (e.code !== "Escape" || !this.isOpen) return;
@@ -106,7 +114,12 @@ export class PhoneSystem {
 
   _updateStatusBar() {
     const hour = this._timeOfDaySystem?.currentTime;
-    if (typeof hour === "number") this.ui.setStatusTime(formatClockTime(hour));
+    if (typeof hour === "number") this.ui.setStatusTime(formatClockTime(hour, this._settingsStore?.get("display").timeFormat));
+  }
+
+  _applyAppearance() {
+    const phone = this._settingsStore?.get("phone");
+    if (phone) this.ui.setAppearance(phone);
   }
 
   toggle() {

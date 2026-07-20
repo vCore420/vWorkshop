@@ -26,12 +26,43 @@
  * recognise simply comes back with fewer joints mapped, honestly, rather
  * than a wrong guess; see `BeingLibrary.js`/`ModelLibrary.js`'s own
  * manual-override capability for what a person does about the rest.
+ *
+ * **Version 3, Phase 10d ("Being Creator, Beyond the Prototype, Wave 3")
+ * — five more joints, for a body the original fifteen never covered at
+ * all.** `docs/BEINGS.md`'s own "Known simplifications" named the gap
+ * honestly, back in Phase 10: a quadruped's own legs and tail had
+ * nowhere to map to, so a primitive Cat or Dog (`DefaultBeings.js`)
+ * shipped as real, hand-posed geometry with every `jointName` left
+ * `null` — static art, not something any clip could ever drive. Five
+ * new ids close that: one shared leg pair for the front, one for the
+ * back (deliberately *not* split into upper/lower segments the way the
+ * biped leg pair is — a single segment per leg is the honest, simpler
+ * scope this pass actually needed, not a claim that a quadruped's real
+ * anatomy is that simple), and one tail joint. `IDENTITY_PLAYER_SKELETON_MAP`
+ * below stays exactly what it always was for the *original* fourteen —
+ * every one of those still matches a real `PlayerCharacter.js` pivot
+ * 1:1 — but that identity claim was never true for these five and isn't
+ * now either: no biped Player rig has a "front leg." Included in the
+ * same `WORKSHOP_JOINTS` list anyway, rather than forked into a second,
+ * parallel vocabulary — one shared Workshop skeleton language remains
+ * the whole point, a Being's own clip can freely mix `torso`/`head`
+ * (shared with every biped) alongside `legFrontLeft` (quadruped-only) in
+ * the same pose. `autoMapSkeleton()`'s own `JOINT_NAME_PATTERNS` were
+ * *not* extended to detect these from an imported model's own bone
+ * names — genuinely separate, lower-priority scope (heuristically
+ * mapping an imported quadruped skeleton) than what this pass actually
+ * set out to fix (primitive-built Beings); see `isSkeletonMapUsable()`'s
+ * own comment for the one real correctness consequence that already
+ * required a fix because of that gap.
  */
 
-/** `{id, label}` — the fifteen joints, in the brief's own order. Every
- *  id matches a real `PlayerCharacter.js` pivot name exactly, so mapping
- *  the Player rig onto this vocabulary is the identity function (see
- *  `IDENTITY_PLAYER_SKELETON_MAP` below). */
+/** `{id, label}` — the original fifteen (the brief's own order; every id
+ *  matches a real `PlayerCharacter.js` pivot name exactly, so mapping
+ *  the Player rig onto this vocabulary is the identity function — see
+ *  `IDENTITY_PLAYER_SKELETON_MAP` below), plus five more added in
+ *  Version 3, Phase 10d for a body no biped Player rig has: a front leg
+ *  pair, a back leg pair, and a tail. Those five are *not* part of the
+ *  identity mapping — see this file's own module comment. */
 export const WORKSHOP_JOINTS = [
   { id: "head", label: "Head" },
   { id: "torso", label: "Chest" },
@@ -47,6 +78,14 @@ export const WORKSHOP_JOINTS = [
   { id: "lowerLegRight", label: "Lower Leg (Right)" },
   { id: "footLeft", label: "Foot (Left)" },
   { id: "footRight", label: "Foot (Right)" },
+  // Version 3, Phase 10d ("Being Creator, Beyond the Prototype, Wave 3")
+  // — a quadruped's own legs (one segment each, not split into
+  // upper/lower the way the biped leg pair above is) and tail.
+  { id: "legFrontLeft", label: "Front Leg (Left)" },
+  { id: "legFrontRight", label: "Front Leg (Right)" },
+  { id: "legBackLeft", label: "Back Leg (Left)" },
+  { id: "legBackRight", label: "Back Leg (Right)" },
+  { id: "tailBase", label: "Tail" },
 ];
 // "Pelvis" (the brief's own example) doesn't need its own entry — the
 // Player rig's own "torso" pivot already sits at the hip line and is
@@ -55,14 +94,33 @@ export const WORKSHOP_JOINTS = [
 // of hardcoded-but-unused field this phase's own "avoid hardcoded
 // assumptions wherever practical" warns against.
 
+// Version 3, Phase 10d ("Being Creator, Beyond the Prototype, Wave 3") —
+// the five quadruped-only joints (see WORKSHOP_JOINTS's own comment):
+// no biped Player rig has a "front leg," so these are excluded from
+// IDENTITY_PLAYER_SKELETON_MAP below, and — a genuinely separate reason,
+// currently the same five joints only by coincidence — excluded from
+// autoMapSkeleton()'s own heuristic detection too (JOINT_NAME_PATTERNS,
+// below, has no pattern for any of them), which is why
+// isSkeletonMapUsable() computes its own threshold from this same set
+// rather than from WORKSHOP_JOINTS.length directly: growing that length
+// with joints autoMapSkeleton() can never actually populate would have
+// quietly raised the usability bar for every ordinary imported *biped*
+// model too, purely as a side effect of a change that had nothing to do
+// with them.
+const QUADRUPED_ONLY_JOINT_IDS = new Set(["legFrontLeft", "legFrontRight", "legBackLeft", "legBackRight", "tailBase"]);
+
 /** Every Workshop joint mapped to itself — the Player rig's own
  *  `pivots` object already uses these exact keys, so this is the
  *  trivial, always-true mapping for it; exported mainly for symmetry
  *  with `autoMapSkeleton()`'s own return shape, so a caller that treats
  *  "a skeleton map" as the general case (not "the Player rig, as a
  *  special case, needs no map at all") never has to branch on which kind
- *  of rig it's looking at. */
-export const IDENTITY_PLAYER_SKELETON_MAP = Object.fromEntries(WORKSHOP_JOINTS.map((j) => [j.id, j.id]));
+ *  of rig it's looking at. Only the original fourteen — see
+ *  `QUADRUPED_ONLY_JOINT_IDS`'s own comment just above for why the newer
+ *  five are deliberately left out here. */
+export const IDENTITY_PLAYER_SKELETON_MAP = Object.fromEntries(
+  WORKSHOP_JOINTS.filter((j) => !QUADRUPED_ONLY_JOINT_IDS.has(j.id)).map((j) => [j.id, j.id])
+);
 
 /** Substring patterns checked case-insensitively — the first matching
  *  kind wins, checked in `JOINT_KIND_ORDER` (more specific patterns
@@ -151,12 +209,16 @@ export function autoMapSkeleton(root) {
 }
 
 /** A quick, honest yes/no for "is this mapping worth offering as a
- *  default" — arbitrary but reasonable: at least half the Workshop
- *  skeleton's own joints were found. Below that, `BeingController.js`
- *  simply doesn't attempt retargeted playback for this model rather than
- *  animating a handful of limbs while the rest of the rig sits frozen in
- *  its bind pose, which would read as broken rather than "partially
- *  supported." */
+ *  default" — arbitrary but reasonable: at least half of whatever
+ *  `autoMapSkeleton()` could ever actually find were found. Below that,
+ *  `BeingController.js` simply doesn't attempt retargeted playback for
+ *  this model rather than animating a handful of limbs while the rest
+ *  of the rig sits frozen in its bind pose, which would read as broken
+ *  rather than "partially supported." Deliberately *not*
+ *  `WORKSHOP_JOINTS.length` — see `QUADRUPED_ONLY_JOINT_IDS`'s own
+ *  comment for why growing that count could never be matched by a
+ *  correspondingly higher `matchedCount` for these five specifically. */
 export function isSkeletonMapUsable(map) {
-  return Object.keys(map ?? {}).length >= Math.ceil(WORKSHOP_JOINTS.length / 2);
+  const detectableJointCount = WORKSHOP_JOINTS.length - QUADRUPED_ONLY_JOINT_IDS.size;
+  return Object.keys(map ?? {}).length >= Math.ceil(detectableJointCount / 2);
 }

@@ -37,10 +37,24 @@ import { fetchLiveWeather } from "../utils/WeatherProvider.js";
  *     it can naturally lead to next (clear rarely jumps straight to
  *     storm; storm always decays back toward heavy rain), each held for
  *     a randomised real-world duration before advancing. On load, elapsed
- *     real time since the state was last entered is replayed forward
- *     (bounded — see `_catchUpDynamic`) rather than the weather either
- *     freezing or resetting, which is what makes "conditions persist
- *     between visits" genuinely true instead of just a saved label.
+ *     real time is replayed forward (bounded — see `_catchUpDynamic`)
+ *     rather than the weather either freezing or resetting, which is what
+ *     makes "conditions persist between visits" genuinely true instead of
+ *     just a saved label.
+ *
+ *     **Version 3, Phase 11** — this catch-up used to compute its own
+ *     `Date.now() - enteredAt` on every load, a second, independently
+ *     invented "how long were we gone" calculation (with its own
+ *     step-count cap, `MAX_CATCHUP_STEPS`) sitting right alongside
+ *     `WorldTimeService`'s own already-canonical, already-capped
+ *     `cappedElapsedSeconds`. It now listens for the shared
+ *     `"world:continuity"` event instead (see `WorldTimeService.js`) and
+ *     drives `_catchUpDynamic()` from that one value — `MAX_CATCHUP_STEPS`
+ *     remains as an inner bound on top of the outer one
+ *     `cappedElapsedSeconds` already applies, not a duplicate of it. A
+ *     genuinely first-ever session skips catch-up entirely and opens on
+ *     `"clear"` explicitly — a deliberate, honest choice rather than an
+ *     accident of whatever the constructor's own default happened to be.
  *
  * Rain is still represented the same honest way it always has been for a
  * room with placeholder-style windows rather than a fully simulated
@@ -182,8 +196,25 @@ export class EnvironmentSystem {
       this.windDirectionRad = saved.windDirectionRad ?? this.windDirectionRad;
       this._enteredAt = saved.enteredAt ?? Date.now();
       this._durationMs = pickDurationMs(this.current);
-      if (this.mode === "dynamic") this._catchUpDynamic();
       if (this.mode === "live") this.requestLiveWeather();
+      this._windTarget = WIND_BASE[this.current] ?? 0.2;
+      this._emit();
+    });
+
+    // Fires once per session, after persistence:load has already restored
+    // this system's own state (see WorldTimeService.js's own comment on
+    // why the ordering is guaranteed) — the one place catch-up actually
+    // happens now, driven by the shared elapsed-time source rather than
+    // this system's own Date.now() call. See the module comment above.
+    engine.events.on("world:continuity", ({ cappedElapsedSeconds, isFirstSession }) => {
+      if (this.mode !== "dynamic") return;
+      if (isFirstSession) {
+        this.current = "clear";
+        this._durationMs = pickDurationMs(this.current);
+        this._enteredAt = Date.now();
+      } else {
+        this._catchUpDynamic(cappedElapsedSeconds * 1000);
+      }
       this._windTarget = WIND_BASE[this.current] ?? 0.2;
       this._emit();
     });
@@ -266,8 +297,11 @@ export class EnvironmentSystem {
   // Workshop Dynamic
   // ---------------------------------------------------------------
 
-  _catchUpDynamic() {
-    let elapsed = Date.now() - this._enteredAt;
+  /** `elapsedMs` comes from the shared `"world:continuity"` event — see
+   *  the module comment above for why this no longer computes its own
+   *  `Date.now() - enteredAt`. */
+  _catchUpDynamic(elapsedMs) {
+    let elapsed = elapsedMs;
     let steps = 0;
     while (elapsed > this._durationMs && steps < MAX_CATCHUP_STEPS) {
       elapsed -= this._durationMs;

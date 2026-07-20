@@ -31,6 +31,10 @@ export const DEFAULT_SETTINGS = {
   display: {
     fov: 62,
     uiScale: 1,
+    // Version 3, Phase 13 ("The Phone Becomes a Device") — one setting,
+    // read by both the PC Settings app and the Phone's own, and by
+    // PhoneSystem's status-bar clock; see TimeFormat.js's own comment.
+    timeFormat: "24h", // "24h" | "12h"
   },
   controls: {
     mouseSensitivity: 1,
@@ -48,6 +52,16 @@ export const DEFAULT_SETTINGS = {
     musicVolume: 1,
     effectsVolume: 1,
     ambientVolume: 1,
+  },
+  // Version 3, Phase 13 ("The Phone Becomes a Device") — "a phone a
+  // player has actually customised is a small, concrete way ownership
+  // shows up." A handful of curated presets (see `css/phone.css`'s own
+  // `[data-wallpaper]`/`[data-border]` rules), not a colour picker — every
+  // preset reuses an existing design token, deliberately not "a theming
+  // engine for its own sake" the phase brief itself warns against.
+  phone: {
+    wallpaper: "paper", // "paper" | "sage" | "glow" | "wood"
+    borderColor: "oak", // "oak" | "walnut" | "brass" | "teal"
   },
 };
 

@@ -238,6 +238,70 @@ const LADDER_CLIMB_CLIP = {
   ],
 };
 
+// Version 3, Phase 10d ("Being Creator, Beyond the Prototype, Wave 3")
+// — the first two clips authored against WorkshopSkeleton.js's own new
+// quadruped joints (legFrontLeft/Right, legBackLeft/Right, tailBase —
+// see that file's own comment). `category: "movement"` for the same
+// reason every other idle/walk clip already uses it: the Emote Wheel
+// filters those out (`c.category !== "movement"`), and a player's own
+// body has no "front leg" to move — showing these as pickable gestures
+// would be a dead, confusing option on every human character. Assigned
+// directly as `default-being-cat`/`default-being-dog`'s own
+// `idleAnimationClipId`/`walkAnimationClipId` (see `DefaultBeings.js`),
+// not reached through `MOVEMENT_STATE_TO_CLIP_ID` — that map is
+// specifically for the Player's own camera-driven state, and Beings
+// never go through it; `BeingController._updateAnimation()` reads a
+// definition's own two clip ids directly instead.
+const QUADRUPED_IDLE_CLIP = {
+  id: "default-quadruped-idle",
+  name: "Quadruped Idle",
+  description: "A calm stand — body sways gently, tail flicks.",
+  category: "movement",
+  loop: true,
+  speed: 1,
+  frames: [
+    frame(2.0, { torso: [0, 0.02, 0], head: [0, 0.05, 0], tailBase: [0.15, 0.1, 0] }),
+    frame(2.0, { torso: [0, -0.02, 0], head: [0, -0.05, 0], tailBase: [-0.15, -0.1, 0] }),
+  ],
+};
+
+// A diagonal trot — the front-left leg and back-right leg swing
+// forward together, then the opposite diagonal pair, the real gait most
+// four-legged animals actually default to (as opposed to a "pace,"
+// where same-side legs move together — a different, less common gait
+// deliberately not modelled here, one real simplification worth naming
+// rather than leaving silent).
+const QUADRUPED_WALK_CLIP = {
+  id: "default-quadruped-walk",
+  name: "Quadruped Walk",
+  description: "A diagonal trot — front-left and back-right swing together, then the opposite pair.",
+  category: "movement",
+  loop: true,
+  speed: 1,
+  frames: [
+    frame(0.22, {
+      legFrontLeft: [0.5, 0, 0], legBackRight: [0.5, 0, 0],
+      legFrontRight: [-0.5, 0, 0], legBackLeft: [-0.5, 0, 0],
+      torso: [0, 0, 0.02], tailBase: [0, 0.08, 0],
+    }),
+    frame(0.18, {
+      legFrontLeft: [0, 0, 0], legBackRight: [0, 0, 0],
+      legFrontRight: [0, 0, 0], legBackLeft: [0, 0, 0],
+      torso: [0, 0, 0],
+    }),
+    frame(0.22, {
+      legFrontRight: [0.5, 0, 0], legBackLeft: [0.5, 0, 0],
+      legFrontLeft: [-0.5, 0, 0], legBackRight: [-0.5, 0, 0],
+      torso: [0, 0, -0.02], tailBase: [0, -0.08, 0],
+    }),
+    frame(0.18, {
+      legFrontLeft: [0, 0, 0], legBackRight: [0, 0, 0],
+      legFrontRight: [0, 0, 0], legBackLeft: [0, 0, 0],
+      torso: [0, 0, 0],
+    }),
+  ],
+};
+
 // Version 3, Phase 10 ("Real Assets, Honestly Introduced") — until now the
 // Emote Wheel (`EmoteWheelSystem.js`, `docs/PLAYER.md`'s own "plays
 // assets, decides nothing" section) was genuinely empty on a fresh
@@ -339,6 +403,8 @@ export const DEFAULT_ANIMATION_CLIPS = [
   LAND_CLIP,
   CROUCH_CLIP,
   LADDER_CLIMB_CLIP,
+  QUADRUPED_IDLE_CLIP,
+  QUADRUPED_WALK_CLIP,
   WAVE_CLIP,
   CLAP_CLIP,
   BOW_CLIP,

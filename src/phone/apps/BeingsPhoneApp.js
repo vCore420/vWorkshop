@@ -1,5 +1,7 @@
 import { CameraSystem } from "../../systems/CameraSystem.js";
 import { MOVEMENT_STYLES } from "../../beings/BeingBehaviours.js";
+import { nextDomId } from "../../utils/domIds.js";
+import { iconMarkup } from "../../utils/ProceduralIcons.js";
 
 /**
  * createBeingsPhoneApp
@@ -19,6 +21,14 @@ import { MOVEMENT_STYLES } from "../../beings/BeingBehaviours.js";
  * changing all of them at once is the simpler, more honest behaviour
  * than a divergent per-instance copy nothing else in the Workshop's own
  * Being architecture currently supports.
+ *
+ * Version 3, Phase 13 ("The Phone Becomes a Device"), Wave 2 — "Spawn a
+ * Being" reads as a roster, so it's a tap-to-place tile grid (the shared
+ * `beings` paw-print icon, since no per-Being icon exists) rather than a
+ * plain list of rows. "Placed Beings" stays a list: each instance carries
+ * real per-instance controls (movement select, move/despawn/remove) a
+ * tile has no room for, so a list is the honest shape for that content,
+ * not a limitation to work around.
  */
 export function createBeingsPhoneApp({ beingLibrary, beingInstanceStore, beingSpawnerSystem, beingController }) {
   const engine = beingController.engine; // same trick MediaApp.js uses via musicSystem.engine
@@ -34,25 +44,35 @@ export function createBeingsPhoneApp({ beingLibrary, beingInstanceStore, beingSp
 
       const spawnSection = document.createElement("div");
       spawnSection.className = "workshop-phone-section";
+      const spawnHeadingId = nextDomId("phone-beings-spawn-heading");
       const spawnHeading = document.createElement("h3");
+      spawnHeading.id = spawnHeadingId;
       spawnHeading.textContent = "Spawn a Being";
       spawnSection.appendChild(spawnHeading);
+      spawnSection.setAttribute("role", "group");
+      spawnSection.setAttribute("aria-labelledby", spawnHeadingId);
       const spawnHint = document.createElement("p");
       spawnHint.className = "app-subtitle";
       spawnHint.textContent = "Choose one, then look where you want it and click.";
       spawnSection.appendChild(spawnHint);
       const spawnList = document.createElement("div");
-      spawnList.className = "workshop-phone-list";
+      spawnList.className = "workshop-phone-being-grid";
+      spawnList.setAttribute("role", "list");
       spawnSection.appendChild(spawnList);
       container.appendChild(spawnSection);
 
+      const manageHeadingId = nextDomId("phone-beings-manage-heading");
       const manageSection = document.createElement("div");
       manageSection.className = "workshop-phone-section";
+      manageSection.setAttribute("role", "group");
+      manageSection.setAttribute("aria-labelledby", manageHeadingId);
       const manageHeading = document.createElement("h3");
+      manageHeading.id = manageHeadingId;
       manageHeading.textContent = "Placed Beings";
       manageSection.appendChild(manageHeading);
       const manageList = document.createElement("div");
       manageList.className = "workshop-phone-list";
+      manageList.setAttribute("role", "list");
       manageSection.appendChild(manageList);
       container.appendChild(manageSection);
 
@@ -66,23 +86,31 @@ export function createBeingsPhoneApp({ beingLibrary, beingInstanceStore, beingSp
           spawnList.appendChild(empty);
           return;
         }
-        for (const being of beings) {
-          const row = document.createElement("div");
-          row.className = "workshop-phone-list-row";
-          const name = document.createElement("span");
-          name.className = "workshop-phone-list-label";
-          name.textContent = being.name;
-          const spawnBtn = document.createElement("button");
-          spawnBtn.type = "button";
-          spawnBtn.className = "workshop-phone-small-button";
-          spawnBtn.textContent = "Place";
-          spawnBtn.addEventListener("click", () => {
-            beingSpawnerSystem.beginPlacement(being.id);
-            engine.events.emit("phone:closeRequested");
-          });
-          row.append(name, spawnBtn);
-          spawnList.appendChild(row);
-        }
+        for (const being of beings) spawnList.appendChild(buildSpawnTile(being));
+      }
+
+      function buildSpawnTile(being) {
+        const cell = document.createElement("div");
+        cell.className = "workshop-phone-being-cell";
+        cell.setAttribute("role", "listitem");
+        const tile = document.createElement("button");
+        tile.type = "button";
+        tile.className = "workshop-phone-being-tile";
+        tile.setAttribute("aria-label", `Place ${being.name}`);
+        const icon = document.createElement("span");
+        icon.className = "workshop-phone-being-tile-icon";
+        icon.innerHTML = iconMarkup("beings");
+        icon.setAttribute("aria-hidden", "true");
+        const name = document.createElement("span");
+        name.className = "workshop-phone-being-tile-name";
+        name.textContent = being.name;
+        tile.append(icon, name);
+        tile.addEventListener("click", () => {
+          beingSpawnerSystem.beginPlacement(being.id);
+          engine.events.emit("phone:closeRequested");
+        });
+        cell.appendChild(tile);
+        return cell;
       }
 
       function renderManageList() {
@@ -102,22 +130,27 @@ export function createBeingsPhoneApp({ beingLibrary, beingInstanceStore, beingSp
         const definition = beingLibrary.get(instance.definitionId);
         const row = document.createElement("div");
         row.className = "workshop-phone-being-row";
+        row.setAttribute("role", "listitem");
         if (instance.despawned) row.classList.add("despawned");
 
+        const displayName = instance.name || definition?.name || "(deleted Being)";
         const topRow = document.createElement("div");
         topRow.className = "workshop-phone-list-row";
         const name = document.createElement("span");
         name.className = "workshop-phone-list-label";
-        name.textContent = instance.name || definition?.name || "(deleted Being)";
+        name.textContent = displayName;
         topRow.appendChild(name);
         row.appendChild(topRow);
 
         if (definition) {
           const behaviourRow = document.createElement("div");
           behaviourRow.className = "panel-row";
+          const movementId = nextDomId("phone-being-movement");
           const label = document.createElement("label");
+          label.htmlFor = movementId;
           label.textContent = "Movement";
           const select = document.createElement("select");
+          select.id = movementId;
           for (const style of MOVEMENT_STYLES) {
             const opt = document.createElement("option");
             opt.value = style.id;
@@ -138,6 +171,7 @@ export function createBeingsPhoneApp({ beingLibrary, beingInstanceStore, beingSp
         moveBtn.type = "button";
         moveBtn.className = "builder-icon-button";
         moveBtn.textContent = "Move to me";
+        moveBtn.setAttribute("aria-label", `Move ${displayName} to me`);
         moveBtn.addEventListener("click", () => {
           const camera = engine.getSystem(CameraSystem);
           if (!camera) return;
@@ -150,6 +184,7 @@ export function createBeingsPhoneApp({ beingLibrary, beingInstanceStore, beingSp
         despawnBtn.type = "button";
         despawnBtn.className = "builder-icon-button";
         despawnBtn.textContent = instance.despawned ? "Respawn" : "Despawn";
+        despawnBtn.setAttribute("aria-label", `${instance.despawned ? "Respawn" : "Despawn"} ${displayName}`);
         despawnBtn.addEventListener("click", () => beingInstanceStore.setDespawned(instance.id, !instance.despawned));
         actions.appendChild(despawnBtn);
 
@@ -157,8 +192,9 @@ export function createBeingsPhoneApp({ beingLibrary, beingInstanceStore, beingSp
         removeBtn.type = "button";
         removeBtn.className = "builder-icon-button";
         removeBtn.textContent = "Remove";
+        removeBtn.setAttribute("aria-label", `Remove ${displayName}`);
         removeBtn.addEventListener("click", () => {
-          if (window.confirm(`Remove "${name.textContent}" from the Workshop?`)) beingInstanceStore.remove(instance.id);
+          if (window.confirm(`Remove "${displayName}" from the Workshop?`)) beingInstanceStore.remove(instance.id);
         });
         actions.appendChild(removeBtn);
 
