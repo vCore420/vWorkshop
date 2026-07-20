@@ -293,6 +293,7 @@ that reads/writes `localStorage`. Two ways state gets included in a save:
   data. See docs/REFINEMENT.md for the full account.
 - **Explicit providers**: `persistenceSystem.registerProvider(key, storeInstance)`
   for plain stores that aren't Engine systems (`ProjectsStore`, `NotesStore`,
+  `JournalStore` — the computer's own dated log; see docs/CONTRIBUTIONS.md —
   `ObjectLibraryStore`, `WorldObjectsStore`, `MusicLibraryStore`,
   `PlaylistStore`, `SettingsStore`, `PlayerAppearanceStore`, `OutfitStore`,
   and `engine.plugins` itself, so every registered plugin's own

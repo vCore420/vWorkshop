@@ -209,6 +209,7 @@ html, body {
   inset: 0;
   z-index: 70;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   pointer-events: none;
@@ -220,7 +221,9 @@ html, body {
   border: 1px solid var(--teal-bright);
   border-radius: var(--radius-lg);
   padding: var(--space-4);
-  width: min(360px, 84vw);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
   box-shadow: var(--shadow-panel);
 }
@@ -230,23 +233,64 @@ html, body {
   color: var(--paper);
   font-size: var(--text-lg);
 }
-.emote-wheel-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
+/* Version 3, Phase 14 ("Further Environmental Polish") — "we could
+   design a radial wheel with options for each emote in a section of the
+   radial circle." Each button's own `--angle` (set per-button in
+   EmoteWheelSystem.js's own _render()) drives a standard CSS-only radial
+   placement: rotate the button around the ring's own centre by that
+   angle, translate outward by the ring's own radius, then rotate back by
+   the same negative angle so the button's own label stays upright rather
+   than reading sideways/upside-down at points around the circle. */
+.emote-wheel-ring {
+  position: relative;
+  width: min(300px, 78vw);
+  height: min(300px, 78vw);
+  --wheel-radius: min(115px, 34vw);
 }
-.emote-wheel-grid button {
-  font-family: var(--font-mono);
+.emote-wheel-hub {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 84px;
+  font-family: var(--font-display);
+  color: var(--paper);
   font-size: var(--text-sm);
-  padding: 8px 14px;
-  border-radius: 999px;
+  pointer-events: none;
+}
+.emote-wheel-ring button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.25);
   background: rgba(255, 255, 255, 0.06);
   color: var(--paper);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-align: center;
+  line-height: 1.2;
   cursor: pointer;
+  transform: translate(-50%, -50%) rotate(var(--angle)) translateY(calc(-1 * var(--wheel-radius))) rotate(calc(-1 * var(--angle)));
+  transition: transform var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
 }
-.emote-wheel-grid button:hover { border-color: var(--teal-bright); background: rgba(127, 216, 196, 0.15); }
+/* Good little hover effects" — a small outward pop (scale) plus the
+   same teal highlight every other Emote Wheel button already used,
+   layered onto the *same* base placement transform above (a hover state
+   can't partially override one property inside a transform list, so
+   the whole chain is repeated here with `scale()` appended). */
+.emote-wheel-ring button:hover,
+.emote-wheel-ring button:focus-visible {
+  border-color: var(--teal-bright);
+  background: rgba(127, 216, 196, 0.2);
+  transform: translate(-50%, -50%) rotate(var(--angle)) translateY(calc(-1 * var(--wheel-radius))) rotate(calc(-1 * var(--angle))) scale(1.12);
+}
 .emote-wheel-hint {
   margin: var(--space-3) 0 0;
   font-size: var(--text-xs);

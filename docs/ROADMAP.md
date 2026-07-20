@@ -4969,6 +4969,436 @@ console errors as the wave's own closing check. `docs/PHONE.md` carries
 the full per-app account. This closes Phase 13 — both waves of "The
 Phone Becomes a Device" are now complete.
 
+## Version 3 — Phase 14a — Further Environmental Polish, Wave 1 (v3.1.4a)
+
+**Goal:** the small, isolated geometry/material/lighting items from
+`docs/ROADMAP_V3.md`'s own Phase 14 brief — furniture clipping, a
+misaligned wall texture, and night lighting — plus a fresh, careful
+re-check of the first-person head-shadow issue the brief specifically
+asked not to be assumed still fixed.
+
+**Six small fixes, each root-caused before touching anything:**
+- The workbench fan's own base sank 2cm into the desk top —
+  `Workbench.js`'s `fanGroup` was anchored to `topY + 0.02` (0.87)
+  instead of `surfaceY` (0.89, the top slab's own actual upper face),
+  the same reference every other flush item on the bench already uses.
+- The computer chair's five castors never turned with their own arm —
+  `arm.rotation.y = angle` per leg, but the castor beside it only ever
+  got a fixed `rotation.x`, so only the leg at angle 0 ever looked
+  right and every other one looked progressively more misaligned with
+  its own arm the further round the circle it sat — "each leg off by a
+  different amount," now the same `angle` on both.
+- The desk keyboard overlapped the mousepad by 6cm — shifted left, clear
+  of it with a real gap.
+- The wardrobe and the music player's stand/speakers used wood tones
+  noticeably darker than the rest of the project's own wood surfaces —
+  lightened while keeping the same "trim a touch darker than the body"
+  relationship, and the grain itself (already good) now actually pops.
+- The north wall's siding texture compressed differently on the short
+  header/sill segments around the window than the full-height segments
+  beside them — every wall segment shared one cached material with a
+  fixed 0-1 UV span regardless of its own physical size. Fixed with a
+  per-segment texture clone (cheap — no canvas redraw) whose
+  `repeat.y`/`offset.y` derive from that segment's own absolute position
+  within the *whole* wall, so board density stays consistent and boards
+  are now genuinely continuous across segment boundaries, not just
+  density-matched — `Materials.siding()`'s own shared, cached material
+  stays untouched for every other caller.
+- Night lighting: the two ceiling pendants (the room's own general
+  lighting, distinct from the two desk task lamps and the entryway
+  sconces) reach further and shine a little brighter, so an 8m x 6m
+  room's far corners stop reading as dim after dark — no new fixtures.
+  A new exterior fixture now lights the front doorway from outside too,
+  gated by the same interior light switch (a porch light left on with
+  the lights inside is the ordinary, believable behaviour).
+
+**The first-person head-shadow item — re-investigated fresh, as asked,
+found already correct.** The original v3.0.3b fix
+(`sun.shadow.camera.layers.enable(FIRST_PERSON_HIDDEN_LAYER)`) is still
+fully intact, and the head mesh reference survived Phase 10b's own
+pivot/mesh split unchanged. Live reproduction in this project's own dev
+browser initially seemed to confirm a regression — no shadow appeared at
+all — until `renderer.shadowMap.enabled` itself turned out to read
+`false` from the very start of a fresh session, unrelated to the head
+specifically: `SettingsStore.js`'s own `detectRecommendedPreset()`
+auto-applies the `"performance"` graphics preset (shadows off) on a
+first session when `navigator.hardwareConcurrency <= 4`, and this
+sandboxed dev browser reports exactly 4 cores. Forcing shadow quality
+back on confirmed the underlying mechanism works correctly — a genuine
+dev-tooling artifact, not a player-facing regression; see
+`.claude/DEV_NOTES.md`'s own new account for the workaround this cost
+real time to find.
+
+**Verified live throughout** — every position, rotation, and material
+change confirmed by traversing the real running scene graph (not
+assumed from the source alone): the fan's local Y, all five castors'
+individual rotations, the keyboard/mousepad gap, the exterior light
+socket's world position, and the per-segment texture `repeat`/`offset`
+values scaling correctly against each wall's own real height — with
+zero console errors.
+
+## Version 3 — Phase 14b — Further Environmental Polish, Wave 2 (v3.1.4b)
+
+**Goal:** the door-hinge item Phase 5's own `DoorBehaviour.js` first
+flagged as a known gap, and NOTES.md's own newer report that builder
+doors "still pivot from the centre." Investigation found these were
+three separate bugs in three separate code paths, not one — each fixed
+on its own terms.
+
+**M8 — Builder Door and Gate now hinge at an edge by default.**
+`hingeOffset` existed since Phase 10 M1, but nothing in
+`ConstructionLibrary.js` ever set it on the Door, Double Door, or Gate
+pieces — every one still defaulted to `0` (centre-pivot) until a player
+found and edited its own properties panel. Door now defaults to `-0.45`
+(its own half-width, hinging at one edge); Gate defaults to `-0.6` (one
+of its own two posts, the same place a real garden gate hinges). The
+properties panel still lets a player flip the side or return to the old
+centre-pivot per instance.
+
+**M9 — The Workshop's own architectural front doors, hinged from the
+true outer wall face.** `WorkshopRoom.js`'s French-door panels already
+had genuinely independent per-leaf pivots (unrelated to
+`DoorBehaviour`/`ConstructionLibrary` entirely — hand-authored code) —
+the bug was narrower than it looked: each pivot sat at the wall's
+*interior* face, so opening swept the panel back through the wall's own
+0.3m thickness. Moved to the true exterior face, with the mesh's own
+local offset shifted by the exact opposite amount so the closed door's
+visual position is completely unchanged — verified directly against the
+real scene graph: the mesh's world Z landed at exactly the same value
+(2.94) before and after, while the pivot itself moved to the wall's
+genuine outer edge (3.24).
+
+**M10 — Double Door, the honest half-fix.** Investigation confirmed
+`DoorBehaviour` has no concept of "which part is the door leaf" — it
+only ever swings one compiled object as a whole, so two genuinely
+independently-hinged leaves would need two separate placed objects,
+each with its own hinge, a real architecture change Phase 14's own risk
+note explicitly warns against taking on here. What's actually in scope
+and now fixed: Double Door defaults to `-0.9` (the combined two-leaf
+unit's own outer edge), so it swings open as one rigid double-wide
+panel from a real edge instead of spinning open from its own centre
+seam. `docs/WORLDBUILDER.md`'s own account of this limitation updated
+to describe the new default alongside the still-standing one.
+
+**Verified live throughout** — `ConstructionLibrary.js`'s three piece
+definitions read back fresh from the loaded module confirm the exact
+values above; the front door fix confirmed directly against the real
+scene graph as described. `DoorBehaviour.js`'s own `apply()` mechanism
+itself is untouched this wave — its edge-hinge math was already
+verified with real Three.js vectors in Phase 10 M1, so this wave only
+needed to confirm the right values now reach that already-proven
+mechanism, not re-prove the mechanism itself.
+
+## Version 3 — Phase 14c — Further Environmental Polish, Wave 3 (v3.1.4c)
+
+**Goal:** Bubble's own two-part visual complaint from `docs/ROADMAP_V3.md`
+(face projection) and the newer NOTES.md report about the resident
+conversation's own chat input/message wrap — both resident-facing, both
+in `src/resident/`.
+
+**M11 — Bubble's face, fixed on both counts.** The face plane's own
+fixed z-offset had only ever been tuned against the flat cube face: on
+the curved `floatingOrb`, the sphere's own surface sits in front of that
+offset everywhere except a small dot dead-centre — `z_surface(r) =
+sqrt(RADIUS² − r²)` only drops below the old offset past r≈0.051, well
+inside the plane's own extent — reading as "rarely showing more than a
+dot or two." Pushed to `RADIUS * 1.08`, clearing every shape's own
+silhouette completely rather than just the flat ones; verified directly
+against the real renderer (`faceMesh.position.z` now exceeds the
+sphere's own geometry radius). Separately, the plane's own per-frame
+`lookAt()` was completely undamped — a snap, not a turn — invisible on
+the round orb but visibly "hunting" against the cube's own hard edges.
+Now eased with `Quaternion.slerp()`, the same exponential-smoothing
+shape `MathUtils.js`'s own `damp()` already uses for scalars; confirmed
+live by driving `renderer.update()` directly across two frames toward a
+forced look target — the face turned 10.6° then a further 9.3° toward
+it, still converging, instead of snapping the full angle in one frame.
+
+**M12 — The chat surface's own wrap/scroll roles, swapped.** Individual
+message bubbles used to cap at four lines with their own nested
+scrollbar while the input stayed a plain single-line field — a long
+*reply* got its own scrollbar even though the outer message list was
+already the real scroll owner for the whole conversation. Now the
+*input* is a real `<textarea>` that grows and caps at four lines
+instead (plain Enter still sends, Shift+Enter now inserts a genuine
+newline, and the terminal-style Up/Down history convention only
+triggers at the caret's own first/last line so navigating a multi-line
+draft doesn't get hijacked); messages display in full. Verified by
+mounting the real `ResidentConversationOverlay` against a detached
+container (the same production code, not a mock): the textarea's own
+height grows on input and clamps at the declared 4-line cap with a real
+scrollbar beyond it, Enter clears the draft and renders a real message
+bubble with no `max-height` of its own, and Shift+Enter correctly
+leaves the browser's own default newline-insertion alone.
+
+**Verified live throughout**, `docs/RESIDENT.md` updated in both places
+this touched (the embodiment section's own account of the shared face
+plane, and the conversation-surface section's stale "message caps at
+four lines" line) — zero console errors.
+
+## Version 3 — Phase 14d — Further Environmental Polish, Wave 4 (v3.1.4d)
+
+**Goal:** the two genuinely bigger design tasks named in item 4's own
+depth — the main Wardrobe app's own layout, and NOTES.md's ask for a
+real radial Emote Wheel.
+
+**M13 — The Wardrobe app, laid out for the width it actually has.**
+`docs/PLAYER.md` already carried the full account of the Phase 9 bug
+where the panel accidentally rendered near-full-viewport, fixed by
+correctly clamping it to 560px — the same generic scale every other,
+simpler furniture overlay already uses. That fix was correct on its own
+terms but never right for *this* app specifically: Wardrobe's own form
+(body model, alternate models, part tabs, proportions, appearance,
+paint, outfits) is meaningfully richer than a typical furniture
+overlay's content, and 560px left it as one long, narrow, single-column
+scroll no matter how the panel itself was sized — "way too small... it
+just needed everything inside of it to have a better layout scheme."
+Widened to 880px and gave `WardrobeApp.js`'s own form a real two-column
+grid (`.wardrobe-form`, scoped to this app alone via its own class, so
+the Builder app's unrelated `.builder-form` usage stays untouched) —
+compact sections (Body + Alternate Models, Proportions + Appearance)
+now pair up instead of stacking; Paint and Outfits keep the full row. A
+genuine layout bug surfaced and fixed along the way: `buildPartTabs()`
+returns a bare, unwrapped strip with no `.builder-section` of its own,
+so the grid's default auto-placement squeezed it into a narrow column
+until given its own explicit full-span rule. Verified live by mounting
+the real overlay directly and reading back every section's own rendered
+position — confirmed the intended pairings, and that Paint/Outfits
+correctly span the full 602px content width.
+
+**M14 — A genuine radial Emote Wheel.** Confirmed still a plain
+flex-wrapping row of pill buttons before this wave — closing on
+selection already worked, the radial geometry never existed. Each
+clip's own `--angle` (one line of JS, no trigonometry needed there) now
+drives a standard CSS-only radial placement — rotate around the ring's
+centre by that angle, translate outward by the ring's own radius,
+rotate back by the same negative angle so every label reads upright
+regardless of where on the circle it sits. Verified directly against
+the real system: four default gestures landed at exactly 115px from
+centre at 0°/90°/180°/270° (top/right/bottom/left, a perfect square on
+the circle), each button's own computed transform matrix showing zero
+net rotation despite each having a different `--angle`, and the
+declared `:hover`/`:focus-visible` rule confirmed structurally (a small
+outward scale plus the same teal highlight) rather than "watched" —
+this project's own dev browser can't reliably observe a live transition
+(see `.claude/DEV_NOTES.md`).
+
+**Verified live throughout**, `docs/PLAYER.md` updated in both places
+this touched (the wardrobe-overlay-width account, extended rather than
+left describing only the now-superseded 560px fix; the Emote Wheel's
+own section) — zero console errors.
+
+## Version 3 — Phase 14e — Further Environmental Polish, Wave 5 (v3.1.4e)
+
+**Goal:** the phase's own final two items — the room's own furniture
+layout, and new outdoor details against the exterior walls — plus the
+phase's own closeout.
+
+**M15 — The room's furniture layout, investigated and found already
+substantially addressed.** `src/data/layoutDefault.js` itself carries a
+detailed comment describing exactly the pass Phase 14's brief asked
+for — the computer desk's own side of the room "reads top-to-bottom as
+one walk," every position checked against
+`FurnitureSystem._computeFootprintBox`'s real rotated-AABB math, not
+eyeballed — and `docs/ROADMAP.md`'s own account traces this to Version
+2's "the reading and listening corner" phase, a real interior-design
+pass predating even the completed-Version-2 state `docs/ROADMAP_V3.md`
+was itself written from. Rather than trust that account or invent
+speculative repositioning I have no reliable way to visually confirm
+improves anything (this project's own dev browser can't render a
+trustworthy screenshot — see `.claude/DEV_NOTES.md`), verified with the
+real, live `FurnitureSystem` directly: queried every placed piece's own
+actual computed footprint box and checked all 36 pairs for genuine
+overlap. Found exactly two, both already intentional and already
+documented — the notebook deliberately sits *on* the workbench (not a
+separate floor piece; see that entry's own comment), and the
+wall-mounted pinboard's own footprint (mounted well above head height)
+overlaps the floor-level workbench box by a negligible sliver. No
+actual "walk into it" collision, no illogical adjacency, nothing
+resembling "the incremental placement each piece happened to arrive
+with." The honest finding: this item doesn't need further changes —
+the third stale-brief item this phase found (after the moon and the
+door hinges), reported plainly rather than manufactured busywork.
+
+**M16 — A bench and window planters, right against the exterior
+walls.** Genuinely new, purely decorative geometry — a wooden bench
+beside the front door, and a planter box (soil + radial foliage
+clusters) under each window, reusing `Shelving.js`'s own pot-plant
+technique rather than a second way to build a plant. Deliberately no
+`FurnitureSystem` footprint or interaction of its own — "the workshop
+itself feels more lived-in from outside" names a detail, not a new
+interactable, and this stays distinct from populating the wider
+surrounding world (still a non-goal). Verified live: both planters
+landed at exactly each window's own x position with the expected width
+(window width + 0.1m), the bench at the expected offset clear of both
+the doorway and the exterior light above it, and all 30 new foliage
+leaves confirmed distinct from — not a duplicate of, and not missing
+from — the 5 pre-existing leaves on the unrelated music-cabinet plant
+(same coincidental leaf scale, different real-world position, split by
+directly reading world-matrix translations).
+
+**Phase 14 closeout.** `docs/WORLD.md` updated with the new outdoor
+detail account. Debug hooks removed from `main.js`; `.claude/launch.json`
+reverted to port 8000. This completes Phase 14 — all five waves of
+"Further Environmental Polish" are now done: the small geometry/
+material/lighting fixes (Wave 1), the three separate door-hinge bugs
+(Wave 2), Bubble's face and chat surface (Wave 3), the Wardrobe layout
+and the radial Emote Wheel (Wave 4), and this wave's furniture-layout
+investigation and outdoor details.
+
+## Version 3 — One Contribution (v3.1.5)
+
+Not a briefed phase — see `docs/CONTRIBUTIONS.md`. At the close of
+Version 3's planned phases, the model that had just finished Phase 14
+was offered the chance to add exactly one contribution of its own
+judgment: something it genuinely believed the Workshop was missing,
+sized however it saw fit, logged in a new standing document rather than
+folded anonymously into a phase account.
+
+**The Journal became a real dated log, not a single overwriting
+textarea.** Investigated first: every other system that touches time in
+this Workshop keeps real continuity — `ConversationMemory` genuinely
+persists what a resident was told, weather resumes honestly rather than
+snapping to a default after time away, `AtmosphereProfileStore` recalls
+a particular sky, and `docs/HISTORY.md` itself accumulates the project's
+own past rather than only describing its present. The one surface meant
+for the *player's* own reflection — the computer's Journal app — had
+none: every keystroke overwrote the last. `docs/HANDBOOK.md`'s own
+flagship illustration of what the Workshop values ("dust motes near a
+window") was investigated first and found to already be real and
+default-on (`main.js`'s unconditional `engine.plugins.register(dustMotesPlugin())`)
+— the right outcome to confirm, and the reason the search continued
+until it found a gap that was actually still open.
+
+`JournalStore.js` (`src/data/JournalStore.js`) is a new, small,
+standalone provider — an ordered list of `{id, createdAt, updatedAt,
+text}` entries, ordered newest-first — deliberately kept separate from
+`NotesStore` rather than an extension of it: the physical notebook prop
+on the workbench stays exactly what `JournalApp.js`'s own prior comment
+already established it as (a single page you're always mid-sentence in,
+untouched by this), while the computer's Journal becomes something a
+paper notebook genuinely isn't — a dated log you can read back through.
+`JournalApp.js` was rewritten as a real list/detail split (reusing
+`.wide-list` from `overlays.css`, not a second list implementation), a
+"New entry" button, and a small delete action per entry. A save
+migration (`SaveMigrations.js`, `CURRENT_SAVE_VERSION` 3 → 4) carries
+whatever a player had already written under the old single-blob
+`"computer-journal"` key into a first dated entry the first time their
+save loads under this version — the old `NotesStore` data itself is left
+untouched, purely additive.
+
+Verified live end-to-end via the real running engine, not an isolated
+mock: the actual `ComputerSystem`-built app instance, the actual
+`PersistenceSystem._buildEnvelope()` output (confirmed `providers.journal`
+populated, `version: 4`), and the migration function fed a realistic
+legacy envelope (confirmed the old text becomes entry one, dated to its
+own `updatedAt`, and that an envelope with no legacy journal text
+doesn't fabricate one). `docs/ARCHITECTURE.md`'s Persistence section and
+`CLAUDE.md`'s own "Where things live" updated; full account and
+reasoning in `docs/CONTRIBUTIONS.md`.
+
+## Version 3 Close-Out (v3.1.6)
+
+**Goal:** wrap up Version 3 honestly before planning Version 4 — a full
+codebase sweep, real fixes for anything small and safe enough to close
+immediately, and the closing documentation every prior version has left
+behind for whoever picks this up next.
+
+**The sweep.** Three independent passes across all 258 files under
+`src/`: a dead-code and duplication audit (full import-graph reachability
+from `main.js`, plus greps for `TODO`/`FIXME`, commented-out code, and
+reimplemented logic), a docs-mined future-work pass (every `docs/*.md`
+file's own "Known simplifications"/"Future extension points" sections,
+cross-checked against `docs/ROADMAP.md`'s actual phase history so nothing
+already-resolved got reported as still open), and a judgment-based read
+of the systems most likely to still feel unfinished (AI Mission Control,
+`host-companion/`, the asset-import pipeline, the Plugin SDK). The
+headline finding was the sweep itself: zero orphaned files, zero
+`TODO`/`FIXME` markers, and zero commented-out code anywhere in `src/` —
+a genuinely disciplined codebase, confirmed rather than assumed.
+
+**What was fixed immediately, not deferred.** The debt that did surface
+was small-scale, repeated micro-duplication — judged safe and quick
+enough to close now rather than carry into Version 4's own first phase:
+
+- `escapeHtml()`, independently reimplemented in nine files (two
+  differently-behaved copies in the same file, `WorkshopPages.js`).
+  Consolidated into `src/utils/domSafety.js` — and along the way, live
+  verification caught a real latent bug: the DOM-`innerHTML`-based
+  variant two of the nine already used does **not** actually escape `"`
+  or `'` (confirmed directly in the browser), which matters wherever the
+  result lands inside an HTML attribute value, exactly as one call site
+  (`WorkshopPages.js`'s search page) does. The canonical version is now
+  an explicit five-character regex escape instead.
+- `clamp()` (already real, at `MathUtils.js:1` — reinvented as
+  `clamp01`/`clampUnit`/`clampCoordinate`/etc. and a dozen ad hoc
+  `Math.max(min, Math.min(max, v))` chains anyway, rather than called),
+  `debounce()`, and record-id generation — each consolidated into
+  `src/utils/` (`debounce.js`, `generateId.js`) from between three and
+  twelve independent reimplementations.
+- `iconButton()`, reimplemented three times with three different
+  signatures — one pair missing `aria-label` entirely (only `title`,
+  the same weaker accessible-name gap Phase 12's own `closeButton.js`
+  consolidation had already fixed once, for a different button). Unified
+  into `src/ui/iconButton.js`, matching `closeButton.js`'s own precedent
+  exactly: always both `title` and `aria-label`, visual class per-surface.
+- A real, live bug: `WorkstationPanel.js`'s header clock and
+  `WindowOverlay.js`'s weather-panel clock both hand-rolled their own
+  0-24-hour formatting instead of using the already-consolidated
+  `TimeFormat.formatClockTime()` — silently ignoring the player's 12h/24h
+  Settings preference. Both now read it correctly, confirmed live
+  (`14.5` → `"2:30 PM"` / `"14:30"` depending on the setting).
+- `BeingLibrary.exportDefinition()` returned a pre-stringified JSON
+  string, the one export method in the whole project not shaped like
+  every other store's own `export*()` — `main.js` had been carrying an
+  explicit `JSON.parse()` workaround comment for this since Phase 7.
+  Fixed at the source (returns a plain object now, like everything else)
+  and the workaround deleted entirely, along with fixing
+  `BeingCreatorApp.js`'s own export button to use the same shared
+  `StorageUtils.downloadJSON()` every other export feature already uses.
+- A small dead CSS block (`.ai-input-row`, `computer.css`) left over
+  from an early AI-app mockup, confirmed via grep to have zero references
+  anywhere in `src/` or `docs/`.
+- One `console.log` → `console.info`, matching `SaveMigrations.js`'s own
+  established convention for migration diagnostics.
+- Stale doc claims corrected in the act of being noticed: `docs/TOOLS.md`
+  still described a limitation Phase 7 had already closed (real
+  export/import for custom calculators); `docs/COMPUTER.md` still called
+  `BrowserApp`/`AIApp` "honest placeholders" long after both became real,
+  substantial systems; `docs/WORLD.md`'s Blueprint-capture note and
+  `docs/HOST.md`'s "Workshop Phone" future-target mention were both
+  superseded by later phases that never came back to correct them;
+  `assets/README.md` was missing a cross-link to the real, working
+  model-import pipeline (`ModelLoader.js`/`ModelLibrary.js`) that already
+  exists alongside its accurate "no bundled binary assets" claim.
+
+Every fix verified live against the real running engine (not just
+`node --check`, though every touched file passed that too) — mounted
+real app instances, drove real store methods, confirmed real save
+envelopes — on a fresh port each time, per `.claude/DEV_NOTES.md`'s own
+standing guidance against module/cache staleness. Debug hooks added for
+verification were removed before this account was written, and
+`.claude/launch.json` reverted to port 8000.
+
+**What wasn't touched.** `BeingController.js`'s own `clampToRadius()`
+(a 3D vector operation, not the same kind of duplication as the scalar
+`clamp()` cases) was deliberately left alone — a research pass had
+grouped it with the others, but reading it directly showed a genuinely
+different concern, not a copy. The two `escapeHtml()` copies inside
+`src/plugins/examples/` (the reference plugins) were kept deliberately
+self-contained rather than migrated to the new shared utility: a real
+third-party plugin has no `src/utils/` to import from at all, and the
+examples are meant to model that real constraint, not a repo-internal
+convenience.
+
+**Closing documentation.** `docs/ROADMAP_V4.md` — a full draft roadmap
+for the next version, written from this sweep's own findings rather than
+invented fresh, matching `docs/ROADMAP_V3.md`'s own precedent exactly.
+`docs/HISTORY.md` gained "Reflecting, after Version 3" and "Handover to
+Version 4," matching the closing essays Version 1 and Version 2 each
+left behind. `CLAUDE.md` updated to reference `docs/ROADMAP_V4.md`
+alongside its Version 3 predecessor.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

@@ -300,9 +300,20 @@
 .overlay--wardrobe {
   background: rgba(10, 8, 6, 0.72);
 }
+/* Version 3, Phase 14 ("Further Environmental Polish") — "way too
+   small... it just needed everything inside of it to have a better
+   layout scheme." The 560px width above traces back to fixing a
+   genuine, different bug (an accidental 1280px render — see this
+   section's own comment above): once that width started actually being
+   respected, it turned out to be the wrong width for *this* app's own
+   richer content specifically, not just a return to correct. Widened to
+   a scale that gives the form room to lay out in two columns (see
+   `.wardrobe-form` below) rather than one narrow scrolling stack
+   regardless of how wide the panel itself is — still well short of the
+   old 1280px accident. */
 .overlay--wardrobe .overlay-panel {
-  width: min(560px, 90vw);
-  height: min(600px, 84vh);
+  width: min(880px, 92vw);
+  height: min(720px, 88vh);
   background: linear-gradient(180deg, var(--wood-mid), var(--wood-dark));
   border-radius: var(--radius-lg);
   border: 3px solid var(--wood-dark);
@@ -660,6 +671,16 @@
 .rest-nook-story-body summary { cursor: pointer; color: var(--brass-bright); margin: var(--space-2) 0; }
 
 /* ---------- Resident Conversation ---------- */
+/* Version 3, Phase 14 ("Further Environmental Polish") — swapped which
+   half of this surface clamps at 4 lines. It used to be each individual
+   message bubble (its own `max-height`/scrollbar below `.resident-
+   message`), while the input stayed a plain single-line field — a long
+   reply got its own nested scrollbar even though the outer `.resident-
+   conversation-messages` list was already the real scroll owner for the
+   whole conversation. Messages now render in full (no per-message
+   clamp); the *input* is what grows and caps at 4 lines with its own
+   scrollbar instead, so a long draft can't push the conversation itself
+   out of view — see `.resident-conversation-input-row textarea` below. */
 .resident-conversation-messages {
   display: flex;
   flex-direction: column;
@@ -676,12 +697,6 @@
   font-size: var(--text-sm);
   line-height: 1.5;
   white-space: pre-wrap;
-  /* Version 3, Phase 8a — caps one long message at ~4 visible lines with
-     its own scrollbar, so a long reply can't push the rest of the
-     conversation out of view. In em units (relative to this element's
-     own font-size/line-height) rather than a hardcoded px value. */
-  max-height: calc(1.5em * 4);
-  overflow-y: auto;
 }
 .resident-message-player {
   align-self: flex-end;
@@ -788,18 +803,29 @@
 }
 .resident-conversation-input-row {
   display: flex;
+  align-items: flex-end;
   gap: 8px;
 }
-.resident-conversation-input-row input {
+.resident-conversation-input-row textarea {
   flex: 1;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 999px;
+  border-radius: 18px;
   padding: 10px 16px;
   color: var(--paper);
   font-family: var(--font-body);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  resize: none;
+  /* Version 3, Phase 14 — grows with the draft (see the JS side's own
+     auto-resize on input), capped at ~4 visible lines with its own
+     scrollbar beyond that — the same em-based, 4-line cap the message
+     bubbles above used to carry individually; see this section's own
+     top comment for why it moved here instead. */
+  max-height: calc(1.5em * 4 + 20px); /* + the row's own vertical padding */
+  overflow-y: auto;
 }
-.resident-conversation-input-row input:focus { outline: none; border-color: var(--teal-bright); }
+.resident-conversation-input-row textarea:focus { outline: none; border-color: var(--teal-bright); }
 .resident-conversation-input-row button {
   font-family: var(--font-body);
   font-weight: 600;

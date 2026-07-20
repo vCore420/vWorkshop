@@ -418,6 +418,16 @@ Exterior collision is not a separate system — it's the same
 `wallColliders` list mentioned above, since a wall's box spans its full
 real thickness from interior to exterior face.
 
+**Version 3, Phase 14 ("Further Environmental Polish") — a handful of
+small outdoor details, right against the walls themselves.** A bench
+beside the front door and a wooden planter box (soil + radial foliage
+clusters, reusing Shelving.js's own pot-plant technique rather than a
+second way to build a plant) under each window — deliberately purely
+decorative, no `FurnitureSystem` footprint/interaction of their own,
+since this is "the workshop itself feels more lived-in from outside,"
+not new interactable content, and distinct from populating the wider
+surrounding world (still a non-goal — see below).
+
 **Version 3, Phase 2 ("Living Spaces") — the fascia's own trim colour,
 unified.** The door frame, baseboard, and framed-sketch frame all
 deliberately share one dark wood tone (`"#3d2a1c"` — see the baseboard's
@@ -703,7 +713,11 @@ this, not just preview it on the ghost.
 
 - **Interior detection is a single horizontal slice** — see "Interior
   Recognition" above.
-- **Blueprint capture is radius-based, not true multi-select.**
+- **Blueprint capture was radius-based, not true multi-select, as of
+  this phase** — superseded in the Builder Evolution phase, which added
+  a real multi-selection and an exact capture
+  (`_captureSelectionAsBlueprintObjects()`) alongside the original
+  radius mode; see `docs/WORLDBUILDER.md`.
 - **"Surface snapping" wasn't added as a distinct third toggle** — the
   ghost already snaps to whatever surface it raycasts against; a
   dedicated edge/corner-alignment mode is future work, not implemented

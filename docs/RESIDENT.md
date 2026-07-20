@@ -284,10 +284,13 @@ existing to use it.
 friction closed, all client-side, none changing what's actually sent to
 Ollama:
 
-- **A long message caps at four visible lines** with its own scrollbar
-  (`.resident-message`'s own `max-height`, `css/overlays.css`) rather
-  than growing indefinitely and pushing the rest of the conversation out
-  of the card's small footprint.
+- **A long draft caps at four visible lines** with its own scrollbar
+  (`.resident-conversation-input-row textarea`'s own `max-height`,
+  `css/overlays.css`) rather than growing indefinitely. Version 3, Phase
+  14 ("Further Environmental Polish") moved this cap here from the
+  message bubbles — a long *reply* now displays in full instead, since
+  the conversation list itself was always the real scroll owner; a
+  second, nested scrollbar on one bubble was never actually needed.
 - **A reply reveals word-by-word** once it's fully back —
   `ResidentConnection.sendMessage()` still asks Ollama for a single,
   complete response (`stream: false`, unchanged); the reveal is a purely
@@ -721,6 +724,22 @@ the exact same face plane and sparkle particles — only the outer
 silhouette actually varies, which is what keeps every embodiment
 unmistakably "the same kind of thing," never a different creature
 depending on which shape happened to be chosen.
+
+**Version 3, Phase 14 ("Further Environmental Polish")** — the one
+shared face plane's own fixed z-offset had only ever been tuned against
+the flat cube face; on the curved `floatingOrb`, the sphere's own
+surface sits *in front of* that offset everywhere except a small dot
+dead-centre (`z_surface(r) = sqrt(RADIUS² − r²)` crosses below the old
+offset only past r≈0.051, well inside the plane's own extent), reading
+as "rarely showing more than a dot or two." Pushed out just past
+`RADIUS` itself so the plane clears every shape's own silhouette
+completely, not just the flat ones. Separately, the plane's own
+per-frame `lookAt()` toward the player was completely undamped — a
+snap, not a turn — invisible on the round orb (nothing to compare it
+against) but visibly "hunting" against the cube's own hard, flat edges,
+since the body itself barely rotates independently. Now eased with a
+`Quaternion.slerp()` each frame, the same exponential-smoothing shape
+`MathUtils.js`'s own `damp()` already uses for scalars elsewhere.
 
 `color`, `glow`, and `scale` — previously stored, never read — are now
 genuinely applied: `color` tints the body's own material directly

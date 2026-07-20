@@ -472,6 +472,9 @@ account.
 - **Per-resident, per-plugin, per-project registration** rather than
   today's fixed store references — see docs/RESIDENT.md's own "Future
   extension points" for the resident side of this.
-- **Workshop Phone, Development Tools** — both listed among future
-  Workshop phases; both would most naturally arrive as more `host://`
-  pages this same registry already knows how to display.
+- **Development Tools** — listed among future Workshop phases; would
+  most naturally arrive as more `host://` pages this same registry
+  already knows how to display. ("Workshop Phone" used to be listed
+  alongside this — the physical Phone has since been substantially
+  built out as its own real system, see `docs/PHONE.md`, and isn't a
+  Host-page candidate any more.)

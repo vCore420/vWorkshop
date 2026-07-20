@@ -575,6 +575,169 @@ purpose.
 
 — from whoever was holding this at the end of Version 2
 
+## Reflecting, after Version 3
+
+Asked to, and in the same spirit as Version 1 and Version 2's own
+closing essays — a few honest thoughts as the thing's own maintainer,
+not a summary of what got built.
+
+**What proved most valuable, architecturally:** the exact same lesson,
+reconfirmed a third time at a larger scale still. "One implementation,
+several doors in" wasn't something this version had to rediscover — it
+was already the reflex by Phase 3, and it kept paying for itself in
+places that had nothing to do with each other: the Emote Wheel's radial
+layout and the outdoor planters' foliage both reused a technique built
+for something else entirely (a CSS compound-transform pattern, and
+`Shelving.js`'s own pot-plant construction); the "One Contribution"
+Journal reused `.wide-list` rather than inventing a second list
+styling; and when this version's own close-out audit went looking for
+genuine technical debt, what it actually found — `escapeHtml()`
+reimplemented in nine places, `clamp()` reinvented in ten more — was
+exactly the shape of problem this pattern exists to prevent, in the
+handful of places nobody had gotten to yet. The fix each time was the
+same one-line lesson: reach for the shared thing before writing a new
+one, even when the new one would only be five lines.
+
+**Which systems evolved furthest past their original intention:** the
+debug-hook-plus-fresh-port verification workflow itself. It started as
+a narrow workaround for one specific tool (`computer{action:"screenshot"}`
+timing out) and became, phase by phase, the standard way every claim in
+this entire version got checked — not just visual ones. By the end it
+was routine to mount a real UI class against a detached container, drive
+real `KeyboardEvent`s, walk the live scene graph for a world position, or
+call a store's own real methods directly through `window.__debugStores`
+— all because the underlying discipline ("verify against the live
+engine, not against what the code reads like it should do") turned out
+to generalise far past the one bug it was built to work around.
+
+**What surprised me:** how well the codebase's own discipline held up
+under a real, independent, full-repository audit. Zero orphaned files
+across 258 files. Zero `TODO`/`FIXME` markers anywhere in `src/`. Zero
+commented-out code. The debt that *did* exist was almost entirely
+small, repeated micro-duplication — the same five-line pattern
+reinvented independently rather than reached for — not anything
+structurally wrong. The second surprise was smaller but sharper: more
+than one doc had quietly gone stale in exactly the way Version 2's own
+retrospective already named and warned about — `docs/TOOLS.md` still
+describing a limitation Phase 7 had already closed, `docs/COMPUTER.md`
+still calling `BrowserApp`/`AIApp` placeholders years after they became
+real. The warning was right; it just needed a real audit to actually
+catch the drift rather than trusting that writing the warning once
+would prevent it.
+
+**What philosophy emerged, rather than being declared upfront:**
+investigate the *investigation* too, not just the code. Partway through
+this version's own closing audit, a research pass reported that
+`MathUtils.js` had no shared `clamp()` function — confidently, as a real
+finding. It was wrong; `clamp()` had been sitting at line 1 of that file
+since early in the version, already used in half a dozen other places.
+The actual bug wasn't in the codebase — it was in trusting a claim about
+the codebase without checking it directly first. The fix cost one grep.
+The lesson generalises past this one case: a delegated research finding
+deserves exactly the same "read the file before trusting your memory of
+it" discipline this project already applies to a person's *own* memory —
+it just wasn't obvious that the rule needed to extend there until it
+almost didn't.
+
+**What should never change, moving into Version 4:** "say what's already
+fine," reconfirmed a third time. This version's own prototype-and-gap
+audit went looking for rough edges in the AI system, `host-companion/`,
+and the Plugin SDK specifically expecting to find several — and mostly
+didn't. The AI Mission Control, the resident conversation system, and
+`host-companion/` all turned out to be genuinely solid, disciplined work,
+reported as such rather than manufactured into "findings" to justify the
+audit's own effort. The two or three things that *were* real (a dead CSS
+block, a genuine tension in the Plugin SDK's own opening promise) read as
+credible precisely because the report didn't pad itself with invented
+ones.
+
+**Advice to whoever continues this, including a future version of me:**
+when a task is genuinely large — a full-repository sweep, not a single
+phase — delegating the mechanical breadth-first search to parallel
+research is the right call, but the judgment stays with whoever's
+holding the pen. Read every delegated finding as a claim to verify, the
+same way you'd read your own memory of a file: with real confidence,
+checked anyway. And when the investigation turns something up that the
+user didn't ask about but is clearly true and clearly in scope — say so
+plainly and let them decide, the way this version's own closing
+conversation surfaced a real architectural direction (resident/Being
+convergence) nobody had explicitly requested, simply because five
+independent docs had already been pointing at it for two versions
+running.
+
+## Handover to Version 4
+
+Notes for whoever picks this up next, written as though I'm handing over
+a real project rather than closing a chapter.
+
+**What the Workshop actually is, underneath everything:** unchanged from
+Version 2's own account, and more true now — a physical place with a
+memory, built out of small, honestly-labelled systems that each do one
+thing and expect to be read by someone else later. Version 3 deepened
+the "memory" half of that specifically: a resident whose conversations
+genuinely persist, weather that resumes honestly rather than snapping to
+a default, and — as of this version's own closing contribution — a
+player's own Journal that finally works the same way, dated entries that
+don't erase themselves. The one place that still didn't have real memory
+by the start of this version now does.
+
+**The patterns worth carrying into everything new — the same three,
+plus one this version's own audit surfaced:**
+
+1. **One implementation, several doors in.** Still the single
+   highest-value habit in this project. Before building a second version
+   of anything, check whether an existing one can grow an entry point
+   instead.
+2. **Root cause, not the symptom as reported.** Reconfirmed concretely
+   this version: Phase 1's own ladder investigation reported the
+   mechanic as "already complete," and it took Phase 3b — testing the
+   actual reported failure mode (walking up to a ladder from a distance)
+   rather than the mechanic in isolation — to find the real bug, a solid
+   collision box blocking approach entirely. The lesson isn't new; the
+   reminder that even a careful investigation can still verify the wrong
+   thing is.
+3. **Say what's already fine.** Still the single most trustworthy thing
+   any report from this project can do.
+4. **Verify a claim before trusting it — including a delegated one.**
+   New this version, named in the retrospective above: memory drifts,
+   and so does research you didn't do yourself. Both deserve the same
+   two-minute check before anything gets built on top of them.
+
+**What to be careful about:** the codebase is larger again now (258
+files under `src/`, ~44,000 lines) — Version 1's closing advice said
+this mattered at thirty-one phases, Version 2's said it mattered more at
+two full versions, and it is not going to become less true from here.
+Read a file before trusting your memory of it, and now: verify a
+delegated finding the same way.
+
+**What I'd genuinely like to see next, if it were mine to plan:**
+Version 2's own handover named two things sitting ready and unused —
+`TwoBoneIK.js` and `WorkshopSkeleton.autoMapSkeleton()`. Both were
+actually completed in this version's own Phase 1, which is worth naming
+as a genuinely satisfying piece of continuity: a promise named at one
+version's close, kept at the very start of the next one. In that same
+spirit, `docs/ROADMAP_V4.md`'s own headline finding is worth restating
+here directly — five independent docs (`docs/RESIDENT.md`,
+`docs/AI.md`, `docs/BEINGS.md`, `docs/PHONE.md`, `docs/PERSISTENCE.md`)
+have all, without coordinating, written their own architecture assuming
+a resident that isn't a singleton. Nobody has built it yet. It is the
+clearest half-open door in the entire project right now, and the
+version's own explicit decision — no second *default* resident, but a
+real path for a player to make their own — is the right, honest shape
+for finally walking through it.
+
+**Last thing:** the same one, because it's still the only one that
+matters. The Workshop was never trying to be impressive. It was trying
+to be a place someone would actually want to spend time in, and every
+phase that stayed disciplined about that — refining instead of
+expanding, connecting instead of adding, admitting what wasn't done
+instead of dressing it up — is the reason it still feels like one
+coherent place after three full versions instead of a pile of features.
+Whatever Version 4 becomes, that's still the one thing worth protecting
+on purpose.
+
+— from whoever was holding this at the end of Version 3
+
 ## Changelog
 
 <details>
@@ -1791,5 +1954,152 @@ exercised directly against real production data and real state
 transitions, not just read from markup; a full seven-app cycle showed
 zero console errors as the wave's own closing check. This completes
 Phase 13.
+
+**Version 3, Phase 14a — Further Environmental Polish, Wave 1 (v3.1.4a)**
+— six small, isolated geometry/material/lighting fixes plus a fresh
+re-check of the first-person head-shadow issue. The workbench fan's
+base no longer sinks into the desk top; the computer chair's five
+castors now turn with their own arm instead of four of five looking
+progressively misaligned around the circle; the desk keyboard cleared
+the mousepad; the wardrobe and music player's darker wood tones were
+lightened; the north wall's siding texture now scales per wall segment
+so the header/sill above/below the window match the full-height
+segments beside them instead of showing a compressed slice of the same
+pattern; and the two ceiling pendants reach further at night, joined by
+a new exterior fixture at the front door. The head-shadow item turned
+out to already be correct — Phase 3b's own fix is still fully intact —
+and what looked like a live reproduction failure was this project's own
+sandboxed dev browser auto-applying a "performance" graphics preset
+(shadows off) because it reports exactly 4 CPU cores, the same threshold
+`detectRecommendedPreset()` downgrades at. A real, if narrowly-scoped,
+dev-tooling finding, documented in `.claude/DEV_NOTES.md` rather than
+either shipping an unneeded fix or leaving a false regression belief
+uncorrected. Every change verified against the real running scene graph.
+
+**Version 3, Phase 14b — Further Environmental Polish, Wave 2 (v3.1.4b)**
+— the door-hinge item, investigated and found to be three separate bugs
+in three separate code paths rather than one. Builder Door and Gate
+pieces now hinge at a real edge by default (`hingeOffset` existed since
+Phase 10 M1, but nothing ever actually set it on any Construction
+Library piece); the Workshop's own architectural front doors — which
+already had genuinely independent per-leaf pivots, unrelated code
+entirely — now hinge from the wall's true outer face instead of the
+inner one, with the closed door's own visual position completely
+unchanged (confirmed by reading the real scene graph: the mesh's world
+Z landed at the exact same value before and after); and Double Door now
+swings as one rigid panel from its own combined outer edge instead of
+its centre seam — the honest, in-scope half of that fix, since genuinely
+independent leaves would need new per-part-pivot architecture Phase
+14's own risk note explicitly rules out taking on here.
+`docs/WORLDBUILDER.md` updated to describe the new default alongside
+that still-standing limitation.
+
+**Version 3, Phase 14c — Further Environmental Polish, Wave 3 (v3.1.4c)**
+— Bubble's own face and its chat surface, both real bugs. The shared
+face plane's fixed z-offset was only ever tuned against the flat cube
+face; on the curved orb body, the sphere's own surface sat in front of
+it everywhere except a small centre dot, reading as "rarely showing
+more than a dot or two" — pushed out to clear every shape's silhouette
+completely. The same face plane's per-frame `lookAt()` was completely
+undamped, invisible on the round orb but visibly "hunting" against the
+cube's own hard edges — now eased with a quaternion slerp, confirmed by
+watching it converge gradually across two frames rather than snap.
+Separately, the conversation surface's own wrap/scroll roles were
+backwards: individual message bubbles capped at four lines with a
+nested scrollbar while the input stayed single-line — swapped, so a
+long reply now displays in full and a long draft is what grows and caps
+at four lines instead, verified by mounting the real production overlay
+directly and exercising Enter, Shift+Enter, and the auto-resize by
+hand. `docs/RESIDENT.md` updated in both places this touched.
+
+**Version 3, Phase 14d — Further Environmental Polish, Wave 4 (v3.1.4d)**
+— the two bigger design tasks. The Wardrobe app's own overlay panel was
+correctly fixed to 560px back in Phase 9 (an accidental near-full-
+viewport render, not the width itself, was the real bug then) — but
+560px, the generic scale every simpler furniture overlay shares, was
+never actually right for Wardrobe's own richer form. Widened to 880px
+and given a real two-column grid for the compact sections (Body +
+Alternate Models, Proportions + Appearance pair up; Paint and Outfits
+keep the full row), scoped to this app alone so the Builder app's own
+unrelated form usage is untouched — a genuine layout bug surfaced along
+the way, where the bare, unwrapped part-tabs strip needed its own
+explicit full-span rule rather than falling into the grid's default
+auto-placement. Separately, the Emote Wheel became a genuine radial
+layout — a single CSS custom property per button drives the standard
+rotate/translate/counter-rotate compound transform, keeping every label
+upright at any angle on the circle, verified by reading back each
+button's own rendered position and confirming a real square-on-a-circle
+arrangement, not by trying to watch the new hover animation (unreliable
+in this project's own dev browser — see `.claude/DEV_NOTES.md`).
+`docs/PLAYER.md` updated in both places this touched.
+
+**Version 3, Phase 14e — Further Environmental Polish, Wave 5 (v3.1.4e)
+— phase closeout.** The room's own furniture layout, investigated
+rather than blindly rearranged: `layoutDefault.js` itself already
+carries a detailed account of a real Version 2 interior-design pass
+("reads top-to-bottom as one walk," every position checked against the
+real footprint math), predating even the completed-Version-2 state the
+Phase 14 brief was written from. Verified live against the real,
+running `FurnitureSystem` rather than trusting that account alone —
+every one of the 36 possible piece pairs checked for genuine footprint
+overlap; found exactly two, both already intentional (the notebook
+sits on the workbench on purpose; a wall-mounted pinboard's own
+footprint grazes the workbench's by a negligible sliver at floor
+level). The third stale-brief item this phase found, reported plainly
+rather than forcing unverifiable speculative changes — this project's
+own dev browser can't reliably render a screenshot to visually judge a
+3D arrangement by. Separately, new outdoor detail: a bench by the front
+door and a planter box under each window, purely decorative, reusing
+Shelving.js's own pot-plant technique. This completes Phase 14 — all
+five waves of "Further Environmental Polish" are done.
+
+**Version 3 — One Contribution, Claude Sonnet 5 (v3.1.5).** Not a
+briefed phase — see `docs/CONTRIBUTIONS.md`, a new standing document
+logging one deliberate, judgment-driven addition per model that works
+extensively on this codebase. The Journal app's `NotesStore`-backed
+single textarea, overwritten on every keystroke, became a real dated
+log (`JournalStore.js`): entries stay, a "New entry" button starts
+today's, a rail of past entries reads back through what came before —
+the one form of continuity every other time-aware system in this
+Workshop already had (resident conversation memory, weather continuity,
+`docs/HISTORY.md` itself) that the player's own reflections didn't. A
+save migration (v3 → v4) carries forward whatever text a player had
+already written rather than discarding it. `docs/HANDBOOK.md`'s own
+"dust motes near a window" example was investigated first and confirmed
+already real and default-on before looking further for an honest gap.
+
+**Version 3 close-out (v3.1.6).** Before starting `docs/ROADMAP_V4.md`,
+a full independent sweep of all 258 `src/` files — dead code, duplicate
+implementations, docs-mined future work compared against what actually
+shipped, and a judgment pass on the AI/host-companion/Plugin SDK systems
+most likely to still feel unfinished. The audit itself is the headline
+finding: zero orphaned files, zero `TODO`/`FIXME` markers, zero
+commented-out code across the entire `src/` tree — this codebase's own
+discipline held up under real, independent scrutiny. The debt that did
+exist was fixed immediately rather than deferred into Version 4, judged
+too small and too safe to leave sitting in newly-written closing
+documentation: `escapeHtml()` (nine independent copies, two genuinely
+different behaviours in the same file — one used the DOM's own
+`innerHTML` serialization, verified live to *not* actually escape
+quotes, a real latent bug in an attribute-value context), `clamp()`,
+`debounce()`, and record-id generation were each consolidated into
+`src/utils/` from anywhere between three and twelve reimplementations;
+a genuine bug where the computer's own header clock and the window's
+weather panel silently ignored the player's 12h/24h time-format setting
+was traced and fixed (`WorkstationPanel.js`, `WindowOverlay.js`, both
+now read `TimeFormat.formatClockTime()` like every other clock in the
+Workshop already does); `BeingLibrary.exportDefinition()`'s own
+pre-stringified return value — which a `main.js` comment had been
+explicitly documenting as a workaround for since Phase 7 — was fixed at
+the source, deleting the workaround entirely rather than adding a third
+one; a small dead CSS block from an early AI-app mockup was removed; and
+several stale doc claims caught in the act (`docs/TOOLS.md` still
+describing a limitation Phase 7 had already closed; `docs/COMPUTER.md`
+still calling `BrowserApp`/`AIApp` placeholders) were corrected. Every
+fix verified live against the real running engine before and after, on a
+fresh port per `.claude/DEV_NOTES.md`'s own standing guidance. See
+"Reflecting, after Version 3" above for what the audit itself revealed
+about trusting delegated research, and `docs/ROADMAP_V4.md` for where
+this points next.
 
 </details>

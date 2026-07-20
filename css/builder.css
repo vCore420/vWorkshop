@@ -134,6 +134,41 @@
   display: none; /* Chrome/Safari/modern Edge */
 }
 
+/* Version 3, Phase 14 ("Further Environmental Polish") — the Wardrobe's
+   own form used to be one long vertical stack of sections regardless of
+   how wide the panel around it actually was, the real cause behind "way
+   too small... needed a better layout scheme" (the panel itself had
+   already been widened — see .overlay--wardrobe .overlay-panel — but a
+   wider panel alone did nothing for content that never used the extra
+   width). A two-column grid, with each section spanning both columns by
+   default (`.builder-section` below) — only the short, tab/slider-only
+   sections marked `.builder-section-compact` (Body, Alternate Models,
+   Proportions, Appearance) opt into sharing a row, so Paint and Outfits
+   still get the panel's full width. Scoped to `.wardrobe-form`
+   specifically (a class only WardrobeApp.js's own form carries), never
+   touching the Builder app's own unrelated use of `.builder-form`. */
+.wardrobe-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: var(--space-4);
+  align-content: start;
+}
+.wardrobe-form .builder-section {
+  grid-column: 1 / -1;
+}
+.wardrobe-form .builder-section-compact {
+  grid-column: auto;
+}
+/* buildPartTabs() returns a bare, unwrapped strip (no .builder-section —
+   see WardrobeApp.js's own render()), so it needs the same full-span
+   treatment named explicitly. The direct-child combinator matters here:
+   the Body section's own body-model tabs reuse this identical class
+   name one level deeper (nested inside a .builder-section that's already
+   correctly full-width), and must NOT also match this rule. */
+.wardrobe-form > .wardrobe-part-tabs {
+  grid-column: 1 / -1;
+}
+
 .builder-section {
   margin-bottom: var(--space-4);
   padding-bottom: var(--space-3);

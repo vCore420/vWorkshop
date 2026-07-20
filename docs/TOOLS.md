@@ -125,11 +125,14 @@ page.
 **Calculators as Workshop assets.** `ToolsStore` follows the identical
 shape `ObjectLibraryStore` already established for Builder-made objects:
 `create`/`update`/`duplicate`/`remove`, `category`, `tags`, a `version`
-field, and the same "safe versioning" defensive defaults on load. File-
-based import/export and sharing were named in the brief but aren't
-implemented this phase — see "Known limitations" below; no other asset
-type in the Workshop (objects, poses, animations) has real file-based
-import/export either, so this isn't a gap unique to calculators.
+field, and the same "safe versioning" defensive defaults on load.
+File-based import/export and sharing were named in the brief but weren't
+implemented this phase — that gap was closed in Version 3, Phase 7
+("Sharing the Workshop"): `ToolsStore.exportCustomCalculator()`/
+`importCustomCalculator()` are real, wired into the Tools panel's own UI
+(`toolsPanelView.js`) and registered with `AssetService`, the same as
+every other exportable Workshop asset — see `docs/PERSISTENCE.md`'s
+Import & Export section and `docs/ASSETS.md`.
 
 ## Tool Storage, the Workbench, and Projects
 
@@ -199,9 +202,6 @@ you last calculated, whether or not it ever got saved anywhere.
   above) — checking individual sides works correctly either way, but the
   form doesn't auto-manage them for you the way the source application's
   own UI did.
-- **No file-based import/export or sharing for custom calculators** —
-  consistent with every other asset type in the Workshop today, and a
-  real future extension point once any asset type gets this treatment.
 - **The formula language is intentionally arithmetic-only** — no
   conditionals, no per-formula references to another formula's own
   output. A calculator whose logic genuinely needs branching (like most

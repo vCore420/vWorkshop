@@ -28,9 +28,12 @@ Its purpose is to become somewhere worth returning to.
    project's deployment story. Three.js loads from a CDN via the import
    map in `index.html`.
 2. **Read the file before trusting your memory of it.** The codebase is
-   ~44,000 hand-written lines across ~245 files. Both previous versions'
-   closing retrospectives (in `docs/HISTORY.md`) name this as the single
-   most important habit, and both were right.
+   ~50,000 hand-written lines across ~260 files under `src/` alone (a
+   Version 3 close-out audit measured this directly rather than trusting
+   the previous figure, which had already drifted). Every previous
+   version's closing retrospective (in `docs/HISTORY.md`) names this as
+   the single most important habit, and all of them were right —
+   including about this exact number quietly going stale.
 3. **One implementation, several doors in.** Before building a second
    version of anything — a second form renderer, a second settings
    surface, a second way to browse a list — check whether an existing
@@ -81,7 +84,17 @@ versions' closing reflections and the Version 2 → 3 handover notes.
 `docs/ROADMAP.md` is the per-phase account of everything built so far;
 `docs/ROADMAP_V3.md` is the independent reviewer's draft of where
 Version 3 could naturally go (a recommendation, not a commitment).
+`docs/ROADMAP_V4.md` is the equivalent draft for Version 4, written from
+a full Version 3 codebase sweep (dead code, duplication, docs-mined
+future work, a judgment pass on what still feels unfinished) rather than
+invented fresh — same status: a recommendation, not a commitment.
 `docs/RELEASE_REVIEW.md` is the v2.2.3d independent release assessment.
+`docs/CONTRIBUTIONS.md` is a standing record, not a phase account: each
+model that has worked on this codebase has been offered the chance to add
+one deliberate, judgment-driven contribution of their own choosing and
+log it there. Read it for a sense of what past sessions believed the
+Workshop was missing, and add your own entry if you're ever offered the
+same opportunity.
 
 ## Conventions
 

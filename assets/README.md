@@ -28,6 +28,15 @@ itself and two Google Fonts, both from a CDN — see `index.html`'s
 comment on vendoring Three.js locally if fully offline use matters
 later).
 
+**This is about what the Workshop ships, not what it can load.** A real,
+working import pipeline for a *player's own* `.glb`/`.gltf` models and
+images already exists — `src/beings/ModelLoader.js`/`ModelLibrary.js`
+and `src/systems/ImageLibraryStore.js`, reachable from the Being Creator
+and the Builder's own "Import Model…" button — and would be reused
+directly by any future phase that adds bundled first-party models,
+rather than building an import path from scratch. See `docs/ASSETS.md`
+for the full account.
+
 ## Replacing a placeholder later
 
 Every placeholder call site is isolated on purpose:

@@ -808,6 +808,18 @@ placed objects, each with its own hinge — not attempted here for the
 sake of staying inside the existing behaviour system rather than
 special-casing one construction piece.
 
+**Version 3, Phase 14 ("Further Environmental Polish")** — `hingeOffset`
+existed since Phase 10, but every one of Door, Double Door, and Gate
+still shipped with the property's own `0` default, so a freshly placed
+piece pivoted around its own centre until a player found and edited its
+properties panel. All three now carry a real default: `Door` and `Gate`
+hinge at their own single leaf/post's outer edge; `Double Door` hinges
+at the combined two-leaf unit's own outer edge — the honest, in-scope
+half of this fix, distinct from the still-unaddressed "two independent
+leaves" limitation described above. The properties panel still lets a
+player flip the side or return to the old centre-pivot (`0`) per
+instance, exactly as before.
+
 **A live search filter for the other three tabs (Version 3, Phase 9 —
 "Creative Flow").** Construction's own seven-group organisation above
 solved "the catalog has grown well past its original size" for that one

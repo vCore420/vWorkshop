@@ -295,26 +295,6 @@
 }
 .browser-frame.active { display: block; }
 
-/* AI app: a mock input, deliberately disabled */
-.ai-input-row {
-  display: flex;
-  gap: 8px;
-  margin-top: 12px;
-}
-.ai-input-row input {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 6px;
-  padding: 10px 12px;
-  color: var(--paper-dark);
-  font-family: var(--font-body);
-}
-.ai-input-row input::placeholder {
-  color: var(--paper-dark);
-  opacity: 0.6;
-}
-
 /* Media app: now-playing strip, reflecting the stereo's real state */
 .now-playing {
   display: flex;
@@ -368,6 +348,120 @@
 }
 .media-open-library:hover {
   border-color: var(--screen-glow);
+}
+
+/* ---------- Journal app (One contribution — see docs/CONTRIBUTIONS.md) ----------
+   A list/detail split, reusing .wide-list (overlays.css) for the entry rail
+   rather than inventing a second list styling — the same "made of the same
+   material language" instinct this file's own top comment already names. */
+.journal-app {
+  display: flex;
+  gap: 18px;
+  min-height: 55vh;
+}
+.journal-rail {
+  width: 240px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+.journal-new-entry {
+  background: rgba(127, 216, 196, 0.15);
+  border: 1px solid rgba(127, 216, 196, 0.4);
+  color: var(--screen-glow);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.journal-new-entry:hover { background: rgba(127, 216, 196, 0.25); }
+
+.journal-entry-list {
+  overflow-y: auto;
+  min-height: 0;
+}
+.journal-entry-list li {
+  display: flex;
+  align-items: stretch;
+  padding: 0;
+  overflow: hidden;
+}
+.journal-entry-list li.active { background: rgba(184, 134, 59, 0.22); }
+.journal-entry-select {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: none;
+  border: none;
+  color: inherit;
+  padding: var(--space-3);
+  cursor: pointer;
+  font-family: inherit;
+}
+.journal-entry-select .item-title { color: var(--paper); }
+.journal-entry-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.journal-entry-delete {
+  flex-shrink: 0;
+  align-self: center;
+  margin-right: 10px;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--paper-dark);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+.journal-entry-list li:hover .journal-entry-delete,
+.journal-entry-list li:focus-within .journal-entry-delete {
+  opacity: 1;
+}
+.journal-entry-delete:hover { border-color: #d9887a; color: #d9887a; }
+
+.journal-editor {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.journal-editor-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--paper-dark);
+  margin-bottom: 8px;
+}
+.journal-entry-textarea {
+  flex: 1;
+  min-height: 46vh;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 14px;
+  color: var(--paper);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  resize: vertical;
+}
+.journal-entry-textarea:focus { outline: none; border-color: var(--screen-glow); }
+
+@media (max-width: 700px) {
+  .journal-app { flex-direction: column; min-height: 0; }
+  .journal-rail { width: 100%; }
+  .journal-entry-list { max-height: 30vh; }
 }
 
 /* Settings app */

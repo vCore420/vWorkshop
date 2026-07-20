@@ -364,14 +364,36 @@ from reading the CSS alone:
 Fixed by removing the conflicting class/rule entirely (the panel never
 needed to flex-grow — every other overlay material's own panel just
 takes its explicit width/height and lets `.overlay`'s own centring do
-the rest) and adding the missing `flex-direction: column`. The panel now
-genuinely renders at the same 560px width every other piece of furniture
-already uses, with the heading correctly stacked above the split
-preview/form layout — verified live with real DOM measurements (panel
-width, child positions, and a full sweep for any element overflowing
-the form's own bounds), not assumed from the CSS. See
-`css/overlays.css`'s own `.overlay--wardrobe` comment for the complete
-account.
+the rest) and adding the missing `flex-direction: column`. The panel
+then genuinely rendered at the same 560px width every other piece of
+furniture already uses, with the heading correctly stacked above the
+split preview/form layout — verified live with real DOM measurements
+(panel width, child positions, and a full sweep for any element
+overflowing the form's own bounds), not assumed from the CSS.
+
+**That 560px turned out to be the wrong fix for this specific app
+(Version 3, Phase 14, "Further Environmental Polish").** Once the panel
+correctly respected its own declared width, 560px — the generic scale
+every *other* furniture overlay's own simpler content already fits —
+was never actually right for Wardrobe's own richer form (body-model
+tabs, part tabs, proportions, appearance, paint, outfits): "way too
+small... it just needed everything inside of it to have a better layout
+scheme." Widened to 880px (short of the old 1280px accident, but wide
+enough to matter), and `WardrobeApp.js`'s own form gained a genuine
+two-column grid (`.wardrobe-form`, scoped to this app alone so the
+Builder app's own unrelated `.builder-form` usage is untouched) — the
+compact, tab/slider-only sections (Body, Alternate Models, Proportions,
+Appearance) now sit two to a row instead of stacking one narrow column
+regardless of how much width the panel actually has; Paint and Outfits
+keep the full row. Verified live by mounting the real overlay and
+reading back each section's own rendered position — confirmed the
+intended pairings land correctly, including one genuine layout bug this
+surfaced along the way: `buildPartTabs()`'s own bare, unwrapped strip
+(no `.builder-section` of its own) needed its full-span rule named
+explicitly, since the grid's default auto-placement squeezed it into a
+narrow column otherwise. See `css/overlays.css`'s own `.overlay--wardrobe`
+comment and `css/builder.css`'s own `.wardrobe-form` comment for the
+complete account.
 
 **The wardrobe was completely unreachable when first added ("Living
 Refinement" — see docs/ROADMAP.md).** The same root cause
@@ -727,7 +749,7 @@ where it came from.
 ### The Emote Wheel: plays assets, decides nothing
 
 `EmoteWheelSystem.js` (toggled with **G**) is deliberately almost
-nothing: it lists every non-movement clip in the library and calls
+nothing: it reads every non-movement clip in the library and calls
 `PlayerAnimationSystem.play(clipId)` when one is picked. "The Emote Wheel
 should simply play animation assets" is true by construction — this file
 has never seen a pose, a frame, or a pivot name. It closes itself the
@@ -736,6 +758,17 @@ open as a persistent menu, and briefly locks movement/look while open
 (the same `CameraSystem.lock()`/`unlock()` every overlay already uses) so
 the mouse can click a button — given how briefly it's ever open, this
 reads as a quick glance down at a gesture list, not a mode switch.
+
+**Version 3, Phase 14 ("Further Environmental Polish")** — a genuine
+radial layout now, not a wrapping row of pill buttons: each clip gets a
+`--angle` custom property (`_render()`'s own JS, one line per clip, no
+trigonometry needed there), and `css/main.css` places every button on
+the ring with a single rotate/translate/counter-rotate compound
+transform — the standard CSS-only technique for a circular layout that
+keeps every label upright regardless of where on the circle it sits.
+Same close-on-pick behaviour, untouched; new hover/focus state (a small
+outward scale plus the same teal highlight the rest of the Workshop's
+own interactive elements already use).
 
 **Version 3, Phase 10 ("Real Assets, Honestly Introduced")** gave the
 wheel real default content — `AnimationClips.js`'s own `DEFAULT_ANIMATION_CLIPS`

@@ -247,8 +247,11 @@ this one or the Workbench's.
 ## Known simplifications (by design, for this phase)
 
 - **Axis-aligned screen projection**, not perspective-correct — see above.
-- **No real browser or AI.** `BrowserApp` and `AIApp` are honest
-  placeholders (see `docs/ROADMAP.md`, Phase 4).
+- **`BrowserApp` and `AIApp` were honest placeholders as of Phase 4** —
+  both became real, substantially-built systems in later phases
+  (`docs/BROWSER.md`, `docs/AI.md`) and shouldn't be described as
+  placeholders any more; this line is kept only as a historical marker of
+  when that changed.
 - **Desktop-sized assumptions, mostly.** `WorkstationPanel`'s rail/content
   layout hasn't been reflowed for a narrow viewport — see the touch-input
   item in `docs/ROADMAP.md`. One specific accessibility problem this
