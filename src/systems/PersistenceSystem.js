@@ -1,5 +1,6 @@
 import { StorageUtils } from "../utils/StorageUtils.js";
 import { CURRENT_SAVE_VERSION, migrateEnvelope } from "./SaveMigrations.js";
+import { debounce } from "../utils/debounce.js";
 
 const SAVE_KEY = "workshop:save";
 const AUTOSAVE_INTERVAL_MS = 20000;
@@ -34,6 +35,7 @@ export class PersistenceSystem {
     this.lastSaveFailedAt = null;
     // Workshop Refinement phase (Pass A) — see save()'s own comment.
     this._suppressSave = false;
+    this._scheduleSave = debounce(() => this.save(), SAVE_DEBOUNCE_MS);
   }
 
   init(engine) {
@@ -54,14 +56,6 @@ export class PersistenceSystem {
       if (document.visibilityState === "hidden") this.save();
     });
     this._autosaveTimer = setInterval(() => this.save(), AUTOSAVE_INTERVAL_MS);
-  }
-
-  _scheduleSave() {
-    if (this._saveDebounceTimer) clearTimeout(this._saveDebounceTimer);
-    this._saveDebounceTimer = setTimeout(() => {
-      this._saveDebounceTimer = null;
-      this.save();
-    }, SAVE_DEBOUNCE_MS);
   }
 
   registerProvider(key, provider) {

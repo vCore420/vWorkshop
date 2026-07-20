@@ -3,6 +3,7 @@ import { playAmbientTrack, createNoiseSource, createNatureAmbience, playPaperShu
 import { CameraSystem } from "./CameraSystem.js";
 import { InteriorSystem } from "./InteriorSystem.js";
 import { EnvironmentSystem } from "./EnvironmentSystem.js";
+import { clamp } from "../utils/MathUtils.js";
 
 // Atmosphere phase — "indoor ambience, outdoor ambience... audio should
 // respond naturally to location." One shared lowpass filter downstream
@@ -206,7 +207,7 @@ export class AudioSystem {
   }
 
   setVolume(v) {
-    this.volume = Math.max(0, Math.min(1, v));
+    this.volume = clamp(v, 0, 1);
     if (this.masterGain) this.masterGain.gain.linearRampToValueAtTime(this.volume * this._masterMultiplier, this.context.currentTime + 0.1);
   }
 

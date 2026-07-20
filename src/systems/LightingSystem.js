@@ -165,9 +165,16 @@ export class LightingSystem {
     const roomSystem = this.engine.getSystem(RoomLayoutSystem);
     const sockets = roomSystem?.room?.ceilingLightSockets ?? [];
     for (const pos of sockets) {
-      const light = new THREE.PointLight("#ffe4b8", 0.9, 6, 2);
+      // Phase 14 ("Further Environmental Polish") — "more generally lit
+      // at night — not more fixtures, just more spread from the existing
+      // main lighting." Only these two ceiling pendants (the room's own
+      // general lighting, distinct from the workbench/desk task lamps
+      // and the entryway sconces) changed — a wider reach and a touch
+      // more output so an 8m x 6m room's own far corners stop reading as
+      // dim once night falls, without adding a single new fixture.
+      const light = new THREE.PointLight("#ffe4b8", 1.3, 9, 2);
       light.position.copy(pos);
-      light.userData.baseIntensity = 0.9;
+      light.userData.baseIntensity = 1.3;
       this.engine.scene.add(light);
       this.practicalLights.push(light);
     }
@@ -182,6 +189,21 @@ export class LightingSystem {
       const light = new THREE.PointLight("#ffcf9c", 0.5, 3.5, 2);
       light.position.copy(pos);
       light.userData.baseIntensity = 0.5;
+      this.engine.scene.add(light);
+      this.practicalLights.push(light);
+    }
+
+    // Phase 14 ("Further Environmental Polish") — "the workshop could
+    // use exterior lighting by the front door." Exactly the same shape
+    // as the interior wall sconces above, one more socket from the room,
+    // gated by the exact same light switch (a porch light left on with
+    // the interior lights is the ordinary, believable behaviour here,
+    // not a case that needed its own separate control).
+    const exteriorSockets = roomSystem?.room?.exteriorLightSockets ?? [];
+    for (const pos of exteriorSockets) {
+      const light = new THREE.PointLight("#ffcf9c", 0.6, 5, 2);
+      light.position.copy(pos);
+      light.userData.baseIntensity = 0.6;
       this.engine.scene.add(light);
       this.practicalLights.push(light);
     }

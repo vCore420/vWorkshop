@@ -1,4 +1,5 @@
 import { formatTime, buildCoverArt } from "./domHelpers.js";
+import { createIconButton } from "../../ui/iconButton.js";
 
 /**
  * PlaybackBar
@@ -159,10 +160,5 @@ export function buildPlaybackBar({ musicSystem }) {
 }
 
 function iconButton(glyph, label) {
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "music-icon-button";
-  btn.textContent = glyph;
-  btn.setAttribute("aria-label", label);
-  return btn;
+  return createIconButton({ className: "music-icon-button", glyph, label });
 }

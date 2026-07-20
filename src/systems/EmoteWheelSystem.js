@@ -63,35 +63,53 @@ export class EmoteWheelSystem {
     this.isOpen ? this.close() : this.open();
   }
 
+  /** Version 3, Phase 14 ("Further Environmental Polish") — "we could
+   *  design a radial wheel with options for each emote in a section of
+   *  the radial circle." Each button's own position on the ring is a
+   *  single CSS custom property (`--angle`, degrees) set here in JS —
+   *  the actual circular placement (a rotate/translate/counter-rotate
+   *  compound transform, keeping every button's own label upright
+   *  despite sitting at an angle) lives entirely in `css/main.css`, the
+   *  standard technique for a CSS-only radial layout that needs no
+   *  per-button trigonometry here at all. Closing on selection already
+   *  worked before this change — see close() below — untouched.
+   */
   _render() {
     this.root.innerHTML = "";
     const card = document.createElement("div");
     card.className = "emote-wheel-card";
 
-    const heading = document.createElement("h3");
-    heading.textContent = "Gestures";
-    card.appendChild(heading);
-
-    const grid = document.createElement("div");
-    grid.className = "emote-wheel-grid";
     const clips = this.animationLibraryStore.all().filter((c) => c.category !== "movement");
     if (clips.length === 0) {
+      const heading = document.createElement("h3");
+      heading.textContent = "Gestures";
+      card.appendChild(heading);
       const empty = document.createElement("p");
       empty.className = "app-subtitle";
       empty.textContent = "No gestures yet — create one in the Animation Editor.";
       card.appendChild(empty);
     } else {
-      for (const clip of clips) {
+      const ring = document.createElement("div");
+      ring.className = "emote-wheel-ring";
+      ring.style.setProperty("--wheel-count", clips.length);
+
+      const hub = document.createElement("div");
+      hub.className = "emote-wheel-hub";
+      hub.textContent = "Gestures";
+      ring.appendChild(hub);
+
+      clips.forEach((clip, i) => {
         const btn = document.createElement("button");
         btn.type = "button";
         btn.textContent = clip.name;
+        btn.style.setProperty("--angle", `${(i / clips.length) * 360}deg`);
         btn.addEventListener("click", () => {
           this._animationSystem?.play(clip.id);
           this.close();
         });
-        grid.appendChild(btn);
-      }
-      card.appendChild(grid);
+        ring.appendChild(btn);
+      });
+      card.appendChild(ring);
     }
 
     const hint = document.createElement("p");

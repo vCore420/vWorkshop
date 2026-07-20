@@ -105,6 +105,11 @@ export class ResidentRenderer {
     this._transitionTimer = 0;
     this._sparklePulsePhase = Math.random() * Math.PI * 2;
     this._localLookTarget = new THREE.Vector3();
+    // Phase 14 ("Further Environmental Polish") — scratch quaternions for
+    // damping the face plane's own look-at rotation; see update()'s own
+    // comment on why an instantaneous lookAt() read as "hunting."
+    this._previousFaceQuaternion = new THREE.Quaternion();
+    this._targetFaceQuaternion = new THREE.Quaternion();
   }
 
   /** One geometry per `EmbodimentConfiguration.EMBODIMENT_TYPES` entry,
@@ -195,7 +200,22 @@ export class ResidentRenderer {
     const faceMaterial = new THREE.MeshBasicMaterial({ map: this._faceTexture, transparent: true, depthWrite: false });
     const faceGeometry = new THREE.PlaneGeometry(RADIUS * 1.1, RADIUS * 1.1);
     this.faceMesh = new THREE.Mesh(faceGeometry, faceMaterial);
-    this.faceMesh.position.set(0, 0, RADIUS * 0.92);
+    // Phase 14 ("Further Environmental Polish") — this sat at RADIUS*0.92
+    // (0.1196), *inside* the sphere body's own curved silhouette
+    // (RADIUS=0.13) everywhere except a small dot dead-centre: the
+    // sphere's own front surface at off-axis distance r sits at
+    // sqrt(RADIUS² - r²), which only drops below 0.1196 past r≈0.051 —
+    // well inside the face plane's own extent, so the sphere's own
+    // depth-writing body (MeshPhysicalMaterial, transparent but not
+    // depth-write-disabled) occluded almost the whole face, reading as
+    // "rarely showing more than a dot or two." RADIUS*1.08 (0.1404)
+    // clears the sphere's own front apex (RADIUS itself) at every off-
+    // axis position, guaranteeing the whole face renders unoccluded —
+    // still a single shared offset for every embodiment shape (the cube
+    // already cleared comfortably at the old value, and clears with even
+    // more room now), matching this file's own "one face plane for all
+    // shapes" simplicity.
+    this.faceMesh.position.set(0, 0, RADIUS * 1.08);
     this.faceMesh.renderOrder = 1;
     this.root.add(this.faceMesh);
 
@@ -469,12 +489,26 @@ export class ResidentRenderer {
       // whenever the root group itself has any position/rotation applied,
       // which it always does here.
       this.root.worldToLocal(this._localLookTarget.copy(lookTarget));
+      // Phase 14 ("Further Environmental Polish") — this used to call
+      // lookAt() directly on faceMesh every frame: an instantaneous,
+      // undamped snap to a fresh orientation, invisible on the round orb
+      // (nothing for the eye to compare it against) but visibly "hunting"
+      // on the cube's own flat, hard-edged face, since the body itself
+      // barely rotates (only the slow idle sway above) while the face
+      // plane alone kept re-snapping every frame. Compute the same target
+      // orientation as before, then ease toward it (the same exponential-
+      // smoothing shape MathUtils.js's own `damp()` already uses for
+      // scalars elsewhere, applied here via Quaternion.slerp) instead of
+      // snapping straight to it.
+      this._previousFaceQuaternion.copy(this.faceMesh.quaternion);
       this.faceMesh.lookAt(this._localLookTarget);
       // lookAt() orients the object's own -Z toward the target; the face
       // texture itself was drawn facing +Z (see _buildFace() — it sits on
       // the bubble's +Z side by default), so a flip is needed for the
       // drawn side to actually be what ends up pointing at lookTarget.
       this.faceMesh.rotateY(Math.PI);
+      this._targetFaceQuaternion.copy(this.faceMesh.quaternion);
+      this.faceMesh.quaternion.copy(this._previousFaceQuaternion).slerp(this._targetFaceQuaternion, 1 - Math.exp(-8 * dt));
     }
 
     for (let i = 0; i < this._sparkleSeeds.length; i++) {

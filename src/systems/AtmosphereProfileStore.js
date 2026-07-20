@@ -1,4 +1,5 @@
 import { EventBus } from "../core/EventBus.js";
+import { clamp } from "../utils/MathUtils.js";
 
 let _nextId = 1;
 
@@ -180,7 +181,7 @@ export class AtmosphereProfileStore {
           windSpeed: normalizedOverride(overrides.windSpeed),
         },
       },
-      time: { hour: typeof source.time.hour === "number" && Number.isFinite(source.time.hour) ? Math.min(24, Math.max(0, source.time.hour)) : 12 },
+      time: { hour: typeof source.time.hour === "number" && Number.isFinite(source.time.hour) ? clamp(source.time.hour, 0, 24) : 12 },
     });
   }
 

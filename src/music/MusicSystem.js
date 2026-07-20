@@ -1,6 +1,7 @@
 import { HandleStore } from "./HandleStore.js";
 import { scanRoot, resolveFile, resolveCoverFile } from "./LibraryScanner.js";
 import { buildMemoryDirectoryTree } from "./MemoryDirectoryHandle.js";
+import { clamp } from "../utils/MathUtils.js";
 
 const PLAY_COUNT_THRESHOLD_SECONDS = 20; // a skip within the first 20s doesn't count as "played"
 const COVER_CACHE_LIMIT = 60;
@@ -141,7 +142,7 @@ export class MusicSystem {
     this.queue = restore.queue.filter((id) => this.libraryStore.getSong(id));
     if (this.queue.length === 0) return;
     this._rebuildPlayOrder();
-    this.queuePosition = Math.max(0, Math.min(restore.queuePosition ?? 0, this.playOrder.length - 1));
+    this.queuePosition = clamp(restore.queuePosition ?? 0, 0, this.playOrder.length - 1);
     this._restoredPosition = restore.position || 0;
     this._loadCurrentSong({ autoplay: false, seekTo: this._restoredPosition });
     this.wasPlayingLastSession = !!restore.wasPlaying;
@@ -235,11 +236,11 @@ export class MusicSystem {
 
   seekTo(seconds) {
     if (!Number.isFinite(seconds)) return;
-    this.audio.currentTime = Math.max(0, Math.min(seconds, this.audio.duration || seconds));
+    this.audio.currentTime = clamp(seconds, 0, this.audio.duration || seconds);
   }
 
   setVolume(v) {
-    this.volume = Math.max(0, Math.min(1, v));
+    this.volume = clamp(v, 0, 1);
     this.muted = false;
     this._applyVolume();
     this._emitPlaybackState();

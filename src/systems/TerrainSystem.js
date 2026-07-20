@@ -451,7 +451,7 @@ export class TerrainSystem {
   }
 
   _migrateFromOldTerrain(oldHeights, oldMaterialIndex) {
-    console.log("[TerrainSystem] Migrating terrain sculpting from the earlier 48m patch onto the new 200m primary terrain \u2014 existing edits are preserved at their original real-world position.");
+    console.info("[TerrainSystem] Migrating terrain sculpting from the earlier 48m patch onto the new 200m primary terrain \u2014 existing edits are preserved at their original real-world position.");
     for (let gz = 0; gz < GRID_POINTS; gz++) {
       for (let gx = 0; gx < GRID_POINTS; gx++) {
         const wx = gridToWorldX(gx);

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { buildCharacter, disposeCharacter, FIRST_PERSON_HIDDEN_LAYER } from "./PlayerCharacter.js";
 import { CameraSystem } from "../systems/CameraSystem.js";
+import { debounce } from "../utils/debounce.js";
 
 const REBUILD_DEBOUNCE_MS = 120; // see _scheduleRebuild
 const DEFAULT_EYE_HEIGHT = 1.65; // fallback for getEyeHeight() before the very first rebuild ever finishes
@@ -53,7 +54,7 @@ export class PlayerCharacterSystem {
     this.textureStore = textureStore;
     this.modelLoader = modelLoader;
     this._current = null;
-    this._rebuildTimer = null;
+    this._scheduleRebuild = debounce(() => this._rebuild(), REBUILD_DEBOUNCE_MS);
     this._rebuildInFlight = false;
     this._rebuildAgainAfter = false;
   }
@@ -72,13 +73,6 @@ export class PlayerCharacterSystem {
     await this._rebuild();
   }
 
-  _scheduleRebuild() {
-    if (this._rebuildTimer) clearTimeout(this._rebuildTimer);
-    this._rebuildTimer = setTimeout(() => {
-      this._rebuildTimer = null;
-      this._rebuild();
-    }, REBUILD_DEBOUNCE_MS);
-  }
 
   async _rebuild() {
     if (this._rebuildInFlight) {

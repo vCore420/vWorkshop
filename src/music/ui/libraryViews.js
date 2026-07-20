@@ -1,4 +1,5 @@
-import { buildSongList, buildAlbumGrid, buildCoverArt, escapeHtml } from "./domHelpers.js";
+import { buildSongList, buildAlbumGrid, buildCoverArt } from "./domHelpers.js";
+import { escapeHtml } from "../../utils/domSafety.js";
 
 /**
  * libraryViews.js

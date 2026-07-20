@@ -24,7 +24,7 @@
  * with a stale or now-meaningless shape.
  */
 
-export const CURRENT_SAVE_VERSION = 3;
+export const CURRENT_SAVE_VERSION = 4;
 
 const MIGRATIONS = {
   // v1 -> v2: furniture position/rotation used to be saved and blindly
@@ -66,6 +66,27 @@ const MIGRATIONS = {
         windDirectionRad: 0,
       };
       delete envelope.systems.weather;
+    }
+    return envelope;
+  },
+  // v3 -> v4: "One contribution" (docs/CONTRIBUTIONS.md) — the computer's
+  // Journal app moved off NotesStore's single-overwriting text blob onto
+  // JournalStore's own dated, multi-entry list (see JournalStore.js's own
+  // top comment for why). Whatever a player had already written under the
+  // old "computer-journal" notebook key shouldn't just vanish the moment
+  // this ships — it becomes that player's first real Journal entry,
+  // dated to whenever it was last actually written rather than to right
+  // now. The old NotesStore data itself is left untouched (the physical
+  // workbench notebook still reads other keys from that exact same
+  // store), so this is purely additive.
+  3: (envelope) => {
+    const legacyText = envelope.providers?.notes?.notebooks?.["computer-journal"];
+    if (legacyText?.text?.trim()) {
+      envelope.providers = envelope.providers ?? {};
+      const when = legacyText.updatedAt ?? new Date().toISOString();
+      envelope.providers.journal = {
+        entries: [{ id: `migrated-${when}`, createdAt: when, updatedAt: when, text: legacyText.text }],
+      };
     }
     return envelope;
   },

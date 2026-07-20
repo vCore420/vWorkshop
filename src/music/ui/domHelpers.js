@@ -14,12 +14,6 @@ export function formatTime(seconds) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-export function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str ?? "";
-  return div.innerHTML;
-}
-
 /**
  * Renders one row for `song` into a `<li>`. `context.songIds` is the full
  * list this row belongs to (so clicking it queues the rest of the list,

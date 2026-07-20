@@ -1,4 +1,5 @@
 import { BEHAVIOUR_DIALS } from "../ai/BehaviourDialsConfiguration.js";
+import { clamp } from "../utils/MathUtils.js";
 
 /**
  * ResidentDials
@@ -105,7 +106,7 @@ export function getDialModifiers(dials) {
 }
 
 function clamp01to2(value) {
-  return Math.min(2, Math.max(0.4, value));
+  return clamp(value, 0.4, 2);
 }
 
 export { BEHAVIOUR_DIALS };

@@ -1,4 +1,5 @@
 import { EventBus } from "../core/EventBus.js";
+import { generateId } from "../utils/generateId.js";
 
 const CURRENT_VERSION = 1;
 const RECENT_LIMIT = 15; // the same cap the source application's own calculator history used
@@ -172,7 +173,7 @@ export class ToolsStore {
 
   recordRun(toolId, toolTitle, inputs, result) {
     const entry = {
-      id: `run-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      id: generateId("run"),
       toolId,
       toolTitle,
       inputs,

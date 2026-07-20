@@ -37,8 +37,15 @@ import { WORKSHOP_FUNCTIONS } from "../ai/WorkshopFunctions.js";
  * side, none touching what's actually sent to Ollama:
  *   - Long messages already wrapped; they now also cap at four visible
  *     lines with their own scrollbar, so one long reply can't push the
- *     rest of the conversation out of view (`.resident-message`'s own
- *     `max-height` in `css/overlays.css`).
+ *     rest of the conversation out of view. **Version 3, Phase 14
+ *     ("Further Environmental Polish") moved this cap from the message
+ *     bubbles to the input itself** — a long *reply* now displays in
+ *     full (the outer `.resident-conversation-messages` list was always
+ *     the real scroll owner for the whole conversation; a second, nested
+ *     scrollbar on one bubble was never actually needed), while a long
+ *     *draft* is what grows and caps at four lines now (a `<textarea>`,
+ *     not a single-line `<input>` — see `resizeInput()` below and
+ *     `css/overlays.css`'s own comment).
  *   - A reply reveals word-by-word once it's back, purely client-side —
  *     `sendMessage()` still returns the complete string in one piece
  *     (Ollama is never asked to stream; see `ResidentConnection.js`'s own
@@ -181,9 +188,19 @@ export function createResidentConversationOverlay({
 
       const inputRow = document.createElement("div");
       inputRow.className = "resident-conversation-input-row";
-      const input = document.createElement("input");
-      input.type = "text";
+      // Version 3, Phase 14 ("Further Environmental Polish") \u2014 a growing
+      // textarea instead of a single-line input, capped at ~4 lines with
+      // its own scrollbar beyond that (see resizeInput() below and
+      // css/overlays.css's own comment on why this moved here from the
+      // message bubbles).
+      const input = document.createElement("textarea");
+      input.rows = 1;
       input.placeholder = "Say something\u2026";
+      const resizeInput = () => {
+        input.style.height = "auto";
+        input.style.height = `${input.scrollHeight}px`;
+      };
+      input.addEventListener("input", resizeInput);
       const sendBtn = document.createElement("button");
       sendBtn.type = "button";
       sendBtn.textContent = "Send";
@@ -308,6 +325,7 @@ export function createResidentConversationOverlay({
         lastError = null;
         if (!retryText) {
           input.value = "";
+          resizeInput();
           history.push({ role: "user", content: text });
           sentMessages.push(text);
           historyCursor = -1;
@@ -345,24 +363,40 @@ export function createResidentConversationOverlay({
       }
 
       sendBtn.addEventListener("click", () => send());
+      // Version 3, Phase 14 \u2014 true, since the caret's own line matters
+      // once the input can hold more than one now (see below).
+      const isCaretOnFirstLine = () => input.value.slice(0, input.selectionStart).indexOf("\n") === -1;
+      const isCaretOnLastLine = () => input.value.slice(input.selectionEnd).indexOf("\n") === -1;
       input.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
+        // Plain Enter sends, the same as before; Shift+Enter inserts a
+        // real newline instead \u2014 now that this is a textarea rather than
+        // a single-line input, a plain Enter would otherwise just add a
+        // line break of its own.
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
           send();
           return;
         }
+        if (event.key === "Enter") return;
         // Version 3, Phase 8a \u2014 the same Up/Down convention a terminal
         // already uses, cycling back through this session's own sent
         // messages. `draftBeforeHistoryNav` restores whatever the player
         // was mid-typing once they arrow back down past the most recent
         // one, rather than leaving them on a blank input.
-        if (event.key === "ArrowUp") {
+        //
+        // Version 3, Phase 14 \u2014 only fires at the caret's own first/last
+        // line now, so navigating a genuinely multi-line draft with the
+        // arrow keys still moves the caret normally rather than getting
+        // hijacked into history-cycling on every line.
+        if (event.key === "ArrowUp" && isCaretOnFirstLine()) {
           if (sentMessages.length === 0) return;
           event.preventDefault();
           if (historyCursor === -1) draftBeforeHistoryNav = input.value;
           historyCursor = historyCursor === -1 ? sentMessages.length - 1 : Math.max(0, historyCursor - 1);
           input.value = sentMessages[historyCursor];
           input.setSelectionRange(input.value.length, input.value.length);
-        } else if (event.key === "ArrowDown") {
+          resizeInput();
+        } else if (event.key === "ArrowDown" && isCaretOnLastLine()) {
           if (historyCursor === -1) return;
           event.preventDefault();
           historyCursor += 1;
@@ -373,6 +407,7 @@ export function createResidentConversationOverlay({
             input.value = sentMessages[historyCursor];
           }
           input.setSelectionRange(input.value.length, input.value.length);
+          resizeInput();
         }
       });
 
