@@ -81,6 +81,27 @@
     --duration-medium: 0ms;
     --duration-slow: 0ms;
   }
+  /* Version 3, Phase 12 ("Accessibility & Comfort Pass") — the two
+     continuous, infinite-loop pulse animations in the codebase
+     (`.entry-status`'s own loading breathe, the resident "thinking"
+     dots) each set their own `animation-duration` directly in the
+     shorthand rather than through a token, so zeroing the durations
+     above did nothing to stop them — the most nausea/distraction-prone
+     motion in the whole app was exactly the motion this block wasn't
+     actually reaching. Named directly here, in the one shared home for
+     motion overrides, rather than duplicating this same media query
+     across `main.css`/`overlays.css`. Each settles at roughly the
+     midpoint of its own animated range, the same "a static, settled
+     read instead of the mid-pulse frame" instinct `.entry-status.ready`
+     already uses for its own non-animated state. */
+  .entry-status {
+    animation: none;
+    opacity: 0.7;
+  }
+  .resident-message-thinking span {
+    animation: none;
+    opacity: 0.6;
+  }
 }
 
 /* "Larger touch targets. Comfortable button spacing... reduced

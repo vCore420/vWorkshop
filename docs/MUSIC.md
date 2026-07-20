@@ -125,6 +125,35 @@ and a button that calls `handle.requestPermission()` — which, per the
 browser's own security model, must run inside a real click handler, which
 is exactly what that button is.
 
+### Firefox/Safari: the memory-root fallback
+
+Version 3, Phase 12 ("Accessibility & Comfort Pass") — "a fallback path
+... would bring the feature to every browser rather than one." Every
+browser supports `<input type="file" webkitdirectory multiple>` (a
+folder picker that yields a flat `FileList`, each entry carrying its own
+`.webkitRelativePath`), even the ones without the File System Access
+API. `MemoryDirectoryHandle.js` builds a plain object from that `FileList`
+that implements only the handful of methods `LibraryScanner.js` actually
+calls on a handle (`entries()`, `getDirectoryHandle()`, `getFileHandle()`,
+`getFile()`) — `scanRoot()`/`resolveFile()`/`resolveCoverFile()` genuinely
+cannot tell it apart from a real `FileSystemDirectoryHandle`, so none of
+them needed to change.
+
+The honest tradeoff: this handle is live `File` references from a picker
+gesture, held only in `MusicSystem._rootHandleCache` — there is nothing
+structured-cloneable to put in `HandleStore`, so it's never written there,
+and the root reads as needing to be re-selected (not reconnected) the
+next time this session ends. `MusicLibraryStore`'s own root records
+(`{id, name, kind}`) carry `kind: "memory"` for exactly these roots, so
+`LibraryManager` knows to offer "Re-select Folder" (which re-opens the
+same picker and calls `MusicSystem.reconnectMemoryRoot()`, reusing the
+*same* root id) rather than "Reconnect" (which would call
+`handle.requestPermission()` against a handle that was never stored).
+Because song ids are deterministic path strings (see above), re-selecting
+the same folder reproduces the same ids — favourites, play counts, and
+playlist entries survive exactly the way a real reconnect's own rescan
+already preserves them.
+
 ## Persistence
 
 Everything the brief asked for, and where it lives:
@@ -270,11 +299,11 @@ one is actually "the music."
   that would change: read tag frames from each file instead of trusting
   only the filename, while keeping the exact same output shape everything
   downstream already expects.
-- **Additional audio backends** — everything here assumes local files via
-  the File System Access API. A future streaming source (a self-hosted
-  server, say) would slot in as an alternative to `LibraryScanner`/
-  `HandleStore` producing the same `{artist, album, songs}` shape
-  `MusicLibraryStore.mergeScan()` already consumes.
+- **Additional audio backends** — everything here assumes local files,
+  whether via the File System Access API or the Phase 12 memory-root
+  fallback. A future streaming source (a self-hosted server, say) would
+  slot in as a third alternative producing the same `{artist, album,
+  songs}` shape `MusicLibraryStore.mergeScan()` already consumes.
 - **More behaviours in the same family** — `musicPlayer` shows the
   pattern: a behaviour whose `apply()` just emits a generic
   `interaction:trigger`. A future "Jukebox" behaviour (opens the library
@@ -285,14 +314,17 @@ one is actually "the music."
 
 ## Known limitations
 
-- **Chromium-only library scanning.** The File System Access API
-  (`window.showDirectoryPicker`) isn't available in Firefox or Safari as
-  of this writing. `LibraryManager` detects this and shows an honest
-  message rather than a broken button — no fallback import path was
-  built for this phase (see the trade-off note in the code comment on
-  `MusicSystem.isScanningSupported()`). Playlists, favourites, and
-  browsing an *already*-scanned library don't depend on this API at all;
-  only adding/rescanning folders does.
+- **Firefox/Safari need re-selecting a folder each session.** The File
+  System Access API (`window.showDirectoryPicker`) isn't available in
+  Firefox or Safari as of this writing, so those browsers can't get a
+  root that silently reopens next time. Version 3, Phase 12 gave them a
+  real, working fallback instead of just an honest message — see
+  "Firefox/Safari: the memory-root fallback" above — at the cost of
+  needing to re-pick the same folder once a session ends, since nothing
+  about a file-picker gesture can be remembered the way a real handle
+  can. Playlists, favourites, and browsing an *already*-scanned library
+  never depended on either API at all; only adding/rescanning folders,
+  or playing/viewing art from an unreachable one, does.
 - **No embedded metadata** — see "Library scanning" above. A song is only
   ever as well-labelled as its filename.
 - **"Recently Added" has no real timestamp per song** — it falls back to

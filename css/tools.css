@@ -71,6 +71,19 @@
   color: rgba(255, 255, 255, 0.55);
   line-height: 1.4;
 }
+/* Version 3, Phase 12 ("Accessibility & Comfort Pass"), Wave 3 — the pin
+   toggle moved from a nested <span> inside .tools-card (a real keyboard
+   trap: nested interactive content) to a genuine sibling <button> under
+   this wrapper, which exists purely to give .tools-pin-btn's own
+   position:absolute something to anchor to now that it's no longer
+   nested inside .tools-card itself. */
+.tools-card-wrap {
+  position: relative;
+}
+.tools-card-wrap .tools-card {
+  width: 100%;
+  box-sizing: border-box;
+}
 .tools-pin-btn {
   position: absolute;
   top: 10px;
@@ -78,6 +91,8 @@
   font-size: 1.1rem;
   color: rgba(255, 255, 255, 0.3);
   cursor: pointer;
+  background: transparent;
+  border: none;
 }
 .tools-pin-btn.pinned { color: var(--brass-bright); }
 .tools-pin-btn:hover { color: var(--brass-bright); }

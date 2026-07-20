@@ -4372,6 +4372,603 @@ Pivot" on a freshly added part — confirmed the button computes the
 right value, the form re-renders with it, and the part selection
 survives the re-render.
 
+## Version 3 — Phase 10c — Being Creator, Beyond the Prototype, Wave 2 (v3.1.0c)
+
+**Goal:** the second of three planned waves — authoring UX. Wave 1
+(Phase 10b) fixed the underlying data model; this wave makes the
+editor itself feel like the "advanced model creator/editor" the user
+asked for, covering every remaining gap the original investigation
+named: click-to-select, joint visibility, precise numeric entry,
+hierarchy management, and material variety.
+
+**Click-to-select in the 3D preview.** `PreviewRenderer.js` — the
+shared mini-scene Builder, Wardrobe, and the Animation Editor all
+already reuse — gained an opt-in `setOnObjectClick(handler)`. A "click"
+is distinguished from the identical pointer sequence orbit already uses
+by total movement between pointerdown and pointerup, so dragging the
+view around never accidentally re-selects whatever ends up under the
+cursor on release. Only `BeingCreatorApp.js` calls it today; the other
+three callers are completely unaffected, unless one of them wires it in
+later.
+
+**A "Show Joint Markers" checkbox** drops a small marker at every
+part's own pivot, parented directly to it — no coordinate math needed,
+it simply inherits the pivot's own world position. Never tagged with
+`userData.partId`, so neither the click raycast above nor the existing
+selection-highlight logic ever mistakes a marker for a genuine,
+selectable part.
+
+**Every vector slider (Position, Rotation, Scale, Mesh Offset) gained a
+real, synced number input.** Dragging the slider updates the number;
+typing an exact value commits on blur/Enter (not per keystroke, so a
+value mid-typo never fires a preview refresh) and updates the slider in
+turn. A typed value isn't bounded by the slider's own min/max the way
+dragging is — a deliberate "advanced editor" escape hatch.
+
+**The hierarchy list gained a collapse toggle** on any row with
+children, and **true HTML5 drag-and-drop re-parenting** — dragging a
+row onto another re-parents it there; dragging onto the list background
+returns it to the root. The exact same `descendantIds()` cycle guard
+the existing "Parent" dropdown already used protects the drag gesture
+too — confirmed live: dragging a part onto its own descendant is
+silently rejected, not merely discouraged by a disabled dropdown entry.
+
+**Every part can now choose one of six materials** — matte, fabric,
+metal, plastic, glass, emissive (`BODY_PART_MATERIALS`) — drawn from
+`PlaceholderFactory.Materials`' own larger, already-shared palette
+(the identical factory `compileBody()` already depended on for the one
+material every part used to have), rather than reaching for
+`PlayerCharacter.js`'s separate, texture-scoped preset system. A
+curated six, not all thirteen available — "please optimise for clarity
+rather than complexity" applies to a dropdown's own length too.
+
+**Verified live and thoroughly, at real interaction level, not just
+code review.** Real `PointerEvent`s dispatched at real canvas
+coordinates against a real Three.js scene: a genuine click resolved to
+the correct part, a click on empty space resolved to `null`, and a
+drag past the movement threshold fired neither — confirming the
+click/drag distinction directly rather than trusting the arithmetic.
+Real `DragEvent`s exercised both a valid re-parent (traced through to
+the saved definition) and a rejected cycle. A material change was
+traced end to end — dropdown → draft → saved definition → the actual
+compiled mesh's own `roughness`/`metalness`/`map` properties, confirmed
+to exactly match `Materials.metal()`'s own values. The hierarchy
+collapse toggle was verified by exact part count (14 parts under the
+Person's root collapsing to 1 visible, restoring to 14 on expand) after
+an initial test-script measurement briefly suggested otherwise — caught
+by re-checking the test's own selector (it was also matching the
+unrelated Being-library list rows) before concluding anything about the
+feature itself. A full `BeingController` spawn → animate → despawn
+cycle was re-run to confirm none of it regressed placed-Being
+behaviour. Wave 3 (non-biped rigging) remains, planned but not yet
+started.
+
+## Version 3 — Phase 10d — Being Creator, Beyond the Prototype, Wave 3 (v3.1.0d)
+
+**Goal:** the third and final wave — non-biped rigging. Phase 10's own
+default Cat and Dog shipped as real geometry with every `jointName`
+left `null`, a gap that Phase 10 itself named honestly: the shared
+Workshop skeleton only spoke a biped's own vocabulary, with nowhere for
+a quadruped's legs and tail to map to. This wave closes it.
+
+**Five new joints, in the same shared vocabulary, not a second one.**
+`WorkshopSkeleton.WORKSHOP_JOINTS` gained `legFrontLeft`/`Right`,
+`legBackLeft`/`Right`, and `tailBase` — one segment per leg (not split
+into upper/lower the way the biped leg pair is; a true knee/hock bend
+is real future work, not this pass's own honest scope), alongside the
+original fourteen, rather than forked into a parallel vocabulary. The
+whole point of "one Workshop skeleton" survives: a Being's own clip can
+freely mix `torso`/`head` (shared with every biped) alongside
+`legFrontLeft` (quadruped-only) in the same pose, which is exactly what
+the two new clips below do.
+
+**A real correctness bug, found and fixed before it could ship.**
+`IDENTITY_PLAYER_SKELETON_MAP` and `isSkeletonMapUsable()` both used to
+derive directly from `WORKSHOP_JOINTS.length` — growing that length
+would have silently claimed the Player rig has a "front leg" pivot (it
+doesn't), and would have raised `isSkeletonMapUsable()`'s own "at least
+half the joints" threshold from 7 to 10 purely because the denominator
+grew, even though `autoMapSkeleton()`'s own heuristic patterns were
+deliberately *not* extended to ever detect these five (a genuinely
+separate, lower-priority scope than what this pass actually needed).
+An ordinary imported *biped* model sitting between 7 and 9 matched
+joints — previously usable — would have silently stopped animating,
+regressed by a change that had nothing to do with it. Fixed by
+computing both from an explicit `QUADRUPED_ONLY_JOINT_IDS` set rather
+than the vocabulary's own total size; confirmed live afterward that a
+synthetic 7-joint map is still usable and a 6-joint one still isn't,
+exactly matching the pre-change threshold.
+
+**The default Cat and Dog are now genuinely rigged**, not static art:
+body→`torso`, head→`head`, all four legs, and the tail, each tagged for
+real (ears and snout stay untagged, decorative — the same as a human
+Being's own hair would be). Two new clips
+(`default-quadruped-idle`/`-walk`) drive them — Idle is a gentle body
+sway with a tail flick; Walk is a genuine diagonal trot, the gait most
+four-legged animals actually default to (front-left and back-right
+swing together, then the opposite pair — a "pace," where same-side legs
+move together, is a different, real gait deliberately not modelled
+here). Both use `category: "movement"`, the same reason every other
+idle/walk clip already does: the Emote Wheel filters those out, and a
+human Being has no "front leg" to move — showing these as pickable
+gestures on the player's own body would be a dead, confusing option.
+
+**Verified live at every level.** The threshold bug above was caught by
+direct reasoning *before* writing the fix, then confirmed both ways
+(pre-fix math predicted the regression; post-fix synthetic 7/6-joint
+maps confirmed it was gone). Cat and Dog's own compiled skeletons were
+checked directly (7 joints each, zero NaN). The walk clip's own leg
+motion was driven straight through `ClipPlayer`/
+`applyPoseToMappedSkeleton()` — the real production path, not a
+reimplementation — confirming `legFrontLeft` and `legBackRight` move
+together and `legFrontRight` moves as their exact opposite at every
+sampled tick, the diagonal trot working as designed rather than merely
+assigned. A full `BeingController` spawn → animate → despawn cycle
+covering all three default Beings together confirmed zero regressions,
+and the Emote Wheel's own filtered list was confirmed to still show
+only the original four human gestures. This closes all three planned
+waves of the Being Creator's "beyond the prototype" work (v3.1.0b →
+v3.1.0d) — see `docs/BEINGS.md` for the accumulated, current state of
+the whole system.
+
+## Version 3 — Phase 11 — Workshop Character (v3.1.1)
+
+**Goal:** strengthen the Workshop's identity as a *place* rather than
+add a feature — "returning to it should feel like returning somewhere
+familiar rather than launching an application." Five small, real
+touches, each connecting a system that already half-existed to
+something that could actually feel it, rather than inventing new
+personalisation mechanics (`docs/ROADMAP_V3.md`'s own Phase 11 brief
+explicitly cautions against that) — plus one literal request: a small
+pot plant on the bookshelf.
+
+**M1 — Bubble's conversation context reflects real continuity.**
+`WorldTimeService` already computed exactly "how long was the player
+away" (`isFirstSession`/`cappedElapsedSeconds`) for
+`ResidentController`/`BeingController`'s own on-load repositioning, but
+nothing ever read it into conversation. `ResidentContext.
+buildContinuityLine()` does now — a first-ever session gets an honest
+"you're meeting them for the first time" line rather than a fabricated
+gap; any later session gets a short, bucketed phrase ("about ten
+minutes," "a few hours," never a raw duration) describing the gap,
+optionally extended with `PlayerPatternMemory.leadingWorkingHours()` —
+fully implemented already but called nowhere before this. Wired into
+both the real conversation and the Mission Control Sandbox via the same
+deferred-`deps` assignment pattern `computerSystem.deps.
+persistenceSystem` already established. A real bucket-mislabeling bug
+(10 minutes reading as "about half an hour") was caught and fixed during
+live verification, before it shipped.
+
+**M2 — `ConversationMemory`'s persistence promise, honoured for real.**
+"Session Only" and "Persistent" memory modes used to behave identically
+— the class was never registered with `PersistenceSystem` at all, so
+neither mode ever reached `localStorage`. Now registered like any other
+plain store, but the mode check lives inside `save()` itself (checking
+whichever profile is active at that moment) rather than at the
+registration site: only "persistent" ever writes real notes out,
+everything else writes an empty snapshot. Verified live end-to-end — a
+note added under "Persistent" survived a genuine page reload; the same
+note, saved again after switching to "Session Only," was gone on the
+next one.
+
+**M3 — Weather continuity uses the shared elapsed-time source.**
+`EnvironmentSystem._catchUpDynamic()` predates `WorldTimeService` and
+had its own, independently invented "how long were we gone" calculation
+(`Date.now() - enteredAt`, with its own separate step-count cap) sitting
+right alongside `WorldTimeService`'s already-canonical, already-capped
+one. It now listens for the shared `"world:continuity"` event and
+drives the catch-up from `cappedElapsedSeconds` instead —
+`MAX_CATCHUP_STEPS` remains as a real inner bound on top of the outer
+one that's now shared, not removed. A genuinely first-ever session also
+gets an explicit, deliberate "clear" opening rather than relying on the
+constructor's own default to happen to read that way. Verified with a
+deterministic `Math.random()`-pinned test confirming the exact
+step-count bound and remainder-preservation math, plus a real save/load
+round trip against a faked five-hour-old `savedAt`.
+
+**M4 — Browser Home surfaces resident mood.** `ResidentState.mood`
+already existed and was already persisted, but nothing outside the
+resident itself ever read it. The Residents tile on `workshop://` now
+shows it alongside the existing "Continuing: [project]" tile-meta line,
+reusing `ExpressionTypes.getExpressionType()`'s own label lookup rather
+than a second mood-label map. Verified against the real
+`pageRegistry.resolve()` path, confirming the tile text updates live as
+mood changes.
+
+**M5 — A small pot plant on the bookshelf.** The literal part of the
+brief. `Shelving.js`'s own book-packing math (see Phase 3's account
+above) always leaves a fixed, deterministic 0.08m corridor at each end
+of every non-bin shelf — never touched by books, confirmed by the
+`cursor` arithmetic ending at exactly `usableWidth` regardless of the
+randomised gap distribution. A small pot-and-leaves plant (the same
+shape `MusicCabinet.js`'s own cabinet-top plant already uses, scaled
+down) sits in the top shelf's right-hand corridor. Getting the fit
+genuinely right needed one real correction beyond the initial
+arithmetic: a leaf's own rotation grows its axis-aligned bounding box
+beyond its unrotated radius, and an initially-plausible sizing still
+clipped the frame post by about 2mm once checked against the real
+generated mesh's own `Box3` rather than the geometry parameters alone.
+Shrunk further and reconfirmed with a real `Box3.intersectsBox()` sweep
+against every other mesh on the shelf.
+
+**Verified live throughout, not just per-file.** Every milestone was
+driven against real, running production code via temporary
+`window.__debugEngine`/`__debugStores` hooks (removed before closing
+each one) rather than trusted from reading the diff — including two
+real, non-trivial bugs (M1's bucket mislabeling, M5's rotated-mesh
+overlap) that reading alone would not have caught. `docs/RESIDENT.md`,
+`docs/AI.md`, `docs/WORLD.md`, `docs/PERSISTENCE.md`,
+`docs/FURNITURE.md`, and `MemoryConfiguration.js`'s own comments were
+each swept for the specific claims this phase made stale (mainly: "these
+two memory modes are currently identical," and "weather's own catch-up
+doesn't need `WorldTimeService`").
+
+## Version 3 — Phase 12a — Accessibility & Comfort Pass, Wave 1 (v3.1.2a)
+
+**Goal:** the three concrete, already-bounded gaps playtesting found,
+ahead of the broader systematic pass (focus management, reduced motion,
+label coverage — Waves 2/3): touch parity for zoom/compass, a genuinely
+visible close button, and a real fallback for the Chromium-only music
+library.
+
+**M1 — HUD touch parity.** Zoom (`InputManager._setupTouchActionButtons()`)
+had no touch equivalent at all — a new button, stacked above Jump/Crouch,
+sets a touch-only `_touchZoomActive` flag on `touchstart`/cleared on
+`touchend`/`touchcancel`, matching `isHeld("zoom")`'s real key-hold
+semantics rather than reusing Crouch's toggle behaviour where it wouldn't
+fit. The compass toggle (keyboard-only, "M") gained a "Compass (M)"
+button in `HUD.js`'s corner-controls group, the same always-visible
+treatment "I'm Lost!" already uses. Verified by driving real per-frame
+`CameraSystem.update()` calls through a simulated touch hold (FOV eased
+correctly from 62° to 38° and back) and a real click through
+`CompassSystem.toggle()`.
+
+**M2 — The Esc/close button, actually visible, and one implementation.**
+`.overlay-close` used to be `background: transparent; color: inherit;
+opacity: 0.7` — no real contrast of its own, blending into whichever
+overlay material sat behind it, exactly "too low-visibility to notice
+reliably." Now the same glass/wood-chip treatment the corner-controls
+and touch buttons already use. Separately, `PhoneUI.js`'s own close
+button was a second, independently-authored implementation that had
+quietly drifted (a `title` but no `aria-label`, unlike the overlay one) —
+a new `createCloseButton()` helper (`src/ui/closeButton.js`) now defines
+the shared *behavior contract* (a real accessible name, always) while
+each surface keeps its own visual styling, since an overlay floating
+over the 3D scene and the Phone's own header genuinely need different
+treatments.
+
+**M3 — A real Firefox/Safari fallback for the music library.** Rather
+than a second, parallel scanner for browsers without the File System
+Access API, `MemoryDirectoryHandle.js` builds a plain object from an
+`<input type="file" webkitdirectory multiple>` picker's `FileList` that
+implements just the handful of methods `LibraryScanner.js` already calls
+on a real handle — `scanRoot()`/`resolveFile()`/`resolveCoverFile()`
+needed zero changes, genuinely unable to tell the difference.
+`MusicLibraryStore.addRoot()` gained a `kind` field ("handle" vs
+"memory"); `LibraryManager.js` offers "Re-select Folder" instead of
+"Reconnect" for a memory root once its session ends, since there's
+nothing in `HandleStore` for it to silently reconnect to. Verified
+end-to-end with real `File` objects: a full scan through the unmodified
+scanner (2 artists, 3 albums, cover art detected), real blob-URL
+playback and cover resolution, and — the core of the tradeoff — a
+favourite surviving a simulated reload and a re-selected folder reusing
+the same root id (so favourites/play counts/playlists stay attached).
+
+**Verified live throughout.** Every milestone was driven against real,
+running production code via temporary debug hooks, removed before each
+one closed — including mounting `LibraryManager.js` directly with
+`isScanningSupported()` stubbed false, rather than trusting the branch
+logic from reading the diff. `docs/RESPONSIVE.md` and `docs/MUSIC.md`
+were updated with the new mechanisms; `docs/DESIGN_SYSTEM.md`'s own
+write-up of the emerging standards (focus-trap pattern, label
+conventions) is deferred to the phase's later waves, where those
+patterns actually get built.
+
+## Version 3 — Phase 12b — Accessibility & Comfort Pass, Wave 2 (v3.1.2b)
+
+**Goal:** the shared mechanisms Wave 1's three bounded fixes deliberately
+deferred — real keyboard focus management, comfort options that actually
+cover every eased transition (not just the CSS ones), a viewport fix
+blocking native pinch-zoom/text-scaling outright, and a label/id sweep
+across every Computer app's own form controls.
+
+**M4 — Real focus management.** `src/ui/focusTrap.js`'s
+`createFocusTrap(containerEl)` is the one shared primitive now behind
+every modal-ish 2D surface — `OverlayManager` panels, the Phone, and
+`WorkstationPanel` all get `role="dialog"`, `aria-modal="true"`, and a
+trap that remembers what had focus, moves it into the surface on open,
+cycles Tab/Shift+Tab within it, and restores focus exactly where it was
+on close. Investigating the two persistent-DOM surfaces (Phone,
+`WorkstationPanel`) surfaced two real, standing bugs neither one's
+"closed" CSS state actually fixed: keyboard Tab could still reach their
+buttons while visually closed. See M7.
+
+**M5 — Reduced motion, real coverage.** `tokens.css`'s existing
+`prefers-reduced-motion` handling only ever reached CSS transitions that
+referenced a `--duration-*` token. `src/utils/motionPreference.js`'s
+`prefersReducedMotion()` is now the one shared read for JavaScript-driven
+tweens; five `damp()`-eased call sites (camera focus, zoom, view blend,
+the Computer and Workbench panel reveals) snap straight to target when
+it's set instead of easing. Two more gaps surfaced along the way and got
+fixed in the same pass: two infinite CSS animations that set their own
+duration directly in the shorthand rather than through a token (one —
+the resident "thinking" dots — found by this phase's own broader `grep`
+sweep, not in the original audit), and two hardcoded transition durations
+that should have referenced a token regardless of reduced motion. See
+`docs/DESIGN_SYSTEM.md`'s "Reduced motion, for real" section for the full
+account, including why core movement physics is deliberately excluded.
+
+**M6 — The viewport meta was blocking pinch-zoom and text-scaling
+outright.** `user-scalable=no` and `maximum-scale=1.0` disable native
+zoom for everyone, not just inside the 3D scene — exactly what WCAG
+1.4.4 (Resize Text) exists to prevent. Removed; `#workshop-canvas`'s own
+`touch-action: none` was already the real (and sufficient) protection
+against the 3D view itself being pinch-zoomed.
+
+**M7 — `WorkstationPanel` and the Phone were keyboard-reachable while
+visually closed.** Found investigating M4: `WorkstationPanel`'s
+`pointer-events: none` and the Phone's off-screen `transform` (plus a
+dead `.hidden` class matching zero CSS anywhere in the codebase, removed
+outright) both left every button inside genuinely `Tab`-reachable and
+activatable. Both now toggle the native `inert` attribute alongside their
+existing open/close logic — closing the same class of gap for both
+surfaces with the one mechanism actually built for it.
+
+**M8 — Label/`for` association swept across every Computer app.**
+`src/utils/domIds.js`'s `nextDomId(prefix)` is one shared id counter,
+handing broken `label`/sibling-`input` pairs across `SettingsApp.js`,
+`WardrobeApp.js`, `AIApp.js`, `BuilderApp.js`, `BeingCreatorApp.js`, and
+`AnimationEditorApp.js` a real `for`/`id` pairing — already-correct
+nested pairs (`label.append(input, text)`) were left untouched.
+`BeingCreatorApp.js`'s `vectorRow()` (one label, six controls across
+three axes) got `role="group"` plus per-axis `aria-label`s instead, the
+correct primitive for a genuine one-to-many relationship. See
+`docs/DESIGN_SYSTEM.md`'s "Label association, one counter" section.
+
+**Verified live throughout, against real production code — mounting
+each surface directly rather than trusting the diff.** M4/M7 were
+confirmed with real `element.focus()` calls against `inert` surfaces
+(refusing to move `document.activeElement`, as it should). M5 was
+verified for both branches of the preference, including temporarily
+forcing `prefersReducedMotion()` to `true` to confirm all five call
+sites snap on frame one, then reverting and re-diffing byte-for-byte. M8
+was verified structurally (`buildApps()` mounting all six apps into
+detached containers, confirming zero missing `for`/`id` targets and zero
+id collisions, including screens only reachable after navigating into a
+tab) and behaviourally (real label clicks focusing their paired
+control). `docs/DESIGN_SYSTEM.md` and `docs/RESPONSIVE.md` carry the
+mechanism write-ups; Wave 3 — the full ARIA-label sweep across every
+Phone app, Browser page, and remaining Computer app — is the phase's
+last wave, not yet started.
+
+## Version 3 — Phase 12c — Accessibility & Comfort Pass, Wave 3 (v3.1.2c)
+
+**Goal:** the phase's own third and final wave — the full ARIA-label
+sweep across every Phone app, the whole Browser system, and every
+remaining Computer app — after two research agents audited all of it in
+parallel and the user chose full depth (every gap, not just the
+zero-accessible-name ones) over a lighter labels-only pass.
+
+**M9 — Phone apps.** Every icon-only button (`PhoneUI`'s Home button,
+status-bar glyphs correctly `aria-hidden`), unlabeled slider/select pair
+(`SettingsPhoneApp.js`, `BeingsPhoneApp.js`'s Movement select), and
+missing live region (Bubble's 1-second status refresh) fixed. Real,
+never-stale state now surfaces correctly: `WardrobePhoneApp.js`'s active
+outfit gets `aria-current`; `WorkshopPhoneApp.js`'s weather buttons get
+`aria-pressed` reflecting `EnvironmentSystem.current` live via
+`environment:changed` — its Time-of-day buttons deliberately don't,
+since `hour` is a continuously easing clock with no discrete "current
+selection" to honestly report. Every repeated row list (Beings, Emotes,
+Wardrobe) gained `role="list"`/`listitem`, and every duplicate button
+name ("Place", "Play", "Apply") gained a per-row `aria-label`.
+
+**M10 — The Browser system (Computer and Phone chrome, and
+`PageShell.js`).** `BrowserApp.js`'s toolbar buttons, address bar, and
+new-tab button were all unlabeled entirely; its per-tab close control was
+a `<span onclick>` nested inside the tab's own `<button>` — invalid HTML
+and a real keyboard trap (a keyboard user could select a tab but never
+close it). Rebuilt as a real `role="tablist"`/`role="tab"` pattern with
+Left/Right/Home/End keyboard navigation (`src/ui/tabList.js`'s
+`tabListTargetIndex()`, the one piece of arrow-key arithmetic genuinely
+shared with M11's Tools panel) and a genuine sibling close `<button>`,
+using `createCloseButton()`'s new optional `ariaLabel` override so every
+tab's close button reads "Close Workshop Documentation," not an
+ambiguous, identical "Close" repeated once per tab. Every dynamically
+created iframe now gets a real `title`, updated once the actual page
+title resolves. `BrowserPhoneApp.js` got the equivalent fixes for its own
+bookmark controls and URL input. `PageShell.js`'s generated document now
+carries `lang="en"`.
+
+**M11 — The four remaining Computer apps.** `ProjectsApp.js` (via the
+shared `projectListView.js`, also used by the pinboard), `JournalApp.js`,
+and `MediaApp.js` all had a straightforward missing-label/aria-live class
+of gap. `toolsPanelView.js` (shared by the Tools app and the physical
+toolbox) was the largest single file in the sweep: both of its own tab
+bars got the same `role="tablist"` treatment as M10's Browser tabs; its
+tool-card pin toggle had the *identical* nested-interactive-content bug
+the Browser's tab-close control had, independently, and got the same
+fix (`.tools-card-wrap`, a plain wrapper existing solely so
+`.tools-pin-btn`'s own `position: absolute` still has something to
+anchor to now that it's a sibling, not a descendant, of `.tools-card`);
+every calculator input, the Rows editor, and the Calculator Builder's own
+input/output editor rows all got real `for`/`id` pairing or `aria-label`,
+and its result/validation panels gained `aria-live`.
+
+**M12 — `workshop://` page content itself** (`WorkshopPages.js`,
+`AssetPages.js` — the HTML rendered *inside* the Browser's iframes, a
+separate accessibility tree from M10's host chrome around it). Both
+search boxes (`workshop://` home, `workshop://search`) were placeholder-
+only; the search-results region now carries `aria-live` too. Every
+tile grid on the home page and the Asset Library overview
+(`tile()`/`assetGrid()`) gained `role="group"` tied to its own heading —
+`assetGrid()` took an optional `labelledbyId` parameter for this rather
+than a second, parallel helper. Object and Being part-colour swatches
+(previously a non-interactive `<div>` with only a `title`, unreliable on
+a non-focusable element) became `role="img"` with a real `aria-label`.
+The Diagnostics page's health dots got `aria-hidden` (real information is
+already conveyed by the adjacent text) and its recheck button's
+"Checking…" transition became a live region.
+
+**Verified live throughout, against real production code.** Every
+Phone/Computer app was mounted via the same `buildApps()`/direct-
+`mount()` pattern established in Wave 2; every Browser/page-content fix
+was verified by resolving the actual `workshop://`/`asset://` URL
+through the live `PageRegistry` into a real iframe and inspecting the
+rendered DOM, not a hand-built approximation. The tab-bar keyboard
+navigation was driven with real `KeyboardEvent`s confirming both focus
+and `aria-selected` moved together. One real regression was caught and
+fixed during verification: `BrowserApp.js`'s `toolbarButton()` helper's
+own `aria-label` line had been planned but never actually written in the
+first implementation pass — caught by a live DOM check (`ariaLabel:
+null` on five of six toolbar buttons) rather than assumed from the diff.
+Deliberately not pursued, and why: rewriting `metaRow()` into `<dl>` and
+unifying `tile()`/`assetGrid()` into one helper — see
+`docs/DESIGN_SYSTEM.md`'s own account of both.
+
+This closes Phase 12 (Accessibility & Comfort Pass) — all three waves
+now complete.
+
+## Version 3 — Phase 13a — The Phone Becomes a Device, Wave 1 (v3.1.3a)
+
+**Goal:** four of the five playtesting-found gaps between "the Phone
+works" and "the Phone feels like carrying a device" — the fifth, deeper
+per-app visual distinctness, deliberately isolated into its own later
+wave rather than bundled in with four smaller, more mechanical fixes.
+
+**M1 — The bottom bar actually returns home.** `PhoneUI.js`'s home
+indicator — the cosmetic pill "this is a touchscreen" nod every modern
+phone shares — had never had a click handler at all, confirmed by
+reading the constructor directly rather than assuming from the name. Now
+a real `<button>`, wired to the same `onGoHome()` the header's own Home
+button already calls.
+
+**M2 — A 12-hour/24-hour time format toggle, the same setting on both
+surfaces.** `SettingsStore.get("display").timeFormat` is the one
+preference every clock display now reads: `TimeFormat.js`'s own
+`formatClockTime(hour, format)`, the PC Settings app's own Atmosphere tab
+(five separate call sites — Current time, Set Time, Sunrise/Sunset,
+Moonrise/Moonset), the Phone's own Settings app, and `PhoneSystem`'s
+status-bar clock. Found and fixed a real, independent rounding bug in
+the same function while touching it: a fractional hour just under the
+next minute (`5.999`) rounded its minutes up to a literal `60` rather
+than rolling into the next hour.
+
+**M3 — Wallpaper and border colour, a player's own choice.** A new
+`SettingsStore.get("phone")` category — four curated presets each
+(`wallpaper`: paper/sage/glow/wood; `borderColor`: oak/walnut/brass/teal),
+every one an existing design token, not a colour picker — exposed on
+both the PC Settings app's new Phone tab and the Phone's own Settings
+app directly, since real device customisation happens on the device at
+least as often as from a desktop. `PhoneUI.setAppearance()` is the one
+place either surface's change actually lands, via plain `data-wallpaper`/
+`data-border` attributes `css/phone.css`'s own rules key off — `PhoneUI`
+itself still has no idea what a "preset" means. Caught and fixed a real,
+subtle finding along the way: verifying this milestone live surfaced
+what first looked like a genuine cross-browser CSS bug (a `transition`
+on an attribute-driven `border-color` appearing permanently stuck) —
+tracked down to a dev-tooling limitation instead (the Browser pane's own
+tab never reports itself as visible, so Chromium never ticks
+`requestAnimationFrame`/animation timelines for it at all, a real
+finding worth its own account in `.claude/DEV_NOTES.md` rather than
+either shipping an unnecessary workaround or leaving the false-bug
+belief uncorrected).
+
+**M4 — App screens arrive with a bit of motion**, not an instant
+`innerHTML` swap. A pure CSS `@keyframes` animation on
+`.workshop-phone-content`'s own direct children — chosen over a
+`transition` specifically because of what M3 had just found, and
+because "runs once on insertion" is what's actually happening, not an
+in-place state change. Fires automatically on every navigation (every
+screen change already replaces the content area's children with
+genuinely new elements), no imperative JS needed. `--duration-medium`
+already resolves to `0ms` under `prefers-reduced-motion`, so this snaps
+to its end state immediately there, same as every other eased value this
+project already gates that way.
+
+**Verified live throughout**, including confirming structural/end-state
+correctness for the two milestones (M3, M4) whose own motion couldn't be
+watched directly through this project's dev tooling — `transition:
+"none"` / `animation: "none"` overrides to force and check the settled
+end-state, rather than either trusting the CSS unverified or discarding
+a working feature over a tooling artifact. `docs/PHONE.md` carries the
+full account; `docs/DESIGN_SYSTEM.md` and `.claude/DEV_NOTES.md` were
+both updated with what this wave found.
+
+## Version 3 — Phase 13b — The Phone Becomes a Device, Wave 2 (v3.1.3b)
+
+**Goal:** the fifth gap deferred from Wave 1 — "each app should read as
+distinctly itself rather than sharing one visual template" — given its
+own wave since it's a genuine per-app design choice, not a mechanical
+fix. Seven apps, each treated for what its own content actually is, all
+still building on the shared component vocabulary (sections, buttons,
+rows) rather than inventing a second design system per app.
+
+**M5 — Bubble** gets a real presence dot (`data-presence`:
+`awake`/`conversing`/`connecting`/`sleeping`, read from
+`residentConnection`/`residentBehaviour`, the same messaging-app contact
+convention) beside its heading, and a Talk button shaped like an actual
+speech bubble instead of the generic full-width primary button every
+other app's own main action already was.
+
+**M6 — Wardrobe** becomes a card grid instead of a scrolling list —
+outfits are garments in a closet, not settings rows. The swatch is each
+outfit's own real `appearance.parts.torso.color` now, a genuine fix
+riding along with the visual pass: the Phase 12 Wave 3 ARIA audit had
+already flagged the old fixed-colour swatch as "not really a preview."
+`display: contents` was considered for the grid-cell wrapper and
+deliberately rejected — a documented older-Safari bug can strip ARIA
+roles from elements styled that way — in favour of a plain block-display
+wrapper div, which still stretches correctly as a CSS Grid item.
+
+**M7 — Workshop** becomes an icon-forward control panel: 11 new marks in
+`ProceduralIcons.js` (weather ×4, time-of-day ×3, a light bulb, music
+×3, a compass) turn the weather and time rows into real control-centre
+tiles, and lighting/music/"I'm Lost!" gain icon prefixes. Building this
+surfaced a real, standing gap unrelated to the icons themselves:
+`aria-pressed` was already being set correctly on every toggle in this
+app, but no CSS anywhere gave it a visible state, so a sighted player had
+no way to *see* which weather or lighting option was actually active —
+fixed once, for every button in the app that sets the attribute, rather
+than patched per-button as it was found.
+
+**M8 — Beings'** "Spawn a Being" becomes a tap-to-place roster grid (the
+shared paw-print icon, since no per-Being icon exists anywhere in the
+Being architecture), sized with `grid-template-columns:
+repeat(auto-fill, minmax(...))` rather than a fixed count, since a
+Being library can hold one entry or many. "Placed Beings" stays a
+list — each instance's real per-instance controls (movement select,
+move/despawn/remove) have no room on a tile, so a list is the honest
+shape for that content, not an oversight.
+
+**M9 — Browser** gains real browser chrome: a favicon-style globe mark
+on every Quick Link and bookmark row, a pill-shaped address bar for
+adding one, and an actual toolbar over an opened page (a new
+`chevronLeft` icon for a real back control, plus the resolved page's own
+title) replacing what had been a plain "← Back" text button.
+
+**M10 — Emotes** gets the same tap-to-trigger tile grid as Beings' own
+roster (the shared sparkle icon, since no per-gesture icon exists) —
+`EmoteWheelSystem.js`'s own radial menu keeps its plain list unchanged,
+since both are independently, deliberately styled paths to the same
+gestures, not a shared component either had to compromise on.
+
+**M11 — Settings** stays deliberately the plainest app of the whole
+wave: its content is a panel of values to adjust, not a collection, a
+companion, or a device to browse, so every slider/checkbox/toggle row is
+untouched. The only change is the same small gear mark next to its own
+heading every other app's identity-defining mark now carries — the
+smallest possible acknowledgement of the same visual language, nothing
+more.
+
+**Verified live throughout** — every app mounted directly via debug
+hooks against real production data (real resident connection states via
+`aiConnectionManager.status`, real default Beings/outfits/gestures, real
+`aria-pressed`/`aria-current` state transitions confirmed by click, not
+assumed from the markup) — with a full seven-app cycle showing zero
+console errors as the wave's own closing check. `docs/PHONE.md` carries
+the full per-app account. This closes Phase 13 — both waves of "The
+Phone Becomes a Device" are now complete.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

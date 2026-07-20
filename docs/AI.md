@@ -302,9 +302,16 @@ this phase activates the rest:
   Shown next to each category's own checkbox as an honest, informative
   label.
 
-"Session Only" and "Persistent" remain currently identical (kept for the
-runtime session, never written to `localStorage`); true cross-session
-persistence for "Persistent" is still honest future work.
+**Version 3, Phase 11** — "Session Only" and "Persistent" now genuinely
+differ: `ConversationMemory.js` is registered with `PersistenceSystem`
+like any other plain store, and its own `save()` only writes real notes
+to `localStorage` when the active profile's `memory.mode` reads
+`"persistent"` at that moment — otherwise it writes an empty snapshot,
+overwriting anything a previous, since-changed "persistent" session may
+have left there. Verified live: a note added under "Persistent" survived
+a genuine page reload; the same note, saved again after switching to
+"Session Only," was gone on the next reload, matching each label
+exactly.
 `memorySize`/`memorySummaries`/`contextBudget` remain exactly what they
 were — real fields, real defaults, no storage limit or summarisation
 behind any of them yet, still marked as not active in the Memory
@@ -393,6 +400,27 @@ prompt, the same "three perfect touches over thirty" restraint Phase 6's
 own risk note already named. Deliberately separate from the
 function-calling mechanism above: this is what a resident *knows*
 without asking, a Workshop Function is what it *does*.
+
+**A real-continuity line, Version 3 Phase 11 ("Workshop Character")**
+(`ResidentContext.buildContinuityLine()`) — "different Workshops should
+naturally begin feeling different because of the choices made within
+them." `WorldTimeService` already computed exactly "how long was the
+player away" (`getContinuity()` returning `{isFirstSession,
+cappedElapsedSeconds}`) for `ResidentController`/`BeingController` to
+reposition things plausibly on load; this reads the same already-
+resolved value into conversation too, rather than inventing a second
+continuity mechanism. A first-ever session gets its own honest greeting
+("you're meeting them for the first time") instead of a fabricated gap.
+Otherwise a short, bucketed phrase ("about ten minutes," "a few hours,"
+"most of a day" — never a raw number, which would read as a clock, not
+a feeling) describing `cappedElapsedSeconds`, optionally extended with
+`PlayerPatternMemory.leadingWorkingHours()` when a real pattern has
+accumulated — that method existed already but was called nowhere before
+this. Wired into both the real conversation (`ResidentConversation.js`)
+and the Sandbox below (`AIApp.js`, via the same deferred-`deps`
+assignment `computerSystem.deps.persistenceSystem` already established
+in `main.js`, since `computerSystem` is constructed before
+`worldTimeService` exists).
 
 **Verified live**: every function's dispatcher `invoke()` call tested
 directly against the real Workshop systems (weather/time/lights/music
@@ -556,10 +584,6 @@ complete account, section by section:
 
 ## Future extension points
 
-- **True cross-session memory**, implementing `MemoryConfiguration.js`'s
-  own "Persistent" mode for real — see docs/RESIDENT.md's own
-  "Conversation Memory" section for exactly what's already in place to
-  build this on.
 - **Real additional providers** — LM Studio and Custom Endpoint (both
   typically OpenAI-compatible local/self-hosted APIs) are the more
   tractable next step; OpenAI/Anthropic would additionally need real

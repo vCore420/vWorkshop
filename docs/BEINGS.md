@@ -123,7 +123,7 @@ array was never built for: a genuine parent-child hierarchy and full
 three-axis rotation per part.
 
 **A body part is `{id, name, parentId, jointName, shape, position,
-rotation, scale, meshOffset, color}`.** Four primitive shapes — Cube, Sphere,
+rotation, scale, meshOffset, color, material}`.** Four primitive shapes — Cube, Sphere,
 Cylinder, Capsule (`THREE.CapsuleGeometry`, available since Three.js
 r142; this Workshop runs r164) — each built once as a cached, unit-sized
 geometry and reused across every part that needs it, exactly
@@ -140,7 +140,8 @@ separate systems.** "Rig Creation... please optimise for clarity rather
 than complexity" is honoured directly: rather than a second, parallel
 "bones" data structure layered on top of the body hierarchy, any part can
 carry an optional `jointName` — one of `WorkshopSkeleton.WORKSHOP_JOINTS`'
-own ids (Head, Chest, Upper/Lower Arms and Legs, Hands, Feet — see
+own ids (Head, Chest, Upper/Lower Arms and Legs, Hands, Feet, plus —
+Version 3, Phase 10d — a quadruped's own Front/Back Legs and Tail; see
 `docs/ANIMATION.md`'s own "Skeleton Mapping" section for the full list
 and reasoning). `BodyCompiler.compileBody()` derives a complete, *exact*
 `skeletonMap`/`skeletonRest` directly from whichever parts were actually
@@ -202,12 +203,42 @@ The editor's own "Hang Below Pivot" button is the common case made one
 click — a limb's shape sitting directly beneath its own joint, sized to
 whatever the part's current Scale already is.
 
-**Selecting a part directly from the 3D preview, collapsing hierarchy
-branches, and true drag-and-drop re-parenting are all honest, deliberate
-simplifications this phase — see "Known simplifications" below**; a
-"Parent" dropdown (excluding the part itself and its own descendants, so
-re-parenting can never create a cycle — `BodyCompiler.descendantIds()`)
-covers re-parenting today, just without the drag gesture.
+**Version 3, Phase 10c ("Being Creator, Beyond the Prototype, Wave 2")
+— every remaining prototype-feeling gap this pass named, closed.**
+Clicking a part directly in the 3D preview now selects it —
+`PreviewRenderer.js` (the same shared mini-scene Builder and Wardrobe
+both already reuse) gained an opt-in `setOnObjectClick()` raycast, with
+a small movement threshold distinguishing an actual click from the
+identical pointer sequence orbit already uses, so dragging the view
+around never accidentally re-selects whatever's under the cursor on
+release. A "Show Joint Markers" checkbox drops a small marker at every
+part's own pivot — parented directly to it, so it always sits at
+exactly the right world position with no coordinate math, and never
+mistaken for a genuine, selectable part by either the click raycast or
+the existing selection-highlight (neither ever matches a mesh without a
+real `userData.partId`). Every position/rotation/scale/mesh-offset
+slider gained a real, synced number input beside it — typed values
+commit on blur/Enter, not per keystroke, so a value mid-typo never
+fires a preview refresh. The hierarchy list gained a collapse toggle on
+any row with children, and true HTML5 drag-and-drop re-parenting
+(dragging a row onto another, or onto the list background to return it
+to the root) — the identical `descendantIds()` cycle guard the
+"Parent" dropdown already used protects the drag gesture too, confirmed
+live: dragging a part onto its own descendant is silently rejected, not
+merely discouraged. And every part can now choose one of six materials
+(`BODY_PART_MATERIALS`, drawn from `PlaceholderFactory.Materials`' own
+larger palette — matte/fabric/metal/plastic/glass/emissive) instead of
+matte being the only option, the identical `Materials` factory
+`compileBody()` already depended on for the one material it used to
+have. Verified live and thoroughly: real `PointerEvent`s dispatched at
+real canvas coordinates against a real Three.js scene (a genuine click
+resolved to the right part, an empty-space click resolved to `null`, a
+drag past the threshold fired neither); real `DragEvent`s exercising
+both a valid re-parent and a rejected cycle; a material change traced
+all the way from the dropdown through the saved definition to the
+actual compiled mesh's own `roughness`/`metalness`/`map`; and a full
+`BeingController` spawn → animate → despawn cycle re-run to confirm
+none of it regressed placed-Being behaviour.
 
 ## Imported Models
 
@@ -595,46 +626,34 @@ needs to be roughly current at save time.
   will need this to become room-aware the same way
   `WorldObjectsStore.js`'s own `roomId` field already anticipates for
   Builder objects.
-- **No selecting a body part directly from the 3D preview** — only from
-  the hierarchy list; a click-to-select raycast into `PreviewRenderer.js`'s
-  own scene is real, reasonable future work (see `docs/BROWSER.md`'s own
-  precedent of the identical trade-off for the Animation Editor's own
-  preview).
-- **No collapsing/expanding hierarchy branches, no true drag-and-drop
-  re-parenting** — a "Parent" dropdown covers re-parenting today; both
-  are reasonable at the scale a single Being's own body actually reaches
-  (rarely more than a few dozen parts), which is why neither felt worth
-  the added complexity this phase.
 - **No editing an imported model's own hierarchy** — adding, removing, or
   replacing parts on an imported `.glb`/`.gltf` stays a primitive-body-only
   capability this phase; see "Imported Models" above for the full
   reasoning.
-- **Body parts have no material beyond a flat colour** — no roughness/
-  metalness/texture per part, unlike `ObjectLibraryStore.js`'s own
-  parts, which stay flat-colour-only for the identical "keep the field
-  set uniform across every primitive type" reasoning `ObjectCompiler.js`'s
-  own comment already gives.
-- **No joint vocabulary for anything but a biped** —
-  `WorkshopSkeleton.WORKSHOP_JOINTS` names head/torso and six left/right
-  limb pairs; a quadruped's own legs and tail have nowhere honest to map
-  to, so a primitive Cat or Dog (see `DefaultBeings.js`, Version 3, Phase
-  10) is real, hand-posed geometry with every `jointName` left `null` —
-  static art, not something any animation clip can ever drive. A future
-  non-biped joint set (or a "static art, no rig at all" mode that stops
-  implying every Being ought to have one) is real future work, not
-  attempted here.
+- **A quadruped's own legs are one joint each, not split into upper and
+  lower segments the way the biped leg pair is** — Version 3, Phase 10d
+  ("Being Creator, Beyond the Prototype, Wave 3") added
+  `legFrontLeft`/`Right`, `legBackLeft`/`Right`, and `tailBase` to
+  `WorkshopSkeleton.WORKSHOP_JOINTS`, closing the "nowhere honest to map
+  to" gap this bullet used to name — the default Cat and Dog
+  (`DefaultBeings.js`) are genuinely rigged and animated through them
+  now, not static art. A single segment per leg was the honest, simpler
+  scope that pass actually needed; a true knee/hock bend (matching the
+  biped upperLeg/lowerLeg split) is real future work, not attempted
+  here. `autoMapSkeleton()`'s own heuristic patterns were also *not*
+  extended to detect these from an imported quadruped model's own bone
+  names — a genuinely separate, lower-priority scope than rigging
+  primitive-built Beings, which is what this pass actually set out to
+  fix.
 
 ## Future extension points
 
 - **Manual skeleton-map correction for imported models** — see
   `docs/ANIMATION.md`'s own "Future extension points" for the identical
   need on the Animation Editor side.
-- **Click-to-select in the 3D preview**, and true drag-and-drop
-  re-parenting in the hierarchy list.
 - **Hybrid bodies** — primitive parts attached onto an imported model's
   own hierarchy, or replacing one of its parts; see "Imported Models"
   above for why this phase kept the two paths separate.
-- **Per-part materials** beyond a flat colour.
 
 - **Future AI Residents as a Being type.** "Future AI Residents should
   naturally become another type of Being rather than requiring a separate

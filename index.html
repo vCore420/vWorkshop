@@ -2,7 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <!-- Version 3, Phase 12 ("Accessibility & Comfort Pass") — this used to
+       carry `maximum-scale=1.0, user-scalable=no`, blocking native
+       pinch-zoom/text-scaling everywhere on the page (a real WCAG 1.4.4
+       gap, working directly against the text-scale setting Settings
+       already offers). `#workshop-canvas` already has its own
+       `touch-action: none` (see touch.css) specifically to stop the
+       browser's own zoom/pan from competing with in-game touch controls
+       — that scoped rule is what actually protected gameplay, not this
+       viewport-wide block, which only ever needed to exist alongside it
+       by mistake. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>The Workshop</title>
   <meta name="description" content="A living 3D creative workshop." />
 

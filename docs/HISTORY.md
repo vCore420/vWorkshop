@@ -1576,4 +1576,220 @@ Two more waves (authoring UX; non-biped rigging) remain, planned but not
 yet started. See `docs/ROADMAP.md`'s own Phase 10b account for the
 complete story.
 
+**Version 3, Phase 10c — Being Creator, Beyond the Prototype, Wave 2
+(v3.1.0c)** — the second of three planned waves, covering every
+remaining authoring-UX gap the original investigation named.
+`PreviewRenderer.js` (the shared mini-scene Builder, Wardrobe, and the
+Animation Editor all already reuse) gained an opt-in
+`setOnObjectClick()` raycast, click a part in the 3D preview to select
+it, distinguished from an orbit drag by total pointer movement; a "Show
+Joint Markers" checkbox drops a small marker at every part's own pivot,
+parented directly to it so it needs no coordinate math and is never
+mistaken for a real, selectable part; every vector slider gained a
+synced, real number input for exact values; the hierarchy list gained
+collapse toggles and true HTML5 drag-and-drop re-parenting, protected
+by the same cycle guard the existing "Parent" dropdown already used;
+and every part can now choose one of six materials
+(matte/fabric/metal/plastic/glass/emissive) instead of only ever being
+matte, drawn from `PlaceholderFactory.Materials`' own already-shared
+palette. Verified at real interaction level throughout: genuine
+`PointerEvent`s dispatched at real canvas coordinates (confirming a
+correct hit, an empty-space miss, and that a drag past the movement
+threshold fires neither), genuine `DragEvent`s exercising both a valid
+re-parent and a rejected cycle, a material change traced from the
+dropdown all the way to the compiled mesh's own real
+`roughness`/`metalness`/`map`, and a full `BeingController` spawn →
+animate → despawn cycle re-run to confirm no regression. Wave 3
+(non-biped rigging) remains, planned but not yet started. See
+`docs/ROADMAP.md`'s own Phase 10c account for the complete story.
+
+**Version 3, Phase 10d — Being Creator, Beyond the Prototype, Wave 3
+(v3.1.0d)** — the third and final wave, closing the gap Phase 10 itself
+named honestly: the shared Workshop skeleton only spoke a biped's own
+vocabulary, so the default Cat and Dog shipped as static, unrigged
+geometry. Five new joints (`legFrontLeft`/`Right`, `legBackLeft`/`Right`,
+`tailBase`) join the original fourteen in the same shared
+`WorkshopSkeleton.WORKSHOP_JOINTS` vocabulary, one leg segment each
+rather than split into upper/lower the way the biped pair is. A real
+correctness bug was caught and fixed *before* it could ship:
+`IDENTITY_PLAYER_SKELETON_MAP` and `isSkeletonMapUsable()` both used to
+derive straight from the vocabulary's own total size, which would have
+silently raised the "is this imported model's skeleton usable" bar for
+every ordinary biped import too, purely because the vocabulary grew —
+fixed by computing both from an explicit set of the new, biped-unrelated
+joint ids instead, confirmed live both by direct reasoning beforehand
+and a synthetic 7-vs-6-joint check afterward landing exactly on the
+unchanged threshold. The default Cat and Dog are now genuinely rigged —
+body, head, all four legs, and the tail — driven by two new clips
+(`default-quadruped-idle`, a gentle sway with a tail flick; `-walk`, a
+real diagonal trot, front-left and back-right swinging together then
+the opposite pair), both `category: "movement"` so they stay out of the
+player's own Emote Wheel exactly like every other idle/walk clip
+already does. Verified by driving the walk clip through the real
+`ClipPlayer`/`applyPoseToMappedSkeleton()` path directly (confirming the
+diagonal-pair motion at every sampled tick, not just that clip ids were
+assigned) and a full three-Being `BeingController` spawn → animate →
+despawn cycle. This closes all three planned waves of the Being
+Creator's "beyond the prototype" work (v3.1.0b → v3.1.0d). See
+`docs/ROADMAP.md`'s own Phase 10d account for the complete story.
+
+**Version 3, Phase 11 — Workshop Character (v3.1.1)** — five small,
+real touches strengthening the Workshop's identity as a place rather
+than adding a feature, plus one literal request. Bubble's conversation
+context now reflects real elapsed-time continuity (`WorldTimeService`'s
+already-computed `isFirstSession`/`cappedElapsedSeconds`, read for the
+first time into a new `buildContinuityLine()`, catching and fixing a
+real bucket-mislabeling bug along the way). `ConversationMemory`'s
+"Session Only"/"Persistent" modes, previously identical because the
+store was never registered with `PersistenceSystem` at all, now
+genuinely differ — verified live with a note that survived a reload
+under "Persistent" and vanished under "Session Only." `EnvironmentSystem`'s
+weather catch-up moved off its own independently-computed `Date.now()`
+reading and onto the same shared `"world:continuity"` event every other
+continuity-aware system already uses, with a first-ever session now
+getting a deliberate calm "clear" opening. Browser Home's Residents
+tile now surfaces `ResidentState.mood` alongside the existing
+"Continuing: [project]" line. And a small pot plant now sits in the
+bookshelf's own structurally-guaranteed-empty corridor — a genuine
+rotated-mesh bounding-box overlap (a leaf clipping the shelf frame by
+about 2mm) was caught and fixed via a real `Box3` check against the
+generated mesh, not trusted from hand arithmetic. See
+`docs/ROADMAP.md`'s own Phase 11 account for the complete story.
+
+**Version 3, Phase 12a — Accessibility & Comfort Pass, Wave 1 (v3.1.2a)**
+— the three concrete, playtesting-found gaps, ahead of the broader
+systematic pass. Zoom and the compass toggle each gained a real
+click/tap-equivalent (a held touch button matching `isHeld("zoom")`'s
+own semantics; a corner-controls button matching "I'm Lost!"). The
+Esc/close button, previously `opacity: 0.7` with no real background of
+its own, now uses the same glass/wood-chip treatment already proven
+elsewhere — and a new shared `createCloseButton()` helper closed a real
+accessibility gap along the way (the Phone's own close button had a
+`title` but no `aria-label`, unlike the overlay one). The personal music
+library gained a genuine Firefox/Safari fallback: `MemoryDirectoryHandle.js`
+adapts an ordinary file-picker's `FileList` into an object
+`LibraryScanner.js` genuinely cannot tell apart from a real
+`FileSystemDirectoryHandle` — verified with real scanning, real
+blob-URL playback, and a favourite surviving both a simulated reload and
+a re-selected folder reusing the same root id. See `docs/ROADMAP.md`'s
+own Phase 12a account for the complete story.
+
+**Version 3, Phase 12b — Accessibility & Comfort Pass, Wave 2 (v3.1.2b)**
+— the shared mechanisms Wave 1 deferred. Every modal-ish 2D surface
+(`OverlayManager` panels, the Phone, `WorkstationPanel`) now shares one
+real focus-trap primitive (`src/ui/focusTrap.js`) instead of three
+independently-invented ones, restoring focus exactly where it was on
+close. Investigating the two persistent-DOM surfaces surfaced a real,
+standing bug in both: neither's own "closed" CSS state actually stopped
+keyboard `Tab` from reaching their buttons — fixed with the native
+`inert` attribute, also removing a dead `.hidden` class in `PhoneUI.js`
+that matched zero CSS anywhere. Reduced motion now genuinely reaches
+every eased transition, not just the CSS ones already wired to a
+duration token: five JavaScript-driven camera/panel tweens
+(`src/utils/motionPreference.js`'s `prefersReducedMotion()`) snap
+straight to target when set, and two infinite CSS animations that
+bypassed the duration tokens entirely — one found by this phase's own
+broader sweep, not the original audit — got the same treatment. The
+viewport meta's `user-scalable=no`/`maximum-scale=1.0` was silently
+blocking native pinch-zoom and text-scaling everywhere, not just inside
+the 3D scene (a real WCAG 1.4.4 violation); removed, since
+`#workshop-canvas`'s own `touch-action: none` was already the real
+protection for the 3D view. And every Computer app's form rows got a
+label/`for`/`id` sweep via one shared id counter
+(`src/utils/domIds.js`), with `BeingCreatorApp.js`'s six-control vector
+rows getting `role="group"` treatment instead, the correct primitive for
+a genuine one-to-many labeling relationship. Every milestone was
+verified against real, running production code — mounted UI, real
+`element.focus()` calls against `inert` surfaces, a temporarily-forced
+`prefersReducedMotion()` to confirm both branches. See
+`docs/ROADMAP.md`'s own Phase 12b account for the complete story; Wave 3
+(the full ARIA-label sweep) remains.
+
+**Version 3, Phase 12c — Accessibility & Comfort Pass, Wave 3 (v3.1.2c)**
+— the phase's own final wave: the full ARIA-label sweep, at the depth
+the user chose after two research agents audited every Phone app, the
+whole Browser system, and every remaining Computer app in parallel.
+Every icon-only button, unlabeled input, and untitled iframe found got a
+real accessible name; every custom tab bar (the Browser's own tab strip,
+the Tools panel's two) became a genuine `role="tablist"` with
+Left/Right/Home/End keyboard navigation, sharing one small piece of
+arrow-key arithmetic (`src/ui/tabList.js`) rather than two independent
+implementations. Two more keyboard-trap bugs of the exact shape this
+phase's earlier waves already found and fixed turned up independently —
+`BrowserApp.js`'s per-tab close control and `toolsPanelView.js`'s
+per-card pin toggle both had a `<span onclick>`/nested `<button>` living
+*inside* another interactive element, reachable only by mouse; both now
+pull the secondary control out to a real, independently-focusable
+sibling button, and `createCloseButton()` gained an optional
+`ariaLabel` override so a tab's close button reads "Close Workshop
+Documentation" rather than an identical, ambiguous "Close" repeated once
+per tab. Real, never-stale state now surfaces correctly where it exists
+(the Wardrobe's active outfit, the Workshop app's weather buttons) and
+deliberately doesn't get faked where it can't (Time-of-day's buttons,
+since `hour` is a continuously easing clock with no discrete "current
+selection" to honestly report). Object and Being part-colour swatches
+became `role="img"` with a real text alternative; every duplicate button
+name across every list ("Open", "Remove", "Edit") gained a per-row
+`aria-label`. Verified live throughout by resolving real
+`workshop://`/`asset://` URLs through the live `PageRegistry` and
+mounting every touched Phone/Computer app via the same pattern Wave 2
+established — which caught one real regression (a planned `aria-label`
+line that had never actually been written) before it shipped. This
+closes Phase 12 — see `docs/ROADMAP.md`'s own Phase 12c account for the
+complete story, including what was deliberately left for a future pass
+and why.
+
+**Version 3, Phase 13a — The Phone Becomes a Device, Wave 1 (v3.1.3a)**
+— four of five playtesting-found gaps between "the Phone works" and "the
+Phone feels like carrying a device." The bottom bar's own home indicator
+— previously a purely cosmetic pill — is a real `<button>` now, wired to
+the same `onGoHome()` the header's own Home button already uses. A
+12-hour/24-hour time format toggle (`SettingsStore.get("display")
+.timeFormat`) is the same one preference every clock display now reads
+— the PC Settings app, the Phone's own Settings app, and
+`PhoneSystem`'s status bar — and caught a real, independent rounding bug
+in `TimeFormat.js` along the way (a fractional hour just under the next
+minute used to render as a literal `:60`). A new `SettingsStore.get
+("phone")` category gives a player real wallpaper and border-colour
+choice — four curated presets each, every one an existing design token,
+not a colour picker — on both Settings surfaces at once, since real
+device customisation happens on the device itself as often as from a
+desktop. And app screens now arrive with a bit of real motion instead of
+an instant swap, a pure CSS animation that needed no JavaScript beyond
+what `PhoneUI.js` already does on every navigation. Verifying the last
+two milestones surfaced a genuine, worth-documenting dev-tooling finding
+along the way: what first looked like a real cross-browser CSS bug (a
+`transition` that never seemed to complete) turned out to be this
+project's own Browser pane never reporting its tab as visible, so
+Chromium never ticks animation timelines for it at all — tracked down
+rather than either shipped around unnecessarily or left as an
+uncorrected false alarm; see `.claude/DEV_NOTES.md`'s own new account.
+Wave 2 (v3.1.3b) — deep per-app visual distinctness, deliberately
+isolated as its own larger, later wave — remains.
+
+**Version 3, Phase 13b — The Phone Becomes a Device, Wave 2 (v3.1.3b)**
+— the deferred fifth gap, "each app should read as distinctly itself
+rather than sharing one visual template," closed across all seven Phone
+apps. Bubble gets a real presence dot beside its heading and a
+speech-bubble-shaped Talk button; Wardrobe becomes a card grid with each
+outfit's own real colour swatch (fixing a placeholder the Phase 12
+ARIA audit had already flagged); Workshop becomes an icon-forward
+control panel (11 new marks in `ProceduralIcons.js`) and picked up a
+real, standing accessibility fix along the way — `aria-pressed` was
+already correct on every toggle button but nothing gave it a visible
+state, so no sighted player could actually see which weather or
+lighting option was selected; Beings' spawn list becomes a tap-to-place
+roster grid while its richer "Placed Beings" management list stays a
+list, on purpose; Browser gained real chrome — a favicon mark on every
+link row, a pill-shaped address bar, and an actual toolbar (a new
+`chevronLeft` icon) over an opened page; Emotes got the same
+tap-to-trigger tile grid as Beings; and Settings — deliberately the
+plainest app of the wave, since its content is values to adjust, not a
+collection or a device — got only the same small identity mark next to
+its heading every other app now carries. Every app was mounted and
+exercised directly against real production data and real state
+transitions, not just read from markup; a full seven-app cycle showed
+zero console errors as the wave's own closing check. This completes
+Phase 13.
+
 </details>

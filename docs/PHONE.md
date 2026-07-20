@@ -141,7 +141,8 @@ demonstrating the real, stable contract a plugin author can rely on.
   shortcut already does, then closes the phone; two access points, one
   wheel.
 - **Settings** — a small, deliberately partial subset (volume, camera
-  sensitivity, invert) of the full computer Settings app.
+  sensitivity, invert, time format, the phone's own wallpaper/border) of
+  the full computer Settings app — see "Becoming a Device" below.
 
 ## Craftsmanship (Version 2, Phase 23b — Interface & Design Refinement)
 
@@ -186,10 +187,118 @@ design tokens, the Builder's own named overflow bug, and what was
 reviewed and found already consistent across the Workshop's digital
 interfaces.
 
+## Becoming a Device (Version 3, Phase 13, Wave 1 — v3.1.3a)
+
+"Grow the Phone from a functional menu surface into something that
+actually feels like carrying a device." Playtesting found the mechanism
+already worked well but the *identity* hadn't caught up — this wave
+closed four of the five gaps it found (the fifth, deeper per-app
+visual distinctness, is its own later wave).
+
+**The home indicator is a real control now, not just a visual cue.**
+The bottom pill (see "Craftsmanship" above) is a genuine `<button>`
+now, wired to the same `onGoHome()` the header's own Home button already
+calls — a real second way back to the home screen, the same bottom-bar
+habit a real device's own gesture nav teaches.
+
+**Wallpaper and border colour, a player's own choice.** A new
+`SettingsStore.get("phone")` category (`{ wallpaper, borderColor }`) —
+four curated presets each, every one reusing an existing design token
+rather than a colour picker (see `docs/DESIGN_SYSTEM.md`'s own account
+of why: "not a theming engine for its own sake" is this phase's own
+brief). Exposed on *both* Settings surfaces — the PC Settings app's new
+Phone tab and the Phone's own Settings app directly, since real device
+customisation happens on the device itself at least as often as from a
+desktop. `PhoneUI.setAppearance({ wallpaper, borderColor })` is the one
+place either surface's change actually lands — plain `data-wallpaper`/
+`data-border` attributes on the shell, with `css/phone.css`'s own
+`[data-wallpaper]`/`[data-border]` rules doing the real work, so
+`PhoneUI` still has no idea what a "preset" even means, the same
+"doesn't know what a Being, an outfit is" standard the rest of this
+file already holds it to.
+
+**A 12-hour/24-hour format toggle, the same setting on both surfaces.**
+`SettingsStore.get("display").timeFormat` (`"24h"` default, or `"12h"`)
+— `src/utils/TimeFormat.js`'s own `formatClockTime(hour, format)` reads
+it wherever a clock is drawn: the PC Settings app's own Atmosphere/Date &
+Time section (Current time, Set Time, Sunrise/Sunset, Moonrise/Moonset),
+the Phone's own Settings app, and `PhoneSystem`'s status-bar clock. A
+genuine rounding bug (a fractional hour just under the next minute could
+render as `":60"`) was caught and fixed in the same pass, not treated as
+out of scope just because the format toggle was the actual assignment.
+
+**App screens now arrive with a bit of motion**, not an instant
+`innerHTML` swap — see `css/phone.css`'s own `workshop-phone-screen-in`
+keyframes and its comment on why this is an `animation`, not a
+`transition` (a one-shot "arrive like this," not an in-place state
+change), plus a real note on a genuine dev-tooling limitation found
+while verifying it (`.claude/DEV_NOTES.md`).
+
+**Deferred to its own wave**, deliberately: "each app should read as
+distinctly itself rather than sharing one visual template" — a real,
+sizeable interpretation choice on its own, not a fix that fits alongside
+four smaller, more mechanical ones. See "Each App, Distinctly Itself"
+below for that wave's own account.
+
+## Each App, Distinctly Itself (Version 3, Phase 13, Wave 2 — v3.1.3b)
+
+"Each app should read as distinctly itself rather than sharing one
+visual template" — the deferred fifth gap from Wave 1, given its own
+wave since it's a real, per-app design choice rather than a mechanical
+fix. Every app below still builds on the shared vocabulary
+(`.workshop-phone-section`, buttons, rows) established earlier in this
+file; what changed is each app's own small, content-grounded departure
+from it — never a departure invented for its own sake (see
+`docs/DESIGN_SYSTEM.md`'s "not a theming engine" caution, quoted above
+for wallpaper presets and just as true here).
+
+- **Bubble** — a companion, not a list. A real presence dot
+  (`data-presence`: `awake`/`conversing`/`connecting`/`sleeping`, driven
+  by the same `residentConnection`/`residentBehaviour` state the rest of
+  the app already reads) sits beside the heading, and the Talk button is
+  shaped like an actual speech bubble instead of the generic full-width
+  rectangle every other app's primary action already is.
+- **Wardrobe** — a closet, so outfits are a grid of garment cards, not a
+  scrolling list of rows. The swatch is each outfit's own real
+  `appearance.parts.torso.color` now, not the fixed placeholder colour
+  the Phase 12 ARIA audit had already flagged as "not really a preview"
+  — a genuine fix riding along with the visual pass, not a separate one.
+- **Workshop** — a portable control panel, so weather and time are
+  icon-forward tiles (11 new marks in `ProceduralIcons.js`: weather × 4,
+  time-of-day × 3, a light bulb, music × 3, a compass) and lighting/
+  music/"I'm Lost!" are icon-prefixed buttons, like a real device's own
+  control centre rather than plain text buttons. Building this surfaced
+  a real, standing gap: `aria-pressed` was already being set correctly
+  on every toggle here, but nothing anywhere gave it a visible look — a
+  listener had no way to *see* which weather or lighting state was
+  actually current. Fixed once, for every button in the app that sets
+  it, rather than patched per-button.
+- **Beings** — "Spawn a Being" is a tap-to-place roster grid (the shared
+  paw-print icon, since no per-Being icon exists), sized with
+  `auto-fill` rather than a fixed column count since a Being library can
+  hold anywhere from one entry to many. "Placed Beings" stays a list —
+  each instance carries real per-instance controls (movement select,
+  move/despawn/remove) a tile has no room for, so a list is the honest
+  shape for that content, not a limitation left unaddressed.
+- **Browser** — real browser chrome: a favicon-style globe mark on every
+  link and bookmark row, a pill-shaped address bar for adding one, and
+  an actual toolbar (a new `chevronLeft` back control plus the resolved
+  page's own title) over an opened page, replacing a plain "← Back" text
+  button.
+- **Emotes** — the same tap-to-trigger tile pattern as Beings' own
+  roster (the shared sparkle icon, since no per-gesture icon exists),
+  swapped in for the plain list `EmoteWheelSystem.js`'s own radial menu
+  still uses unchanged — two equally valid, independently-styled ways to
+  reach the same gestures, not a shared component either had to
+  compromise on.
+- **Settings** — deliberately the plainest app of the whole wave. Its
+  content is a panel of values to adjust, not a collection, a companion,
+  or a device to browse, so every slider, checkbox, and toggle row stays
+  exactly as it was; the only touch is the same small gear mark next to
+  its own heading every other app's identity-defining mark now gets.
+
 ## Known simplifications (by design, for this phase)
 
-- **Wardrobe preview is a colour swatch, not a live 3D render** — see
-  above.
 - **Being "quick behaviour changes" affect the whole definition**, not
   a single placed instance, since no per-instance override currently
   exists anywhere in the Being architecture.

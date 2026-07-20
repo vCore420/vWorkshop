@@ -200,6 +200,28 @@ toward small gaps with occasional larger breaks) rather than uniform
 weights per gap, so items bunch into a few natural-looking clusters
 instead of a comb.
 
+**Version 3, Phase 11 ("Workshop Character") — a small pot plant on the
+top shelf.** The book cluster on every non-bin shelf always spans
+exactly the shelf's own `usableWidth` (±0.45 from centre — deterministic
+regardless of the randomised gap distribution above, since the
+randomness only redistributes the leftover space *within* that fixed
+span, never the span itself), and the frame posts' own inner face sits
+at ±0.53 — leaving a real, fixed, always-empty 0.08m corridor at each
+end of every book shelf. The plant (a small ceramic pot plus five
+radially-arranged leaf spheres, the same shape `MusicCabinet.js`'s own
+cabinet-top plant already used, scaled down to actually fit this
+corridor) sits in the top shelf's right-hand one. Getting the fit
+genuinely right needed one real correction beyond the arithmetic above:
+a leaf's own rotation (the same tilt the reference pattern already
+applies, so the leaves don't all point identically straight up) grows
+its axis-aligned bounding box beyond its unrotated radius — an initial
+sizing that looked correct by hand computation still clipped the frame
+post by about 2mm once checked against the real generated mesh's own
+`Box3`, not the geometry parameters alone. Shrunk further and
+reconfirmed with a real overlap check (`Box3.intersectsBox()` against
+every other mesh on the shelf) rather than trusted by arithmetic a
+second time.
+
 **Version 3, Phase 3 ("The Reading Chair") — the sitting area's own
 quiet-corner bugs, and a shared reading panel.** Two real, stacked bugs
 kept the sitting area from ever doing what its own `allowLookAround:

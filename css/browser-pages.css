@@ -101,7 +101,11 @@ body {
   border-radius: 10px;
   text-decoration: none;
   color: var(--ink);
-  transition: border-color 0.15s ease, transform 0.15s ease;
+  /* Version 3, Phase 12 — was a hardcoded 0.15s with a plain `ease`
+     curve, neither referencing a token; rounded to the nearest one
+     (--duration-fast, 120ms) rather than adding a new one for a single
+     16ms difference nobody would notice. */
+  transition: border-color var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard);
 }
 .workshop-home-tile:hover { border-color: var(--brass); transform: translateY(-1px); }
 .workshop-home-tile-title { display: block; font-weight: 600; color: var(--wood-dark); margin-bottom: 2px; }

@@ -95,16 +95,24 @@ now-irrelevant old target.
 
 ## Environment Continuity
 
-**Weather already had this.** `EnvironmentSystem._catchUpDynamic()`
-predates this phase — `_enteredAt` is a real, persisted timestamp, and
-on load it steps `TRANSITIONS` forward (capped at `MAX_CATCHUP_STEPS`)
-however many times would plausibly have happened in the elapsed real
-time. Nothing needed to change here; it already answers "what should
-the weather have been doing while the player was away?" correctly, and
-doesn't need `WorldTimeService` at all, since "how long has the current
-weather state been active" is a genuinely different question from "how
-long since the last session," answered independently and correctly
-already.
+**Weather already had this, then Version 3 Phase 11 folded it into the
+shared source.** `EnvironmentSystem._catchUpDynamic()` predates
+`WorldTimeService` — it originally computed its own `Date.now() -
+_enteredAt` on every load and stepped `TRANSITIONS` forward (capped at
+`MAX_CATCHUP_STEPS`) however many times would plausibly have happened.
+That answered "what should the weather have been doing while the player
+was away?" correctly on its own terms, but it was a second, independently
+invented "how long were we gone" calculation sitting right alongside
+`WorldTimeService`'s already-canonical, already-capped one — the two
+caps (`MAX_CATCHUP_STEPS` and `WorldTimeService`'s own
+`MAX_CATCHUP_SECONDS`) existed for the same underlying reason without
+ever actually sharing anything. Phase 11 moved the catch-up itself onto
+a `"world:continuity"` listener, driven by `cappedElapsedSeconds` —
+`MAX_CATCHUP_STEPS` remains as a real, meaningful *inner* bound now that
+the outer one is shared, not removed. A genuinely first-ever session
+(`isFirstSession`) also gets an explicit, deliberate "clear" opening
+rather than relying on the constructor's own default to happen to read
+that way.
 
 **Time was the real gap.** `TimeOfDaySystem`'s default `"realtime"` mode
 already needed nothing either — it computes directly from the actual

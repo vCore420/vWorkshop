@@ -151,7 +151,17 @@ separate "Pelvis" entry — the Player rig's own "torso" pivot already sits
 at the hip line and is what every clip's own root rotation is authored
 against; a second, never-populated joint for the identical concept would
 be exactly the kind of hardcoded-but-unused field this phase's own "avoid
-hardcoded assumptions" warns against).
+hardcoded assumptions" warns against) — plus five more, added Version 3,
+Phase 10d ("Being Creator, Beyond the Prototype, Wave 3") for a
+quadruped's own legs and tail (`legFrontLeft`/`Right`,
+`legBackLeft`/`Right`, `tailBase` — see `docs/BEINGS.md`'s own "Known
+simplifications" for the full account). Those five are deliberately
+*not* part of `autoMapSkeleton()`'s own heuristic detection below, or of
+`IDENTITY_PLAYER_SKELETON_MAP` (no biped Player rig has a "front leg") —
+see `WorkshopSkeleton.js`'s own `QUADRUPED_ONLY_JOINT_IDS` comment for
+both reasons and the one real correctness consequence
+(`isSkeletonMapUsable()`, below) that already needed a fix because of
+it.
 
 **`autoMapSkeleton(root)` is a real, tested heuristic**, not a
 placeholder — it walks an arbitrary `THREE.Object3D` hierarchy and
@@ -194,11 +204,16 @@ labels from candidacy at all (see `WorkshopSkeleton.js`'s own
 pattern itself stricter and risking genuine compound Mixamo names like
 `"LeftHandIndex1"`.
 
-`isSkeletonMapUsable(map)` is the honest threshold — at least half the
-Workshop skeleton's own joints need to be found before anything attempts
-retargeted playback at all; below that, a model simply doesn't animate
-rather than animating a handful of limbs while the rest of the rig sits
-frozen, which would read as broken rather than "partially supported."
+`isSkeletonMapUsable(map)` is the honest threshold — at least half of
+whatever `autoMapSkeleton()` could ever actually find need to be found
+before anything attempts retargeted playback at all; below that, a
+model simply doesn't animate rather than animating a handful of limbs
+while the rest of the rig sits frozen, which would read as broken
+rather than "partially supported." Deliberately *not* half of
+`WORKSHOP_JOINTS.length` directly (fourteen, still, for this specific
+threshold) — see `WorkshopSkeleton.js`'s own comment for why growing
+that count with joints the heuristic can never populate would have
+quietly raised the bar for every ordinary imported biped model too.
 
 **Mapping is cached, not recomputed every spawn.** `ModelLibrary.js`
 gained a `skeletonMap` field — a plain `{jointId: boneName}` object, not

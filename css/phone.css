@@ -27,11 +27,29 @@
   flex-direction: column;
   overflow: hidden;
   transform: translateY(140%);
-  transition: transform var(--duration-slow) cubic-bezier(0.2, 0.8, 0.3, 1);
+  transition: transform var(--duration-slow) cubic-bezier(0.2, 0.8, 0.3, 1), border-color var(--duration-medium) var(--ease-standard);
 }
 .workshop-phone.open {
   transform: translateY(0);
 }
+
+/* Version 3, Phase 13 ("The Phone Becomes a Device") — "let a player
+   change... the phone's own border colour." Four curated cases, each an
+   existing token, not a colour picker; `[data-border="oak"]` is
+   deliberately identical to the rule above (the un-set default) so a
+   fresh Workshop looks exactly as it always has. Set by
+   `PhoneUI.setAppearance()`, read from `SettingsStore.get("phone")`.
+   `border-color`'s own transition (declared above, alongside `transform`)
+   is what makes an appearance change read as a real material change
+   rather than a flicker — verifying that motion live isn't possible
+   through this project's own dev browser pane specifically (it never
+   reports the tab as visible, so Chromium legitimately never ticks
+   `requestAnimationFrame`/CSS animation timelines for it at all — see
+   `.claude/DEV_NOTES.md`); the end state (which colour a given preset
+   actually resolves to) is what's checked here instead. */
+.workshop-phone[data-border="walnut"] { border-color: var(--wood-dark); }
+.workshop-phone[data-border="brass"] { border-color: var(--brass); }
+.workshop-phone[data-border="teal"] { border-color: var(--teal); }
 
 /* "Comfortable one-handed use... safe button placement... proper
    scaling." A fixed 290px corner panel works on desktop/tablet, where
@@ -120,17 +138,56 @@
   flex-direction: column;
 }
 
+/* Version 3, Phase 13 ("The Phone Becomes a Device") — "app opening/
+   closing should transition with a bit more phone-like motion." Every
+   screen change (`PhoneUI.showHome()`/`prepareAppContainer()`) already
+   does `this.content.innerHTML = ""` then appends fresh elements, so a
+   plain CSS animation targeting the content area's own direct children
+   fires automatically on every navigation — genuinely new elements, not
+   ones being reused — with no imperative "start/stop the transition" JS
+   needed at all. `animation`, not `transition`: this is a one-shot
+   "arrive like this" on insertion, not an in-place change between two
+   states, so `@keyframes` is the more honest fit for what's actually
+   happening, independent of which mechanism this project's own dev
+   tooling could or couldn't observe running (see `.claude/DEV_NOTES.md`
+   if a future check here seems to hang — this phase found the headless
+   browser pane used for verification doesn't tick `requestAnimationFrame`
+   at all for a backgrounded tab, so neither a `transition` nor an
+   `animation` can be watched progress through that tool; that's a
+   tooling limitation, not evidence of anything wrong with the CSS
+   itself). `--duration-medium` already resolves to `0ms` under
+   `prefers-reduced-motion` (see tokens.css), so this snaps to its end
+   state immediately there, the same as every other eased value this
+   project already gates that way. */
+@keyframes workshop-phone-screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.workshop-phone-content > * {
+  animation: workshop-phone-screen-in var(--duration-medium) var(--ease-standard);
+}
+
 /* Interface & Design Refinement phase — "navigation... home indicator."
    The one purely cosmetic nod to "this is a touchscreen" every modern
    phone shares — not a real gesture surface, just the visual grammar
    that reads as one. */
 .workshop-phone-home-indicator {
   flex-shrink: 0;
+  width: 100%;
   height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--wood-dark);
+  border: none;
+  padding: 0;
+  cursor: pointer;
 }
 .workshop-phone-home-indicator::after {
   content: "";
@@ -138,6 +195,11 @@
   height: 4px;
   border-radius: var(--radius-pill);
   background: rgba(237, 227, 208, 0.35);
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+.workshop-phone-home-indicator:hover::after,
+.workshop-phone-home-indicator:focus-visible::after {
+  background: rgba(237, 227, 208, 0.6);
 }
 
 /* ==========================================================================
@@ -146,7 +208,23 @@
    home screen has instead of plain bordered boxes on a flat surface.
    ========================================================================== */
 .workshop-phone-content:has(.workshop-phone-home-grid) {
-  background: radial-gradient(ellipse at 50% -10%, rgba(184, 134, 59, 0.16), transparent 60%), linear-gradient(180deg, var(--paper) 0%, var(--paper-dark) 100%);
+  background: radial-gradient(ellipse at 50% -10%, var(--phone-wallpaper-tint, color-mix(in srgb, var(--brass) 16%, transparent)), transparent 60%), linear-gradient(180deg, var(--paper) 0%, var(--paper-dark) 100%);
+}
+/* Version 3, Phase 13 — "let a player change the home screen's own
+   wallpaper." Every preset keeps the same paper/paper-dark base (the
+   home screen's own text is dark ink, so the surface itself always
+   needs to stay light) and only shifts which existing accent token
+   tints the radial glow above it — a curated set of the Workshop's own
+   colours, not a free-form picker. `"paper"` (this file's own long-
+   standing default) needs no rule of its own; it's the fallback above. */
+.workshop-phone[data-wallpaper="sage"] .workshop-phone-content:has(.workshop-phone-home-grid) {
+  --phone-wallpaper-tint: color-mix(in srgb, var(--teal-bright) 18%, transparent);
+}
+.workshop-phone[data-wallpaper="glow"] .workshop-phone-content:has(.workshop-phone-home-grid) {
+  --phone-wallpaper-tint: color-mix(in srgb, var(--screen-glow) 16%, transparent);
+}
+.workshop-phone[data-wallpaper="wood"] .workshop-phone-content:has(.workshop-phone-home-grid) {
+  --phone-wallpaper-tint: color-mix(in srgb, var(--wood-light) 20%, transparent);
 }
 .workshop-phone-home-grid {
   display: grid;
@@ -306,4 +384,336 @@
   border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: var(--radius-sm);
   background: white;
+}
+
+/* ==========================================================================
+   Per-app distinctness (Version 3, Phase 13, Wave 2) — "each app should
+   read as distinctly itself rather than sharing one visual template."
+   Every app below still builds on the shared vocabulary above (sections,
+   rows, buttons) — what's here is each app's own small, content-grounded
+   departure from it, not a second design system. Grouped by app, in the
+   order this wave built them.
+   ========================================================================== */
+
+/* Bubble — a companion, not a list or a control panel. A real presence
+   dot (the same convention a messaging app's own contact list already
+   uses) and a Talk button styled as an actual speech bubble rather than
+   the generic full-width rectangle every other app's primary action
+   already is. */
+.workshop-phone-bubble-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.workshop-phone-bubble-header h2 {
+  margin: 0;
+}
+.workshop-phone-presence-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--ink-soft); /* sleeping/unknown — the honest default until refreshStatus() sets a real one */
+}
+.workshop-phone-presence-dot[data-presence="awake"] {
+  background: var(--screen-glow);
+}
+.workshop-phone-presence-dot[data-presence="conversing"] {
+  background: var(--brass-bright);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brass-bright) 25%, transparent);
+}
+.workshop-phone-presence-dot[data-presence="connecting"] {
+  background: var(--brass);
+}
+.workshop-phone-presence-dot[data-presence="sleeping"] {
+  background: var(--ink-soft);
+}
+.workshop-phone-talk-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 6px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: var(--screen-glow);
+  color: #14211d;
+  font-weight: 600;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.workshop-phone-talk-icon {
+  display: flex;
+  font-size: 1.1em;
+}
+
+/* Wardrobe — a closet, so outfits read as a grid of garments, not a
+   scrolling list of rows. The swatch is now the card's own dominant
+   surface (a real per-outfit colour, not a small fixed circle), the
+   whole card is the tap target, and the active outfit gets a visible
+   ring rather than relying on colour alone. */
+.workshop-phone-outfit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.workshop-phone-outfit-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  width: 100%;
+  height: 100%; /* fills its grid row's own height even when a row-mate's longer name makes the row taller */
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.03);
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+}
+.workshop-phone-outfit-card.active {
+  border-color: var(--screen-glow);
+}
+.workshop-phone-outfit-swatch {
+  display: block;
+  width: 100%;
+  height: 44px;
+  flex-shrink: 0;
+}
+.workshop-phone-outfit-name {
+  padding: 6px 8px;
+  font-size: var(--text-xs);
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Workshop — a portable control panel, so every control reads as an
+   icon-forward tile or an icon-prefixed button like a real device's own
+   control centre, instead of plain text buttons. Building this surfaced
+   a real gap: `aria-pressed` was already being set correctly on the
+   weather/lighting/music toggle buttons, but nothing anywhere gave it a
+   visible look, so a listener had no way to *see* which option was
+   current. Fixed once here for every button in this app that sets it,
+   rather than per-button. */
+.workshop-phone-control-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.workshop-phone-control-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  text-align: center;
+}
+.workshop-phone-control-tile:hover {
+  background: rgba(127, 216, 196, 0.15);
+}
+.workshop-phone-control-tile-icon {
+  display: flex;
+  font-size: 1.3em;
+}
+.workshop-phone-icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.workshop-phone-icon-button-icon {
+  display: flex;
+  font-size: 1.1em;
+}
+/* The "on" look is `.workshop-phone-primary-button`'s own existing
+   default (it's always the affirmative highlighted button elsewhere,
+   e.g. Wardrobe's "Save Current Outfit") — only a real toggle in its
+   explicit "off" state (`aria-pressed="false"`) needs to look different
+   from that default, so a non-toggle primary button (no `aria-pressed`
+   attribute at all, e.g. "I'm Lost!") is untouched by this rule. */
+.workshop-phone-primary-button[aria-pressed="false"] {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--ink);
+}
+.workshop-phone-control-tile[aria-pressed="true"],
+.workshop-phone-small-button[aria-pressed="true"] {
+  background: var(--screen-glow);
+  color: #14211d;
+  border-color: transparent;
+}
+
+/* Beings — "Spawn a Being" reads as a roster, a tap-to-place tile grid
+   (the shared paw-print icon, since no per-Being icon exists) rather
+   than a plain list of rows. Column count adapts to however many
+   Beings exist (unlike Workshop's fixed-count rows above), since a
+   library can hold anywhere from one Being to many. */
+.workshop-phone-being-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+}
+.workshop-phone-being-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 4px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  text-align: center;
+}
+.workshop-phone-being-tile:hover {
+  background: rgba(127, 216, 196, 0.15);
+}
+.workshop-phone-being-tile-icon {
+  display: flex;
+  font-size: 1.5em;
+}
+.workshop-phone-being-tile-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* Browser — a browser's own chrome, not a settings list: a favicon-style
+   mark on every link/bookmark row, a pill-shaped address bar for adding
+   one, and a real toolbar (back chevron + page title) over an opened
+   page instead of a plain "← Back" text button. */
+.workshop-phone-browser-favicon {
+  display: flex;
+  flex-shrink: 0;
+  font-size: 1em;
+  color: var(--ink-soft);
+}
+.workshop-phone-browser-addressbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.03);
+}
+.workshop-phone-browser-addressbar-icon {
+  display: flex;
+  flex-shrink: 0;
+  font-size: 1em;
+  color: var(--ink-soft);
+}
+.workshop-phone-browser-addressbar input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  outline: none;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--text-xs);
+}
+.workshop-phone-browser-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 4px 0;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, 0.03);
+  flex-shrink: 0;
+}
+.workshop-phone-browser-back-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 1.2em;
+  flex-shrink: 0;
+}
+.workshop-phone-browser-back-button:hover {
+  background: rgba(127, 216, 196, 0.15);
+}
+.workshop-phone-browser-toolbar-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+}
+
+/* Emotes — the same tap-to-trigger tile grid as Beings' own roster (the
+   shared sparkle icon, since no per-gesture icon exists). */
+.workshop-phone-emotes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+}
+.workshop-phone-emotes-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 4px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  text-align: center;
+}
+.workshop-phone-emotes-tile:hover {
+  background: rgba(127, 216, 196, 0.15);
+}
+.workshop-phone-emotes-tile-icon {
+  display: flex;
+  font-size: 1.5em;
+}
+.workshop-phone-emotes-tile-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* Settings — deliberately the plainest app of the wave (see the file's
+   own comment): every control stays a slider, checkbox, or toggle row.
+   The one touch is the same small identity mark next to the heading
+   every other app in this wave now carries. */
+.workshop-phone-settings-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.workshop-phone-settings-header h2 {
+  margin: 0;
+}
+.workshop-phone-settings-header-icon {
+  display: flex;
+  font-size: 1.2em;
+  color: var(--ink-soft);
 }

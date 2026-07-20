@@ -474,7 +474,12 @@ purpose, rather than one field trying to mean all three:
   mood it already is, so it settles rather than flickers between
   reconsiderations. This is deliberately not a per-message mood computed
   from conversation sentiment or anything similarly elaborate — "subtle
-  behaviour changes are preferable to obvious state changes."
+  behaviour changes are preferable to obvious state changes." Version 3
+  Phase 11 gave it its first surfacing outside the resident itself: the
+  Browser Home page's own Residents tile (`WorkshopPages.js`'s
+  `homePage()`) reads it alongside the existing "Continuing: [project]"
+  line, via `ExpressionTypes.getExpressionType()`'s own label lookup
+  rather than a second mood-label map.
 - **Emotion** (short-term) is `ResidentBehaviour.emotion` — never
   persisted, set by `triggerEmotion(expression, seconds)` and decaying
   back to nothing on its own. The one place this is actually called is
@@ -605,6 +610,20 @@ directly and never guaranteed to actually come up. The one thing this
 class persists (`lastSeenObjectCount`) exists purely so the same "new
 object" note doesn't repeat forever once it's been mentioned once.
 
+## Continuity (Version 3, Phase 11)
+
+Related to curiosity but distinct: `ResidentContext.buildContinuityLine()`
+turns the shared `WorldTimeService.getContinuity()` result (already used
+by `ResidentController`/`BeingController` for on-load repositioning; see
+docs/PERSISTENCE.md) into one line about *how long the gap itself was*,
+handed to `composeSystemPrompt()`'s own `context.continuityLine`. A first
+session gets an honest "meeting them for the first time" line rather
+than a fabricated gap; any later session gets a bucketed phrase ("about
+ten minutes," "a few hours") rather than a raw duration, optionally
+joined with `PlayerPatternMemory.leadingWorkingHours()`. See
+docs/AI.md's own fuller account for exactly why this reads a shared
+value rather than computing its own.
+
 ## Conversation Memory
 
 "Continue improving conversation memory. Please focus on remembering
@@ -670,11 +689,18 @@ anything expired), fed into `composeSystemPrompt()`'s own
 Also read, read-only, by Mission Control's own Resident Sandbox for
 "Memory Inspection" — see docs/AI.md.
 
-**Deliberately never registered with `PersistenceSystem`.** This is what
-makes Mission Control's own "Session Only" memory mode true by
-construction — nothing here ever reaches `localStorage` — rather than a
-mode check scattered through save/load paths. See "Mission Control
-Integration" for what this means for "Persistent" mode specifically.
+**Registered with `PersistenceSystem` (Version 3, Phase 11)**, but the
+mode check lives inside `save()` itself rather than at registration —
+`save()` only writes real notes when the active profile's own
+`memory.mode` reads `"persistent"` at that moment, otherwise it writes
+an empty snapshot. This is what makes "Session Only" true by
+construction on the write side (nothing meaningful ever reaches
+`localStorage` under that mode) without a mode check scattered through
+every other save/load path, and makes "Persistent" genuinely persistent
+rather than a label with nothing behind it. Since this store is shared
+across every profile rather than segmented per-resident (see
+"Multiple residents" below), whichever profile is active at save time is
+the one whose mode decides.
 
 ## Resident Embodiments
 
@@ -873,11 +899,10 @@ wired, since the pieces are spread across several files above:
   motion; see "Resident Embodiments" above.
 - **Memory mode** — previously entirely inert — now genuinely gates
   `ConversationMemory`'s own extraction and prompt injection. "Disabled"
-  means exactly that. "Session Only" and "Persistent" are currently
-  treated identically (kept for the runtime session, never written to
-  `localStorage`) — true cross-session persistence for "Persistent" is
-  still honest future work, not this phase's; see
-  `MemoryConfiguration.js`'s own updated description.
+  means exactly that. "Session Only" and "Persistent" now genuinely
+  differ too (Version 3, Phase 11): only "Persistent" ever reaches
+  `localStorage`, checked fresh at every save — see
+  `ConversationMemory.js`'s own comment.
 - **Memory size / summaries / context budget** remain exactly what they
   were — real fields, real defaults, no storage limit or summarisation
   behind any of them yet.
@@ -1036,11 +1061,6 @@ own brief asks for.
   ever embodied at once this phase.
 - **No voice** — text only, matching "Voice" being listed as an explicit
   future capability, not this phase's own.
-- **"Session Only" and "Persistent" memory modes are currently
-  identical** — both keep `ConversationMemory`'s notes for the current
-  runtime only; genuine cross-session persistence for "Persistent" is
-  still future work, not implemented here (see `MemoryConfiguration.js`'s
-  own honest description).
 - **Conversation Memory's extraction is heuristic, not semantic** — three
   cheap regex/substring checks, not a model call. A message that states a
   preference or goal in an unusual phrasing simply isn't noticed; this is
@@ -1126,13 +1146,6 @@ own brief asks for.
   of what's here, only new systems that read from the same
   `ResidentProfileStore`/`ResidentState`/`ResidentPreferences`/
   `PlayerPatternMemory` this and earlier phases already established.
-- **True cross-session Conversation Memory** consuming
-  `MemoryConfiguration.js`'s own already-real `mode` field for its
-  "Persistent" value specifically — the seam is already there
-  (`ConversationMemory.js`'s own notes are already structured, bounded,
-  and ready to serialise); this phase's own honest choice was keeping
-  them runtime-only rather than half-persisting them without a real plan
-  for pruning/summarising a list that would otherwise grow forever.
 - **Semantic (model-assisted) memory extraction** — replacing
   `ConversationMemory.extractFromMessage()`'s own regex heuristics with an
   actual summarisation call, once `MemoryConfiguration.memorySummaries`

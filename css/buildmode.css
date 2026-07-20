@@ -34,7 +34,12 @@
   flex-direction: column;
   overflow: hidden;
   transform: translateY(140%);
-  transition: transform 0.38s cubic-bezier(0.2, 0.8, 0.3, 1);
+  /* Version 3, Phase 12 — was a hardcoded 0.38s; the real Phone's own
+     identical slide (`.workshop-phone` in phone.css) already used
+     `var(--duration-slow)` for this exact transition — an inconsistency
+     the token duration-zeroing under reduced motion also silently
+     missed, since this value never referenced the token at all. */
+  transition: transform var(--duration-slow) cubic-bezier(0.2, 0.8, 0.3, 1);
 }
 .builder-phone.open {
   transform: translateY(0);

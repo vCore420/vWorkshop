@@ -180,10 +180,18 @@ per-frame dice roll.
 - **Workshop Dynamic** (the default) — the Markov process above, running
   on its own. "Conditions should persist between visits" is handled by
   persisting *when* the current state was entered, not just what it is:
-  on load, `_catchUpDynamic()` replays elapsed real time forward through
-  the transition graph (bounded to six steps, so a save that's months old
-  doesn't try to simulate months of ticks) — the weather has genuinely
-  moved on while you were away, rather than freezing or resetting.
+  once per session, listening for the shared `"world:continuity"` event
+  (`WorldTimeService.js`), `_catchUpDynamic()` replays that elapsed time
+  forward through the transition graph (bounded to six steps on top of
+  `WorldTimeService`'s own already-capped elapsed value, so a save that's
+  months old doesn't try to simulate months of ticks) — the weather has
+  genuinely moved on while you were away, rather than freezing or
+  resetting. Version 3 Phase 11 moved this off a second,
+  independently-computed `Date.now()` reading and onto the same shared
+  elapsed-time source every other continuity-aware system already uses;
+  it also gave a genuinely first-ever session an explicit, calm "clear"
+  opening rather than an accident of whatever the constructor's own
+  default happened to be.
 
 **Live Weather's failure path is the same graceful fallback everywhere**:
 geolocation denied, geolocation unsupported, offline, a slow or

@@ -4,9 +4,9 @@
   Invisible on desktop by construction: #touch-controls starts empty of any
   visible content and only gains `.touch-active` (see InputManager.js) the
   first time an actual touch event happens. The joystick (walking, and —
-  pushed near its own edge — running), the two action buttons (jump,
-  crouch), and the tappable HUD prompt (see main.css's .hud-prompt) are
-  the entire touch-specific surface; ladder climbing needs none of its
+  pushed near its own edge — running), the three action buttons (jump,
+  crouch, zoom), and the tappable HUD prompt (see main.css's .hud-prompt)
+  are the entire touch-specific surface; ladder climbing needs none of its
   own, since it already reads the same forward/back joystick input
   ordinary ground movement does.
 */
@@ -61,13 +61,15 @@
   pointer-events: none;
 }
 
-/* Jump and crouch — the only two touch movement controls that need an
+/* Jump, crouch, and zoom — the touch movement/view controls that need an
    actual button (see InputManager.js's own comment on why running and
-   ladder climbing don't). Positioned opposite the joystick, same
-   glass/wood styling, same reveal-on-first-touch and modal-hidden
-   behaviour every other touch control already has. */
+   ladder climbing don't). Positioned opposite the joystick, stacked
+   bottom-to-top (crouch, jump, zoom), same glass/wood styling, same
+   reveal-on-first-touch and modal-hidden behaviour every other touch
+   control already has. */
 #touch-jump-button,
-#touch-crouch-button {
+#touch-crouch-button,
+#touch-zoom-button {
   position: absolute;
   right: max(28px, env(safe-area-inset-right));
   width: 68px;
@@ -81,18 +83,23 @@
   touch-action: none;
   pointer-events: auto;
 }
-#touch-jump-button {
-  bottom: max(108px, calc(env(safe-area-inset-bottom) + 108px));
-}
 #touch-crouch-button {
   bottom: max(28px, env(safe-area-inset-bottom));
 }
-#touch-crouch-button.active {
+#touch-jump-button {
+  bottom: max(108px, calc(env(safe-area-inset-bottom) + 108px));
+}
+#touch-zoom-button {
+  bottom: max(188px, calc(env(safe-area-inset-bottom) + 188px));
+}
+#touch-crouch-button.active,
+#touch-zoom-button.active {
   background: rgba(184, 134, 59, 0.35);
   border-color: var(--brass-bright);
   color: var(--brass-bright);
 }
 #touch-controls.modal-hidden #touch-jump-button,
-#touch-controls.modal-hidden #touch-crouch-button {
+#touch-controls.modal-hidden #touch-crouch-button,
+#touch-controls.modal-hidden #touch-zoom-button {
   pointer-events: none;
 }

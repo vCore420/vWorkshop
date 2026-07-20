@@ -48,6 +48,16 @@ screen, still sliding up the exact same way.
 
 ## Touch Improvements
 
+**A touch zoom button** (`InputManager.js`'s `_setupTouchActionButtons()`,
+`css/touch.css`) closes a real playtesting-found gap: "holding the Z key
+should smoothly zoom the camera in" had no touch equivalent at all.
+Stacked above Jump/Crouch, same glass/wood circle styling — but a genuine
+*hold*, not a toggle like Crouch, since `CameraSystem._updateZoom()`
+already expects `isHeld("zoom")` to track a real held key; the button
+sets a matching touch-only "held" flag on `touchstart` and clears it on
+`touchend`/`touchcancel` rather than reusing Crouch's toggle behaviour
+where it wouldn't fit.
+
 **A global touch-comfort baseline** (`tokens.css`, under `(pointer:
 coarse)` — the actual signal for "being tapped with a finger," not
 viewport width, so a touch laptop and a mouse-driven one at the same
@@ -59,6 +69,22 @@ classes across every interface file one at a time. `min-height`/
 size — nothing already tall/wide enough is affected.
 
 ## Accessibility Improvements
+
+**Native pinch-zoom/text-scaling, restored** (`index.html`'s own
+viewport meta, Version 3 Phase 12). `maximum-scale=1.0, user-scalable=no`
+blocked it everywhere on the page — a real WCAG 1.4.4 gap, and one that
+worked directly against the text-scale setting Settings already offers.
+Removed outright rather than loosened, since `#workshop-canvas`'s own
+`touch-action: none` (`touch.css`) was always what actually protected
+in-game touch controls from competing with the browser's own zoom/pan —
+confirmed live afterward that touch look-drag on the canvas still works
+exactly as before.
+
+**A compass corner button** (`HUD.js`, alongside Phone/View/Emotes) gives
+the compass toggle — previously keyboard-only ("M") — the same
+click/tap-reachable equivalent every other keyboard-shortcut action in
+the corner-controls group already had, matching the existing "I'm Lost!"
+button's own styling and placement rather than a new pattern.
 
 **A global focus-visible fallback** (`tokens.css`) gives every
 interactive element a clear keyboard-focus ring unless it already

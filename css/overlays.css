@@ -20,19 +20,29 @@
   pointer-events: auto;
 }
 
+/* Version 3, Phase 12 ("Accessibility & Comfort Pass") — this used to be
+   `background: transparent; color: inherit; opacity: 0.7`, which read as
+   "too low-visibility to notice reliably" in playtesting: no real
+   contrast of its own, blending into whatever material (screen/paper/
+   cork/panel) happened to sit behind it, with a hover boost that does
+   nothing on touch. Now the same glass/wood-chip treatment
+   `.hud-corner-controls button` and the touch action buttons already use
+   — proven to read clearly over the 3D scene, so it reads clearly here
+   too, regardless of which overlay material is behind it. */
 .overlay-close {
   position: absolute;
   top: var(--space-3);
   right: var(--space-3);
-  background: transparent;
-  border: none;
+  background: var(--surface-glass);
+  border: 1px solid var(--wood-mid);
+  border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
-  color: inherit;
-  opacity: 0.7;
+  color: var(--paper-dark);
+  padding: var(--space-1) var(--space-2);
   cursor: pointer;
 }
-.overlay-close:hover { opacity: 1; }
+.overlay-close:hover { border-color: var(--brass); color: var(--paper); }
 
 /* ---------- Screen material (computer desk) ---------- */
 .overlay--screen {
