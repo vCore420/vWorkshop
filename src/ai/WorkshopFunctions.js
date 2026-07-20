@@ -1,5 +1,6 @@
 import { WEATHER_STATES } from "../systems/EnvironmentSystem.js";
 import { CONSTRUCTION_PIECES, getConstructionPiece } from "../worldbuilder/ConstructionLibrary.js";
+import { clamp } from "../utils/MathUtils.js";
 
 /**
  * WorkshopFunctions
@@ -178,7 +179,7 @@ function round1(n) {
 function clampCoordinate(value, min, max) {
   const n = Number(value);
   if (!Number.isFinite(n)) return 0;
-  return Math.min(max, Math.max(min, n));
+  return clamp(n, min, max);
 }
 
 function clampPosition(args) {
@@ -356,7 +357,7 @@ export function createWorkshopFunctionDispatcher(deps) {
         case "setVolume": {
           const volume = Number(args?.volume);
           if (!Number.isFinite(volume)) return { error: "volume must be a number between 0 and 1." };
-          const clamped = Math.min(1, Math.max(0, volume));
+          const clamped = clamp(volume, 0, 1);
           musicSystem.setVolume(clamped);
           return { ok: true, action, volume: clamped };
         }

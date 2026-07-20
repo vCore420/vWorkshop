@@ -4,6 +4,8 @@ import { getBehaviourTypes, getBehaviourConfig, defaultPropertiesFor } from "../
 import { PART_CATEGORIES, SEGMENTED_PART_TYPES, partLabel } from "../../../worldbuilder/PartTypes.js";
 import { PreviewRenderer } from "./PreviewRenderer.js";
 import { nextDomId } from "../../../utils/domIds.js";
+import { escapeHtml } from "../../../utils/domSafety.js";
+import { createIconButton } from "../../../ui/iconButton.js";
 
 // Behaviours in this group can't be combined with each other — an entity
 // can only carry one InteractableComponent. See behaviours/registry.js.
@@ -667,13 +669,7 @@ function selectField(label, value, options, onChange, optionValues) {
 }
 
 function iconButton(glyph, title, onClick) {
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "builder-icon-button";
-  btn.title = title;
-  btn.textContent = glyph;
-  btn.addEventListener("click", (e) => { e.stopPropagation(); onClick(); });
-  return btn;
+  return createIconButton({ className: "builder-icon-button", glyph, label: title, onClick, stopPropagation: true });
 }
 
 function smallButton(label, onClick) {
@@ -689,8 +685,3 @@ function swap(arr, i, j) {
   [arr[i], arr[j]] = [arr[j], arr[i]];
 }
 
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str ?? "";
-  return div.innerHTML;
-}

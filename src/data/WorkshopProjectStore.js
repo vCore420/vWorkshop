@@ -1,4 +1,5 @@
 import { EventBus } from "../core/EventBus.js";
+import { clamp } from "../utils/MathUtils.js";
 
 /**
  * WorkshopProjectStore
@@ -49,7 +50,7 @@ export class WorkshopProjectStore {
     const project = this.projects[id];
     if (!project) return 0;
     const elapsedMs = Date.now() - new Date(project.startedAt).getTime();
-    return Math.max(0, Math.min(1, elapsedMs / (project.durationSeconds * 1000)));
+    return clamp(elapsedMs / (project.durationSeconds * 1000), 0, 1);
   }
 
   isComplete(id) {

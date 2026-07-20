@@ -131,17 +131,20 @@ export class BeingLibrary {
     return Object.values(this.beings).sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  /** A plain JSON string — "Export... Import" from the brief's own
-   *  Being Library section. Deliberately excludes `id`/timestamps
-   *  (`import()` always mints a fresh id, exactly like pasting a
-   *  duplicate) so importing the same exported file twice, or sharing it
-   *  with someone else's Workshop, never collides with an id that
-   *  already means something different there. */
+  /** A plain object — "Export... Import" from the brief's own Being
+   *  Library section. Deliberately excludes `id`/timestamps (`import()`
+   *  always mints a fresh id, exactly like pasting a duplicate) so
+   *  importing the same exported file twice, or sharing it with someone
+   *  else's Workshop, never collides with an id that already means
+   *  something different there. Returns a plain object, not a
+   *  pre-stringified JSON string — same shape every other store's own
+   *  export method already returns, so the caller can hand it straight to
+   *  `StorageUtils.downloadJSON()` like every other export feature does. */
   exportDefinition(id) {
     const being = this.get(id);
     if (!being) return null;
     const { id: _id, createdAt: _c, updatedAt: _u, ...portable } = being;
-    return JSON.stringify({ version: DEFINITION_VERSION, being: portable }, null, 2);
+    return { version: DEFINITION_VERSION, being: portable };
   }
 
   /** Accepts exactly what `exportDefinition()` produces. Normalizes every

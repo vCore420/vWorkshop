@@ -50,6 +50,30 @@ const WALL_GROWTH = (WALL_THICKNESS - OLD_WALL_THICKNESS) / 2;
  * solid segment is guaranteed to be solid; there's no second, hand-tuned
  * collision layout to drift out of sync with the geometry.
  */
+/** Phase 14 ("Further Environmental Polish") — every wall segment shared
+ *  one cached siding material with a fixed 0-1 UV span regardless of the
+ *  segment's own physical size, so a short header/sill segment (above/
+ *  below a window, say) showed the exact same board pattern squeezed
+ *  into far less height than the full-height segments beside it —
+ *  "compresses differently at a smaller height... doesn't line up." A
+ *  per-segment texture clone (cheap — no canvas redraw, just a new
+ *  Texture referencing the same image) with `repeat.y`/`offset.y` set
+ *  from this segment's own absolute position within the *whole* wall
+ *  keeps board density consistent and makes boards genuinely continuous
+ *  across every segment boundary, not just density-matched. Only ever
+ *  applied to the one face that's actually exterior siding —
+ *  `Materials.siding()`'s own shared, cached material is untouched for
+ *  every other caller in the project. */
+function wallSegmentMaterial(material, isExteriorFace, v0, v1, wallHeight) {
+  if (!isExteriorFace || !material.map) return material;
+  const clone = material.clone();
+  clone.map = material.map.clone();
+  clone.map.offset.y = v0 / wallHeight;
+  clone.map.repeat.y = (v1 - v0) / wallHeight;
+  clone.map.needsUpdate = true;
+  return clone;
+}
+
 function buildWallWithOpenings({ length, height, thickness, openings, exteriorFacesPositiveZ, interiorMaterial, exteriorMaterial }) {
   const wallGroup = new THREE.Group();
   const segments = [];
@@ -61,7 +85,9 @@ function buildWallWithOpenings({ length, height, thickness, openings, exteriorFa
     const w = u1 - u0;
     const h = v1 - v0;
     if (w <= 0.01 || h <= 0.01) return;
-    const mesh = multiFaceBox(w, h, thickness, { pz: pzMaterial, nz: nzMaterial }, exteriorMaterial);
+    const segPz = wallSegmentMaterial(pzMaterial, exteriorFacesPositiveZ, v0, v1, height);
+    const segNz = wallSegmentMaterial(nzMaterial, !exteriorFacesPositiveZ, v0, v1, height);
+    const mesh = multiFaceBox(w, h, thickness, { pz: segPz, nz: segNz }, exteriorMaterial);
     mesh.position.set((u0 + u1) / 2, (v0 + v1) / 2, 0);
     wallGroup.add(mesh);
     segments.push({ u0, u1, v0, v1 });
@@ -402,7 +428,14 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
     // centre, so together the two panels meet in the middle when closed.
     const pivot = new THREE.Group();
     const mesh = box(panelWidth, doorDef.height, 0.06, doorMat);
-    mesh.position.set(-hingeSide * (panelWidth / 2), doorDef.height / 2, 0);
+    // Phase 14 ("Further Environmental Polish") — the pivot itself now
+    // sits at the wall's true *outer* face (see its own `.position.set()`
+    // below), not the inner one, so opening no longer sweeps the panel
+    // back through the wall's own 0.3m thickness. The mesh's own local Z
+    // offsets by the exact same amount in the opposite direction, so the
+    // closed door still visually sits exactly where it always did (flush
+    // with the interior face) — only the invisible hinge point moved.
+    mesh.position.set(-hingeSide * (panelWidth / 2), doorDef.height / 2, -WALL_THICKNESS);
     pivot.add(mesh);
 
     const glassAreaHeight = doorDef.height - lowerPanelHeight - stileWidth * 2;
@@ -459,8 +492,11 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
 
   const doorPanelLeft = buildDoorPanel(-1);
   const doorPanelRight = buildDoorPanel(1);
-  doorPanelLeft.position.set(doorDef.position[0] - doorDef.width / 2, 0, southInteriorZ);
-  doorPanelRight.position.set(doorDef.position[0] + doorDef.width / 2, 0, southInteriorZ);
+  // Phase 14 — hinged from the wall's own true outer edge (southOuterZ),
+  // not the inner one; see buildDoorPanel()'s own comment on why the
+  // closed door's visual position is unaffected by this change.
+  doorPanelLeft.position.set(doorDef.position[0] - doorDef.width / 2, 0, southOuterZ);
+  doorPanelRight.position.set(doorDef.position[0] + doorDef.width / 2, 0, southOuterZ);
   root.add(doorPanelLeft);
   root.add(doorPanelRight);
   const doorOpenAngle = 1.9; // ~109° — flung outward, past perpendicular, the way a real French door rests open rather than stopping exactly at 90°
@@ -578,6 +614,84 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
     wallLightSockets.push(new THREE.Vector3(bracketX, 1.75, southInteriorZ - 0.15));
   }
 
+  // --- Exterior light, above the front doors — Phase 14 ("Further
+  // Environmental Polish") — "the workshop could use exterior lighting
+  // by the front door, spreading a bit of light outward." Built exactly
+  // like the interior wall sconces just above (geometry only here,
+  // LightingSystem attaches the real PointLight through the same
+  // registerPracticalLight path), just mounted on the outer face of the
+  // south wall instead, centred above the doorway rather than flanking
+  // it — a single fixture lighting the entrance, not a matched pair.
+  const exteriorLightSockets = [];
+  {
+    const bracket = box(0.06, 0.09, 0.08, sconceMat);
+    bracket.position.set(doorDef.position[0], doorDef.height + 0.35, southOuterZ + 0.05);
+    root.add(bracket);
+    const shade = cylinder(0.07, 0.09, 0.15, Materials.glass("#fbe8c2"));
+    shade.rotation.x = Math.PI / 2;
+    shade.position.set(doorDef.position[0], doorDef.height + 0.35, southOuterZ + 0.14);
+    root.add(shade);
+    exteriorLightSockets.push(new THREE.Vector3(doorDef.position[0], doorDef.height + 0.35, southOuterZ + 0.14));
+  }
+
+  // --- Outdoor details, right against the exterior walls — Phase 14
+  // ("Further Environmental Polish") — "a handful of small outdoor
+  // details... a bench seat, planter boxes under the windows — making
+  // the workshop itself feel more lived-in from outside." Purely
+  // decorative (no FurnitureSystem/interaction entry — a small detail,
+  // not a new interactable), sitting outside the room's own walkable
+  // interior, so neither needs its own collision footprint.
+  //
+  // A planter box under each window — the pot+radial-leaves technique
+  // is Shelving.js's own (see its "one pot plant on the book shelf"
+  // comment), reused here rather than inventing a second way to build
+  // foliage, just sized up for an outdoor box instead of a shelf-top pot.
+  const planterMat = Materials.wood("#4a3120");
+  const soilMat = Materials.matte("#2c1f14");
+  const foliageMat = Materials.fabric("#4a6b4a");
+  for (const w of windowDefs) {
+    const planterWidth = w.width + 0.1;
+    const planterDepth = 0.28;
+    const planterZ = northOuterZ - 0.18;
+    const planterBox = box(planterWidth, 0.3, planterDepth, planterMat);
+    planterBox.position.set(w.position[0], 0.15, planterZ);
+    root.add(planterBox);
+    const soil = box(planterWidth - 0.05, 0.03, planterDepth - 0.06, soilMat, { castShadow: false });
+    soil.position.set(w.position[0], 0.3 + 0.015, planterZ);
+    root.add(soil);
+    for (const clusterOffset of [-planterWidth / 3.4, 0, planterWidth / 3.4]) {
+      const clusterX = w.position[0] + clusterOffset;
+      for (let i = 0; i < 5; i++) {
+        const leaf = sphere(foliageMat, 8, 6);
+        const angle = (i / 5) * Math.PI * 2;
+        leaf.scale.set(0.05, 0.13, 0.05);
+        leaf.position.set(clusterX + Math.cos(angle) * 0.02, 0.3 + 0.11, planterZ + Math.sin(angle) * 0.02);
+        leaf.rotation.z = Math.cos(angle) * 0.3;
+        leaf.rotation.x = Math.sin(angle) * 0.3;
+        root.add(leaf);
+      }
+    }
+  }
+
+  // A bench beside the front door, far enough along the south wall to
+  // stay clear of the doorway itself and the exterior light above it.
+  {
+    const benchMat = Materials.wood("#5a3d29");
+    const benchX = doorDef.position[0] + doorDef.width / 2 + 1.2;
+    const benchZ = southOuterZ + 0.25;
+    const benchSeat = box(1.2, 0.06, 0.4, benchMat);
+    benchSeat.position.set(benchX, 0.42, benchZ);
+    root.add(benchSeat);
+    const benchBack = box(1.2, 0.32, 0.05, benchMat);
+    benchBack.position.set(benchX, 0.61, benchZ + 0.17);
+    root.add(benchBack);
+    for (const lx of [-0.5, 0.5]) {
+      const leg = box(0.06, 0.42, 0.35, benchMat);
+      leg.position.set(benchX + lx, 0.21, benchZ);
+      root.add(leg);
+    }
+  }
+
   // --- A small framed sketch, south wall — Decorative Details phase
   // ("picture frames... wall decorations"). Reuses `Materials
   // .sketchPaper()` (already built for the Builder's own sketch presence
@@ -613,6 +727,7 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
     doorColliderBox,
     ceilingLightSockets,
     wallLightSockets,
+    exteriorLightSockets,
     clockHourHand,
     clockMinuteHand,
     bounds: { width, depth, height },

@@ -7,6 +7,8 @@ import { ClipPlayer } from "../../../player/AnimationPlayback.js";
 import { applyPoseToMappedSkeleton } from "../../../player/AnimationRetargeting.js";
 import { importModelFile } from "../../../beings/ModelLibrary.js";
 import { nextDomId } from "../../../utils/domIds.js";
+import { createIconButton } from "../../../ui/iconButton.js";
+import { StorageUtils } from "../../../utils/StorageUtils.js";
 
 const RAD_TO_DEG = 180 / Math.PI;
 const DEG_TO_RAD = Math.PI / 180;
@@ -370,14 +372,10 @@ function buildLibraryRow(being, isSelected, beingLibrary, onLoad, onChange) {
   exportBtn.className = "builder-icon-button";
   exportBtn.textContent = "Export";
   exportBtn.addEventListener("click", () => {
-    const json = beingLibrary.exportDefinition(being.id);
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${being.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "being"}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const data = beingLibrary.exportDefinition(being.id);
+    if (!data) return;
+    const filename = `${being.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "being"}.json`;
+    StorageUtils.downloadJSON(filename, data);
   });
 
   const deleteBtn = document.createElement("button");
@@ -863,13 +861,7 @@ function vectorRow(label, values, min, max, step, onChange, unit = "") {
 }
 
 function iconButton(glyph, title, onClick) {
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "builder-icon-button";
-  btn.title = title;
-  btn.textContent = glyph;
-  btn.addEventListener("click", onClick);
-  return btn;
+  return createIconButton({ className: "builder-icon-button", glyph, label: title, onClick });
 }
 
 // ---------------------------------------------------------------------

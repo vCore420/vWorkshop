@@ -1,4 +1,5 @@
 import { EventBus } from "../core/EventBus.js";
+import { generateId } from "../utils/generateId.js";
 
 const HOME_URL = "workshop://";
 const MAX_HISTORY_PER_TAB = 100;
@@ -53,7 +54,7 @@ export class BrowserStore {
   }
 
   _makeTab(url = HOME_URL) {
-    return { id: `tab-${Date.now()}-${Math.round(Math.random() * 10000)}`, history: [url], historyIndex: 0, scrollY: 0, title: "New Tab" };
+    return { id: generateId("tab"), history: [url], historyIndex: 0, scrollY: 0, title: "New Tab" };
   }
 
   newTab(url = HOME_URL) {

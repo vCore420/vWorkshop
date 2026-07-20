@@ -152,10 +152,13 @@ export const MusicCabinetDefinition = {
     const speakerOffsetX = cabinetWidth / 2 + 0.24;
     for (const sx of [-speakerOffsetX, speakerOffsetX]) {
       const standHeight = 0.4;
-      const stand = box(0.09, standHeight, 0.09, Materials.wood("#3d2a1c"));
+      // Phase 14 ("Further Environmental Polish") — both read noticeably
+      // darker than the project's other wood surfaces; lightened so the
+      // grain itself (already good) actually pops against the room.
+      const stand = box(0.09, standHeight, 0.09, Materials.wood("#5a3d29"));
       stand.position.set(sx, standHeight / 2, 0);
       g.add(stand);
-      const speaker = box(0.19, 0.28, 0.17, Materials.wood("#4a3120"));
+      const speaker = box(0.19, 0.28, 0.17, Materials.wood("#6b4830"));
       speaker.position.set(sx, standHeight + 0.14, 0);
       g.add(speaker);
       const cone = cylinder(0.055, 0.055, 0.015, Materials.rubber("#232323"), 20);

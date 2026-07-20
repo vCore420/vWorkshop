@@ -8,6 +8,7 @@ import { buildConversationContext } from "../../resident/ResidentContext.js";
 import { getIdleLocation } from "../../resident/ResidentMovement.js";
 import { StorageUtils } from "../../utils/StorageUtils.js";
 import { EXPRESSION_TYPES, EXPRESSION_GRID_SIZE } from "../../resident/ExpressionTypes.js";
+import { escapeHtml } from "../../utils/domSafety.js";
 import { nextDomId } from "../../utils/domIds.js";
 import { WORKSHOP_FUNCTIONS } from "../../ai/WorkshopFunctions.js";
 
@@ -1418,6 +1419,3 @@ function capitalize(text) {
   return value ? value[0].toUpperCase() + value.slice(1) : "\u2014";
 }
 
-function escapeHtml(text) {
-  return String(text ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}

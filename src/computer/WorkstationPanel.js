@@ -1,5 +1,6 @@
 import { iconMarkup } from "../utils/ProceduralIcons.js";
 import { createFocusTrap } from "../ui/focusTrap.js";
+import { formatClockTime } from "../utils/TimeFormat.js";
 
 /**
  * WorkstationPanel
@@ -34,9 +35,10 @@ import { createFocusTrap } from "../ui/focusTrap.js";
  * got, applied here for the exact same reason.
  */
 export class WorkstationPanel {
-  constructor(rootEl, apps, engine) {
+  constructor(rootEl, apps, engine, settingsStore) {
     this.engine = engine;
     this.apps = apps;
+    this._settingsStore = settingsStore; // read directly for the header clock's own time-format preference — see TimeFormat.js's own comment, and PhoneSystem's identical use of the same store for its status bar
     this.activeAppId = apps[0]?.id ?? null;
     this._mountedDispose = null;
 
@@ -82,11 +84,15 @@ export class WorkstationPanel {
     this.el.append(this.rail, this.main);
     rootEl.appendChild(this.el);
 
+    const renderClock = () => {
+      if (this._lastHour == null) return;
+      this.clockEl.textContent = formatClockTime(this._lastHour, this._settingsStore?.get("display").timeFormat);
+    };
     this._unsubClock = engine.events.on("timeofday:changed", ({ hour }) => {
-      const h = Math.floor(hour);
-      const m = Math.floor((hour - h) * 60);
-      this.clockEl.textContent = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+      this._lastHour = hour;
+      renderClock();
     });
+    this._unsubClockFormat = this._settingsStore?.events.on("settings:changed", renderClock);
   }
 
   /** Opens on whichever app was active last time (default: the first app). */

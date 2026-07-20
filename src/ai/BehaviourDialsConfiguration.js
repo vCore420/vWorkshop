@@ -21,6 +21,8 @@
  * `EmbodimentConfiguration.js`/`TraitConfiguration.js` — a plain object,
  * a `default*Config()`, a `normalize*Config()`.
  */
+import { clamp } from "../utils/MathUtils.js";
+
 export const BEHAVIOUR_DIALS = [
   { id: "curiosity", label: "Curiosity", low: "Incurious", high: "Curious" },
   { id: "talkativeness", label: "Talkativeness", low: "Reserved", high: "Talkative" },
@@ -43,7 +45,7 @@ export function normalizeDialsConfig(config) {
   const normalized = {};
   for (const dial of BEHAVIOUR_DIALS) {
     const value = config[dial.id];
-    normalized[dial.id] = typeof value === "number" && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : defaults[dial.id];
+    normalized[dial.id] = typeof value === "number" && Number.isFinite(value) ? clamp(value, 0, 1) : defaults[dial.id];
   }
   return normalized;
 }

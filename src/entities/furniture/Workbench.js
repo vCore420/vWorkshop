@@ -246,7 +246,12 @@ export const WorkbenchDefinition = {
     }
     fanGroup.add(bladeAssembly);
 
-    fanGroup.position.set(-0.72, topY + 0.02, -0.32);
+    // Phase 14 ("Further Environmental Polish") — the base's own bottom
+    // face sat at `topY + 0.02` (0.87), 2cm below the bench top's real
+    // surface (`surfaceY`, 0.89 — the top box's own upper face), sinking
+    // it visibly into the wood. Every other surface-flush item on the
+    // bench already anchors to `surfaceY` for exactly this reason.
+    fanGroup.position.set(-0.72, surfaceY, -0.32);
     fanGroup.rotation.y = 0.5; // angled slightly, as if aimed across the bench rather than dead-on
     g.add(fanGroup);
     g.userData.spinningParts = [{ mesh: bladeAssembly, axis: "z", speed: 7 }];

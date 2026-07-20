@@ -36,7 +36,7 @@ const PANEL_REVEAL_END = 1.0; // ...and is fully shown by this progress
  */
 export class ComputerSystem {
   constructor(deps) {
-    this.deps = deps; // { projectsStore, notesStore, musicSystem, lightingSystem, timeOfDaySystem, environmentSystem, settingsStore, appearanceStore, outfitStore, textureStore, dangerZoneActions, audioSystem }
+    this.deps = deps; // { projectsStore, notesStore, journalStore, musicSystem, lightingSystem, timeOfDaySystem, environmentSystem, settingsStore, appearanceStore, outfitStore, textureStore, dangerZoneActions, audioSystem }
     this.active = false;
     this.progress = 0;
     this.lastAppId = "projects";
@@ -76,7 +76,7 @@ export class ComputerSystem {
     }
 
     const apps = buildApps(this.deps);
-    this.panel = new WorkstationPanel(document.getElementById("computer-root"), apps, engine);
+    this.panel = new WorkstationPanel(document.getElementById("computer-root"), apps, engine, this.deps.settingsStore);
     this.vignetteEl = document.getElementById("computer-vignette");
 
     engine.events.on("computer:activate", () => this.activate());

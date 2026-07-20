@@ -52,7 +52,11 @@ export function createWardrobeApp({ appearanceStore, outfitStore, textureStore, 
       const preview = new PreviewRenderer(previewSlot, { lookAtHeight: 0.8, distance: 2.6 });
 
       const form = document.createElement("div");
-      form.className = "builder-form";
+      // Phase 14 ("Further Environmental Polish") — a Wardrobe-specific
+      // class alongside the shared `.builder-form`, so the new grid
+      // layout below is scoped to this app only and never touches the
+      // Builder app's own unrelated use of `.builder-form`.
+      form.className = "builder-form wardrobe-form";
       root.appendChild(form);
       container.appendChild(root);
 
@@ -111,7 +115,13 @@ export function createWardrobeApp({ appearanceStore, outfitStore, textureStore, 
        *  models needed no special-casing here at all. */
       function buildBodyModelSection() {
         const section = document.createElement("div");
-        section.className = "builder-section";
+        // Phase 14 ("Further Environmental Polish") — "everything inside
+        // needed a better layout scheme," not a bigger panel for its own
+        // sake. This section and Alternate Models are both short, tab-only
+        // selectors — `builder-section-compact` lets the wider panel below
+        // sit them side by side instead of stacking every section in one
+        // narrow column regardless of how much width is actually available.
+        section.className = "builder-section builder-section-compact";
         const heading = document.createElement("h2");
         heading.textContent = "Body";
         section.appendChild(heading);
@@ -140,7 +150,7 @@ export function createWardrobeApp({ appearanceStore, outfitStore, textureStore, 
        *  their walk cycle stopped moving. */
       function buildImportedModelSection() {
         const section = document.createElement("div");
-        section.className = "builder-section";
+        section.className = "builder-section builder-section-compact";
         const heading = document.createElement("h2");
         heading.textContent = "Alternate Models";
         section.appendChild(heading);
@@ -196,7 +206,10 @@ export function createWardrobeApp({ appearanceStore, outfitStore, textureStore, 
 
       function buildProportionsSection() {
         const section = document.createElement("div");
-        section.className = "builder-section";
+        // Phase 14 \u2014 paired with Appearance below: both are compact,
+        // single-part edit panels (three sliders here; colour/material/
+        // texture there), not long enough to need the panel's full width.
+        section.className = "builder-section builder-section-compact";
         const heading = document.createElement("h2");
         heading.textContent = `${PART_LABELS[selectedPart]} \u2014 proportions`;
         section.appendChild(heading);
@@ -237,7 +250,7 @@ export function createWardrobeApp({ appearanceStore, outfitStore, textureStore, 
 
       function buildAppearanceSection() {
         const section = document.createElement("div");
-        section.className = "builder-section";
+        section.className = "builder-section builder-section-compact";
         const heading = document.createElement("h2");
         heading.textContent = "Appearance";
         section.appendChild(heading);

@@ -1,5 +1,6 @@
 import { wrapPage } from "./PageShell.js";
 import { WORKSHOP_JOINTS } from "../player/WorkshopSkeleton.js";
+import { escapeHtml } from "../utils/domSafety.js";
 
 const DETAIL_URL_PATTERN = /^workshop:\/\/asset\/(object|blueprint|animation|being|expression|atmosphere|calculator|resident)\/(.+)$/;
 const ASSET_SCHEME_DETAIL_PATTERN = /^asset:\/\/(object|blueprint|animation|being|expression|atmosphere|calculator|resident)\/(.+)$/;
@@ -455,6 +456,3 @@ function formatDate(iso) {
   }
 }
 
-function escapeHtml(text) {
-  return String(text ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}

@@ -3,6 +3,7 @@ import { isInternalUrl, INTERNAL_SCHEMES } from "../../browser/PageRegistry.js";
 import { StorageUtils } from "../../utils/StorageUtils.js";
 import { createCloseButton } from "../../ui/closeButton.js";
 import { tabListTargetIndex } from "../../ui/tabList.js";
+import { escapeHtml } from "../../utils/domSafety.js";
 
 /**
  * createBrowserApp
@@ -499,6 +500,3 @@ function notFoundHtml(url) {
   return `<h1>Page not found</h1><p>Nothing is registered for <code>${escapeHtml(url)}</code>.</p><p><a href="workshop://">Return to Workshop Home</a></p>`;
 }
 
-function escapeHtml(text) {
-  return String(text ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}

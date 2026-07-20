@@ -1,5 +1,6 @@
 import { wrapPage } from "./PageShell.js";
 import { renderMarkdown } from "../utils/SimpleMarkdown.js";
+import { escapeHtml } from "../utils/domSafety.js";
 import { HOME_URL } from "./BrowserStore.js";
 import { WorkbenchSystem } from "../workbench/WorkbenchSystem.js";
 import { getIdleLocation } from "../resident/ResidentMovement.js";
@@ -652,6 +653,3 @@ function capitalize(text) {
   return value ? value[0].toUpperCase() + value.slice(1) : "Unknown";
 }
 
-function escapeHtml(text) {
-  return String(text ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}

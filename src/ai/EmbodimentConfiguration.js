@@ -25,6 +25,8 @@
  * into something that reuses `AnimationLibraryStore` clips directly;
  * nothing here commits to it staying this simple forever.
  */
+import { clamp } from "../utils/MathUtils.js";
+
 export const EMBODIMENT_TYPES = [
   { id: "floatingOrb", label: "Floating Orb" },
   { id: "cube", label: "Cube" },
@@ -57,11 +59,11 @@ export function normalizeEmbodimentConfig(config) {
     type: EMBODIMENT_TYPES.some((t) => t.id === config.type) ? config.type : defaults.type,
     color: typeof config.color === "string" ? config.color : defaults.color,
     glow: clamp01(config.glow, defaults.glow),
-    scale: typeof config.scale === "number" ? Math.min(2, Math.max(0.3, config.scale)) : defaults.scale,
+    scale: typeof config.scale === "number" ? clamp(config.scale, 0.3, 2) : defaults.scale,
     idleBehaviour: IDLE_BEHAVIOUR_OPTIONS.some((o) => o.id === config.idleBehaviour) ? config.idleBehaviour : defaults.idleBehaviour,
   };
 }
 
 function clamp01(value, fallback) {
-  return typeof value === "number" ? Math.min(1, Math.max(0, value)) : fallback;
+  return typeof value === "number" ? clamp(value, 0, 1) : fallback;
 }

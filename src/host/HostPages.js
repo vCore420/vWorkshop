@@ -1,4 +1,5 @@
 import { wrapPage } from "../browser/PageShell.js";
+import { escapeHtml } from "../utils/domSafety.js";
 
 /**
  * HostPages
@@ -409,6 +410,3 @@ function capitalize(text) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-function escapeHtml(text) {
-  return String(text ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}

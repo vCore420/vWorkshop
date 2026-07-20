@@ -18,6 +18,7 @@
  * rather than a domain root.
  */
 import { INTERNAL_SCHEMES } from "./PageRegistry.js";
+import { escapeHtml } from "../utils/domSafety.js";
 
 const LINK_SELECTOR = INTERNAL_SCHEMES.map((scheme) => `a[href^='${scheme}://']`).join(", ");
 
@@ -52,8 +53,4 @@ ${bodyHtml}
 </script>
 </body>
 </html>`;
-}
-
-function escapeHtml(text) {
-  return String(text ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }

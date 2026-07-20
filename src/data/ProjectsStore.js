@@ -40,6 +40,7 @@
  * own "Why no Planner" for the reasoning.
  */
 import { EventBus } from "../core/EventBus.js";
+import { generateId } from "../utils/generateId.js";
 
 let _nextId = 1;
 
@@ -100,7 +101,7 @@ export class ProjectsStore {
     const project = this.get(projectId);
     if (!project) return null;
     if (!Array.isArray(project.calculations)) project.calculations = [];
-    const entry = { id: `calc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, createdAt: new Date().toISOString(), ...record };
+    const entry = { id: generateId("calc"), createdAt: new Date().toISOString(), ...record };
     project.calculations.push(entry);
     project.updatedAt = new Date().toISOString();
     this.events.emit("projects:changed", this.projects);

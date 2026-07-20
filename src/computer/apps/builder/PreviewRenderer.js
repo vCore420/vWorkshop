@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { clamp } from "../../../utils/MathUtils.js";
 
 /**
  * PreviewRenderer
@@ -88,7 +89,7 @@ export class PreviewRenderer {
     this._onPointerMove = (e) => {
       if (!this._dragging) return;
       this._theta -= (e.clientX - this._lastX) * 0.008;
-      this._phi = Math.max(0.15, Math.min(Math.PI - 0.15, this._phi - (e.clientY - this._lastY) * 0.008));
+      this._phi = clamp(this._phi - (e.clientY - this._lastY) * 0.008, 0.15, Math.PI - 0.15);
       this._lastX = e.clientX;
       this._lastY = e.clientY;
       this._updateCameraPosition();
@@ -109,7 +110,7 @@ export class PreviewRenderer {
     this._maxDistance = distance * 3;
     this._onWheel = (e) => {
       e.preventDefault();
-      this._distance = Math.max(this._minDistance, Math.min(this._maxDistance, this._distance + e.deltaY * 0.003 * this._distance));
+      this._distance = clamp(this._distance + e.deltaY * 0.003 * this._distance, this._minDistance, this._maxDistance);
       this._updateCameraPosition();
     };
     this.canvas.addEventListener("wheel", this._onWheel, { passive: false });

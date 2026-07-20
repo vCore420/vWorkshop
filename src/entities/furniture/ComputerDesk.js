@@ -144,8 +144,11 @@ export const ComputerDeskDefinition = {
     // plastic in real life, the identical finding the Workbench phase
     // made about its own clipboard and fan. Proportions nudged slightly
     // closer to a real keyboard's own aspect ratio at the same time.
+    // Phase 14 ("Further Environmental Polish") — this sat centred at
+    // x=0 (spanning -0.18..0.18), overlapping the mousepad's own left
+    // edge at x=0.12 by 6cm. Shifted left, clear of it with a real gap.
     const keyboard = box(0.36, 0.02, 0.13, Materials.plastic("#2c2c2c"));
-    keyboard.position.set(0, surfaceY + 0.01, 0.15);
+    keyboard.position.set(-0.08, surfaceY + 0.01, 0.15);
     g.add(keyboard);
     // A thin rubber mousepad — "comfort... small practical details."
     // Sits directly on the desk surface; the mouse above is lifted by
@@ -265,6 +268,14 @@ export const ComputerDeskDefinition = {
       // once it's rotated this way, not as a coin lying flat.
       const castor = cylinder(0.022, 0.022, 0.02, Materials.rubber("#141414"), 10);
       castor.rotation.x = Math.PI / 2;
+      // Phase 14 ("Further Environmental Polish") — this never turned
+      // with its own leg (unlike `arm` above), so every castor shared one
+      // fixed orientation regardless of which of the 5 evenly-spaced
+      // positions it sat at; only the leg at angle 0 ever looked right,
+      // and every other one looked progressively more misaligned with
+      // its own arm the further round the circle it was — "each leg off
+      // by a different amount." The same `angle` the arm already turns by.
+      castor.rotation.y = angle;
       // Rotating around X swaps this cylinder's height (0.02) and radius
       // (0.022) axes — its vertical extent is now governed by the
       // *radius*, not half its height, so it needs to sit a full radius

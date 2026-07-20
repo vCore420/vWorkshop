@@ -34,8 +34,12 @@ export const WardrobeDefinition = {
 
   build() {
     const g = group();
-    const wood = Materials.wood("#4a2f1f");
-    const woodTrim = Materials.wood("#3a2415");
+    // Phase 14 ("Further Environmental Polish") — both tones read
+    // noticeably darker than the project's other wood surfaces (compare
+    // Materials.wood()'s own "#6b4a34" default); lightened while keeping
+    // the same "trim a touch darker than the body" relationship.
+    const wood = Materials.wood("#6b4527");
+    const woodTrim = Materials.wood("#4f3320");
     const brass = Materials.brass();
 
     // --- Cabinet body, roughly centred at local x = -0.35 ---
