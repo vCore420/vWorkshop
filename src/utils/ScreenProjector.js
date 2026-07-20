@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { clamp } from "./MathUtils.js";
 
 /**
  * ScreenProjector
@@ -96,15 +97,15 @@ export function comfortableRect(rect, viewportWidth, viewportHeight) {
   const narrowViewport = viewportWidth < NARROW_VIEWPORT_WIDTH;
   if (!tooSmall && !narrowViewport) return rect;
 
-  const targetWidth = Math.min(viewportWidth * 0.94, Math.max(rect.width, MIN_COMFORTABLE_WIDTH));
-  const targetHeight = Math.min(viewportHeight * 0.88, Math.max(rect.height, MIN_COMFORTABLE_HEIGHT));
+  const targetWidth = clamp(rect.width, MIN_COMFORTABLE_WIDTH, viewportWidth * 0.94);
+  const targetHeight = clamp(rect.height, MIN_COMFORTABLE_HEIGHT, viewportHeight * 0.88);
   const centerX = rect.left + rect.width / 2;
   const centerY = rect.top + rect.height / 2;
 
   let left = centerX - targetWidth / 2;
   let top = centerY - targetHeight / 2;
-  left = Math.max(4, Math.min(left, viewportWidth - targetWidth - 4));
-  top = Math.max(4, Math.min(top, viewportHeight - targetHeight - 4));
+  left = clamp(left, 4, viewportWidth - targetWidth - 4);
+  top = clamp(top, 4, viewportHeight - targetHeight - 4);
 
   return { left, top, width: targetWidth, height: targetHeight };
 }

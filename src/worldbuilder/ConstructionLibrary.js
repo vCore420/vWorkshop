@@ -208,7 +208,14 @@ export const CONSTRUCTION_PIECES = [
     name: "Door",
     description: "A swinging door, ready to use — carries the same Door behaviour any custom object can.",
     parts: [{ id: "a", type: "box", position: [0, 1.05, 0], rotationY: 0, scale: [0.9, 2.1, 0.05], color: DOOR_COLOR }],
-    behaviours: [{ type: "door", properties: { openOffset: 90 } }],
+    // Phase 14 ("Further Environmental Polish") — DoorBehaviour.js's own
+    // `hingeOffset` property existed since Phase 10 but nothing here ever
+    // set it, so every placed Door still swung around its own centre by
+    // default. -0.45 is this leaf's own half-width (0.9/2), hinging at
+    // its left edge — a real, believable swing out of the box; the
+    // properties panel already lets a player flip it to 0.45 (or back to
+    // 0 for the old centre-swing) per instance.
+    behaviours: [{ type: "door", properties: { openOffset: 90, hingeOffset: -0.45 } }],
   }),
 
   piece({
@@ -219,7 +226,17 @@ export const CONSTRUCTION_PIECES = [
       { id: "left", type: "box", position: [-0.46, 1.05, 0], rotationY: 0, scale: [0.88, 2.1, 0.05], color: DOOR_COLOR },
       { id: "right", type: "box", position: [0.46, 1.05, 0], rotationY: 0, scale: [0.88, 2.1, 0.05], color: DOOR_COLOR },
     ],
-    behaviours: [{ type: "door", properties: { openOffset: 90 } }],
+    // Phase 14 ("Further Environmental Polish") — both leaves still
+    // swing together as one rigid unit (DoorBehaviour has no concept of
+    // "which part is the door leaf" — see docs/WORLDBUILDER.md's own
+    // account of why genuinely independent leaves would need two
+    // separate placed objects, out of scope for a small, isolated fix).
+    // What this *can* honestly fix: -0.9 is the combined unit's own
+    // leftmost outer edge (left leaf spans -0.9..-0.02, right spans
+    // 0.02..0.9), so the whole two-leaf unit now swings from one shared
+    // outer edge like a single wide door, instead of both leaves
+    // spinning open from empty air at the centre seam.
+    behaviours: [{ type: "door", properties: { openOffset: 90, hingeOffset: -0.9 } }],
   }),
 
   piece({
@@ -385,7 +402,11 @@ export const CONSTRUCTION_PIECES = [
       { id: "railLow", type: "box", position: [0, 0.35, 0], rotationY: 0, scale: [1.2, 0.06, 0.06], color: RAW_MATERIAL_COLOR },
       { id: "railHigh", type: "box", position: [0, 0.75, 0], rotationY: 0, scale: [1.2, 0.06, 0.06], color: RAW_MATERIAL_COLOR },
     ],
-    behaviours: [{ type: "door", properties: { openOffset: 100 } }],
+    // Phase 14 ("Further Environmental Polish") — same fix as the Door
+    // piece above, same reason: -0.6 is postA's own position, hinging
+    // the gate at one of its own two posts rather than its centre — the
+    // same place a real garden gate actually hinges.
+    behaviours: [{ type: "door", properties: { openOffset: 100, hingeOffset: -0.6 } }],
   }),
 
   piece({

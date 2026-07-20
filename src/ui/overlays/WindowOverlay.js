@@ -1,5 +1,6 @@
 import { WEATHER_STATES } from "../../systems/EnvironmentSystem.js";
 import { getObserverLocation, dayOfYear, getSeason } from "../../utils/Astronomy.js";
+import { formatClockTime } from "../../utils/TimeFormat.js";
 
 const MODES = [
   ["manual", "Manual"],
@@ -48,7 +49,7 @@ function capitalize(text) {
  * the same pure function anything else that wants to know the season
  * calls, not a value this file computes or owns.
  */
-export function createWindowOverlay({ environmentSystem, timeOfDaySystem }) {
+export function createWindowOverlay({ environmentSystem, timeOfDaySystem, settingsStore }) {
   return {
     materialClass: "panel",
     mount(panelEl) {
@@ -77,13 +78,12 @@ export function createWindowOverlay({ environmentSystem, timeOfDaySystem }) {
         const state = environmentSystem.getState();
         const weatherDef = WEATHER_STATES[state.current] ?? WEATHER_STATES.clear;
         const timeState = timeOfDaySystem.getState();
-        const hours = Math.floor(timeState.currentTime);
-        const minutes = Math.floor((timeState.currentTime - hours) * 60);
 
         const summary = document.createElement("p");
         summary.className = "environment-summary";
         const season = getSeason(dayOfYear(new Date()), getObserverLocation().latitude);
-        summary.textContent = `${weatherDef.label}, ${capitalize(season)} \u2014 ${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+        const clock = formatClockTime(timeState.currentTime, settingsStore?.get("display").timeFormat);
+        summary.textContent = `${weatherDef.label}, ${capitalize(season)} \u2014 ${clock}`;
         panelEl.appendChild(summary);
 
         const wind = document.createElement("p");

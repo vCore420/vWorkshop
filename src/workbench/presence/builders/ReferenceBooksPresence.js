@@ -1,4 +1,5 @@
 import { box, group, Materials } from "../../../utils/PlaceholderFactory.js";
+import { clamp } from "../../../utils/MathUtils.js";
 
 /**
  * Reference books
@@ -10,7 +11,7 @@ import { box, group, Materials } from "../../../utils/PlaceholderFactory.js";
 const BOOK_COLORS = ["#6b4a34", "#3c5a53", "#8d6a45", "#5a3d29", "#2a4a52"];
 
 export function buildReferenceBooks(item) {
-  const count = Math.max(1, Math.min(4, item.count ?? 2));
+  const count = clamp(item.count ?? 2, 1, 4);
   const g = group();
 
   let y = 0;

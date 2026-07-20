@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { debounce } from "../utils/debounce.js";
 
 const GRID_CELL_SIZE = 0.5; // metres — coarse enough for a fast flood-fill, fine enough to recognise an ordinary room
 const GRID_HALF_EXTENT = 40; // metres — the build area this system considers, centred on the Workshop; a flood-fill needs *some* bound to have a guaranteed "outside" to start from
@@ -52,7 +53,10 @@ export class BuildingDetectionSystem {
     this.worldObjectsStore = worldObjectsStore;
     this.worldObjectsSystem = worldObjectsSystem;
     this.interiorSystem = interiorSystem;
-    this._debounceTimer = null;
+    // Debounced, not run on every single placement/move — "instances:changed"
+    // can fire many times a second while a player drags something around;
+    // the flood-fill only needs to run once things have actually settled.
+    this._scheduleDetection = debounce(() => this._detect(), DETECTION_DEBOUNCE_MS);
     this._disposers = []; // every InteriorSystem.registerVolume() disposer from the last detection pass
   }
 
@@ -62,16 +66,7 @@ export class BuildingDetectionSystem {
     this._offChanged = this.worldObjectsStore.events.on("instances:changed", () => this._scheduleDetection());
   }
 
-  _scheduleDetection() {
-    if (this._debounceTimer) clearTimeout(this._debounceTimer);
-    // Debounced, not run on every single placement/move — "instances:changed"
-    // can fire many times a second while a player drags something around;
-    // the flood-fill only needs to run once things have actually settled.
-    this._debounceTimer = setTimeout(() => this._detect(), DETECTION_DEBOUNCE_MS);
-  }
-
   _detect() {
-    this._debounceTimer = null;
     const wallBoxes = this._collectWallLikeFootprints();
     const regions = wallBoxes.length ? this._floodFillEnclosures(wallBoxes) : [];
 
@@ -173,7 +168,7 @@ export class BuildingDetectionSystem {
   }
 
   dispose() {
-    if (this._debounceTimer) clearTimeout(this._debounceTimer);
+    this._scheduleDetection.cancel();
     this._offChanged?.();
     for (const dispose of this._disposers) dispose();
   }

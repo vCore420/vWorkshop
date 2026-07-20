@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { TAU } from "./MathUtils.js";
+import { TAU, clamp } from "./MathUtils.js";
 
 /**
  * Astronomy
@@ -105,7 +105,7 @@ export function solarPosition(hour, latitude, dayOfYearValue) {
 }
 
 function clampUnit(v) {
-  return Math.min(1, Math.max(-1, v));
+  return clamp(v, -1, 1);
 }
 
 /** The one place (azimuth, altitude) in degrees becomes a world-space

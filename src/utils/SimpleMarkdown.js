@@ -15,6 +15,8 @@
  * stale in the v2.2.3d review — it had said three pages for two phases
  * after plugin-sdk became a fourth.)
  */
+import { escapeHtml } from "./domSafety.js";
+
 export function renderMarkdown(source) {
   const lines = source.replace(/\r\n/g, "\n").split("\n");
   const htmlParts = [];
@@ -123,6 +125,3 @@ function inline(text) {
   return escaped;
 }
 
-function escapeHtml(text) {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}

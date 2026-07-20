@@ -16,6 +16,7 @@
  * `AudioSystem`) and `createNatureAmbience` for the day/night layer
  * (birds, crickets) — see docs/WORLD.md's Environmental Audio section.
  */
+import { clamp } from "./MathUtils.js";
 
 const TRACK_DEFS = [
   { id: "warm-static", title: "Warm Static", chord: [130.81, 164.81, 196.0], filter: 900 },
@@ -73,7 +74,7 @@ export function playAmbientTrack(audioContext, destinationNode, trackId) {
     id: def.id,
     title: def.title,
     setVolume(v) {
-      masterGain.gain.linearRampToValueAtTime(Math.max(0, Math.min(1, v)) * 0.5, audioContext.currentTime + 0.2);
+      masterGain.gain.linearRampToValueAtTime(clamp(v, 0, 1) * 0.5, audioContext.currentTime + 0.2);
     },
     stop() {
       const t = audioContext.currentTime;

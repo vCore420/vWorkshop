@@ -97,6 +97,7 @@ import { PoseLibraryStore } from "./player/PoseLibraryStore.js";
 
 import { ProjectsStore } from "./data/ProjectsStore.js";
 import { NotesStore } from "./data/NotesStore.js";
+import { JournalStore } from "./data/JournalStore.js";
 import { ToolsStore } from "./tools/ToolsStore.js";
 
 import { OverlayManager } from "./ui/OverlayManager.js";
@@ -200,6 +201,7 @@ void furnitureSystem;
 // --- Plain data stores (not Engine systems — no scene/camera concerns) ---
 const projectsStore = new ProjectsStore();
 const notesStore = new NotesStore();
+const journalStore = new JournalStore(); // "One contribution" — see docs/CONTRIBUTIONS.md and JournalStore.js's own top comment
 // Workshop Tools phase — "Tool Storage... should now become one of the
 // Workshop's core systems." Custom calculators, pinned tools, and recent
 // runs — see docs/TOOLS.md.
@@ -603,6 +605,7 @@ const computerSystem = engine.addSystem(
   new ComputerSystem({
     projectsStore,
     notesStore,
+    journalStore,
     toolsStore,
     musicSystem,
     lightingSystem,
@@ -747,6 +750,7 @@ void interactionSystem;
 
 persistenceSystem.registerProvider("projects", projectsStore);
 persistenceSystem.registerProvider("notes", notesStore);
+persistenceSystem.registerProvider("journal", journalStore);
 persistenceSystem.registerProvider("tools", toolsStore);
 persistenceSystem.registerProvider("objectLibrary", objectLibraryStore);
 persistenceSystem.registerProvider("blueprints", blueprintStore);
@@ -814,7 +818,7 @@ overlayManager.register(
     functionDispatcher: workshopFunctionDispatcher,
   })
 );
-overlayManager.register("window", createWindowOverlay({ environmentSystem, timeOfDaySystem }));
+overlayManager.register("window", createWindowOverlay({ environmentSystem, timeOfDaySystem, settingsStore }));
 overlayManager.register("restNook", createRestNookOverlay({ projectsStore }));
 overlayManager.register("wardrobe", createWardrobeOverlay({ appearanceStore, outfitStore, textureStore }));
 
@@ -1035,16 +1039,7 @@ assetService.registerKind("beings", {
     if (b.bodySource === "primitives" && !b.bodyParts.some((p) => p.jointName)) issues.push("No Rig Joints assigned \u2014 this Being can't play Workshop animations yet.");
     return issues;
   },
-  // `exportDefinition()` returns a JSON *string* (the older of this
-  // Workshop's two export conventions \u2014 see BeingLibrary.js's own top
-  // comment), not the plain object `AssetService.exportAsset()`'s own
-  // contract expects (matching `toDescriptor`/`getDependencies`
-  // /`validateItem` above); parsed back once here rather than changing a
-  // working, already-wired method just for this.
-  exportItem: (b) => {
-    const json = beingLibrary.exportDefinition(b.id);
-    return json ? JSON.parse(json) : null;
-  },
+  exportItem: (b) => beingLibrary.exportDefinition(b.id),
 });
 // Version 3, Phase 7 ("Sharing the Workshop") — three real, player-
 // creatable kinds of data that had never been registered with
