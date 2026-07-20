@@ -324,8 +324,6 @@ const residentConnection = new ResidentConnection(aiConnectionManager);
 // things rather than everything." Four small, single-responsibility
 // pieces, the same "separate responsibilities" instinct src/resident/
 // already follows for everything else — see docs/RESIDENT.md.
-// `conversationMemory` is deliberately never registered with
-// PersistenceSystem below; see its own file comment for why.
 const residentPreferences = new ResidentPreferences();
 const playerPatternMemory = new PlayerPatternMemory();
 const residentCuriosity = new ResidentCuriosity();
@@ -335,6 +333,10 @@ const conversationMemory = new ConversationMemory();
 // watchProjects() comment for how it avoids treating every
 // already-finished project as a fresh milestone on the very next load.
 conversationMemory.watchProjects(projectsStore, () => residentProfileStore.getActive()?.memory?.categories);
+// Phase 11 ("Workshop Character") — "Persistent" now genuinely persists;
+// see ConversationMemory.js's own comment for why the mode check lives
+// inside save() rather than at this registration site.
+conversationMemory.configurePersistence(() => residentProfileStore.getActive()?.memory?.mode);
 const settingsStore = new SettingsStore();
 const atmosphereProfileStore = new AtmosphereProfileStore();
 const appearanceStore = new PlayerAppearanceStore();
@@ -718,7 +720,7 @@ const phoneApps = buildPhoneApps({
   settingsStore,
   engine,
 });
-const phoneSystem = engine.addSystem(new PhoneSystem(phoneApps));
+const phoneSystem = engine.addSystem(new PhoneSystem(phoneApps, settingsStore));
 
 // "Introduce a shared persistence service responsible for session
 // timestamps, elapsed real-world time, world continuation helpers."
@@ -736,6 +738,10 @@ const persistenceSystem = engine.addSystem(new PersistenceSystem()); // last: lo
 // own "last, by design" position would otherwise create a chicken-and-
 // egg problem.
 computerSystem.deps.persistenceSystem = persistenceSystem;
+// Phase 11 ("Workshop Character") — same deferred-assignment pattern as
+// persistenceSystem just above: computerSystem (and its AIApp Sandbox)
+// is constructed before worldTimeService exists.
+computerSystem.deps.worldTimeService = worldTimeService;
 
 void interactionSystem;
 
@@ -764,6 +770,7 @@ persistenceSystem.registerProvider("residentState", residentState);
 persistenceSystem.registerProvider("residentPreferences", residentPreferences);
 persistenceSystem.registerProvider("playerPatternMemory", playerPatternMemory);
 persistenceSystem.registerProvider("residentCuriosity", residentCuriosity);
+persistenceSystem.registerProvider("conversationMemory", conversationMemory);
 persistenceSystem.registerProvider("modelLibrary", modelLibrary);
 persistenceSystem.registerProvider("beingLibrary", beingLibrary);
 persistenceSystem.registerProvider("beingInstances", beingInstanceStore);
@@ -803,6 +810,7 @@ overlayManager.register(
     timeOfDaySystem,
     worldEventLog,
     worldAwareness,
+    worldTimeService,
     functionDispatcher: workshopFunctionDispatcher,
   })
 );

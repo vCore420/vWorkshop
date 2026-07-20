@@ -52,6 +52,7 @@ export function renderProjectList(container, projectsStore, { filterStatus = nul
           const activateBtn = document.createElement("button");
           activateBtn.textContent = "Move to bench";
           activateBtn.className = "dial-button-plain";
+          activateBtn.setAttribute("aria-label", `Move ${project.title} to bench`);
           styleSmallButton(activateBtn);
           activateBtn.addEventListener("click", () => projectsStore.update(project.id, { status: "active" }));
           controls.appendChild(activateBtn);
@@ -59,12 +60,14 @@ export function renderProjectList(container, projectsStore, { filterStatus = nul
         if (project.status !== "done") {
           const doneBtn = document.createElement("button");
           doneBtn.textContent = "Mark done";
+          doneBtn.setAttribute("aria-label", `Mark ${project.title} done`);
           styleSmallButton(doneBtn);
           doneBtn.addEventListener("click", () => projectsStore.update(project.id, { status: "done" }));
           controls.appendChild(doneBtn);
         }
         const removeBtn = document.createElement("button");
         removeBtn.textContent = "Remove";
+        removeBtn.setAttribute("aria-label", `Remove ${project.title}`);
         styleSmallButton(removeBtn);
         removeBtn.addEventListener("click", () => projectsStore.remove(project.id));
         controls.appendChild(removeBtn);
@@ -81,6 +84,7 @@ export function renderProjectList(container, projectsStore, { filterStatus = nul
       const input = document.createElement("input");
       input.type = "text";
       input.placeholder = "New project title\u2026";
+      input.setAttribute("aria-label", "New project title");
       const addBtn = document.createElement("button");
       addBtn.textContent = "Pin it";
       addBtn.addEventListener("click", () => {

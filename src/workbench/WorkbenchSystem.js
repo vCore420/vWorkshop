@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { FurnitureSystem } from "../systems/FurnitureSystem.js";
 import { damp, clamp } from "../utils/MathUtils.js";
+import { prefersReducedMotion } from "../utils/motionPreference.js";
 import { makeTopDownRectCorners, projectRect, comfortableRect } from "../utils/ScreenProjector.js";
 import { WorkbenchPanel } from "./WorkbenchPanel.js";
 import { assignSlots } from "./slots.js";
@@ -307,7 +308,10 @@ export class WorkbenchSystem {
 
     if (!this.clipboardMesh) return;
     const target = this.active ? 1 : 0;
-    this._panelProgress = damp(this._panelProgress, target, PANEL_SMOOTHING, dt);
+    // Version 3, Phase 12 ("Accessibility & Comfort Pass") — same
+    // reasoning as ComputerSystem's own identical pattern: snap the
+    // clipboard reveal straight to target under prefers-reduced-motion.
+    this._panelProgress = prefersReducedMotion() ? target : damp(this._panelProgress, target, PANEL_SMOOTHING, dt);
     if (Math.abs(this._panelProgress - target) < 0.002) this._panelProgress = target;
 
     if (this._panelProgress > 0.001) {

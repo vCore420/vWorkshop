@@ -92,6 +92,7 @@ export class InputManager {
     this._lookTouchId = null;
     this._lookLast = { x: 0, y: 0 };
     this._touchCrouchActive = false; // toggled by the touch crouch button — see _setupTouchActionButtons()
+    this._touchZoomActive = false; // held (not toggled) by the touch zoom button — see _setupTouchActionButtons()
 
     window.addEventListener("keydown", (e) => this._onKeyDown(e));
     window.addEventListener("keyup", (e) => this._onKeyUp(e));
@@ -125,6 +126,8 @@ export class InputManager {
     this._lookTouchId = null;
     this._touchCrouchActive = false;
     this._crouchButton?.classList.remove("active");
+    this._touchZoomActive = false;
+    this._zoomButton?.classList.remove("active");
   }
 
   _onKeyDown(e) {
@@ -213,16 +216,18 @@ export class InputManager {
   }
 
   /** Keyboard/gamepad-style "is this action currently held" for most
-   *  actions — but "run" and "crouch" also have their own touch
-   *  equivalents (joystick-push-intensity, and a toggle button,
-   *  respectively — see _setupTouchActionButtons()), checked here so
-   *  every caller (CameraSystem) only ever needs the one method
-   *  regardless of input device. */
+   *  actions — but "run", "crouch", and "zoom" also have their own touch
+   *  equivalents (joystick-push-intensity, a toggle button, and a
+   *  press-and-hold button, respectively — see
+   *  _setupTouchActionButtons()), checked here so every caller
+   *  (CameraSystem) only ever needs the one method regardless of input
+   *  device. */
   isHeld(action) {
     if (action === "run" && this._joystickTouchId !== null) {
       return this._joystickVector.length() > RUN_JOYSTICK_THRESHOLD;
     }
     if (action === "crouch" && this._touchCrouchActive) return true;
+    if (action === "zoom" && this._touchZoomActive) return true;
     return this._isActionHeld(action);
   }
 
@@ -358,13 +363,22 @@ export class InputManager {
    *  isHeld("run") above — no separate control, just pushing further),
    *  and ladder climbing already works through the exact same forward/
    *  back joystick input that drives ordinary ground movement (see
-   *  CameraSystem's own `input.moveVector.y` use for climbing). Only
-   *  jump (a one-shot action, the same as the existing interact prompt's
-   *  own tap-to-trigger) and crouch (a held *toggle*, since there's no
+   *  CameraSystem's own `input.moveVector.y` use for climbing). Jump (a
+   *  one-shot action, the same as the existing interact prompt's own
+   *  tap-to-trigger) and crouch (a held *toggle*, since there's no
    *  natural drag gesture for it the way running already has one) need
-   *  actual new buttons — kept to exactly two, positioned opposite the
-   *  joystick, same glass/wood styling, same reveal-on-first-touch
-   *  behaviour as everything else in this file. */
+   *  actual buttons — positioned opposite the joystick, same glass/wood
+   *  styling, same reveal-on-first-touch behaviour as everything else in
+   *  this file.
+   *
+   *  Version 3, Phase 12 ("Accessibility & Comfort Pass") — zoom joins
+   *  them as a third: "holding the Z key should smoothly zoom the camera
+   *  in" (`CameraSystem._updateZoom()`) had no touch equivalent at all.
+   *  Unlike crouch, zoom is a genuine *hold*, not a toggle — the button
+   *  sets `_touchZoomActive` true on `touchstart` and false again on
+   *  `touchend`/`touchcancel`, matching the key-hold semantics
+   *  `isHeld("zoom")` already expects from a real held `KeyZ`, rather
+   *  than reusing crouch's toggle behaviour where it wouldn't fit. */
   _setupTouchActionButtons(touchRoot) {
     const jumpButton = document.createElement("button");
     jumpButton.type = "button";
@@ -387,5 +401,20 @@ export class InputManager {
     }, { passive: false });
     touchRoot.appendChild(crouchButton);
     this._crouchButton = crouchButton;
+
+    const zoomButton = document.createElement("button");
+    zoomButton.type = "button";
+    zoomButton.id = "touch-zoom-button";
+    zoomButton.textContent = "Zoom";
+    const setZoomActive = (e, active) => {
+      e.preventDefault();
+      this._touchZoomActive = active;
+      zoomButton.classList.toggle("active", active);
+    };
+    zoomButton.addEventListener("touchstart", (e) => setZoomActive(e, true), { passive: false });
+    zoomButton.addEventListener("touchend", (e) => setZoomActive(e, false), { passive: false });
+    zoomButton.addEventListener("touchcancel", (e) => setZoomActive(e, false), { passive: false });
+    touchRoot.appendChild(zoomButton);
+    this._zoomButton = zoomButton;
   }
 }

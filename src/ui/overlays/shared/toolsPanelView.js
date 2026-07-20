@@ -3,6 +3,8 @@ import { CALCULATOR_TEMPLATES } from "../../../tools/CalculatorTemplates.js";
 import { validateFormula } from "../../../tools/ToolFormula.js";
 import { runTool, valuesFromSnapshot } from "../../../tools/runTool.js";
 import { StorageUtils } from "../../../utils/StorageUtils.js";
+import { nextDomId } from "../../../utils/domIds.js";
+import { tabListTargetIndex } from "../../tabList.js";
 
 /**
  * mountToolsPanel
@@ -37,6 +39,23 @@ export function mountToolsPanel(container, { toolsStore, projectsStore, audioSys
     return allTools().find((t) => t.id === id) ?? null;
   }
 
+  /** WAI-ARIA Tabs keyboard behaviour (Left/Right/Home/End), shared by
+   *  both tab bars in this file. Both fully rebuild their own DOM on
+   *  activation via the surrounding `render()`, so a plain `.click()`
+   *  already does the real work — this only needs to move focus to
+   *  wherever the target tab ends up after that rebuild, found again by
+   *  its scoped selector since the original element is gone. */
+  function handleTabListKeydown(event, tabListScopeSelector) {
+    const tabs = [...container.querySelectorAll(`${tabListScopeSelector} [role="tab"]`)];
+    const currentIndex = tabs.indexOf(event.target);
+    if (currentIndex === -1) return;
+    const targetIndex = tabListTargetIndex(event.key, currentIndex, tabs.length);
+    if (targetIndex === null) return;
+    event.preventDefault();
+    tabs[targetIndex].click();
+    container.querySelectorAll(`${tabListScopeSelector} [role="tab"]`)[targetIndex]?.focus();
+  }
+
   function render() {
     container.innerHTML = "";
     const heading = document.createElement("h2");
@@ -48,15 +67,26 @@ export function mountToolsPanel(container, { toolsStore, projectsStore, audioSys
 
     const topTabs = document.createElement("div");
     topTabs.className = "tools-top-tabs";
+    topTabs.setAttribute("role", "tablist");
+    topTabs.setAttribute("aria-label", "Tools panel mode");
     const browseBtn = document.createElement("button");
+    browseBtn.type = "button";
     browseBtn.textContent = "\uD83E\uDDF0 Toolbox";
     browseBtn.className = state.mode !== "build" ? "active" : "";
+    browseBtn.setAttribute("role", "tab");
+    browseBtn.setAttribute("aria-selected", String(state.mode !== "build"));
+    browseBtn.tabIndex = state.mode !== "build" ? 0 : -1;
     browseBtn.addEventListener("click", () => { state.mode = "browse"; render(); });
     const buildBtn = document.createElement("button");
+    buildBtn.type = "button";
     buildBtn.textContent = "\uD83D\uDEE0\uFE0F Calculator Builder";
     buildBtn.className = state.mode === "build" ? "active" : "";
+    buildBtn.setAttribute("role", "tab");
+    buildBtn.setAttribute("aria-selected", String(state.mode === "build"));
+    buildBtn.tabIndex = state.mode === "build" ? 0 : -1;
     buildBtn.addEventListener("click", () => { state.mode = "build"; state.editingCalculator = null; render(); });
     topTabs.append(browseBtn, buildBtn);
+    topTabs.addEventListener("keydown", (event) => handleTabListKeydown(event, ".tools-top-tabs"));
     container.appendChild(topTabs);
 
     if (state.mode === "build") {
@@ -73,6 +103,8 @@ export function mountToolsPanel(container, { toolsStore, projectsStore, audioSys
   function renderBrowse() {
     const tabBar = document.createElement("div");
     tabBar.className = "settings-tab-bar tools-tab-bar";
+    tabBar.setAttribute("role", "tablist");
+    tabBar.setAttribute("aria-label", "Tool categories");
     const tabs = [
       { id: "all", label: "All" },
       { id: "pinned", label: "Pinned" },
@@ -80,12 +112,18 @@ export function mountToolsPanel(container, { toolsStore, projectsStore, audioSys
       ...TOOL_CATEGORIES.map((c) => ({ id: c.id, label: `${c.icon} ${c.label}` })),
     ];
     for (const tab of tabs) {
+      const isActive = state.tab === tab.id;
       const btn = document.createElement("button");
+      btn.type = "button";
       btn.textContent = tab.label;
-      btn.className = state.tab === tab.id ? "active" : "";
+      btn.className = isActive ? "active" : "";
+      btn.setAttribute("role", "tab");
+      btn.setAttribute("aria-selected", String(isActive));
+      btn.tabIndex = isActive ? 0 : -1;
       btn.addEventListener("click", () => { state.tab = tab.id; render(); });
       tabBar.appendChild(btn);
     }
+    tabBar.addEventListener("keydown", (event) => handleTabListKeydown(event, ".tools-tab-bar"));
     container.appendChild(tabBar);
 
     if (state.tab === "recent") {
@@ -115,28 +153,48 @@ export function mountToolsPanel(container, { toolsStore, projectsStore, audioSys
     container.appendChild(grid);
   }
 
+  /** `card` used to hold the pin toggle as a nested `<span onclick>`
+   *  inside itself \u2014 invalid HTML (interactive content nested inside
+   *  interactive content) and a real keyboard bug: a keyboard user
+   *  tabbing to the card could only ever open the tool, never reach the
+   *  pin toggle at all, only a mouse could. Now a genuine sibling
+   *  `<button>` under a plain, non-interactive wrapper div \u2014 the same
+   *  "pull the secondary control out to a real sibling" fix
+   *  `BrowserApp.js`'s tab-close button already established for the
+   *  identical bug shape. `.tools-card-wrap` only exists to give the pin
+   *  button's existing `position: absolute` something to anchor to now
+   *  that it's no longer nested inside `.tools-card` itself \u2014 see
+   *  `tools.css`. */
   function buildToolCard(tool) {
+    const wrap = document.createElement("div");
+    wrap.className = "tools-card-wrap";
+
     const card = document.createElement("button");
     card.type = "button";
     card.className = "tools-card";
-    const pinned = toolsStore.isPinned(tool.id);
     card.innerHTML = `
       <div class="tools-card-icon">${tool.icon || "\u{1F9EE}"}</div>
       <div class="tools-card-title">${tool.title}${tool.custom ? " <span class=\"tools-card-tag\">custom</span>" : ""}</div>
       <div class="tools-card-desc">${tool.description || ""}</div>
     `;
-    const pinBtn = document.createElement("span");
+    card.addEventListener("click", () => openTool(tool.id));
+    wrap.appendChild(card);
+
+    const pinned = toolsStore.isPinned(tool.id);
+    const pinBtn = document.createElement("button");
+    pinBtn.type = "button";
     pinBtn.className = "tools-pin-btn" + (pinned ? " pinned" : "");
     pinBtn.textContent = pinned ? "\u2605" : "\u2606";
     pinBtn.title = pinned ? "Unpin" : "Pin";
+    pinBtn.setAttribute("aria-label", `${pinned ? "Unpin" : "Pin"} ${tool.title}`);
     pinBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       toolsStore.togglePin(tool.id);
       render();
     });
-    card.appendChild(pinBtn);
-    card.addEventListener("click", () => openTool(tool.id));
-    return card;
+    wrap.appendChild(pinBtn);
+
+    return wrap;
   }
 
   function renderRecentList() {
@@ -159,7 +217,9 @@ export function mountToolsPanel(container, { toolsStore, projectsStore, audioSys
       meta.className = "item-meta";
       meta.textContent = new Date(entry.createdAt).toLocaleString();
       const reopenBtn = document.createElement("button");
+      reopenBtn.type = "button";
       reopenBtn.textContent = "Reopen";
+      reopenBtn.setAttribute("aria-label", `Reopen ${entry.toolTitle}`);
       reopenBtn.style.marginTop = "8px";
       reopenBtn.addEventListener("click", () => {
         const tool = findTool(entry.toolId);
@@ -222,6 +282,12 @@ export function mountToolsPanel(container, { toolsStore, projectsStore, audioSys
     container.appendChild(runBtn);
 
     const resultHost = document.createElement("div");
+    // Covers the result itself (renderResult() below) and the "Copy
+    // result"/"Save to project" buttons' own transient text changes
+    // ("Copied", "Saved") — both live inside this same region, so one
+    // aria-live announces all of it rather than needing a separate one
+    // per transient state.
+    resultHost.setAttribute("aria-live", "polite");
     container.appendChild(resultHost);
 
     function readSnapshot() {
@@ -320,11 +386,20 @@ export function mountToolsPanel(container, { toolsStore, projectsStore, audioSys
   function buildInputField(input, presetValue) {
     const wrap = document.createElement("div");
     wrap.className = "tools-field";
+    const labelId = nextDomId("tools-field-label");
     const label = document.createElement("label");
+    label.id = labelId;
     label.textContent = input.unit ? `${input.label} (${input.unit})` : input.label;
     wrap.appendChild(label);
 
     if (input.type === "radio") {
+      // A group of controls, not a one-to-one label — `role="group"` +
+      // `aria-labelledby` is the correct primitive here, the same one
+      // BeingCreatorApp.js's vectorRow() uses for the identical shape.
+      // Each individual radio is still correctly self-labelled by its own
+      // nesting `optLabel`, unchanged below.
+      wrap.setAttribute("role", "group");
+      wrap.setAttribute("aria-labelledby", labelId);
       const row = document.createElement("div");
       row.className = "tools-radio-row";
       const name = `${input.id}-${Math.random().toString(36).slice(2, 7)}`;
@@ -354,12 +429,17 @@ export function mountToolsPanel(container, { toolsStore, projectsStore, audioSys
     }
 
     if (input.type === "rows") {
+      wrap.setAttribute("role", "group");
+      wrap.setAttribute("aria-labelledby", labelId);
       const editor = buildRowsEditor(input, presetValue);
       wrap.appendChild(editor.el);
       return { wrap, getValue: editor.getRows };
     }
 
+    const fieldId = nextDomId("tools-field-input");
+    label.htmlFor = fieldId;
     const field = document.createElement("input");
+    field.id = fieldId;
     field.type = input.type === "number" ? "number" : "text";
     if (input.min !== undefined) field.min = String(input.min);
     if (input.step !== undefined) field.step = String(input.step);
@@ -394,6 +474,7 @@ export function mountToolsPanel(container, { toolsStore, projectsStore, audioSys
           const cb = document.createElement("input");
           cb.type = "checkbox";
           cb.title = "Preferred";
+          cb.setAttribute("aria-label", "Preferred");
           cb.checked = Boolean(data.preferred);
           row.appendChild(cb);
           getters.preferred = () => cb.checked;
@@ -401,6 +482,7 @@ export function mountToolsPanel(container, { toolsStore, projectsStore, audioSys
           const inp = document.createElement("input");
           inp.type = "number";
           inp.placeholder = placeholders[fieldName] ?? fieldName;
+          inp.setAttribute("aria-label", placeholders[fieldName] ?? fieldName);
           inp.value = data[dataKey] !== undefined ? data[dataKey] : fieldName === "qty" ? 1 : "";
           row.appendChild(inp);
           getters[dataKey] = () => inp.value;
@@ -410,6 +492,7 @@ export function mountToolsPanel(container, { toolsStore, projectsStore, audioSys
       removeBtn.type = "button";
       removeBtn.textContent = "\u2715";
       removeBtn.className = "tools-row-remove";
+      removeBtn.setAttribute("aria-label", "Remove row");
       removeBtn.addEventListener("click", () => row.remove());
       row.appendChild(removeBtn);
       row._getters = getters;
@@ -519,19 +602,27 @@ export function mountToolsPanel(container, { toolsStore, projectsStore, audioSys
         controls.style.display = "flex";
         controls.style.gap = "8px";
         const editBtn = document.createElement("button");
+        editBtn.type = "button";
         editBtn.textContent = "Edit";
+        editBtn.setAttribute("aria-label", `Edit ${calc.title}`);
         editBtn.addEventListener("click", () => { state.editingCalculator = { isNew: false, ...calc }; render(); });
         const dupBtn = document.createElement("button");
+        dupBtn.type = "button";
         dupBtn.textContent = "Duplicate";
+        dupBtn.setAttribute("aria-label", `Duplicate ${calc.title}`);
         dupBtn.addEventListener("click", () => { toolsStore.duplicateCustomCalculator(calc.id); render(); });
         const exportBtn = document.createElement("button");
+        exportBtn.type = "button";
         exportBtn.textContent = "Export";
+        exportBtn.setAttribute("aria-label", `Export ${calc.title}`);
         exportBtn.addEventListener("click", () => {
           const exported = toolsStore.exportCustomCalculator(calc.id);
           if (exported) StorageUtils.downloadJSON(`${calc.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "calculator"}.json`, exported);
         });
         const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
         removeBtn.textContent = "Remove";
+        removeBtn.setAttribute("aria-label", `Remove ${calc.title}`);
         removeBtn.addEventListener("click", () => { toolsStore.removeCustomCalculator(calc.id); render(); });
         controls.append(editBtn, dupBtn, exportBtn, removeBtn);
         li.appendChild(controls);
@@ -568,13 +659,16 @@ export function mountToolsPanel(container, { toolsStore, projectsStore, audioSys
         row.className = "tools-builder-row";
         const idField = document.createElement("input");
         idField.placeholder = "id (e.g. width)";
+        idField.setAttribute("aria-label", "Input id");
         idField.value = input.id;
         idField.addEventListener("input", () => { input.id = idField.value.trim(); });
         const labelField = document.createElement("input");
         labelField.placeholder = "Label";
+        labelField.setAttribute("aria-label", "Input label");
         labelField.value = input.label;
         labelField.addEventListener("input", () => { input.label = labelField.value; });
         const typeField = document.createElement("select");
+        typeField.setAttribute("aria-label", "Input type");
         for (const t of ["number", "text", "checkbox"]) {
           const opt = document.createElement("option");
           opt.value = t;
@@ -584,7 +678,9 @@ export function mountToolsPanel(container, { toolsStore, projectsStore, audioSys
         }
         typeField.addEventListener("change", () => { input.type = typeField.value; });
         const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
         removeBtn.textContent = "\u2715";
+        removeBtn.setAttribute("aria-label", `Remove input ${index + 1}`);
         removeBtn.addEventListener("click", () => { inputRows.splice(index, 1); renderInputsList(); });
         row.append(idField, labelField, typeField, removeBtn);
         inputsList.appendChild(row);
@@ -607,6 +703,7 @@ export function mountToolsPanel(container, { toolsStore, projectsStore, audioSys
     let outputRows = draft.outputs.map((o) => ({ ...o }));
     const validationHost = document.createElement("div");
     validationHost.className = "tools-validation";
+    validationHost.setAttribute("aria-live", "polite");
 
     function renderOutputsList() {
       outputsList.innerHTML = "";
@@ -615,20 +712,25 @@ export function mountToolsPanel(container, { toolsStore, projectsStore, audioSys
         row.className = "tools-builder-row tools-builder-output-row";
         const labelField = document.createElement("input");
         labelField.placeholder = "Label (e.g. Cut Length)";
+        labelField.setAttribute("aria-label", "Output label");
         labelField.value = output.label;
         labelField.addEventListener("input", () => { output.label = labelField.value; });
         const formulaField = document.createElement("input");
         formulaField.placeholder = "Formula (e.g. width * 2 + height * 2)";
+        formulaField.setAttribute("aria-label", "Output formula");
         formulaField.value = output.formula;
         formulaField.className = "tools-formula-input";
         formulaField.addEventListener("input", () => { output.formula = formulaField.value; });
         const unitField = document.createElement("input");
         unitField.placeholder = "unit";
+        unitField.setAttribute("aria-label", "Output unit");
         unitField.value = output.unit || "";
         unitField.style.width = "60px";
         unitField.addEventListener("input", () => { output.unit = unitField.value; });
         const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
         removeBtn.textContent = "\u2715";
+        removeBtn.setAttribute("aria-label", `Remove output ${index + 1}`);
         removeBtn.addEventListener("click", () => { outputRows.splice(index, 1); renderOutputsList(); });
         row.append(labelField, formulaField, unitField, removeBtn);
         outputsList.appendChild(row);
@@ -695,9 +797,12 @@ export function mountToolsPanel(container, { toolsStore, projectsStore, audioSys
   function labeledInput(labelText, value, type) {
     const wrap = document.createElement("div");
     wrap.className = "tools-field";
+    const id = nextDomId("tools-labeled-input");
     const label = document.createElement("label");
+    label.htmlFor = id;
     label.textContent = labelText;
     const field = document.createElement("input");
+    field.id = id;
     field.type = type;
     field.value = value ?? "";
     wrap.append(label, field);

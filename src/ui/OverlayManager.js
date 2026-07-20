@@ -1,3 +1,6 @@
+import { createCloseButton } from "./closeButton.js";
+import { createFocusTrap } from "./focusTrap.js";
+
 /**
  * OverlayManager
  * --------------
@@ -16,6 +19,16 @@
  *
  * and having some interactable's onInteract emit
  * `engine.events.emit("interaction:trigger", { overlayId: "my-plugin-panel" })`.
+ *
+ * Version 3, Phase 12 ("Accessibility & Comfort Pass") — every overlay now
+ * gets `role="dialog"`/`aria-modal="true"` and a real focus trap
+ * (`focusTrap.js`): focus moves in on open, Tab stays inside, and it
+ * returns to whatever was focused before opening once closed. `aria-label`
+ * falls back to the overlay's own id (e.g. "pinboard") — a plain but
+ * genuine accessible name; giving each overlay a nicer one tied to its own
+ * heading is exactly the kind of per-surface polish this phase's broader
+ * label sweep (see the same phase's later waves) is for, not a special
+ * case here.
  */
 export class OverlayManager {
   constructor(rootEl, engine) {
@@ -42,17 +55,19 @@ export class OverlayManager {
 
     const overlayEl = document.createElement("div");
     overlayEl.className = `overlay overlay--${def.materialClass}`;
+    overlayEl.setAttribute("role", "dialog");
+    overlayEl.setAttribute("aria-modal", "true");
+    overlayEl.setAttribute("aria-label", overlayId);
 
     const panelEl = document.createElement("div");
     panelEl.className = "overlay-panel";
     overlayEl.appendChild(panelEl);
 
-    const closeBtn = document.createElement("button");
-    closeBtn.className = "overlay-close";
-    closeBtn.type = "button";
-    closeBtn.textContent = "Esc \u2715";
-    closeBtn.setAttribute("aria-label", "Close");
-    closeBtn.addEventListener("click", () => this.engine.events.emit("interaction:exitRequested"));
+    const closeBtn = createCloseButton({
+      className: "overlay-close",
+      label: "Esc \u2715",
+      onClick: () => this.engine.events.emit("interaction:exitRequested"),
+    });
     overlayEl.appendChild(closeBtn);
 
     this.root.appendChild(overlayEl);
@@ -60,13 +75,17 @@ export class OverlayManager {
 
     requestAnimationFrame(() => overlayEl.classList.add("open"));
 
-    this.current = { overlayId, el: overlayEl, dispose };
+    const focusTrap = createFocusTrap(overlayEl);
+    focusTrap.activate();
+
+    this.current = { overlayId, el: overlayEl, dispose, focusTrap };
     this.engine.input?.exitPointerLock();
   }
 
   _closeCurrent() {
     if (!this.current) return;
-    const { el, dispose } = this.current;
+    const { el, dispose, focusTrap } = this.current;
+    focusTrap.deactivate();
     dispose?.();
     el.classList.remove("open");
     setTimeout(() => el.remove(), 300);

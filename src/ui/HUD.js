@@ -1,5 +1,6 @@
 import { CameraSystem } from "../systems/CameraSystem.js";
 import { EmoteWheelSystem } from "../systems/EmoteWheelSystem.js";
+import { CompassSystem } from "../systems/CompassSystem.js";
 
 /**
  * HUD
@@ -67,7 +68,17 @@ export class HUD {
     emoteBtn.type = "button";
     emoteBtn.textContent = "Emotes (G)";
     emoteBtn.addEventListener("click", () => engine.getSystem(EmoteWheelSystem)?.toggle());
-    this.cornerControls.append(buildModeBtn, viewModeBtn, emoteBtn, lostBtn);
+    // Version 3, Phase 12 ("Accessibility & Comfort Pass") — "the compass
+    // toggle needs one [a button] in the top-left, similar to the
+    // existing 'I'm lost' button." Same corner-controls treatment as
+    // every other keyboard-shortcut button here (Phone/View/Emotes),
+    // rather than a touch-only control — desktop already has "M", but a
+    // clickable/tappable equivalent was simply missing.
+    const compassBtn = document.createElement("button");
+    compassBtn.type = "button";
+    compassBtn.textContent = "Compass (M)";
+    compassBtn.addEventListener("click", () => engine.getSystem(CompassSystem)?.toggle());
+    this.cornerControls.append(buildModeBtn, viewModeBtn, emoteBtn, compassBtn, lostBtn);
     this.root.appendChild(this.cornerControls);
 
     this.touchControls = document.getElementById("touch-controls");

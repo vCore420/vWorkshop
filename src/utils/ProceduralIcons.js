@@ -66,6 +66,36 @@ const ICONS = {
   animation: svg(`<rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M7 5v14M17 5v14"/><path d="M3 9h4M3 15h4M17 9h4M17 15h4"/>`),
   // A second, distinct sparkle (an orbiting dot) — the AI Control app.
   ai: svg(`<path d="M11.5 3c.5 3.2 2.3 5 5.5 5.5-3.2.5-5 2.3-5.5 5.5-.5-3.2-2.3-5-5.5-5.5C9.2 8 11 6.2 11.5 3z"/><circle cx="18" cy="17.5" r="1.6"/>`, { filled: true }),
+
+  // Version 3, Phase 13 ("The Phone Becomes a Device"), Wave 2 — the
+  // Workshop app's own quick controls, icon-forward like a real device's
+  // control centre rather than a plain row of text buttons. Kept in this
+  // same shared file (not a Workshop-app-local one) since the standing
+  // convention here is "one small, coherent line-icon language" — these
+  // small enough, specific-enough marks would only fragment that if they
+  // lived somewhere else.
+  weatherClear: svg(`<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>`),
+  weatherCloudy: svg(`<path d="M7 17h10a3 3 0 0 0 0-6 5 5 0 0 0-9.8-1.5A3.5 3.5 0 0 0 7 17z"/>`),
+  weatherRain: svg(`<path d="M7 13h10a3 3 0 0 0 0-6 5 5 0 0 0-9.8-1.5A3.5 3.5 0 0 0 7 13z"/><path d="M8 17l-1 3M12 17l-1 3M16 17l-1 3"/>`),
+  weatherStorm: svg(`<path d="M7 12h10a3 3 0 0 0 0-6 5 5 0 0 0-9.8-1.5A3.5 3.5 0 0 0 7 12z"/><path d="M13 12l-3 5h3l-2 5"/>`),
+  // Dawn/dusk share the same "sun on the horizon" shape — an up arrow for
+  // rising, a down arrow for setting, is the one detail that actually
+  // tells them apart in plain line art with no colour to lean on.
+  timeDawn: svg(`<path d="M12 2v3"/><path d="M5.6 8.6l1.4 1.4M18.4 8.6l-1.4 1.4"/><path d="M3 15h18"/><path d="M6 15a6 6 0 0 1 12 0"/><path d="M12 17v4M10 19l2 2 2-2"/>`),
+  timeDusk: svg(`<path d="M12 2v3"/><path d="M5.6 8.6l1.4 1.4M18.4 8.6l-1.4 1.4"/><path d="M3 15h18"/><path d="M6 15a6 6 0 0 1 12 0"/><path d="M12 21v-4M10 19l2-2 2 2"/>`),
+  // A crescent — Noon reuses `weatherClear`'s own full sun directly
+  // (see WorkshopPhoneApp.js) rather than a near-duplicate icon here.
+  timeNight: svg(`<path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 1 0 10.5 10.5z"/>`, { filled: true }),
+  lightBulb: svg(`<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.5.4.8 1 .8 1.6v.5h5.4v-.5c0-.6.3-1.2.8-1.6A6 6 0 0 0 12 3z"/>`),
+  musicPlay: svg(`<path d="M8 5v14l11-7z"/>`, { filled: true }),
+  musicPause: svg(`<path d="M8 5h3v14H8zM13 5h3v14h-3z"/>`, { filled: true }),
+  musicNext: svg(`<path d="M6 5v14l9-7z"/><path d="M16 5h2v14h-2z"/>`, { filled: true }),
+  // A compass — "I'm Lost!" (a circle, an outlined ring like every other
+  // stroked icon here, plus one small filled needle, mixed on the same
+  // mark rather than a second `svg()` mode just for this one case).
+  compass: svg(`<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M15.2 8.8l-1.7 4.7-4.7 1.7 1.7-4.7z" fill="currentColor" stroke="none"/>`),
+  // A left chevron — Browser's own back-navigation chrome (Wave 2, M9).
+  chevronLeft: svg(`<path d="M15 4.5 7 12l8 7.5"/>`),
 };
 
 /** `kind` is a first-party app's own `glyph` value. Returns markup for a
