@@ -6,6 +6,7 @@ import { getIdleLocation } from "../resident/ResidentMovement.js";
 import { getProvider } from "../ai/ProviderRegistry.js";
 import { PERSONALITY_TRAITS } from "../ai/TraitConfiguration.js";
 import { EMBODIMENT_TYPES } from "../ai/EmbodimentConfiguration.js";
+import { getExpressionType } from "../resident/ExpressionTypes.js";
 
 /**
  * WorkshopPages
@@ -53,7 +54,7 @@ export function registerWorkshopPages(pageRegistry, searchIndex, deps) {
   const { projectsStore, browserStore, hostProjectsService, residentProfileStore, residentState, residentBehaviour, conversationMemory, aiConnectionManager, engine, hostManager } = deps;
 
   pageRegistry.register("workshop://", () =>
-    homePage({ browserStore, hostManager, residentProfileStore, projectsStore, workbenchSystem: engine?.getSystem(WorkbenchSystem) })
+    homePage({ browserStore, hostManager, residentProfileStore, residentState, projectsStore, workbenchSystem: engine?.getSystem(WorkbenchSystem) })
   );
   pageRegistry.register("workshop://documentation", () => docFilePage("Workshop Documentation", "./README.md"));
   pageRegistry.register("workshop://docs", () => docFilePage("Workshop Documentation", "./README.md")); // alias — see this file's own comment
@@ -116,14 +117,26 @@ async function docFilePage(title, path) {
   return { title, html: wrapPage(title, `<span class="workshop-page-badge">Workshop Docs</span>${bodyHtml}`) };
 }
 
-function homePage({ browserStore, hostManager, residentProfileStore, projectsStore, workbenchSystem }) {
+function homePage({ browserStore, hostManager, residentProfileStore, residentState, projectsStore, workbenchSystem }) {
   const recents = collectRecentUrls(browserStore);
   const recentsHtml = recents.length
-    ? `<div class="workshop-home-grid">${recents.map((url) => tile(url, url)).join("")}</div>`
+    ? `<div class="workshop-home-grid" role="group" aria-labelledby="home-recent-heading">${recents.map((url) => tile(url, url)).join("")}</div>`
     : `<p class="workshop-page-empty">Nowhere visited yet this session.</p>`;
 
   const activeResident = residentProfileStore?.getActive();
   const hostStatus = hostManager?.getOverviewStatus();
+  // Version 3, Phase 11 ("Workshop Character") — the same "checking
+  // yesterday's project" instinct just below, applied to the resident:
+  // `ResidentState.mood` already exists and is already persisted (see
+  // that file's own comment); this is its first surfacing anywhere
+  // outside the resident itself. Reuses `ExpressionTypes.js`'s own
+  // canonical label lookup rather than a second mood-label map.
+  const moodLabel = activeResident && residentState ? getExpressionType(residentState.mood)?.label : null;
+  const residentsTileMeta = activeResident
+    ? moodLabel
+      ? `${activeResident.name} and friends — currently ${moodLabel.toLowerCase()}`
+      : `${activeResident.name} and friends`
+    : "No residents yet";
   // Version 3, Phase 4 ("Workshop Rituals") — "checking yesterday's
   // project," from a screen already opened for other reasons rather than
   // a new dedicated dashboard. `WorkbenchSystem.currentProjectId` already
@@ -137,13 +150,13 @@ function homePage({ browserStore, hostManager, residentProfileStore, projectsSto
     <p class="workshop-page-subtitle">Your window into everything \u2014 the Workshop, your local machine, and the wider digital world.</p>
 
     <div class="workshop-home-section">
-      <input class="workshop-search-box" type="text" placeholder="Search the Workshop\u2026" id="home-search-box" autocomplete="off">
+      <input class="workshop-search-box" type="text" placeholder="Search the Workshop\u2026" id="home-search-box" autocomplete="off" aria-label="Search the Workshop">
     </div>
 
     <div class="workshop-home-section">
-      <h2>Workshop</h2>
-      <div class="workshop-home-grid">
-        ${tile("resident://", "Residents", activeResident ? `${activeResident.name} and friends` : "No residents yet")}
+      <h2 id="home-workshop-heading">Workshop</h2>
+      <div class="workshop-home-grid" role="group" aria-labelledby="home-workshop-heading">
+        ${tile("resident://", "Residents", residentsTileMeta)}
         ${tile("asset://", "Shared Asset Library", "Objects, blueprints, animations, and more")}
         ${tile("project://", "Workshop Projects", projectsTileMeta)}
         ${tile("workshop://mission-control", "Mission Control", "AI resident status snapshot")}
@@ -159,9 +172,9 @@ function homePage({ browserStore, hostManager, residentProfileStore, projectsSto
     </div>
 
     <div class="workshop-home-section">
-      <h2>Workshop Host</h2>
+      <h2 id="home-host-heading">Workshop Host</h2>
       <p class="workshop-page-subtitle" style="margin-bottom:10px;">The Workshop's bridge to your local machine \u2014 ${hostStatus?.availableCapabilities.length ?? 0} of ${hostStatus?.services.length ?? 0} services currently available.</p>
-      <div class="workshop-home-grid">
+      <div class="workshop-home-grid" role="group" aria-labelledby="home-host-heading">
         ${tile("host://services", "Host Services", "Dashboard and status")}
         ${tile("host://applications", "Applications", "Installed applications")}
         ${tile("host://projects", "Local Projects", "Projects on your own computer")}
@@ -172,7 +185,7 @@ function homePage({ browserStore, hostManager, residentProfileStore, projectsSto
     </div>
 
     <div class="workshop-home-section">
-      <h2>Recently visited</h2>
+      <h2 id="home-recent-heading">Recently visited</h2>
       ${recentsHtml}
     </div>
 
@@ -223,9 +236,9 @@ function projectsPage(projectsStore, hostProjectsService) {
     <p class="workshop-page-subtitle">Everything you're building — inside the Workshop, and (eventually) on your own computer.</p>
 
     <div class="workshop-home-section">
-      <h2>Workshop Projects</h2>
+      <h2 id="projects-workshop-heading">Workshop Projects</h2>
       <p class="workshop-page-subtitle" style="margin-bottom:12px;">Live from ProjectsStore — the same board as the Notebook, Pinboard, and Workbench.</p>
-      <div class="workshop-home-grid">${rows}</div>
+      <div class="workshop-home-grid" role="group" aria-labelledby="projects-workshop-heading">${rows}</div>
     </div>
 
     <div class="workshop-home-section">
@@ -379,7 +392,7 @@ function diagnosticsPage({ hostManager }) {
     : "";
 
   const sectionRows = report.health.sections
-    .map((s) => `<div class="workshop-diagnostics-health-row workshop-diagnostics-health-${s.health}"><span class="workshop-diagnostics-health-dot"></span><strong>${escapeHtml(s.name)}</strong><span>${escapeHtml(s.summary)}</span></div>`)
+    .map((s) => `<div class="workshop-diagnostics-health-row workshop-diagnostics-health-${s.health}"><span class="workshop-diagnostics-health-dot" aria-hidden="true"></span><strong>${escapeHtml(s.name)}</strong><span>${escapeHtml(s.summary)}</span></div>`)
     .join("");
 
   const html = `
@@ -388,13 +401,13 @@ function diagnosticsPage({ hostManager }) {
     <p class="workshop-page-subtitle">Monitoring, explaining, and helping diagnose the Workshop's own health \u2014 generated ${new Date(report.generatedAt).toLocaleTimeString()}.</p>
 
     <div class="workshop-diagnostics-banner workshop-diagnostics-health-${overall}">
-      <span class="workshop-diagnostics-health-dot"></span>
+      <span class="workshop-diagnostics-health-dot" aria-hidden="true"></span>
       <strong>${escapeHtml(overallCopy)}</strong>
     </div>
     <div class="workshop-diagnostics-health-rows">${sectionRows}</div>
     ${suggestionsHtml}
 
-    <p><button id="workshop-diagnostics-recheck" class="workshop-favourite-button">Run Workshop Health Check</button></p>
+    <p><button id="workshop-diagnostics-recheck" class="workshop-favourite-button" aria-live="polite">Run Workshop Health Check</button></p>
 
     <details class="workshop-diagnostics-detail">
       <summary>AI Connection</summary>
@@ -588,8 +601,8 @@ function searchPage(url, searchIndex, assetService) {
   const html = `
     <h1>Search</h1>
     <p class="workshop-page-subtitle">Workshop pages, Host pages, plugin pages, and every individual Workshop Asset \u2014 all in one place.</p>
-    <input class="workshop-search-box" type="text" id="search-input" placeholder="Search everything\u2026" autocomplete="off" value="${escapeHtml(initialQuery)}">
-    <div class="workshop-search-results" id="search-results"></div>
+    <input class="workshop-search-box" type="text" id="search-input" placeholder="Search everything\u2026" autocomplete="off" value="${escapeHtml(initialQuery)}" aria-label="Search everything">
+    <div class="workshop-search-results" id="search-results" role="region" aria-label="Search results" aria-live="polite"></div>
     <script>
       const ENTRIES = ${JSON.stringify(entries)};
       const input = document.getElementById("search-input");

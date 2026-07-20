@@ -20,6 +20,7 @@ import { WEATHER_STATES } from "../../systems/EnvironmentSystem.js";
 import { getObserverLocation, solarPosition, moonPhaseFraction, moonIllumination, sunriseSunset, moonriseMoonset, dayOfYear, getSeason } from "../../utils/Astronomy.js";
 import { formatClockTime } from "../../utils/TimeFormat.js";
 import { StorageUtils } from "../../utils/StorageUtils.js";
+import { nextDomId } from "../../utils/domIds.js";
 
 
 const COMPASS_LABELS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
@@ -87,9 +88,15 @@ function overrideSliderRow(labelText, currentValue, onChange) {
   row.className = "panel-row";
   const label = document.createElement("label");
   label.textContent = labelText;
+  // Version 3, Phase 12 — associated with the checkbox specifically
+  // (checking it is what "activates" this row), not the slider, which
+  // stays disabled until the checkbox is checked anyway.
+  const fieldId = nextDomId("override");
+  label.htmlFor = fieldId;
 
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
+  checkbox.id = fieldId;
   checkbox.checked = currentValue !== null;
   checkbox.title = "Override";
 
@@ -135,6 +142,7 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
     { id: "display", label: "Display" },
     { id: "controls", label: "Controls" },
     { id: "audio", label: "Audio" },
+    { id: "phone", label: "Phone" },
     { id: "diagnostics", label: "Diagnostics" },
     { id: "danger", label: "Danger Zone" },
   ];
@@ -174,7 +182,7 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         disposeCurrentTab?.();
         disposeCurrentTab = null;
         body.innerHTML = "";
-        const render = { general: renderGeneral, atmosphere: renderAtmosphere, graphics: renderGraphics, performance: renderPerformance, display: renderDisplay, controls: renderControls, audio: renderAudio, diagnostics: renderDiagnostics, danger: renderDangerZone }[id];
+        const render = { general: renderGeneral, atmosphere: renderAtmosphere, graphics: renderGraphics, performance: renderPerformance, display: renderDisplay, controls: renderControls, audio: renderAudio, phone: renderPhone, diagnostics: renderDiagnostics, danger: renderDangerZone }[id];
         disposeCurrentTab = render(body);
       }
 
@@ -290,6 +298,8 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         el.appendChild(sectionHeading("Location"));
         el.appendChild(infoRow("Current location", `${location.latitude.toFixed(2)}\u00b0, ${location.longitude.toFixed(2)}\u00b0 ${location.isReal ? "" : "(default \u2014 location not shared)"}`));
 
+        const timeFormat = settingsStore.get("display").timeFormat;
+
         el.appendChild(sectionHeading("Date & Time"));
         el.appendChild(infoRow("Current date", now.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })));
         el.appendChild(infoRow("Season", capitalize(getSeason(doy, location.latitude))));
@@ -297,7 +307,24 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         seasonHint.className = "app-subtitle";
         seasonHint.textContent = "Season Foundations \u2014 the Workshop now knows what season it is, from your real date and hemisphere. Seasonal vegetation, resident behaviour, and deeper environmental change are future work; this is the architecture they'll build on.";
         el.appendChild(seasonHint);
-        el.appendChild(infoRow("Current time", formatClockTime(timeOfDaySystem.currentTime)));
+        // Version 3, Phase 13 ("The Phone Becomes a Device") \u2014 one
+        // preference, read by every clock display on this tab (and by the
+        // Phone's own status bar and Settings app, via the same
+        // `settingsStore.get("display").timeFormat`). Re-renders the whole
+        // tab on change, the same way the Atmosphere Profiles' own "Apply"
+        // already does, since several rows below format a time.
+        el.appendChild(
+          buildSelectRow(
+            "Time Format",
+            timeFormat,
+            [["24h", "24-hour"], ["12h", "12-hour (AM/PM)"]],
+            (value) => {
+              settingsStore.update("display", { timeFormat: value });
+              setTab("atmosphere");
+            }
+          )
+        );
+        el.appendChild(infoRow("Current time", formatClockTime(timeOfDaySystem.currentTime, timeFormat)));
         el.appendChild(
           buildSelectRow(
             "Clock",
@@ -310,7 +337,10 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         setTimeRow.className = "panel-row";
         const setTimeLabel = document.createElement("label");
         setTimeLabel.textContent = "Set time";
+        const setTimeFieldId = nextDomId("set-time");
+        setTimeLabel.htmlFor = setTimeFieldId;
         const setTimeInput = document.createElement("input");
+        setTimeInput.id = setTimeFieldId;
         setTimeInput.type = "range";
         setTimeInput.min = "0";
         setTimeInput.max = "23.75";
@@ -318,9 +348,9 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         setTimeInput.value = String(timeOfDaySystem.currentTime);
         const setTimeValue = document.createElement("span");
         setTimeValue.className = "settings-range-value";
-        setTimeValue.textContent = formatClockTime(timeOfDaySystem.currentTime);
+        setTimeValue.textContent = formatClockTime(timeOfDaySystem.currentTime, timeFormat);
         setTimeInput.addEventListener("input", () => {
-          setTimeValue.textContent = formatClockTime(parseFloat(setTimeInput.value));
+          setTimeValue.textContent = formatClockTime(parseFloat(setTimeInput.value), timeFormat);
         });
         // Deliberately "change" (on release), not "input" (continuous,
         // while dragging) — setTime() starts a fresh easing transition on
@@ -337,8 +367,8 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         el.appendChild(setTimeHint);
 
         el.appendChild(sectionHeading("Sun"));
-        el.appendChild(infoRow("Sunrise", sunTimes.rise !== null ? formatClockTime(sunTimes.rise) : "Doesn't rise today"));
-        el.appendChild(infoRow("Sunset", sunTimes.set !== null ? formatClockTime(sunTimes.set) : "Doesn't set today"));
+        el.appendChild(infoRow("Sunrise", sunTimes.rise !== null ? formatClockTime(sunTimes.rise, timeFormat) : "Doesn't rise today"));
+        el.appendChild(infoRow("Sunset", sunTimes.set !== null ? formatClockTime(sunTimes.set, timeFormat) : "Doesn't set today"));
         const sunHint = document.createElement("p");
         sunHint.className = "app-subtitle";
         sunHint.textContent = "The sun's own position already follows Set Time above \u2014 there's nothing separate to override here.";
@@ -346,8 +376,8 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
 
         el.appendChild(sectionHeading("Moon"));
         el.appendChild(infoRow("Phase", `${moonPhaseName(phaseFrac)} \u2014 ${Math.round(illum * 100)}% illuminated`));
-        el.appendChild(infoRow("Moonrise", moonTimes.rise !== null ? formatClockTime(moonTimes.rise) : "Doesn't rise today"));
-        el.appendChild(infoRow("Moonset", moonTimes.set !== null ? formatClockTime(moonTimes.set) : "Doesn't set today"));
+        el.appendChild(infoRow("Moonrise", moonTimes.rise !== null ? formatClockTime(moonTimes.rise, timeFormat) : "Doesn't rise today"));
+        el.appendChild(infoRow("Moonset", moonTimes.set !== null ? formatClockTime(moonTimes.set, timeFormat) : "Doesn't set today"));
         el.appendChild(overrideSliderRow("Moon Phase", timeOfDaySystem.moonPhaseOverride, (v) => timeOfDaySystem.setMoonPhaseOverride(v)));
 
         el.appendChild(sectionHeading("Stars"));
@@ -510,7 +540,10 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         presetRow.className = "panel-row";
         const presetLabel = document.createElement("label");
         presetLabel.textContent = "Preset";
+        const presetFieldId = nextDomId("preset");
+        presetLabel.htmlFor = presetFieldId;
         const presetSelect = document.createElement("select");
+        presetSelect.id = presetFieldId;
         for (const [value, label] of [["performance", "Performance"], ["balanced", "Balanced"], ["quality", "Quality"], ["custom", "Custom"]]) {
           const opt = document.createElement("option");
           opt.value = value;
@@ -606,6 +639,37 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         const note = document.createElement("p");
         note.className = "app-subtitle";
         note.textContent = "Music Volume sits on top of the player's own volume slider, the same way a device's system volume sits on top of an app's — turning either down turns the music down.";
+        el.appendChild(note);
+        return null;
+      }
+
+      /** Version 3, Phase 13 ("The Phone Becomes a Device") — "let a
+       *  player change the home screen's own wallpaper... and the
+       *  phone's own border colour." A curated preset list, not a colour
+       *  picker (see `SettingsStore.js`'s own comment on why) — the exact
+       *  same `settingsStore.get("phone")`/`update("phone", ...)` the
+       *  Phone's own Settings app writes to, so a change from either
+       *  surface shows up on the actual phone immediately
+       *  (`PhoneSystem._applyAppearance()` listens for `settings:changed`
+       *  regardless of which surface fired it). */
+      function renderPhone(el) {
+        const phone = settingsStore.get("phone");
+        const patch = (fields) => settingsStore.update("phone", fields);
+
+        el.appendChild(
+          buildSelectRow("Wallpaper", phone.wallpaper, [
+            ["paper", "Paper"], ["sage", "Sage"], ["glow", "Glow"], ["wood", "Wood"],
+          ], (v) => patch({ wallpaper: v }))
+        );
+        el.appendChild(
+          buildSelectRow("Border Colour", phone.borderColor, [
+            ["oak", "Oak"], ["walnut", "Walnut"], ["brass", "Brass"], ["teal", "Teal"],
+          ], (v) => patch({ borderColor: v }))
+        );
+
+        const note = document.createElement("p");
+        note.className = "app-subtitle";
+        note.textContent = "The same phone the Phone's own Settings app controls — a change from either place shows up immediately, whichever one you're actually holding.";
         el.appendChild(note);
         return null;
       }
@@ -772,7 +836,10 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         row.className = "panel-row";
         const label = document.createElement("label");
         label.textContent = labelText;
+        const fieldId = nextDomId("select");
+        label.htmlFor = fieldId;
         const select = document.createElement("select");
+        select.id = fieldId;
         for (const [optValue, optLabel] of options) {
           const opt = document.createElement("option");
           opt.value = optValue;
@@ -790,7 +857,10 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         row.className = "panel-row";
         const label = document.createElement("label");
         label.textContent = labelText;
+        const fieldId = nextDomId("range");
+        label.htmlFor = fieldId;
         const input = document.createElement("input");
+        input.id = fieldId;
         input.type = "range";
         input.min = String(min);
         input.max = String(max);

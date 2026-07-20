@@ -3,6 +3,7 @@ import { compileDefinition, makeDefaultPart } from "../../../worldbuilder/Object
 import { getBehaviourTypes, getBehaviourConfig, defaultPropertiesFor } from "../../../worldbuilder/behaviours/index.js";
 import { PART_CATEGORIES, SEGMENTED_PART_TYPES, partLabel } from "../../../worldbuilder/PartTypes.js";
 import { PreviewRenderer } from "./PreviewRenderer.js";
+import { nextDomId } from "../../../utils/domIds.js";
 
 // Behaviours in this group can't be combined with each other — an entity
 // can only carry one InteractableComponent. See behaviours/registry.js.
@@ -470,6 +471,8 @@ function imageRefField(field, properties, imageLibraryStore, imageAssetStore, on
 
   const labelEl = document.createElement("label");
   labelEl.textContent = field.label;
+  const fieldId = nextDomId("builder-image-ref");
+  labelEl.htmlFor = fieldId;
   wrap.appendChild(labelEl);
 
   const row = document.createElement("div");
@@ -477,6 +480,7 @@ function imageRefField(field, properties, imageLibraryStore, imageAssetStore, on
 
   const images = imageLibraryStore?.all() ?? [];
   const select = document.createElement("select");
+  select.id = fieldId;
   const emptyOption = document.createElement("option");
   emptyOption.value = "";
   emptyOption.textContent = images.length ? "\u2014 choose an image \u2014" : "No images uploaded yet";

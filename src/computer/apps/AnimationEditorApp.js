@@ -4,6 +4,7 @@ import { resolveTextureImages } from "../../player/PlayerCharacterSystem.js";
 import { StorageUtils } from "../../utils/StorageUtils.js";
 import { autoMapSkeleton, isSkeletonMapUsable } from "../../player/WorkshopSkeleton.js";
 import { applyPoseToMappedSkeleton } from "../../player/AnimationRetargeting.js";
+import { nextDomId } from "../../utils/domIds.js";
 
 const ANIMATION_FILE_FORMAT = "workshop-animation";
 const ANIMATION_FILE_VERSION = 1;
@@ -114,7 +115,10 @@ export function createAnimationEditorApp({ appearanceStore, textureStore, animat
       modelSelectRow.className = "panel-row";
       const modelSelectLabel = document.createElement("label");
       modelSelectLabel.textContent = "Model";
+      const modelFieldId = nextDomId("anim-model");
+      modelSelectLabel.htmlFor = modelFieldId;
       const modelSelect = document.createElement("select");
+      modelSelect.id = modelFieldId;
       const modelNote = document.createElement("p");
       modelNote.className = "app-subtitle";
 
@@ -550,7 +554,10 @@ export function createAnimationEditorApp({ appearanceStore, textureStore, animat
         categoryRow.className = "panel-row";
         const categoryLabel = document.createElement("label");
         categoryLabel.textContent = "Category";
+        const categoryFieldId = nextDomId("anim-category");
+        categoryLabel.htmlFor = categoryFieldId;
         const categorySelect = document.createElement("select");
+        categorySelect.id = categoryFieldId;
         categorySelect.disabled = disabled;
         for (const [value, label] of Object.entries(CATEGORY_LABELS)) {
           const opt = document.createElement("option");
@@ -567,7 +574,10 @@ export function createAnimationEditorApp({ appearanceStore, textureStore, animat
         speedRow.className = "panel-row";
         const speedLabel = document.createElement("label");
         speedLabel.textContent = "Playback Speed";
+        const speedFieldId = nextDomId("anim-speed");
+        speedLabel.htmlFor = speedFieldId;
         const speedInput = document.createElement("input");
+        speedInput.id = speedFieldId;
         speedInput.type = "range";
         speedInput.min = "0.25"; speedInput.max = "3"; speedInput.step = "0.05";
         speedInput.value = String(draft.speed);
@@ -587,7 +597,10 @@ export function createAnimationEditorApp({ appearanceStore, textureStore, animat
         loopRow.className = "panel-row";
         const loopLabel = document.createElement("label");
         loopLabel.textContent = "Loop";
+        const loopFieldId = nextDomId("anim-loop");
+        loopLabel.htmlFor = loopFieldId;
         const loopCheckbox = document.createElement("input");
+        loopCheckbox.id = loopFieldId;
         loopCheckbox.type = "checkbox";
         loopCheckbox.checked = draft.loop;
         loopCheckbox.disabled = disabled;
@@ -609,7 +622,10 @@ export function createAnimationEditorApp({ appearanceStore, textureStore, animat
         row.className = "panel-row";
         const labelEl = document.createElement("label");
         labelEl.textContent = label;
+        const fieldId = nextDomId("anim-text");
+        labelEl.htmlFor = fieldId;
         const input = document.createElement("input");
+        input.id = fieldId;
         input.type = "text";
         input.value = value ?? "";
         input.disabled = disabled;
@@ -774,7 +790,10 @@ export function createAnimationEditorApp({ appearanceStore, textureStore, animat
           row.className = "panel-row";
           const label = document.createElement("label");
           label.textContent = AXIS_LABELS[axis];
+          const fieldId = nextDomId("anim-rotation-axis");
+          label.htmlFor = fieldId;
           const input = document.createElement("input");
+          input.id = fieldId;
           input.type = "range";
           input.min = "-180"; input.max = "180"; input.step = "1";
           input.value = String(Math.round(rotation[axis] * DEG));

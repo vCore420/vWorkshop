@@ -8,6 +8,7 @@ import { buildConversationContext } from "../../resident/ResidentContext.js";
 import { getIdleLocation } from "../../resident/ResidentMovement.js";
 import { StorageUtils } from "../../utils/StorageUtils.js";
 import { EXPRESSION_TYPES, EXPRESSION_GRID_SIZE } from "../../resident/ExpressionTypes.js";
+import { nextDomId } from "../../utils/domIds.js";
 import { WORKSHOP_FUNCTIONS } from "../../ai/WorkshopFunctions.js";
 
 const STATUS_LABELS = {
@@ -56,6 +57,7 @@ export function createAIApp({
   timeOfDaySystem = null,
   worldEventLog = null,
   worldAwareness = null,
+  worldTimeService = null,
 }) {
   return {
     id: "ai",
@@ -289,7 +291,10 @@ export function createAIApp({
         row.className = "panel-row";
         const label = document.createElement("label");
         label.textContent = "Current model";
+        const modelFieldId = nextDomId("ai-model");
+        label.htmlFor = modelFieldId;
         const select = document.createElement("select");
+        select.id = modelFieldId;
         select.disabled = models.length === 0;
         const emptyOpt = document.createElement("option");
         emptyOpt.value = "";
@@ -644,7 +649,10 @@ export function createAIApp({
         checkboxRow.className = "panel-row";
         const checkboxLabel = document.createElement("label");
         checkboxLabel.textContent = "Memory Summaries";
+        const memorySummariesFieldId = nextDomId("memory-summaries");
+        checkboxLabel.htmlFor = memorySummariesFieldId;
         const checkbox = document.createElement("input");
+        checkbox.id = memorySummariesFieldId;
         checkbox.type = "checkbox";
         checkbox.checked = profile.memory.memorySummaries;
         checkbox.disabled = true;
@@ -1117,7 +1125,7 @@ export function createAIApp({
           try {
             const context = buildConversationContext(
               profile,
-              { residentCuriosity, residentPreferences, playerPatternMemory, conversationMemory, worldObjectsStore, environmentSystem, timeOfDaySystem, worldEventLog, worldAwareness },
+              { residentCuriosity, residentPreferences, playerPatternMemory, conversationMemory, worldObjectsStore, environmentSystem, timeOfDaySystem, worldEventLog, worldAwareness, worldTimeService },
               { mutateCuriosity: false }
             );
             const systemPrompt = composeSystemPrompt(profile, context);
@@ -1242,7 +1250,10 @@ export function createAIApp({
         row.className = "panel-row";
         const labelEl = document.createElement("label");
         labelEl.textContent = label;
+        const fieldId = nextDomId("ai-text");
+        labelEl.htmlFor = fieldId;
         const input = document.createElement("input");
+        input.id = fieldId;
         input.type = "text";
         input.value = value ?? "";
         if (placeholder) input.placeholder = placeholder;
@@ -1256,7 +1267,10 @@ export function createAIApp({
         wrap.className = "ai-textarea-row";
         const labelEl = document.createElement("label");
         labelEl.textContent = label;
+        const fieldId = nextDomId("ai-textarea");
+        labelEl.htmlFor = fieldId;
         const textarea = document.createElement("textarea");
+        textarea.id = fieldId;
         textarea.value = value ?? "";
         textarea.rows = 2;
         if (placeholder) textarea.placeholder = placeholder;
@@ -1270,7 +1284,10 @@ export function createAIApp({
         row.className = "panel-row";
         const labelEl = document.createElement("label");
         labelEl.textContent = label;
+        const fieldId = nextDomId("ai-slider");
+        labelEl.htmlFor = fieldId;
         const input = document.createElement("input");
+        input.id = fieldId;
         input.type = "range";
         input.min = String(min);
         input.max = String(max);
@@ -1297,6 +1314,8 @@ export function createAIApp({
         wrap.className = "ai-dial-row";
         const labelEl = document.createElement("label");
         labelEl.textContent = dial.label;
+        const fieldId = nextDomId("ai-dial");
+        labelEl.htmlFor = fieldId;
         wrap.appendChild(labelEl);
 
         const sliderWrap = document.createElement("div");
@@ -1305,6 +1324,7 @@ export function createAIApp({
         lowEl.className = "ai-dial-endpoint";
         lowEl.textContent = dial.low;
         const input = document.createElement("input");
+        input.id = fieldId;
         input.type = "range";
         input.min = "0";
         input.max = "1";
@@ -1324,7 +1344,10 @@ export function createAIApp({
         row.className = "panel-row";
         const labelEl = document.createElement("label");
         labelEl.textContent = label;
+        const fieldId = nextDomId("ai-select");
+        labelEl.htmlFor = fieldId;
         const select = document.createElement("select");
+        select.id = fieldId;
         select.disabled = disabled;
         for (const opt of options) {
           const optionEl = document.createElement("option");
@@ -1343,7 +1366,10 @@ export function createAIApp({
         row.className = "panel-row";
         const labelEl = document.createElement("label");
         labelEl.textContent = label;
+        const fieldId = nextDomId("ai-color");
+        labelEl.htmlFor = fieldId;
         const input = document.createElement("input");
+        input.id = fieldId;
         input.type = "color";
         input.value = value;
         input.addEventListener("input", () => onChange(input.value));

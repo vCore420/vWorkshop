@@ -12,15 +12,34 @@ import * as THREE from "three";
  * away from, or this loop would keep running forever in the background.
  *
  * Originally built for the Builder app's live object preview; the
- * Wardrobe app reuses it unchanged for the character preview (see
- * `WardrobeApp.js`) — the same isolated-mini-scene need, just previewing a
- * different kind of object. `lookAtHeight`/`distance` are configurable
- * specifically so the Wardrobe can frame a person-sized figure properly;
- * their defaults are exactly the Builder's original hardcoded values, so
- * its own usage is completely unaffected. Orbit (drag) and zoom (scroll,
- * bounded to a sensible range around the starting `distance`) are both
- * supported; either app gets both for free.
+ * Wardrobe app (`WardrobeApp.js`) and the Animation Editor
+ * (`AnimationEditorApp.js`) both reuse it unchanged for their own
+ * preview panes — the same isolated-mini-scene need, just previewing a
+ * different kind of object each time. `lookAtHeight`/`distance` are
+ * configurable specifically so the Wardrobe can frame a person-sized
+ * figure properly; their defaults are exactly the Builder's original
+ * hardcoded values, so its own usage is completely unaffected. Orbit
+ * (drag) and zoom (scroll, bounded to a sensible range around the
+ * starting `distance`) are both supported; every caller gets both for
+ * free.
+ *
+ * **Version 3, Phase 10c ("Being Creator, Beyond the Prototype, Wave 2")
+ * — click-to-select, opt-in.** `setOnObjectClick(handler)` is the whole
+ * addition: nothing calls it automatically, so nothing changes for
+ * Builder, Wardrobe, or the Animation Editor unless one of them
+ * explicitly wires it in later — only `BeingCreatorApp.js` does today.
+ * A "click" is distinguished from the same
+ * pointer sequence orbit already uses by total movement between
+ * pointerdown and pointerup — under `CLICK_DRAG_THRESHOLD_PX`, it's a
+ * click; over it, it was always an orbit drag, so a person dragging the
+ * view around never accidentally re-selects whatever's under their
+ * cursor when they release the mouse. Only ever raycasts against
+ * `currentObject` — whatever's actually being previewed — and only ever
+ * resolves to a mesh carrying `userData.partId`, so a marker/helper mesh
+ * a caller has added for its own purposes (a joint indicator, say) is
+ * never mistaken for a genuine, selectable part.
  */
+const CLICK_DRAG_THRESHOLD_PX = 4;
 export class PreviewRenderer {
   constructor(container, { lookAtHeight = 0.3, distance = 3.2 } = {}) {
     this.container = container;
@@ -51,11 +70,21 @@ export class PreviewRenderer {
     this.scene.add(grid);
 
     this.currentObject = null;
+    this._onObjectClick = null;
+    this._raycaster = new THREE.Raycaster();
 
     this._dragging = false;
     this._lastX = 0;
     this._lastY = 0;
-    this._onPointerDown = (e) => { this._dragging = true; this._lastX = e.clientX; this._lastY = e.clientY; };
+    this._downX = 0;
+    this._downY = 0;
+    this._onPointerDown = (e) => {
+      this._dragging = true;
+      this._lastX = e.clientX;
+      this._lastY = e.clientY;
+      this._downX = e.clientX;
+      this._downY = e.clientY;
+    };
     this._onPointerMove = (e) => {
       if (!this._dragging) return;
       this._theta -= (e.clientX - this._lastX) * 0.008;
@@ -64,7 +93,12 @@ export class PreviewRenderer {
       this._lastY = e.clientY;
       this._updateCameraPosition();
     };
-    this._onPointerUp = () => { this._dragging = false; };
+    this._onPointerUp = (e) => {
+      this._dragging = false;
+      if (!this._onObjectClick) return;
+      if (Math.hypot(e.clientX - this._downX, e.clientY - this._downY) > CLICK_DRAG_THRESHOLD_PX) return; // an orbit drag, not a click
+      this._handleClick(e);
+    };
     this.canvas.addEventListener("pointerdown", this._onPointerDown);
     window.addEventListener("pointermove", this._onPointerMove);
     window.addEventListener("pointerup", this._onPointerUp);
@@ -115,6 +149,31 @@ export class PreviewRenderer {
     if (this.currentObject) this.scene.remove(this.currentObject);
     this.currentObject = object3D;
     if (object3D) this.scene.add(object3D);
+  }
+
+  /** `handler(mesh)` fires on a genuine click (not an orbit drag — see
+   *  this class's own module comment) against `currentObject`. `mesh` is
+   *  the first intersected `THREE.Mesh` carrying `userData.partId`, or
+   *  `null` for a click that hit nothing selectable (empty space, or
+   *  only non-part helper meshes) — a caller typically treats `null` as
+   *  "deselect." Pass `null` to remove a previously-set handler. */
+  setOnObjectClick(handler) {
+    this._onObjectClick = handler;
+  }
+
+  _handleClick(e) {
+    if (!this.currentObject) {
+      this._onObjectClick(null);
+      return;
+    }
+    const rect = this.canvas.getBoundingClientRect();
+    const pointer = {
+      x: ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      y: -((e.clientY - rect.top) / rect.height) * 2 + 1,
+    };
+    this._raycaster.setFromCamera(pointer, this.camera);
+    const hit = this._raycaster.intersectObject(this.currentObject, true).find((i) => i.object.isMesh && i.object.userData?.partId);
+    this._onObjectClick(hit ? hit.object : null);
   }
 
   dispose() {

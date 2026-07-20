@@ -1,4 +1,4 @@
-import { box, group, Materials, brassTag } from "../../utils/PlaceholderFactory.js";
+import { box, group, Materials, brassTag, cylinder, sphere } from "../../utils/PlaceholderFactory.js";
 
 /**
  * Shelving
@@ -148,6 +148,35 @@ export const ShelvingDefinition = {
         g.add(item);
         cursor += w + (gaps[j] ?? 0);
       }
+    }
+
+    // Version 3, Phase 11 ("Workshop Character") — "one of our small pot
+    // plants on the book shelf somewhere where it doesn't interfere with
+    // the books." The book cluster on every non-bin shelf always spans
+    // exactly `usableWidth` (±0.45, deterministic regardless of the
+    // randomised gap distribution above — see that loop's own final
+    // `cursor`), and the frame posts' own inner face sits at ±0.53 —
+    // leaving a genuinely fixed, empty 0.08m corridor on each end of every
+    // book shelf, never touched by books or bins. Smaller than
+    // MusicCabinet.js's own cabinet-top plant (the reference this reuses
+    // the pot+radial-leaves shape from) specifically to fit that corridor
+    // with real clearance on both sides. Top shelf, right end — visible,
+    // catching whatever light the window gives it, and nowhere near the
+    // bin shelf's own already-tight edges.
+    const plantShelfY = topShelfY;
+    const plantX = 0.48; // centre-ish of the 0.45–0.53 corridor, biased slightly off the frame's own inner face
+    const potMat = Materials.ceramic("#8d6a45");
+    const pot = cylinder(0.026, 0.022, 0.045, potMat, 12);
+    pot.position.set(plantX, plantShelfY + 0.015 + 0.0225, 0);
+    g.add(pot);
+    for (let i = 0; i < 5; i++) {
+      const leaf = sphere(Materials.fabric("#4a6b4a"), 8, 6);
+      const angle = (i / 5) * Math.PI * 2;
+      leaf.scale.set(0.028, 0.07, 0.028);
+      leaf.position.set(plantX + Math.cos(angle) * 0.008, plantShelfY + 0.015 + 0.065, Math.sin(angle) * 0.008);
+      leaf.rotation.z = Math.cos(angle) * 0.3;
+      leaf.rotation.x = Math.sin(angle) * 0.3;
+      g.add(leaf);
     }
 
     return g;

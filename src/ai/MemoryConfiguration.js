@@ -12,10 +12,12 @@
  * genuinely read by `ConversationMemory.js` too — see its own comments
  * for exactly how.
  *
- * "Session Only" and "Persistent" are still currently treated
- * identically (kept for the runtime session, never written to
- * `localStorage`); true cross-session persistence for the latter remains
- * honest future work, not implemented here.
+ * **Version 3, Phase 11 ("Workshop Character")** — "Session Only" and
+ * "Persistent" now genuinely differ: `ConversationMemory.js` is
+ * registered with `PersistenceSystem` and consults the active profile's
+ * own `mode` at save time, writing real notes to `localStorage` only
+ * when it reads `"persistent"` — see that file's own comment for exactly
+ * how.
  *
  * `memorySize`/`memorySummaries`/`contextBudget` remain exactly what they
  * were — real fields with real defaults, no storage limit or
@@ -25,7 +27,7 @@
 export const MEMORY_MODES = [
   { id: "disabled", label: "Disabled", description: "This resident won't remember anything between conversations." },
   { id: "session", label: "Session Only", description: "Remembered for as long as the Workshop stays open, forgotten when it closes." },
-  { id: "persistent", label: "Persistent", description: "Remembered across Workshop sessions — treated the same as Session Only for now; true cross-session persistence is reserved for a future phase." },
+  { id: "persistent", label: "Persistent", description: "Remembered across Workshop sessions, saved to this device." },
 ];
 
 export const MEMORY_SIZE_OPTIONS = [

@@ -1,4 +1,5 @@
 import { iconMarkup } from "../utils/ProceduralIcons.js";
+import { createFocusTrap } from "../ui/focusTrap.js";
 
 /**
  * WorkstationPanel
@@ -19,6 +20,18 @@ import { iconMarkup } from "../utils/ProceduralIcons.js";
  * plugin's own literal emoji `glyph`) prints as plain text exactly as
  * before. See `ProceduralIcons.js`'s own comment for why that fallback
  * matters.
+ *
+ * Version 3, Phase 12 ("Accessibility & Comfort Pass") — this panel never
+ * actually leaves the DOM (`close()` only clears its own content), and
+ * its own base CSS state is `opacity: 0; pointer-events: none` —
+ * `pointer-events: none` blocks a mouse click but does nothing at all to
+ * keyboard `Tab`/Enter, so the rail buttons and "Stand up (Esc)" stayed
+ * genuinely reachable and activatable by a keyboard-only person the
+ * entire session, whether or not anyone had ever sat down at the
+ * computer. `setInteractive()` now toggles the native `inert` attribute
+ * alongside `pointer-events`, and gained a real focus trap
+ * (`focusTrap.js`) — the same treatment `OverlayManager`/`PhoneUI` just
+ * got, applied here for the exact same reason.
  */
 export class WorkstationPanel {
   constructor(rootEl, apps, engine) {
@@ -29,6 +42,11 @@ export class WorkstationPanel {
 
     this.el = document.createElement("div");
     this.el.className = "workstation-panel";
+    this.el.setAttribute("role", "dialog");
+    this.el.setAttribute("aria-modal", "true");
+    this.el.setAttribute("aria-label", "Computer");
+    this.el.setAttribute("inert", ""); // matches the base (non-interactive) CSS state until open() is called
+    this._focusTrap = createFocusTrap(this.el);
 
     this.rail = document.createElement("div");
     this.rail.className = "workstation-rail";
@@ -74,17 +92,22 @@ export class WorkstationPanel {
   /** Opens on whichever app was active last time (default: the first app). */
   open(lastAppId) {
     this.setActiveApp(this.apps.some((a) => a.id === lastAppId) ? lastAppId : this.apps[0]?.id);
-    this.el.classList.add("interactive");
+    this.setInteractive(true);
   }
 
-  /** Stops accepting clicks immediately — called the instant you stand up,
-   *  even though the panel keeps fading out visually for a little longer. */
+  /** Stops accepting clicks *and* keyboard focus immediately — called the
+   *  instant you stand up, even though the panel keeps fading out
+   *  visually for a little longer (see the module comment above on why
+   *  `inert` doesn't need to wait for that). */
   setInteractive(flag) {
     this.el.classList.toggle("interactive", flag);
+    this.el.toggleAttribute("inert", !flag);
+    if (flag) this._focusTrap.activate();
+    else this._focusTrap.deactivate();
   }
 
   close() {
-    this.el.classList.remove("interactive");
+    this.setInteractive(false);
     this._mountedDispose?.();
     this._mountedDispose = null;
     this.content.innerHTML = "";

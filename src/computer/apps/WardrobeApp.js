@@ -2,6 +2,7 @@ import { PreviewRenderer } from "./builder/PreviewRenderer.js";
 import { buildCharacter, disposeCharacter, PART_IDS } from "../../player/PlayerCharacter.js";
 import { resolveTextureImages } from "../../player/PlayerCharacterSystem.js";
 import { getBodyModelList } from "../../player/BodyModels.js";
+import { nextDomId } from "../../utils/domIds.js";
 
 const PART_LABELS = {
   head: "Head",
@@ -149,7 +150,10 @@ export function createWardrobeApp({ appearanceStore, outfitStore, textureStore, 
         row.className = "panel-row";
         const label = document.createElement("label");
         label.textContent = "Model";
+        const modelFieldId = nextDomId("wardrobe-model");
+        label.htmlFor = modelFieldId;
         const select = document.createElement("select");
+        select.id = modelFieldId;
         const noneOpt = document.createElement("option");
         noneOpt.value = "";
         noneOpt.textContent = models.length ? "\u2014 ordinary body \u2014" : "No models imported yet";
@@ -210,7 +214,10 @@ export function createWardrobeApp({ appearanceStore, outfitStore, textureStore, 
         row.className = "panel-row";
         const labelEl = document.createElement("label");
         labelEl.textContent = label;
+        const fieldId = nextDomId("wardrobe-slider");
+        labelEl.htmlFor = fieldId;
         const input = document.createElement("input");
+        input.id = fieldId;
         input.type = "range";
         input.min = "0.4";
         input.max = "2";
@@ -241,7 +248,10 @@ export function createWardrobeApp({ appearanceStore, outfitStore, textureStore, 
         colorRow.className = "panel-row";
         const colorLabel = document.createElement("label");
         colorLabel.textContent = "Colour";
+        const colorFieldId = nextDomId("wardrobe-color");
+        colorLabel.htmlFor = colorFieldId;
         const colorInput = document.createElement("input");
+        colorInput.id = colorFieldId;
         colorInput.type = "color";
         colorInput.value = part.color;
         colorInput.addEventListener("input", () => appearanceStore.updatePart(selectedPart, { color: colorInput.value }));
@@ -252,7 +262,10 @@ export function createWardrobeApp({ appearanceStore, outfitStore, textureStore, 
         materialRow.className = "panel-row";
         const materialLabel = document.createElement("label");
         materialLabel.textContent = "Material";
+        const materialFieldId = nextDomId("wardrobe-material");
+        materialLabel.htmlFor = materialFieldId;
         const materialSelect = document.createElement("select");
+        materialSelect.id = materialFieldId;
         for (const [value, label] of Object.entries(MATERIAL_LABELS)) {
           const opt = document.createElement("option");
           opt.value = value;

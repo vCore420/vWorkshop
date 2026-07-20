@@ -12,36 +12,39 @@ import { mirrorSubtree } from "./BodyCompiler.js";
  * color}` — hand-placed the same way `DefaultBlueprints.js`'s own pieces
  * are, not generated.
  *
- * **Person is fully rigged; Cat and Dog are not, honestly.**
- * `WorkshopSkeleton.WORKSHOP_JOINTS` only names biped joints (head,
- * torso, and six left/right limb pairs) — there is no vocabulary for a
- * quadruped's own four legs and tail, so tagging a cat or dog's parts
- * with `jointName` would mean either lying about which joint a foreleg
- * "is," or inventing new joint ids no animation clip could ever target
- * anyway. Left `null` on every Cat/Dog part instead: real geometry,
- * genuinely posed by hand, simply not animatable through the shared
- * Workshop skeleton — a genuinely new gap this content is the first to
- * surface, now named in `docs/BEINGS.md`'s own "Known simplifications"
- * section rather than left implicit.
+ * **All three are fully rigged.** Person uses the original biped
+ * `WorkshopSkeleton.WORKSHOP_JOINTS` (head, torso, six left/right limb
+ * pairs). Cat and Dog shipped unrigged in Phase 10 — the biped-only
+ * joint vocabulary had nowhere honest for a quadruped's own legs and
+ * tail to map to, a gap `docs/BEINGS.md`'s own "Known simplifications"
+ * section named plainly rather than leaving implicit. Version 3, Phase
+ * 10d ("Being Creator, Beyond the Prototype, Wave 3") closed it: five
+ * new joints (`legFrontLeft`/`Right`, `legBackLeft`/`Right`, `tailBase`
+ * — see `WorkshopSkeleton.js`'s own comment) let Cat and Dog tag their
+ * existing body/head/legs/tail parts for real, driven by two new
+ * clips (`AnimationClips.js`'s `default-quadruped-idle`/`-walk`)
+ * authored specifically against that vocabulary — their own ears/snout
+ * stay untagged, genuinely decorative, the same as a human Being's own
+ * hair or jewellery would be.
  *
  * **Person's own left side is hand-placed; the right side is
  * `mirrorSubtree()`,** the exact tool the Being Creator's own "Mirror"
  * button already uses — reusing it here means the two sides are
  * *guaranteed* symmetric by construction, not just eyeballed to match.
- * Every part position follows one convention throughout: a part's
- * `position` is that part's own *segment midpoint*, not a joint —
- * `BodyCompiler.compileBody()` has no separate pivot-then-mesh split the
- * way `PlayerCharacter.js`'s rig does (one node *is* both the joint and
- * the visible box), so a part positioned at a joint would render
- * centred on and straddling it rather than hanging cleanly from it. A
- * segment-midpoint placement, with each child offset to meet its
- * parent's own far end, gives clean abutting limbs at rest — the
- * honest tradeoff is that any *future* animation rotating one of these
- * parts pivots around that segment's own centre rather than a true
- * joint, a structural property of `BodyCompiler.js` itself this file
- * doesn't attempt to work around. Every dimension reuses
- * `BodyModels.js`'s own masculine base measurements directly, so Person
- * stands at the same real-world scale the player already does.
+ * Every dimension reuses `BodyModels.js`'s own masculine base
+ * measurements directly, so Person stands at the same real-world scale
+ * the player already does.
+ *
+ * **Every part's `position` names its own pivot — where it attaches to
+ * its parent, and what a Workshop animation actually rotates** (see
+ * `BodyCompiler.js`'s own module comment for the full pivot/mesh
+ * architecture, added Version 3, Phase 10b). Every part below relies on
+ * the default `meshOffset` of `[0, 0, 0]` — the visible shape centred
+ * directly on its own pivot — rather than the "Hang Below Pivot" offset
+ * the Being Creator's own editor can compute for a new part; these
+ * were placed by hand, one segment's own end meeting the next
+ * segment's own centre, the same clean-abutting-limbs result either
+ * approach reaches.
  */
 
 function part(id, name, parentId, shape, position, scale, color, jointName = null) {
@@ -78,15 +81,15 @@ const CAT_FUR = "#c97b3e";
 const CAT_FUR_DARK = "#a8663a";
 
 const CAT_BODY_PARTS = [
-  part("cat-body", "Body", null, "box", [0, 0.33, 0], [0.22, 0.22, 0.48], CAT_FUR),
-  part("cat-head", "Head", "cat-body", "sphere", [0, 0.09, 0.26], [0.16, 0.16, 0.16], CAT_FUR),
+  part("cat-body", "Body", null, "box", [0, 0.33, 0], [0.22, 0.22, 0.48], CAT_FUR, "torso"),
+  part("cat-head", "Head", "cat-body", "sphere", [0, 0.09, 0.26], [0.16, 0.16, 0.16], CAT_FUR, "head"),
   part("cat-earLeft", "Ear (Left)", "cat-head", "box", [-0.06, 0.09, -0.02], [0.04, 0.07, 0.02], CAT_FUR_DARK),
   part("cat-earRight", "Ear (Right)", "cat-head", "box", [0.06, 0.09, -0.02], [0.04, 0.07, 0.02], CAT_FUR_DARK),
-  part("cat-tail", "Tail", "cat-body", "capsule", [0, 0.1, -0.3], [0.05, 0.28, 0.05], CAT_FUR),
-  part("cat-legFrontLeft", "Front Leg (Left)", "cat-body", "cylinder", [-0.09, -0.22, 0.18], [0.05, 0.22, 0.05], CAT_FUR_DARK),
-  part("cat-legFrontRight", "Front Leg (Right)", "cat-body", "cylinder", [0.09, -0.22, 0.18], [0.05, 0.22, 0.05], CAT_FUR_DARK),
-  part("cat-legBackLeft", "Back Leg (Left)", "cat-body", "cylinder", [-0.09, -0.22, -0.18], [0.05, 0.22, 0.05], CAT_FUR_DARK),
-  part("cat-legBackRight", "Back Leg (Right)", "cat-body", "cylinder", [0.09, -0.22, -0.18], [0.05, 0.22, 0.05], CAT_FUR_DARK),
+  part("cat-tail", "Tail", "cat-body", "capsule", [0, 0.1, -0.3], [0.05, 0.28, 0.05], CAT_FUR, "tailBase"),
+  part("cat-legFrontLeft", "Front Leg (Left)", "cat-body", "cylinder", [-0.09, -0.22, 0.18], [0.05, 0.22, 0.05], CAT_FUR_DARK, "legFrontLeft"),
+  part("cat-legFrontRight", "Front Leg (Right)", "cat-body", "cylinder", [0.09, -0.22, 0.18], [0.05, 0.22, 0.05], CAT_FUR_DARK, "legFrontRight"),
+  part("cat-legBackLeft", "Back Leg (Left)", "cat-body", "cylinder", [-0.09, -0.22, -0.18], [0.05, 0.22, 0.05], CAT_FUR_DARK, "legBackLeft"),
+  part("cat-legBackRight", "Back Leg (Right)", "cat-body", "cylinder", [0.09, -0.22, -0.18], [0.05, 0.22, 0.05], CAT_FUR_DARK, "legBackRight"),
 ];
 CAT_BODY_PARTS[4].rotation = [-0.6, 0, 0]; // tail, tipped up and back
 
@@ -96,16 +99,16 @@ const DOG_FUR = "#b98a4f";
 const DOG_FUR_DARK = "#8a6339";
 
 const DOG_BODY_PARTS = [
-  part("dog-body", "Body", null, "box", [0, 0.41, 0], [0.26, 0.26, 0.58], DOG_FUR),
-  part("dog-head", "Head", "dog-body", "box", [0, 0.11, 0.35], [0.2, 0.2, 0.2], DOG_FUR),
+  part("dog-body", "Body", null, "box", [0, 0.41, 0], [0.26, 0.26, 0.58], DOG_FUR, "torso"),
+  part("dog-head", "Head", "dog-body", "box", [0, 0.11, 0.35], [0.2, 0.2, 0.2], DOG_FUR, "head"),
   part("dog-snout", "Snout", "dog-head", "box", [0, -0.03, 0.15], [0.1, 0.09, 0.14], DOG_FUR),
   part("dog-earLeft", "Ear (Left)", "dog-head", "box", [-0.11, 0.02, -0.02], [0.05, 0.13, 0.03], DOG_FUR_DARK),
   part("dog-earRight", "Ear (Right)", "dog-head", "box", [0.11, 0.02, -0.02], [0.05, 0.13, 0.03], DOG_FUR_DARK),
-  part("dog-tail", "Tail", "dog-body", "capsule", [0, 0.12, -0.35], [0.05, 0.24, 0.05], DOG_FUR),
-  part("dog-legFrontLeft", "Front Leg (Left)", "dog-body", "cylinder", [-0.11, -0.27, 0.22], [0.06, 0.28, 0.06], DOG_FUR_DARK),
-  part("dog-legFrontRight", "Front Leg (Right)", "dog-body", "cylinder", [0.11, -0.27, 0.22], [0.06, 0.28, 0.06], DOG_FUR_DARK),
-  part("dog-legBackLeft", "Back Leg (Left)", "dog-body", "cylinder", [-0.11, -0.27, -0.22], [0.06, 0.28, 0.06], DOG_FUR_DARK),
-  part("dog-legBackRight", "Back Leg (Right)", "dog-body", "cylinder", [0.11, -0.27, -0.22], [0.06, 0.28, 0.06], DOG_FUR_DARK),
+  part("dog-tail", "Tail", "dog-body", "capsule", [0, 0.12, -0.35], [0.05, 0.24, 0.05], DOG_FUR, "tailBase"),
+  part("dog-legFrontLeft", "Front Leg (Left)", "dog-body", "cylinder", [-0.11, -0.27, 0.22], [0.06, 0.28, 0.06], DOG_FUR_DARK, "legFrontLeft"),
+  part("dog-legFrontRight", "Front Leg (Right)", "dog-body", "cylinder", [0.11, -0.27, 0.22], [0.06, 0.28, 0.06], DOG_FUR_DARK, "legFrontRight"),
+  part("dog-legBackLeft", "Back Leg (Left)", "dog-body", "cylinder", [-0.11, -0.27, -0.22], [0.06, 0.28, 0.06], DOG_FUR_DARK, "legBackLeft"),
+  part("dog-legBackRight", "Back Leg (Right)", "dog-body", "cylinder", [0.11, -0.27, -0.22], [0.06, 0.28, 0.06], DOG_FUR_DARK, "legBackRight"),
 ];
 DOG_BODY_PARTS[3].rotation = [0, 0, -0.3]; // ear left, tilted outward/down
 DOG_BODY_PARTS[4].rotation = [0, 0, 0.3]; // ear right, tilted outward/down
@@ -147,18 +150,22 @@ export const DEFAULT_BEINGS = [
     idleAnimationClipId: "default-idle",
     walkAnimationClipId: "default-walk",
   }),
-  being("default-being-cat", "Cat", "A small, unrigged cat, built from primitives — content to sit and watch.", "animal", CAT_BODY_PARTS, {
+  being("default-being-cat", "Cat", "A small cat, built from primitives and rigged through the Workshop's own quadruped joints — content to sit and watch.", "animal", CAT_BODY_PARTS, {
     movementStyle: "wander",
     idleBehaviour: "sit",
     awarenessMode: "lookAtPlayer",
     interactionBehaviour: "inspect",
     homeRadius: 3,
+    idleAnimationClipId: "default-quadruped-idle",
+    walkAnimationClipId: "default-quadruped-walk",
   }),
-  being("default-being-dog", "Dog", "A friendly, unrigged dog, built from primitives — sticks close and looks up often.", "animal", DOG_BODY_PARTS, {
+  being("default-being-dog", "Dog", "A friendly dog, built from primitives and rigged through the Workshop's own quadruped joints — sticks close and looks up often.", "animal", DOG_BODY_PARTS, {
     movementStyle: "follow",
     idleBehaviour: "lookAround",
     awarenessMode: "followPlayerWithEyes",
     interactionBehaviour: "wave",
     homeRadius: 4,
+    idleAnimationClipId: "default-quadruped-idle",
+    walkAnimationClipId: "default-quadruped-walk",
   }),
 ];

@@ -23,7 +23,7 @@ const LINK_SELECTOR = INTERNAL_SCHEMES.map((scheme) => `a[href^='${scheme}://']`
 
 export function wrapPage(title, bodyHtml) {
   return `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <title>${escapeHtml(title)}</title>

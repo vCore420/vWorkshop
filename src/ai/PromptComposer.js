@@ -42,6 +42,7 @@ export function composeSystemPrompt(profile, context = null) {
   if (context?.personalityLine) lines.push(context.personalityLine);
   if (context?.preferenceLine) lines.push(context.preferenceLine);
   if (context?.worldKnowledgeLine) lines.push(context.worldKnowledgeLine);
+  if (context?.continuityLine) lines.push(context.continuityLine);
   if (context?.curiosityNotes?.length) lines.push(`Things you might have noticed recently: ${context.curiosityNotes.join(" ")}`);
   if (context?.memoryNotes?.length) lines.push(`A few things you remember about the player: ${context.memoryNotes.join(" ")}`);
 

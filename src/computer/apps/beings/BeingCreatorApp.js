@@ -1,13 +1,23 @@
+import * as THREE from "three";
 import { PreviewRenderer } from "../builder/PreviewRenderer.js";
 import { MOVEMENT_STYLES, IDLE_BEHAVIOURS, AWARENESS_MODES, INTERACTION_BEHAVIOURS, BEING_TYPES } from "../../../beings/BeingBehaviours.js";
-import { compileBody, mirrorSubtree, makeDefaultBodyPart, nextBodyPartId, descendantIds, BODY_PART_SHAPES } from "../../../beings/BodyCompiler.js";
+import { compileBody, mirrorSubtree, makeDefaultBodyPart, nextBodyPartId, descendantIds, BODY_PART_SHAPES, BODY_PART_MATERIALS } from "../../../beings/BodyCompiler.js";
 import { WORKSHOP_JOINTS, autoMapSkeleton, isSkeletonMapUsable } from "../../../player/WorkshopSkeleton.js";
 import { ClipPlayer } from "../../../player/AnimationPlayback.js";
 import { applyPoseToMappedSkeleton } from "../../../player/AnimationRetargeting.js";
 import { importModelFile } from "../../../beings/ModelLibrary.js";
+import { nextDomId } from "../../../utils/domIds.js";
 
 const RAD_TO_DEG = 180 / Math.PI;
 const DEG_TO_RAD = Math.PI / 180;
+
+// Version 3, Phase 10c ("Being Creator, Beyond the Prototype, Wave 2") —
+// one shared geometry/material for every joint marker, cached at module
+// scope rather than rebuilt per `refreshPreview()` call the way each
+// part's own (colour-varying, genuinely can't be shared) material is —
+// every marker looks identical, so there's nothing per-instance to vary.
+const JOINT_MARKER_GEOMETRY = new THREE.SphereGeometry(0.03, 10, 8);
+const JOINT_MARKER_MATERIAL = new THREE.MeshBasicMaterial({ color: "#ff5fd6", depthTest: false });
 
 /**
  * createBeingCreatorApp
@@ -48,6 +58,10 @@ export function createBeingCreatorApp({ beingLibrary, modelLibrary, modelAssetSt
       let draft = freshDraft();
       let editingId = null;
       let highlightMaterial = null; // the previous refresh's selection-tint clone — see refreshPreview(), same pattern BuilderApp.js already established
+      // Version 3, Phase 10c — editor-only UI state, never saved onto the
+      // draft/definition itself: which hierarchy branches are collapsed,
+      // and whether joint markers are currently shown in the preview.
+      const uiState = { collapsedPartIds: new Set(), showJointMarkers: false };
 
       const workspace = document.createElement("div");
       workspace.className = "builder-workspace";
@@ -60,6 +74,22 @@ export function createBeingCreatorApp({ beingLibrary, modelLibrary, modelAssetSt
       workspace.append(previewPane, formPane);
 
       const preview = new PreviewRenderer(previewPane, { lookAtHeight: 0.5, distance: 2.6 });
+
+      // Version 3, Phase 10c ("Being Creator, Beyond the Prototype, Wave
+      // 2") — click a part directly in the 3D preview to select it,
+      // rather than only ever finding it in the hierarchy list. A click
+      // on empty space (or only a joint marker — `PreviewRenderer`'s own
+      // click handling already excludes those, see that file's own
+      // comment) resolves to `null`, which deselects. Only meaningful
+      // for a primitives-sourced body; an imported model's own meshes
+      // carry no `userData.partId` at all, so a click against one always
+      // resolves to `null` regardless — harmless, just a no-op.
+      preview.setOnObjectClick((mesh) => {
+        if (draft.bodySource !== "primitives") return;
+        draft.selectedPartId = mesh?.userData?.partId ?? null;
+        refreshPreview();
+        renderAll();
+      });
 
       // --- Animation preview — "previewing existing Workshop animations,
       // pose previews... the goal is to ensure every created being is
@@ -99,6 +129,18 @@ export function createBeingCreatorApp({ beingLibrary, modelLibrary, modelAssetSt
           const compiled = compileBody(draft.bodyParts);
           object3D = compiled.root;
           if (Object.keys(compiled.skeletonMap).length > 0) previewSkeleton = { map: compiled.skeletonMap, rest: compiled.skeletonRest };
+          // "Show Joint Markers" — a small dot at every part's own pivot,
+          // parented directly to that pivot so it sits at exactly the
+          // right world position with no coordinate math needed. Never
+          // tagged with `userData.partId`, so neither this file's own
+          // selection-highlight below nor `PreviewRenderer`'s own click
+          // raycasting (see that file's comment) ever mistakes a marker
+          // for a genuine, selectable part.
+          if (uiState.showJointMarkers) {
+            object3D.traverse((child) => {
+              if (child.isGroup && child.userData?.partId) child.add(new THREE.Mesh(JOINT_MARKER_GEOMETRY, JOINT_MARKER_MATERIAL));
+            });
+          }
         } else {
           const model = draft.modelId ? await modelLoader.load(draft.modelId) : null;
           object3D = model ?? modelLoader.buildPlaceholder();
@@ -166,7 +208,7 @@ export function createBeingCreatorApp({ beingLibrary, modelLibrary, modelAssetSt
         formPane.appendChild(buildIdentitySection(draft, renderAll));
         formPane.appendChild(buildBodySourceSection(draft, renderAll, refreshPreview));
         if (draft.bodySource === "primitives") {
-          formPane.appendChild(buildBodyConstructionSection(draft, renderAll, refreshPreview));
+          formPane.appendChild(buildBodyConstructionSection(draft, renderAll, refreshPreview, uiState));
         } else {
           formPane.appendChild(buildModelSection(draft, modelLibrary, modelAssetStore, renderAll, refreshPreview));
         }
@@ -392,7 +434,10 @@ function buildBodySourceSection(draft, onChange, onPreviewChange) {
   row.className = "panel-row";
   const label = document.createElement("label");
   label.textContent = "Source";
+  const sourceFieldId = nextDomId("being-source");
+  label.htmlFor = sourceFieldId;
   const select = document.createElement("select");
+  select.id = sourceFieldId;
   for (const [value, text] of [["primitives", "Built from Primitives"], ["model", "Imported Model"]]) {
     const opt = document.createElement("option");
     opt.value = value;
@@ -454,7 +499,21 @@ function orderedByHierarchy(bodyParts) {
   return ordered;
 }
 
-function buildBodyConstructionSection(draft, onChange, onPreviewChange) {
+/** Whether `partId` sits beneath a currently-collapsed ancestor — the
+ *  part itself still exists and is still selectable (via the 3D preview
+ *  or the editor), just not shown in the list right now. */
+function isHiddenByCollapse(bodyParts, partId, collapsedPartIds) {
+  let current = bodyParts.find((p) => p.id === partId);
+  const seen = new Set();
+  while (current?.parentId && !seen.has(current.id)) {
+    seen.add(current.id);
+    if (collapsedPartIds.has(current.parentId)) return true;
+    current = bodyParts.find((p) => p.id === current.parentId);
+  }
+  return false;
+}
+
+function buildBodyConstructionSection(draft, onChange, onPreviewChange, uiState) {
   const section = document.createElement("div");
   section.className = "builder-section builder-library";
   section.appendChild(sectionHeading("Body Construction"));
@@ -477,10 +536,36 @@ function buildBodyConstructionSection(draft, onChange, onPreviewChange) {
     onChange();
   });
   actions.appendChild(addBtn);
+
+  const markersLabel = document.createElement("label");
+  markersLabel.className = "builder-checkbox-label";
+  const markersCheckbox = document.createElement("input");
+  markersCheckbox.type = "checkbox";
+  markersCheckbox.checked = uiState.showJointMarkers;
+  markersCheckbox.addEventListener("change", () => {
+    uiState.showJointMarkers = markersCheckbox.checked;
+    onPreviewChange();
+  });
+  markersLabel.append(markersCheckbox, document.createTextNode(" Show Joint Markers"));
+  actions.appendChild(markersLabel);
   section.appendChild(actions);
 
   const list = document.createElement("ul");
   list.className = "builder-library-list";
+  // Dropping a row directly on the list background (not on another row)
+  // re-parents it to the root -- the list itself is the "no parent"
+  // drop target. dragover must also call preventDefault(), or the
+  // browser never treats this as a valid drop zone at all.
+  list.addEventListener("dragover", (e) => e.preventDefault());
+  list.addEventListener("drop", (e) => {
+    e.preventDefault();
+    const draggedId = e.dataTransfer.getData("text/plain");
+    const draggedPart = draft.bodyParts.find((p) => p.id === draggedId);
+    if (!draggedPart || draggedPart.parentId === null) return;
+    draggedPart.parentId = null;
+    onPreviewChange();
+    onChange();
+  });
   if (draft.bodyParts.length === 0) {
     const empty = document.createElement("p");
     empty.className = "app-subtitle";
@@ -488,7 +573,8 @@ function buildBodyConstructionSection(draft, onChange, onPreviewChange) {
     list.appendChild(empty);
   }
   for (const part of orderedByHierarchy(draft.bodyParts)) {
-    list.appendChild(buildPartRow(draft, part, onChange, onPreviewChange));
+    if (isHiddenByCollapse(draft.bodyParts, part.id, uiState.collapsedPartIds)) continue;
+    list.appendChild(buildPartRow(draft, part, onChange, onPreviewChange, uiState));
   }
   section.appendChild(list);
 
@@ -498,9 +584,57 @@ function buildBodyConstructionSection(draft, onChange, onPreviewChange) {
   return section;
 }
 
-function buildPartRow(draft, part, onChange, onPreviewChange) {
+function buildPartRow(draft, part, onChange, onPreviewChange, uiState) {
   const li = document.createElement("li");
   if (part.id === draft.selectedPartId) li.classList.add("selected");
+
+  // Version 3, Phase 10c ("Being Creator, Beyond the Prototype, Wave 2")
+  // -- true drag-and-drop re-parenting. descendantIds() (already used
+  // by the Parent dropdown below) rules out dropping a part onto its
+  // own descendant, the same cycle guard either UI surface needs.
+  li.draggable = true;
+  li.addEventListener("dragstart", (e) => {
+    e.dataTransfer.setData("text/plain", part.id);
+    e.dataTransfer.effectAllowed = "move";
+  });
+  li.addEventListener("dragover", (e) => {
+    e.preventDefault(); // required for this element to register as a valid drop target
+    e.stopPropagation(); // this row is the intended target, not the list background's own "drop to root" handler
+    li.classList.add("drag-over");
+  });
+  li.addEventListener("dragleave", () => li.classList.remove("drag-over"));
+  li.addEventListener("drop", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    li.classList.remove("drag-over");
+    const draggedId = e.dataTransfer.getData("text/plain");
+    if (!draggedId || draggedId === part.id) return;
+    const excluded = descendantIds(draft.bodyParts, draggedId);
+    excluded.add(draggedId);
+    if (excluded.has(part.id)) return; // would create a cycle
+    const draggedPart = draft.bodyParts.find((p) => p.id === draggedId);
+    if (!draggedPart) return;
+    draggedPart.parentId = part.id;
+    onPreviewChange();
+    onChange();
+  });
+
+  const hasChildren = draft.bodyParts.some((p) => p.parentId === part.id);
+  if (hasChildren) {
+    const collapseToggle = document.createElement("button");
+    collapseToggle.type = "button";
+    collapseToggle.className = "builder-collapse-toggle";
+    const collapsed = uiState.collapsedPartIds.has(part.id);
+    collapseToggle.textContent = collapsed ? "▸" : "▾";
+    collapseToggle.title = collapsed ? "Expand" : "Collapse";
+    collapseToggle.addEventListener("click", (e) => {
+      e.stopPropagation(); // don't also select the row underneath
+      if (collapsed) uiState.collapsedPartIds.delete(part.id);
+      else uiState.collapsedPartIds.add(part.id);
+      onChange();
+    });
+    li.appendChild(collapseToggle);
+  }
 
   const meta = document.createElement("span");
   meta.className = "builder-library-meta";
@@ -590,11 +724,16 @@ function buildPartEditor(draft, part, onChange, onPreviewChange) {
 
   section.appendChild(buildMeshOffsetSection(part, onChange, onPreviewChange));
 
+  section.appendChild(selectRow("Material", part.material ?? "matte", BODY_PART_MATERIALS, (v) => { part.material = v; onPreviewChange(); }));
+
   const colorRow = document.createElement("div");
   colorRow.className = "panel-row";
   const colorLabel = document.createElement("label");
   colorLabel.textContent = "Colour";
+  const colorFieldId = nextDomId("being-color");
+  colorLabel.htmlFor = colorFieldId;
   const colorInput = document.createElement("input");
+  colorInput.id = colorFieldId;
   colorInput.type = "color";
   colorInput.value = part.color;
   colorInput.addEventListener("input", () => { part.color = colorInput.value; onPreviewChange(); });
@@ -638,13 +777,31 @@ function buildMeshOffsetSection(part, onChange, onPreviewChange) {
   return wrap;
 }
 
-/** Three sliders in a row (X/Y/Z), for position/rotation/scale — the
- *  three vector fields every body part has. `onChange` receives the
- *  whole updated `[x,y,z]` array each time any one axis moves, so a
- *  caller never has to reassemble it from three separate callbacks. */
+/** Three sliders in a row (X/Y/Z), for position/rotation/scale/mesh
+ *  offset — the vector fields every body part has. `onChange` receives
+ *  the whole updated `[x,y,z]` array each time any one axis changes, so
+ *  a caller never has to reassemble it from three separate callbacks.
+ *  Version 3, Phase 10c ("Being Creator, Beyond the Prototype, Wave 2")
+ *  — each axis also gets a real number input beside its slider, synced
+ *  both ways: dragging the slider updates the number, typing an exact
+ *  value (committed on blur/Enter, not per keystroke — the same
+ *  `"change"` convention `textRow()` already uses, so a value mid-typo
+ *  never fires a preview refresh) updates the slider. A number input
+ *  isn't bounded by `min`/`max` the way the slider visually is — typing
+ *  something outside that range still applies it, the slider just
+ *  displays clamped to its own ends, an intentional "advanced editor"
+ *  escape hatch from the slider's own more casual range. */
 function vectorRow(label, values, min, max, step, onChange, unit = "") {
   const wrap = document.createElement("div");
   wrap.className = "panel-row";
+  // Version 3, Phase 12 — three real, separately-editable inputs (a
+  // slider and a number field) per axis, not one control this outer
+  // label could sensibly `htmlFor` — a `role="group"` with its own
+  // `aria-label`, plus a per-axis `aria-label` on each input below
+  // ("Position X", "Position Y", ...), is the honest fix here, not a
+  // for/id pointing at just one of six controls.
+  wrap.setAttribute("role", "group");
+  wrap.setAttribute("aria-label", label);
   const labelEl = document.createElement("label");
   labelEl.textContent = label;
   wrap.appendChild(labelEl);
@@ -656,22 +813,49 @@ function vectorRow(label, values, min, max, step, onChange, unit = "") {
     axisWrap.className = "being-vector-axis";
     const axisTag = document.createElement("span");
     axisTag.textContent = axisLabel;
-    const input = document.createElement("input");
-    input.type = "range";
-    input.min = String(min);
-    input.max = String(max);
-    input.step = String(step);
-    input.value = String(values[axis]);
-    const valueEl = document.createElement("span");
-    valueEl.className = "settings-range-value";
-    valueEl.textContent = values[axis].toFixed(2) + unit;
-    input.addEventListener("input", () => {
-      const v = parseFloat(input.value);
+
+    const axisAccessibleLabel = `${label} ${axisLabel}`;
+
+    const slider = document.createElement("input");
+    slider.type = "range";
+    slider.setAttribute("aria-label", axisAccessibleLabel);
+    slider.min = String(min);
+    slider.max = String(max);
+    slider.step = String(step);
+    slider.value = String(values[axis]);
+
+    const numberInput = document.createElement("input");
+    numberInput.type = "number";
+    numberInput.setAttribute("aria-label", axisAccessibleLabel);
+    numberInput.className = "being-vector-number";
+    numberInput.step = String(step);
+    numberInput.value = values[axis].toFixed(2);
+
+    const commit = (v) => {
       current[axis] = v;
-      valueEl.textContent = v.toFixed(2) + unit;
       onChange([...current]);
+    };
+
+    slider.addEventListener("input", () => {
+      const v = parseFloat(slider.value);
+      numberInput.value = v.toFixed(2);
+      commit(v);
     });
-    axisWrap.append(axisTag, input, valueEl);
+    numberInput.addEventListener("change", () => {
+      let v = parseFloat(numberInput.value);
+      if (!Number.isFinite(v)) v = current[axis]; // reject garbage/empty input rather than propagate NaN
+      slider.value = String(v); // range inputs clamp their own displayed value to [min,max]; the true typed value still commits below
+      numberInput.value = v.toFixed(2);
+      commit(v);
+    });
+
+    axisWrap.append(axisTag, numberInput, slider);
+    if (unit) {
+      const unitTag = document.createElement("span");
+      unitTag.className = "being-vector-unit";
+      unitTag.textContent = unit;
+      axisWrap.appendChild(unitTag);
+    }
     axesWrap.appendChild(axisWrap);
   });
   wrap.appendChild(axesWrap);
@@ -701,7 +885,10 @@ function buildModelSection(draft, modelLibrary, modelAssetStore, onChange, onPre
   row.className = "panel-row";
   const label = document.createElement("label");
   label.textContent = "Model";
+  const modelFieldId = nextDomId("being-model");
+  label.htmlFor = modelFieldId;
   const select = document.createElement("select");
+  select.id = modelFieldId;
   const noneOpt = document.createElement("option");
   noneOpt.value = "";
   noneOpt.textContent = models.length ? "\u2014 no model (placeholder) \u2014" : "No models imported yet";
@@ -885,7 +1072,10 @@ function textRow(label, value, onChange) {
   row.className = "panel-row";
   const labelEl = document.createElement("label");
   labelEl.textContent = label;
+  const fieldId = nextDomId("being-text");
+  labelEl.htmlFor = fieldId;
   const input = document.createElement("input");
+  input.id = fieldId;
   input.type = "text";
   input.value = value ?? "";
   input.addEventListener("change", () => onChange(input.value));
@@ -898,7 +1088,10 @@ function textareaRow(label, value, onChange) {
   wrap.className = "ai-textarea-row";
   const labelEl = document.createElement("label");
   labelEl.textContent = label;
+  const fieldId = nextDomId("being-textarea");
+  labelEl.htmlFor = fieldId;
   const textarea = document.createElement("textarea");
+  textarea.id = fieldId;
   textarea.value = value ?? "";
   textarea.rows = 2;
   textarea.addEventListener("change", () => onChange(textarea.value));
@@ -911,7 +1104,10 @@ function sliderRow(label, value, min, max, step, onChange, format) {
   row.className = "panel-row";
   const labelEl = document.createElement("label");
   labelEl.textContent = label;
+  const fieldId = nextDomId("being-slider");
+  labelEl.htmlFor = fieldId;
   const input = document.createElement("input");
+  input.id = fieldId;
   input.type = "range";
   input.min = String(min);
   input.max = String(max);
@@ -934,7 +1130,10 @@ function selectRow(label, value, options, onChange) {
   row.className = "panel-row";
   const labelEl = document.createElement("label");
   labelEl.textContent = label;
+  const fieldId = nextDomId("being-select");
+  labelEl.htmlFor = fieldId;
   const select = document.createElement("select");
+  select.id = fieldId;
   for (const opt of options) {
     const [optId, optLabel] = Array.isArray(opt) ? opt : [opt.id, opt.label];
     const optionEl = document.createElement("option");

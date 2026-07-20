@@ -1,6 +1,8 @@
 import { wrapPage } from "../../browser/PageShell.js";
 import { isInternalUrl, INTERNAL_SCHEMES } from "../../browser/PageRegistry.js";
 import { StorageUtils } from "../../utils/StorageUtils.js";
+import { createCloseButton } from "../../ui/closeButton.js";
+import { tabListTargetIndex } from "../../ui/tabList.js";
 
 /**
  * createBrowserApp
@@ -55,10 +57,14 @@ export function createBrowserApp({ browserStore, pageRegistry, hostManager }) {
 
       const tabBar = document.createElement("div");
       tabBar.className = "browser-tab-bar";
+      tabBar.setAttribute("role", "tablist");
+      tabBar.setAttribute("aria-label", "Browser tabs");
       root.appendChild(tabBar);
 
       const toolbar = document.createElement("div");
       toolbar.className = "browser-toolbar";
+      toolbar.setAttribute("role", "toolbar");
+      toolbar.setAttribute("aria-label", "Browser controls");
       root.appendChild(toolbar);
 
       const backBtn = toolbarButton("\u2190", "Back");
@@ -72,6 +78,7 @@ export function createBrowserApp({ browserStore, pageRegistry, hostManager }) {
       addressBar.className = "browser-address-input";
       addressBar.spellcheck = false;
       addressBar.placeholder = "Search or enter a workshop://, host://, or web address";
+      addressBar.setAttribute("aria-label", "Address bar");
       toolbar.appendChild(addressBar);
 
       // "Bookmarks... continue improving the browsing experience" — a
@@ -90,6 +97,7 @@ export function createBrowserApp({ browserStore, pageRegistry, hostManager }) {
       newTabBtn.className = "browser-new-tab-btn";
       newTabBtn.textContent = "+";
       newTabBtn.title = "New tab";
+      newTabBtn.setAttribute("aria-label", "New tab");
 
       const content = document.createElement("div");
       content.className = "browser-content";
@@ -133,6 +141,11 @@ export function createBrowserApp({ browserStore, pageRegistry, hostManager }) {
         if (oldFrame?.classList.contains("active")) newFrame.classList.add("active");
         newFrame.dataset.tabId = tabId;
         newFrame.dataset.currentUrl = url;
+        // A placeholder accessible name immediately — multiple tabs mean
+        // multiple iframes at once, so "which page is this" can't wait for
+        // the real title below to resolve. Updated to the real title in
+        // both branches once it's actually known.
+        newFrame.title = url;
         // Deliberately not sandboxed — a sandboxed srcdoc frame loses
         // same-origin access to its own contentWindow, which is exactly
         // what scroll-position tracking for workshop:// pages needs (see
@@ -147,9 +160,11 @@ export function createBrowserApp({ browserStore, pageRegistry, hostManager }) {
               if (disposed || frames.get(tabId) !== newFrame) return; // superseded by a newer navigation before this resolved
               if (page) {
                 newFrame.srcdoc = page.html;
+                newFrame.title = page.title;
                 browserStore.setTitle(tabId, page.title);
               } else {
                 newFrame.srcdoc = wrapPage("Not found", notFoundHtml(url));
+                newFrame.title = "Not found";
                 browserStore.setTitle(tabId, "Not found");
               }
               if (tabId === activeTabId()) renderChrome();
@@ -178,7 +193,10 @@ export function createBrowserApp({ browserStore, pageRegistry, hostManager }) {
               browserStore.setScrollY(tabId, frame.contentWindow.scrollY);
             });
             const titleFromDoc = frame.contentDocument?.title;
-            if (titleFromDoc) browserStore.setTitle(tabId, titleFromDoc);
+            if (titleFromDoc) {
+              browserStore.setTitle(tabId, titleFromDoc);
+              frame.title = titleFromDoc;
+            }
           } catch {
             // Same-origin access unexpectedly failing is harmless here —
             // the page still displays fine, it just won't get scroll
@@ -189,7 +207,9 @@ export function createBrowserApp({ browserStore, pageRegistry, hostManager }) {
           // (title, scroll) is blocked by the browser's own same-origin
           // policy, not something to work around. The address/title
           // falls back to the URL itself; see renderTabBar().
-          browserStore.setTitle(tabId, hostnameOf(url) ?? url);
+          const fallbackTitle = hostnameOf(url) ?? url;
+          browserStore.setTitle(tabId, fallbackTitle);
+          frame.title = fallbackTitle;
         }
         if (tabId === activeTabId()) renderChrome();
       }
@@ -221,15 +241,46 @@ export function createBrowserApp({ browserStore, pageRegistry, hostManager }) {
         }
       }
 
+      /** Each tab used to be a `<button>` with a `<span onclick>` "close"
+       *  glued inside it \u2014 invalid HTML (interactive content nested inside
+       *  interactive content) and a real keyboard bug: a `<span>` isn't
+       *  focusable, so a keyboard user tabbing to a tab could select it but
+       *  could never close it, only a mouse could reach the close control
+       *  at all. Now a real `role="tab"` container (a `<div>`, since it
+       *  must legally contain a genuine, independently-focusable close
+       *  `<button>` \u2014 nesting a `<button>` inside a `<button>` is exactly
+       *  what caused the bug) plus the WAI-ARIA Tabs keyboard pattern \u2014
+       *  Left/Right/Home/End move *and* activate, matching this app's own
+       *  click-already-activates model rather than inventing a separate
+       *  "focused but not selected" state nothing else here has. */
       function renderTabBar() {
         tabBar.innerHTML = "";
         const activeId = activeTabId();
-        for (const tab of browserStore.all()) {
-          const tabEl = document.createElement("button");
-          tabEl.type = "button";
-          tabEl.className = tab.id === activeId ? "browser-tab active" : "browser-tab";
-          tabEl.addEventListener("click", () => {
-            browserStore.setActiveTab(tab.id);
+        const tabsList = browserStore.all();
+        tabsList.forEach((tab, index) => {
+          const isActive = tab.id === activeId;
+          const tabEl = document.createElement("div");
+          tabEl.className = isActive ? "browser-tab active" : "browser-tab";
+          tabEl.setAttribute("role", "tab");
+          tabEl.setAttribute("aria-selected", String(isActive));
+          tabEl.tabIndex = isActive ? 0 : -1;
+          tabEl.addEventListener("click", () => browserStore.setActiveTab(tab.id));
+          tabEl.addEventListener("keydown", (event) => {
+            if (event.target !== tabEl) return; // let the nested close button handle its own Enter/Space
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              browserStore.setActiveTab(tab.id);
+              return;
+            }
+            const targetIndex = tabListTargetIndex(event.key, index, tabsList.length);
+            if (targetIndex === null) return;
+            event.preventDefault();
+            browserStore.setActiveTab(tabsList[targetIndex].id);
+            // `setActiveTab()` emits "browser:changed" synchronously, which
+            // this file's own `render()` listener rebuilds `tabBar` from \u2014
+            // by the time `setActiveTab()` returns, the tab now at
+            // `targetIndex` is already the freshly-rendered element.
+            tabBar.querySelectorAll('[role="tab"]')[targetIndex]?.focus();
           });
 
           const titleEl = document.createElement("span");
@@ -237,18 +288,19 @@ export function createBrowserApp({ browserStore, pageRegistry, hostManager }) {
           titleEl.textContent = tab.title || "New Tab";
           tabEl.appendChild(titleEl);
 
-          const closeEl = document.createElement("span");
-          closeEl.className = "browser-tab-close";
-          closeEl.textContent = "\u00d7";
-          closeEl.title = "Close tab";
-          closeEl.addEventListener("click", (event) => {
-            event.stopPropagation();
-            browserStore.closeTab(tab.id);
+          const closeBtn = createCloseButton({
+            className: "browser-tab-close",
+            label: "\u00d7",
+            ariaLabel: `Close ${tab.title || "New Tab"}`,
+            onClick: (event) => {
+              event.stopPropagation();
+              browserStore.closeTab(tab.id);
+            },
           });
-          tabEl.appendChild(closeEl);
+          tabEl.appendChild(closeBtn);
 
           tabBar.appendChild(tabEl);
-        }
+        });
         tabBar.appendChild(newTabBtn);
       }
 
@@ -262,6 +314,8 @@ export function createBrowserApp({ browserStore, pageRegistry, hostManager }) {
         const isBookmarked = browserStore.bookmarks.some((b) => b.url === url);
         bookmarkBtn.textContent = isBookmarked ? "\u2605" : "\u2606";
         bookmarkBtn.title = isBookmarked ? "Remove bookmark" : "Bookmark this page";
+        bookmarkBtn.setAttribute("aria-label", isBookmarked ? "Remove bookmark" : "Bookmark this page");
+        bookmarkBtn.setAttribute("aria-pressed", String(isBookmarked));
         bookmarkBtn.classList.toggle("browser-toolbar-button-active", isBookmarked);
       }
 
@@ -409,6 +463,7 @@ function toolbarButton(glyph, title) {
   btn.className = "browser-toolbar-button";
   btn.textContent = glyph;
   btn.title = title;
+  btn.setAttribute("aria-label", title);
   return btn;
 }
 

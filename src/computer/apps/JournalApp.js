@@ -23,6 +23,7 @@ export function createJournalApp({ notesStore }) {
       const textarea = document.createElement("textarea");
       textarea.value = notesStore.read(JOURNAL_ID);
       textarea.placeholder = "What are you thinking about\u2026";
+      textarea.setAttribute("aria-label", "Journal entry");
       textarea.style.width = "100%";
       textarea.style.minHeight = "60vh";
       textarea.style.background = "rgba(255,255,255,0.03)";

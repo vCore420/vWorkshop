@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { FurnitureSystem } from "../systems/FurnitureSystem.js";
 import { LightingSystem } from "../systems/LightingSystem.js";
 import { damp, clamp, lerp } from "../utils/MathUtils.js";
+import { prefersReducedMotion } from "../utils/motionPreference.js";
 import { makeRectCorners, projectRect, comfortableRect } from "../utils/ScreenProjector.js";
 import { WorkstationPanel } from "./WorkstationPanel.js";
 import { buildApps } from "./apps/registry.js";
@@ -127,7 +128,11 @@ export class ComputerSystem {
     if (!this.screenMesh) return;
 
     const target = this.active ? 1 : 0;
-    this.progress = damp(this.progress, target, TRANSITION_SMOOTHING, dt);
+    // Version 3, Phase 12 ("Accessibility & Comfort Pass") — the screen
+    // power-on/off fade (emissive glow, screen light, panel opacity) is
+    // real, sustained motion; snap straight to target under
+    // prefers-reduced-motion rather than easing toward it.
+    this.progress = prefersReducedMotion() ? target : damp(this.progress, target, TRANSITION_SMOOTHING, dt);
     if (Math.abs(this.progress - target) < 0.002) this.progress = target;
 
     this.screenMaterial.emissiveIntensity = lerp(STANDBY_EMISSIVE, FULL_EMISSIVE, this.progress);

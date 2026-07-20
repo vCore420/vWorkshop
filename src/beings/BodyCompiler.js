@@ -106,6 +106,26 @@ export const BODY_PART_SHAPES = [
   { id: "capsule", label: "Capsule" },
 ];
 
+/** Version 3, Phase 10c ("Being Creator, Beyond the Prototype, Wave 2")
+ *  — a curated subset of `PlaceholderFactory.Materials`' own, larger
+ *  palette (wood/metal/fabric/paper/matte/plastic/rubber/siding/glass/
+ *  cork/ceramic/emissive/brass), the same module `compileBody()` below
+ *  already depends on for `"matte"` — reusing it rather than reaching
+ *  for `PlayerCharacter.js`'s own, separate material-preset system,
+ *  which is scoped to textured player/outfit body parts specifically.
+ *  Six, not all thirteen: every one reads as a genuinely different look
+ *  for a creature or character (skin/fur, cloth, robot, toy, spirit,
+ *  glowing/magical) — "please optimise for clarity rather than
+ *  complexity" applies to a dropdown's own length, not just code. */
+export const BODY_PART_MATERIALS = [
+  { id: "matte", label: "Matte" },
+  { id: "fabric", label: "Fabric" },
+  { id: "metal", label: "Metal" },
+  { id: "plastic", label: "Plastic" },
+  { id: "glass", label: "Glass" },
+  { id: "emissive", label: "Emissive" },
+];
+
 let _nextPartId = 1;
 
 export function nextBodyPartId() {
@@ -134,6 +154,7 @@ export function makeDefaultBodyPart(id, { parentId = null, shape = "box" } = {})
     // this constructor's.
     meshOffset: [0, 0, 0],
     color: "#8d8577",
+    material: "matte",
   };
 }
 
@@ -209,7 +230,13 @@ export function compileBody(bodyParts) {
     pivotsById.set(part.id, pivot);
 
     const geometry = (SHAPE_BUILDERS[part.shape] ?? unitBoxGeometry)();
-    const mesh = new THREE.Mesh(geometry, Materials.matte(part.color));
+    // Version 3, Phase 10c ("Being Creator, Beyond the Prototype, Wave
+    // 2") — `part.material` names one of `BODY_PART_MATERIALS`' own ids,
+    // each a real key on the shared `Materials` factory; missing or
+    // unrecognised (every part saved before this phase) falls back to
+    // `matte`, the exact material every part already used to have.
+    const materialFactory = Materials[part.material] ?? Materials.matte;
+    const mesh = new THREE.Mesh(geometry, materialFactory(part.color));
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.name = part.name || part.id;
@@ -239,7 +266,13 @@ export function compileBody(bodyParts) {
 
 const SIDE_SWAP_PATTERN = /\b(left|right)\b/i;
 const JOINT_SIDE_SWAP = Object.fromEntries(
-  ["upperArm", "lowerArm", "hand", "upperLeg", "lowerLeg", "foot"].flatMap((kind) => [
+  // "legFront"/"legBack" added Version 3, Phase 10d ("Being Creator,
+  // Beyond the Prototype, Wave 3") — WorkshopSkeleton.js's own two new
+  // quadruped leg pairs. "tailBase" isn't here on purpose: a single,
+  // central joint has no Left/Right counterpart to swap with, so
+  // mirrorSubtree()'s own `JOINT_SIDE_SWAP[part.jointName] ?? part.jointName`
+  // fallback already does the right thing — leaves it unchanged.
+  ["upperArm", "lowerArm", "hand", "upperLeg", "lowerLeg", "foot", "legFront", "legBack"].flatMap((kind) => [
     [`${kind}Left`, `${kind}Right`],
     [`${kind}Right`, `${kind}Left`],
   ])

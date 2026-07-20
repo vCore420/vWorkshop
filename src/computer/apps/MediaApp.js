@@ -27,6 +27,10 @@ export function createMediaApp({ musicSystem }) {
 
       const nowPlaying = document.createElement("div");
       nowPlaying.className = "now-playing";
+      // Refreshed on "music:trackChanged"/"music:playbackStateChanged" below \u2014
+      // a real live-updating region, since the track can change from the
+      // music cabinet across the room, not just from this button.
+      nowPlaying.setAttribute("aria-live", "polite");
 
       const render = () => {
         const song = musicSystem.currentSong;
@@ -34,10 +38,12 @@ export function createMediaApp({ musicSystem }) {
         const glyph = document.createElement("span");
         glyph.className = "glyph";
         glyph.textContent = "\u266A";
+        glyph.setAttribute("aria-hidden", "true");
         const label = document.createElement("button");
         label.type = "button";
         label.className = "media-now-playing-title";
         label.textContent = song ? `${song.title} \u2014 ${song.artist}` : "Nothing playing";
+        label.setAttribute("aria-label", song ? `${song.title} \u2014 ${song.artist}. Open the music library` : "Nothing playing. Open the music library");
         label.addEventListener("click", () => engine.events.emit("interaction:trigger", { overlayId: "music" }));
         const btn = document.createElement("button");
         btn.type = "button";

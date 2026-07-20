@@ -100,12 +100,13 @@ function assetsOverviewPage({ assetService, worldObjectsStore }) {
     .map((kind) => {
       const segment = KIND_TO_URL_SEGMENT[kind.id];
       const descriptors = segment ? assetService.allDescriptors(kind.id) : [];
+      const headingId = `asset-kind-${kind.id}-heading`;
       const body = descriptors.length
-        ? assetGrid(descriptors.map((d) => ({ url: `asset://${segment}/${d.assetId.slice(d.assetId.indexOf(":") + 1)}`, title: d.name, meta: d.categories.join(", ") })))
+        ? assetGrid(descriptors.map((d) => ({ url: `asset://${segment}/${d.assetId.slice(d.assetId.indexOf(":") + 1)}`, title: d.name, meta: d.categories.join(", ") })), headingId)
         : kind.count > 0
           ? kindSummaryNote(kind, worldObjectsStore)
           : emptyNote(EMPTY_NOTES[kind.id] ?? "Nothing here yet.");
-      return `<div class="workshop-home-section"><h2>${escapeHtml(kind.label)} <span class="workshop-page-badge">${kind.count}</span></h2>${body}</div>`;
+      return `<div class="workshop-home-section"><h2 id="${headingId}">${escapeHtml(kind.label)} <span class="workshop-page-badge">${kind.count}</span></h2>${body}</div>`;
     })
     .join("");
 
@@ -114,13 +115,13 @@ function assetsOverviewPage({ assetService, worldObjectsStore }) {
     <p class="workshop-page-subtitle">Everything the Workshop knows how to reuse \u2014 built, not downloaded. Search for any of it from <a href="workshop://search">workshop://search</a>.</p>
 
     <div class="workshop-home-section">
-      <h2>Favourites <span class="workshop-page-badge">${favourites.length}</span></h2>
-      ${favourites.length ? assetGrid(favourites.map(descriptorToTile)) : emptyNote("Star an asset from its own page to keep it here.")}
+      <h2 id="asset-favourites-heading">Favourites <span class="workshop-page-badge">${favourites.length}</span></h2>
+      ${favourites.length ? assetGrid(favourites.map(descriptorToTile), "asset-favourites-heading") : emptyNote("Star an asset from its own page to keep it here.")}
     </div>
 
     <div class="workshop-home-section">
-      <h2>Recently Viewed <span class="workshop-page-badge">${recent.length}</span></h2>
-      ${recent.length ? assetGrid(recent.map(descriptorToTile)) : emptyNote("Open an asset's own page and it'll show up here.")}
+      <h2 id="asset-recent-heading">Recently Viewed <span class="workshop-page-badge">${recent.length}</span></h2>
+      ${recent.length ? assetGrid(recent.map(descriptorToTile), "asset-recent-heading") : emptyNote("Open an asset's own page and it'll show up here.")}
     </div>
 
     ${sections}
@@ -287,7 +288,7 @@ function objectDetailPage(descriptor, { objectLibraryStore, worldObjectsStore, a
   if (!def) return notFoundPage(`asset://object/${id}`);
 
   const placedCount = (worldObjectsStore?.all() ?? []).filter((instance) => instance.definitionId === def.id).length;
-  const swatches = (def.parts ?? []).map((p) => `<div class="workshop-asset-swatch" style="background:${escapeHtml(p.color ?? "#999")}" title="${escapeHtml(p.type ?? "part")}"></div>`).join("");
+  const swatches = (def.parts ?? []).map((p) => `<div class="workshop-asset-swatch" style="background:${escapeHtml(p.color ?? "#999")}" role="img" aria-label="${escapeHtml(p.type ?? "part")} — ${escapeHtml(p.color ?? "#999")}" title="${escapeHtml(p.type ?? "part")}"></div>`).join("");
 
   const html = `
     <span class="workshop-page-badge">Object</span>
@@ -394,7 +395,7 @@ function beingDetailPage(descriptor, { beingLibrary, assetService }) {
   const rigJointCount = being.bodyParts.filter((p) => p.jointName).length;
   const preview =
     being.bodySource === "primitives"
-      ? `<div class="workshop-asset-preview">${being.bodyParts.map((p) => `<div class="workshop-asset-swatch" style="background:${escapeHtml(p.color)}" title="${escapeHtml(p.name)}"></div>`).join("") || '<span class="workshop-page-empty">No parts</span>'}</div>`
+      ? `<div class="workshop-asset-preview">${being.bodyParts.map((p) => `<div class="workshop-asset-swatch" style="background:${escapeHtml(p.color)}" role="img" aria-label="${escapeHtml(p.name)} — ${escapeHtml(p.color)}" title="${escapeHtml(p.name)}"></div>`).join("") || '<span class="workshop-page-empty">No parts</span>'}</div>`
       : `<p class="workshop-page-subtitle">Built from an imported model \u2014 preview it from the Being Creator.</p>`;
 
   const html = `
@@ -427,8 +428,9 @@ function beingDetailPage(descriptor, { beingLibrary, assetService }) {
   return { title: descriptor.name, html: wrapPage(descriptor.name, html) };
 }
 
-function assetGrid(items) {
-  return `<div class="workshop-home-grid">${items.map((i) => `<a class="workshop-home-tile" href="${escapeHtml(i.url)}"><span class="workshop-home-tile-title">${escapeHtml(i.title)}</span><span class="workshop-home-tile-meta">${escapeHtml(i.meta ?? "")}</span></a>`).join("")}</div>`;
+function assetGrid(items, labelledbyId) {
+  const groupAttrs = labelledbyId ? ` role="group" aria-labelledby="${escapeHtml(labelledbyId)}"` : "";
+  return `<div class="workshop-home-grid"${groupAttrs}>${items.map((i) => `<a class="workshop-home-tile" href="${escapeHtml(i.url)}"><span class="workshop-home-tile-title">${escapeHtml(i.title)}</span><span class="workshop-home-tile-meta">${escapeHtml(i.meta ?? "")}</span></a>`).join("")}</div>`;
 }
 
 function metaRow(label, value) {
