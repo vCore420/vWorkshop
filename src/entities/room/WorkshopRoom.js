@@ -427,15 +427,32 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
     // the panel mesh is offset from its own pivot toward the doorway's
     // centre, so together the two panels meet in the middle when closed.
     const pivot = new THREE.Group();
-    const mesh = box(panelWidth, doorDef.height, 0.06, doorMat);
-    // Phase 14 ("Further Environmental Polish") — the pivot itself now
-    // sits at the wall's true *outer* face (see its own `.position.set()`
-    // below), not the inner one, so opening no longer sweeps the panel
-    // back through the wall's own 0.3m thickness. The mesh's own local Z
-    // offsets by the exact same amount in the opposite direction, so the
-    // closed door still visually sits exactly where it always did (flush
-    // with the interior face) — only the invisible hinge point moved.
-    mesh.position.set(-hingeSide * (panelWidth / 2), doorDef.height / 2, -WALL_THICKNESS);
+    const panelDepth = 0.06;
+    const mesh = box(panelWidth, doorDef.height, panelDepth, doorMat);
+    // Phase 14 ("Further Environmental Polish") — the pivot itself sits
+    // at the wall's true *outer* face (see its own `.position.set()`
+    // below), not the inner one. Version 4, Phase 2 ("Playtesting Notes,
+    // Continued") — Phase 14's own fix moved the *pivot* correctly but
+    // left the *mesh* offset at the full wall thickness (`-WALL_THICKNESS`,
+    // 0.3m) specifically so the closed door's world position wouldn't
+    // shift — which quietly re-created the same problem one level down:
+    // a door's hinge line has to be coincident with the leaf's own edge
+    // to swing like a hinge at all, and a leaf sitting 0.3m away from its
+    // own rotation axis instead sweeps its whole width through open air
+    // around a point that isn't on it — confirmed numerically (traced the
+    // hinge-side point's own world position at closed vs. fully-open
+    // angles: ~0.5m of drift, reading exactly like "swings outward, away
+    // from the house," not a clean hinge). The mesh's own local Z now
+    // offsets by half its own physical depth instead — its hinge-side
+    // face lands exactly on the pivot (local z = 0), the same way a real
+    // door's hinge pin sits right at the leaf's own edge, not floating
+    // inside the wall cavity behind it. The closed door's world position
+    // does shift as a result (now sitting near the *outer* face, embedded
+    // in the wall's own opening, rather than flush with the interior
+    // face) — a real, visible, and correct change: a leaf hinged at the
+    // outer face has to actually live near the outer face, not the inner
+    // one, for "hinge" to mean anything geometrically.
+    mesh.position.set(-hingeSide * (panelWidth / 2), doorDef.height / 2, -panelDepth / 2);
     pivot.add(mesh);
 
     const glassAreaHeight = doorDef.height - lowerPanelHeight - stileWidth * 2;
@@ -682,8 +699,18 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
     const benchSeat = box(1.2, 0.06, 0.4, benchMat);
     benchSeat.position.set(benchX, 0.42, benchZ);
     root.add(benchSeat);
+    // Version 4, Phase 2 ("Playtesting Notes, Continued") — the backrest
+    // was on the wrong side: `benchZ + 0.17` put it *further* from the
+    // wall than the seat, leaving the open, backless edge almost flush
+    // against the wall (a ~5cm gap) and the backrest itself out in the
+    // yard, so anyone sitting down would face directly into the exterior
+    // wall a few inches from their knees. `+Z` is "further from the
+    // house" throughout this file (see `southOuterZ`'s own usage above) —
+    // the backrest belongs on the *near*-wall side instead, so a person
+    // sitting on the bench has their back to the house and looks out
+    // into the yard, the ordinary way a bench against a wall works.
     const benchBack = box(1.2, 0.32, 0.05, benchMat);
-    benchBack.position.set(benchX, 0.61, benchZ + 0.17);
+    benchBack.position.set(benchX, 0.61, benchZ - 0.17);
     root.add(benchBack);
     for (const lx of [-0.5, 0.5]) {
       const leg = box(0.06, 0.42, 0.35, benchMat);

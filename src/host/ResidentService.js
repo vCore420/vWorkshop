@@ -1,4 +1,5 @@
 import { getIdleLocation } from "../resident/ResidentMovement.js";
+import { BUBBLE_DEFINITION_ID } from "../beings/DefaultBeings.js";
 
 /**
  * ResidentService
@@ -24,34 +25,55 @@ import { getIdleLocation } from "../resident/ResidentMovement.js";
  * exists for the Host's own cross-cutting purposes (Dashboard status,
  * `resident://` pages, and any future service that needs to know "is
  * there a resident" without caring about the Browser at all).
+ *
+ * Version 4, Phase 7 ("Being ↔ Resident Convergence") — Bubble is a real
+ * `BeingLibrary` instance now, not a singular `ResidentController`.
+ * `activeResidentSummary()` describes her specifically (resolved via
+ * `beingInstanceStore`/`beingResidentStateStore`), the same "keep
+ * Bubble's own dashboard working, a genuine multi-resident view is
+ * separate scope" decision every other Bubble-facing surface this phase
+ * touched made too. One honest simplification: `activity` no longer
+ * distinguishes "in conversation" — that lived on a `ResidentBehaviour`
+ * that's now genuinely ephemeral, scoped to one open conversation
+ * overlay, with nothing outside it left to read.
  */
 export class ResidentService {
-  constructor({ residentProfileStore, residentState, residentBehaviour, conversationMemory } = {}) {
+  constructor({ residentProfileStore, beingLibrary, beingInstanceStore, beingResidentStateStore } = {}) {
     this._residentProfileStore = residentProfileStore;
-    this._residentState = residentState;
-    this._residentBehaviour = residentBehaviour;
-    this._conversationMemory = conversationMemory;
+    this._beingLibrary = beingLibrary;
+    this._beingInstanceStore = beingInstanceStore;
+    this._beingResidentStateStore = beingResidentStateStore;
   }
 
   listResidents() {
     return this._residentProfileStore?.all() ?? [];
   }
 
+  _bubbleInstance() {
+    return this._beingInstanceStore?.all().find((i) => i.definitionId === BUBBLE_DEFINITION_ID) ?? null;
+  }
+
   /** `null` if no resident is currently embodied at all (shouldn't
-   *  happen in practice — `ResidentProfileStore` always seeds one — but
-   *  a Host-level consumer shouldn't have to assume that invariant holds
-   *  forever). */
+   *  happen in practice — Bubble is always seeded and migrated to a real
+   *  Being instance — but a Host-level consumer shouldn't have to assume
+   *  that invariant holds forever). Resolved via Bubble's own specific
+   *  `residentProfileId`, not `residentProfileStore.getActive()` — the
+   *  editor's own "active" profile for editing purposes may not be the
+   *  one actually embodying her right now. */
   activeResidentSummary() {
-    const profile = this._residentProfileStore?.getActive();
+    const instance = this._bubbleInstance();
+    const definition = instance ? this._beingLibrary?.get(instance.definitionId) : null;
+    const profile = definition?.residentProfileId ? this._residentProfileStore?.get(definition.residentProfileId) : null;
     if (!profile) return null;
+    const bundle = instance ? this._beingResidentStateStore?.get(instance.id) : null;
     return {
       name: profile.name,
       provider: profile.provider,
       model: profile.model,
-      mood: this._residentState?.mood ?? "unknown",
-      activity: this._residentBehaviour?.mode === "conversing" ? "In conversation" : "Going about its day",
-      location: this._residentState?.idleLocationId ? getIdleLocation(this._residentState.idleLocationId).label : "Unknown",
-      thingsRemembered: this._conversationMemory?.notes.length ?? 0,
+      mood: bundle?.residentState?.mood ?? "unknown",
+      activity: "Going about its day",
+      location: bundle?.residentState?.idleLocationId ? getIdleLocation(bundle.residentState.idleLocationId).label : "Unknown",
+      thingsRemembered: bundle?.conversationMemory?.notes.length ?? 0,
     };
   }
 

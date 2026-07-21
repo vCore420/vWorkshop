@@ -25,6 +25,15 @@ export const MOVEMENT_STYLES = [
   { id: "patrol", label: "Patrol", description: "Follows a loop around its home area." },
   { id: "follow", label: "Follow", description: "Stays near the player, within its home radius." },
   { id: "stayNearHome", label: "Stay Near Home", description: "Mostly still, occasionally repositions within its home area." },
+  // Version 4, Phase 7 — the resident's own bespoke idle-location travel
+  // (ResidentMovement.js), reused wholesale rather than reimplemented as
+  // a wander variant. Its named idle locations are fixed, real
+  // Workshop-interior furniture positions, not configurable per Being —
+  // this only reads as intentional for something that actually lives in
+  // the Workshop's own room, not a generic "wander anywhere outdoors"
+  // option. Not restricted to resident-capable Beings specifically,
+  // though — a real movement style like any other here.
+  { id: "residentTravel", label: "Resident Travel", description: "Eases between the Workshop's own named idle spots, the way the resident already does." },
 ];
 
 export const IDLE_BEHAVIOURS = [
@@ -46,6 +55,12 @@ export const INTERACTION_BEHAVIOURS = [
   { id: "talk", label: "Talk" },
   { id: "wave", label: "Wave" },
   { id: "inspect", label: "Inspect" },
+  // Version 4, Phase 7 — a real conversation, not a toast. Reuses the
+  // exact same ResidentProfileStore/AIConnectionManager machinery the
+  // Workshop's own resident already runs on, via `residentProfileId`
+  // (see BeingLibrary.js) — see docs/BEINGS.md's own account for the
+  // full architecture.
+  { id: "aiResident", label: "AI Resident" },
   { id: "none", label: "None" },
 ];
 

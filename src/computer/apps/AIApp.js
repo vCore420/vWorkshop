@@ -12,6 +12,7 @@ import { escapeHtml } from "../../utils/domSafety.js";
 import { nextDomId } from "../../utils/domIds.js";
 import { formatBytes } from "../../utils/formatBytes.js";
 import { WORKSHOP_FUNCTIONS } from "../../ai/WorkshopFunctions.js";
+import { BUBBLE_DEFINITION_ID } from "../../beings/DefaultBeings.js";
 
 const STATUS_LABELS = {
   connected: "Connected",
@@ -30,10 +31,10 @@ const STATUS_LABELS = {
  * Functions it's granted) or reads from the systems that make the
  * resident this profile describes actually real in the room —
  * `AIConnectionManager`/`ModelRegistry` for the connection itself,
- * `residentBehaviour`/`residentState`/`conversationMemory` for what
- * Bubble is *currently* doing. This file coordinates all of them but
- * owns none of their actual state itself, the same "app renders a store,
- * doesn't duplicate it" shape every other Workshop app already follows.
+ * Bubble's own `BeingResidentStateStore` bundle for what she's
+ * *currently* doing. This file coordinates all of them but owns none of
+ * their actual state itself, the same "app renders a store, doesn't
+ * duplicate it" shape every other Workshop app already follows.
  *
  * "Avoid making this feel like configuring software. Instead, make it
  * feel like preparing another presence." Section order: status, health,
@@ -41,19 +42,41 @@ const STATUS_LABELS = {
  * behaviour, memory, embodiment, functions, expressions, sandbox,
  * advanced, connection test — *who this resident is* and *how it's doing
  * right now* both come before the numeric tuning knobs, not after.
+ *
+ * Version 4, Phase 7 ("Being ↔ Resident Convergence") — Bubble is a real
+ * `BeingLibrary` instance now, not a singular `ResidentController`.
+ * **Decided with Vi**: this dashboard keeps describing Bubble
+ * specifically (`BUBBLE_DEFINITION_ID`), resolved via
+ * `beingResidentStateStore` — a genuine multi-resident picker is real,
+ * separate scope, deliberately not attempted this phase. One honest
+ * simplification: `describeActivity()`'s old "In conversation" state is
+ * gone — it lived on a `ResidentBehaviour` that's now genuinely
+ * ephemeral, scoped to one open conversation overlay, with nothing
+ * outside it left to read.
+ *
+ * **Version 4, Phase 7a** — a real, narrow inconsistency this created,
+ * fixed: the Status Card and Resident Health grid used to read
+ * `activeProfile()` (whichever profile is currently selected *for
+ * editing* below) for Bubble's own name/model/provider — the same value
+ * by default, but genuinely different the moment a player creates and
+ * activates a second profile purely for editing. Both now read
+ * `residentDefinitionProfile()` instead, resolved via her own Being
+ * definition's `residentProfileId` — describing Bubble specifically,
+ * exactly as this dashboard's own header always intended. Every editing
+ * section below `render()`'s own `if (profile)` branch still reads
+ * `activeProfile()`, unchanged — editing genuinely means "whichever
+ * profile is selected," a different question from "which one Bubble is
+ * actually using right now."
  */
 export function createAIApp({
   aiConnectionManager,
   modelRegistry,
   residentProfileStore,
   expressionSetStore = null,
-  residentBehaviour = null,
   residentConnection = null,
-  residentState = null,
-  residentPreferences = null,
-  playerPatternMemory = null,
-  residentCuriosity = null,
-  conversationMemory = null,
+  beingLibrary = null,
+  beingInstanceStore = null,
+  beingResidentStateStore = null,
   worldObjectsStore = null,
   environmentSystem = null,
   timeOfDaySystem = null,
@@ -81,8 +104,8 @@ export function createAIApp({
       // "A safe place to experiment with resident configuration before
       // applying changes" — entirely separate from the real conversation
       // in `ResidentConversation.js`: its own history, never touching
-      // `residentBehaviour`/`ConversationMemory`'s own writes, so nothing
-      // typed here ever reaches Bubble in the room. See buildSandboxSection().
+      // Bubble's own real `ConversationMemory` writes, so nothing typed
+      // here ever reaches Bubble in the room. See buildSandboxSection().
       let sandboxHistory = [];
       let sandboxThinking = false;
 
@@ -98,6 +121,35 @@ export function createAIApp({
 
       function activeProfile() {
         return residentProfileStore.getActive();
+      }
+
+      /** Bubble's own resident-state bundle (mood, idle location,
+       *  conversation memory) — see this file's own header comment on why
+       *  the status/health/sandbox sections below describe her
+       *  specifically rather than whichever profile happens to be
+       *  "active" for editing purposes. `null` if she isn't in the
+       *  Workshop at all (a defensive case, not an expected one). */
+      function bubbleBundle() {
+        const instance = beingInstanceStore?.all().find((i) => i.definitionId === BUBBLE_DEFINITION_ID);
+        return instance ? (beingResidentStateStore?.get(instance.id) ?? null) : null;
+      }
+
+      /** Version 4, Phase 7a — Bubble's own *real* profile, resolved via
+       *  her own Being definition's `residentProfileId`, distinct from
+       *  `activeProfile()` (whichever profile is currently selected for
+       *  editing below). The two are the same by default — a fresh
+       *  Workshop, or one where nobody's created a second profile — but
+       *  diverge the moment a player creates and activates a second one
+       *  purely for editing. The Status Card and Resident Health grid
+       *  describe Bubble specifically, so they read this, not
+       *  `activeProfile()`; every editing section (Identity, Traits,
+       *  Behaviour, Memory, Embodiment, Functions, Expressions, Sandbox,
+       *  Advanced, Test) keeps reading `activeProfile()` exactly as
+       *  before, since editing genuinely means "whichever profile is
+       *  selected," not "Bubble's own." */
+      function residentDefinitionProfile() {
+        const definition = beingLibrary?.get(BUBBLE_DEFINITION_ID);
+        return definition?.residentProfileId ? (residentProfileStore.get(definition.residentProfileId) ?? null) : null;
       }
 
       function updateActive(patch) {
@@ -153,7 +205,7 @@ export function createAIApp({
       }
 
       function buildStatusCard() {
-        const profile = activeProfile();
+        const profile = residentDefinitionProfile();
         const section = document.createElement("div");
         section.className = "builder-section ai-status-card";
         const title = document.createElement("h3");
@@ -182,7 +234,8 @@ export function createAIApp({
        *  person would actually want to know about how Bubble is doing,
        *  nothing here is editable (that's every section below it). */
       function buildHealthSection() {
-        const profile = activeProfile();
+        const profile = residentDefinitionProfile();
+        const bundle = bubbleBundle();
         const section = document.createElement("div");
         section.className = "builder-section";
         section.appendChild(sectionHeading("Resident Health"));
@@ -193,9 +246,9 @@ export function createAIApp({
           ["Provider", getProvider(profile?.provider).label],
           ["Latency", aiConnectionManager.lastLatencyMs != null ? `${aiConnectionManager.lastLatencyMs} ms` : "\u2014"],
           ["Current activity", describeActivity()],
-          ["Current mood", residentState ? capitalize(residentState.mood) : "\u2014"],
-          ["Memory status", describeMemoryStatus(profile)],
-          ["Current location", residentState?.idleLocationId ? getIdleLocation(residentState.idleLocationId).label : "\u2014"],
+          ["Current mood", bundle?.residentState ? capitalize(bundle.residentState.mood) : "\u2014"],
+          ["Memory status", describeMemoryStatus(profile, bundle)],
+          ["Current location", bundle?.residentState?.idleLocationId ? getIdleLocation(bundle.residentState.idleLocationId).label : "\u2014"],
         ];
         const grid = document.createElement("div");
         grid.className = "ai-health-grid";
@@ -216,15 +269,14 @@ export function createAIApp({
       }
 
       function describeActivity() {
-        if (!residentBehaviour) return "\u2014";
         if (aiConnectionManager.status !== "connected") return "Waiting quietly";
-        return residentBehaviour.mode === "conversing" ? "In conversation" : "Going about its day";
+        return "Going about its day";
       }
 
-      function describeMemoryStatus(profile) {
+      function describeMemoryStatus(profile, bundle) {
         if (!profile) return "\u2014";
         if (profile.memory.mode === "disabled") return "Disabled";
-        const count = conversationMemory?.notes.length ?? 0;
+        const count = bundle?.conversationMemory?.notes.length ?? 0;
         const modeLabel = MEMORY_MODES.find((m) => m.id === profile.memory.mode)?.label ?? profile.memory.mode;
         return `${modeLabel} \u2014 ${count} thing${count === 1 ? "" : "s"} remembered`;
       }
@@ -1033,9 +1085,9 @@ export function createAIApp({
        *  inside the Workshop... a safe place to experiment with resident
        *  configuration before applying changes." Genuinely isolated: its
        *  own `sandboxHistory` (never `ResidentConversation.js`'s own),
-       *  never calls `residentBehaviour.triggerEmotion()`/`setThinking()`
-       *  (so Bubble's actual presence in the room never reacts), and never
-       *  writes to `ConversationMemory` (`buildConversationContext()` is
+       *  never touches Bubble's own real conversation-mode state (so her
+       *  actual presence in the room never reacts), and never writes to
+       *  her real `ConversationMemory` (`buildConversationContext()` is
        *  called with `mutateCuriosity: false` for the same reason — a test
        *  message must never consume the real "something new was built"
        *  note before the player gets to it for real). The system prompt
@@ -1064,7 +1116,7 @@ export function createAIApp({
         const memoryHeading = document.createElement("h4");
         memoryHeading.textContent = "Memory Inspection";
         memoryPreview.appendChild(memoryHeading);
-        const notes = conversationMemory?.mostRelevant(8) ?? [];
+        const notes = bubbleBundle()?.conversationMemory?.mostRelevant(8) ?? [];
         if (notes.length === 0) {
           const empty = document.createElement("p");
           empty.className = "app-subtitle";
@@ -1125,9 +1177,21 @@ export function createAIApp({
           sandboxThinking = true;
           render();
           try {
+            const bundle = bubbleBundle();
             const context = buildConversationContext(
               profile,
-              { residentCuriosity, residentPreferences, playerPatternMemory, conversationMemory, worldObjectsStore, environmentSystem, timeOfDaySystem, worldEventLog, worldAwareness, worldTimeService },
+              {
+                residentCuriosity: bundle?.residentCuriosity,
+                residentPreferences: bundle?.residentPreferences,
+                playerPatternMemory: bundle?.playerPatternMemory,
+                conversationMemory: bundle?.conversationMemory,
+                worldObjectsStore,
+                environmentSystem,
+                timeOfDaySystem,
+                worldEventLog,
+                worldAwareness,
+                worldTimeService,
+              },
               { mutateCuriosity: false }
             );
             const systemPrompt = composeSystemPrompt(profile, context);

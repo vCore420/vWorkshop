@@ -1,4 +1,5 @@
 import { CURRENT_SAVE_VERSION } from "../systems/SaveMigrations.js";
+import { BUBBLE_DEFINITION_ID } from "../beings/DefaultBeings.js";
 
 // Version 2 Sign-Off phase — "Healthy. Warning. Error. Unavailable."
 // used to also live here as its own exported `HEALTH_LEVELS` array —
@@ -52,7 +53,11 @@ export class DiagnosticsService {
     pageRegistry,
     browserStore,
     searchIndex,
-    residentController,
+    residentProfileStore,
+    residentConnection,
+    beingLibrary,
+    beingInstanceStore,
+    beingResidentStateStore,
     workshopEventLog,
     worldEventLog,
   } = {}) {
@@ -64,7 +69,11 @@ export class DiagnosticsService {
     this._pageRegistry = pageRegistry;
     this._browserStore = browserStore;
     this._searchIndex = searchIndex;
-    this._residentController = residentController;
+    this._residentProfileStore = residentProfileStore;
+    this._residentConnection = residentConnection;
+    this._beingLibrary = beingLibrary;
+    this._beingInstanceStore = beingInstanceStore;
+    this._beingResidentStateStore = beingResidentStateStore;
     this._workshopEventLog = workshopEventLog;
     this._worldEventLog = worldEventLog;
   }
@@ -234,13 +243,30 @@ export class DiagnosticsService {
     };
   }
 
+  /** Version 4, Phase 7 ("Being \u2194 Resident Convergence") \u2014 Bubble is a
+   *  real `BeingLibrary` instance now, resolved here the same way every
+   *  other Bubble-facing surface this phase touched resolves her, rather
+   *  than a singular `ResidentController.getDiagnostics()`. */
   _buildResidentsSection() {
-    const diagnostics = this._residentController?.getDiagnostics?.() ?? null;
+    const instance = this._beingInstanceStore?.all().find((i) => i.definitionId === BUBBLE_DEFINITION_ID) ?? null;
+    const definition = instance ? this._beingLibrary?.get(instance.definitionId) : null;
+    const profile = definition?.residentProfileId ? this._residentProfileStore?.get(definition.residentProfileId) : null;
+    const bundle = instance ? this._beingResidentStateStore?.get(instance.id) : null;
+    const diagnostics = profile
+      ? {
+          name: profile.name,
+          isAwake: this._residentConnection?.isAwake ?? false,
+          connectionState: this._residentConnection?.status ?? "disconnected",
+          mood: bundle?.residentState?.mood ?? "neutral",
+          idleLocationId: bundle?.residentState?.idleLocationId ?? null,
+          position: bundle?.residentState?.currentPosition ?? null,
+        }
+      : null;
     return {
       id: "residents",
       name: "Resident System",
       health: diagnostics ? "healthy" : "unavailable",
-      summary: diagnostics ? `${diagnostics.name} \u2014 ${diagnostics.isAwake ? "awake" : "asleep"}, ${diagnostics.behaviourMode}.` : "No resident currently embodied.",
+      summary: diagnostics ? `${diagnostics.name} \u2014 ${diagnostics.isAwake ? "awake" : "asleep"}.` : "No resident currently embodied.",
       residents: diagnostics ? [diagnostics] : [],
     };
   }

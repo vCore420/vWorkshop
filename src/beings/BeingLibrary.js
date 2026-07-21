@@ -78,6 +78,11 @@ export class BeingLibrary {
       homeRadius: 2.5,
       awarenessMode: "ignorePlayer",
       interactionBehaviour: "none",
+      // Version 4, Phase 7 — populated only when interactionBehaviour is
+      // "aiResident"; references ResidentProfileStore, resolved fresh by
+      // whoever renders this Being, exactly the same reference shape
+      // idleAnimationClipId below already is for AnimationLibraryStore.
+      residentProfileId: null,
       idleAnimationClipId: null, // references AnimationLibraryStore — see docs/BEINGS.md's own "Animation Integration" section
       walkAnimationClipId: null,
       createdAt: now,
@@ -186,6 +191,12 @@ export class BeingLibrary {
       // Creator's own placeholder (ModelLoader.buildPlaceholder()) covers
       // the gap until a real model is chosen.
       modelId: null,
+      // Same reasoning as modelId — a resident profile lives in this
+      // Workshop's own ResidentProfileStore, minted at runtime, and an
+      // imported file has no access to it. Falls back to "none" rather
+      // than a dangling reference; the Being Creator's own picker covers
+      // the gap.
+      residentProfileId: null,
     });
     this.beings[being.id] = being;
     this._emitChanged();

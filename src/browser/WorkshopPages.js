@@ -8,6 +8,7 @@ import { getProvider } from "../ai/ProviderRegistry.js";
 import { PERSONALITY_TRAITS } from "../ai/TraitConfiguration.js";
 import { EMBODIMENT_TYPES } from "../ai/EmbodimentConfiguration.js";
 import { getExpressionType } from "../resident/ExpressionTypes.js";
+import { BUBBLE_DEFINITION_ID } from "../beings/DefaultBeings.js";
 
 /**
  * WorkshopPages
@@ -52,7 +53,16 @@ import { getExpressionType } from "../resident/ExpressionTypes.js";
  * page (see `docs/HOST.md`).
  */
 export function registerWorkshopPages(pageRegistry, searchIndex, deps) {
-  const { projectsStore, browserStore, hostProjectsService, residentProfileStore, residentState, residentBehaviour, conversationMemory, aiConnectionManager, engine, hostManager } = deps;
+  const { projectsStore, browserStore, hostProjectsService, residentProfileStore, beingLibrary, beingInstanceStore, beingResidentStateStore, aiConnectionManager, engine, hostManager } = deps;
+
+  // Version 4, Phase 7 ("Being ↔ Resident Convergence") — Bubble is a
+  // real `BeingLibrary` instance now, resolved once here rather than a
+  // singular `residentState`/`residentBehaviour`/`conversationMemory`
+  // trio, the same "keep Bubble's own dashboard working" decision every
+  // other Bubble-facing surface this phase touched made too.
+  const bubbleInstance = beingInstanceStore?.all().find((i) => i.definitionId === BUBBLE_DEFINITION_ID) ?? null;
+  const residentState = bubbleInstance ? (beingResidentStateStore?.get(bubbleInstance.id)?.residentState ?? null) : null;
+  const conversationMemory = bubbleInstance ? (beingResidentStateStore?.get(bubbleInstance.id)?.conversationMemory ?? null) : null;
 
   pageRegistry.register("workshop://", () =>
     homePage({ browserStore, hostManager, residentProfileStore, residentState, projectsStore, workbenchSystem: engine?.getSystem(WorkbenchSystem) })
@@ -71,8 +81,8 @@ export function registerWorkshopPages(pageRegistry, searchIndex, deps) {
   pageRegistry.register("workshop://history", () => docFilePage("The Workshop's Story", "./docs/HISTORY.md"));
   pageRegistry.register("workshop://projects", () => projectsPage(projectsStore, hostProjectsService));
   pageRegistry.register("workshop://settings", () => settingsPage());
-  pageRegistry.register("workshop://residents", () => residentsPage({ residentProfileStore, residentState, residentBehaviour, conversationMemory, aiConnectionManager }));
-  pageRegistry.register("resident://", () => residentsPage({ residentProfileStore, residentState, residentBehaviour, conversationMemory, aiConnectionManager })); // new canonical scheme — Workshop Platform phase, see docs/BROWSER.md's own "Local Protocols" section
+  pageRegistry.register("workshop://residents", () => residentsPage({ residentProfileStore, residentState, conversationMemory, aiConnectionManager }));
+  pageRegistry.register("resident://", () => residentsPage({ residentProfileStore, residentState, conversationMemory, aiConnectionManager })); // new canonical scheme — Workshop Platform phase, see docs/BROWSER.md's own "Local Protocols" section
   pageRegistry.register("workshop://diagnostics", () => diagnosticsPage(deps));
   pageRegistry.register("workshop://mission-control", () => missionControlPage({ residentProfileStore, aiConnectionManager }));
   pageRegistry.register("workshop://bookmarks", () => bookmarksPage(browserStore));
@@ -273,7 +283,7 @@ function settingsPage() {
  *  browsable page rather than a computer app — the same live data,
  *  reached a different way. Every profile is listed, not only the active
  *  one, matching `docs/AI.md`'s own multi-profile support. */
-function residentsPage({ residentProfileStore, residentState, residentBehaviour, conversationMemory, aiConnectionManager }) {
+function residentsPage({ residentProfileStore, residentState, conversationMemory, aiConnectionManager }) {
   const profiles = residentProfileStore?.all() ?? [];
   const activeId = residentProfileStore?.activeProfileId;
 
@@ -303,7 +313,7 @@ function residentsPage({ residentProfileStore, residentState, residentBehaviour,
         <h2>Right now</h2>
         <div class="workshop-diagnostics-grid">
           ${metaRow("Connection", aiConnectionManager?.status ?? "unknown")}
-          ${metaRow("Current activity", residentBehaviour?.mode === "conversing" ? "In conversation" : "Going about its day")}
+          ${metaRow("Current activity", "Going about its day")}
           ${metaRow("Current mood", capitalize(residentState?.mood))}
           ${metaRow("Current location", residentState?.idleLocationId ? getIdleLocation(residentState.idleLocationId).label : "Unknown")}
           ${metaRow("Things remembered", String(conversationMemory?.notes.length ?? 0))}

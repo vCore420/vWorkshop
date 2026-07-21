@@ -267,11 +267,11 @@ export function createWorkshopFunctionDispatcher(deps) {
     blueprintStore = null,
     beingInstanceStore = null,
     beingLibrary = null,
+    beingController = null,
     environmentSystem = null,
     timeOfDaySystem = null,
     lightingSystem = null,
     musicSystem = null,
-    residentController = null,
   } = deps;
 
   function nearby(store, resolveName, radius) {
@@ -290,16 +290,25 @@ export function createWorkshopFunctionDispatcher(deps) {
   }
 
   const invokers = {
-    moveTo(args) {
-      if (!residentController?.goTo) return { error: "Movement isn't available right now." };
+    // Version 4, Phase 7 ("Being ↔ Resident Convergence") — `callContext`
+    // (a third, optional argument every invoker receives, see `invoke()`
+    // below) carries `beingInstanceId`: which resident-capable Being is
+    // actually speaking, since there's no longer a singular
+    // `residentController` this could assume. `ResidentConversation.js`'s
+    // own `mount()` is what actually supplies it, wrapping the shared
+    // dispatcher in a small closure scoped to whichever instance it's
+    // currently open for.
+    moveTo(args, callContext) {
+      if (!beingController?.sendResidentTo || !callContext?.beingInstanceId) return { error: "Movement isn't available right now." };
       // y is deliberately not part of this function's own schema — the
       // resident only ever moves along the ground (see
-      // ResidentController.js's own arrival-check comment on why a
-      // height mismatch would otherwise leave "goto" stuck active
-      // forever); clampPosition()'s own missing-value default (0) is
-      // harmless here since nothing reads this y for movement.
+      // BeingController.js's own _updateResidentTravel() arrival-check
+      // comment on why a height mismatch would otherwise leave a "goto"
+      // stuck active forever); clampPosition()'s own missing-value
+      // default (0) is harmless here since nothing reads this y for
+      // movement.
       const position = clampPosition(args);
-      residentController.goTo(position);
+      beingController.sendResidentTo(callContext.beingInstanceId, position);
       return { ok: true, movingTo: { x: position.x, z: position.z } };
     },
     getPlayerPosition() {
@@ -391,12 +400,16 @@ export function createWorkshopFunctionDispatcher(deps) {
     /** Never throws — an unknown function or a bad argument becomes a
      *  returned `{error}` object, the same shape a *successful* call
      *  returns alongside `ok: true`, so the tool-calling loop always has
-     *  something sensible to feed back to the model either way. */
-    async invoke(name, args) {
+     *  something sensible to feed back to the model either way.
+     *  `callContext` (optional — see `moveTo`'s own comment above) is
+     *  only ever read by invokers that need to know *which* resident is
+     *  acting; every other invoker ignores it, same as an unused function
+     *  argument anywhere else. */
+    async invoke(name, args, callContext) {
       const fn = invokers[name];
       if (!fn) return { error: `Unknown function "${name}".` };
       try {
-        const result = await fn(args ?? {});
+        const result = await fn(args ?? {}, callContext);
         return result ?? { ok: true };
       } catch (err) {
         return { error: err?.message || "Something went wrong running that." };

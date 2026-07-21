@@ -51,7 +51,7 @@ const JOINT_MARKER_MATERIAL = new THREE.MeshBasicMaterial({ color: "#ff5fd6", de
  * plus, where possible, a skeleton map `AnimationRetargeting.
  * applyPoseToMappedSkeleton()` already knows how to animate.
  */
-export function createBeingCreatorApp({ beingLibrary, modelLibrary, modelAssetStore, modelLoader, animationLibraryStore }) {
+export function createBeingCreatorApp({ beingLibrary, modelLibrary, modelAssetStore, modelLoader, animationLibraryStore, residentProfileStore = null }) {
   return {
     id: "beingCreator",
     label: "Being Creator",
@@ -214,7 +214,7 @@ export function createBeingCreatorApp({ beingLibrary, modelLibrary, modelAssetSt
         } else {
           formPane.appendChild(buildModelSection(draft, modelLibrary, modelAssetStore, renderAll, refreshPreview));
         }
-        formPane.appendChild(buildMovementSection(draft, renderAll));
+        formPane.appendChild(buildMovementSection(draft, renderAll, residentProfileStore));
         formPane.appendChild(
           buildAnimationSection(draft, animationLibraryStore, renderAll, refreshPreview, {
             get playing() { return previewPlaying; },
@@ -264,6 +264,7 @@ function freshDraft() {
     homeRadius: 2.5,
     awarenessMode: "ignorePlayer",
     interactionBehaviour: "none",
+    residentProfileId: null,
     idleAnimationClipId: null,
     walkAnimationClipId: null,
   };
@@ -962,7 +963,7 @@ function buildModelSection(draft, modelLibrary, modelAssetStore, onChange, onPre
 // ---------------------------------------------------------------------
 // Movement & Behaviour
 // ---------------------------------------------------------------------
-function buildMovementSection(draft, onChange) {
+function buildMovementSection(draft, onChange, residentProfileStore) {
   const section = document.createElement("div");
   section.className = "builder-section";
   section.appendChild(sectionHeading("Behaviour"));
@@ -977,7 +978,39 @@ function buildMovementSection(draft, onChange) {
   }
   section.appendChild(selectRow("Idle Behaviour", draft.idleBehaviour, IDLE_BEHAVIOURS, (v) => { draft.idleBehaviour = v; }));
   section.appendChild(selectRow("Awareness", draft.awarenessMode, AWARENESS_MODES, (v) => { draft.awarenessMode = v; }));
-  section.appendChild(selectRow("Interaction", draft.interactionBehaviour, INTERACTION_BEHAVIOURS, (v) => { draft.interactionBehaviour = v; }));
+  section.appendChild(selectRow("Interaction", draft.interactionBehaviour, INTERACTION_BEHAVIOURS, (v) => { draft.interactionBehaviour = v; onChange(); }));
+
+  // Version 4, Phase 7 ("Being ↔ Resident Convergence") — only shown once
+  // "AI Resident" is actually chosen above; `residentProfileId` is just a
+  // reference into `ResidentProfileStore`, the same shape
+  // `idleAnimationClipId` below already is for `AnimationLibraryStore`.
+  // Deliberately not full CRUD here (rename/duplicate/export/delete stay
+  // Mission Control's own job) — a small "New Profile…" affordance covers
+  // the one action this screen genuinely needs.
+  if (draft.interactionBehaviour === "aiResident" && residentProfileStore) {
+    const profiles = residentProfileStore.all();
+    const options = [["", "— choose a profile —"], ...profiles.map((p) => [p.id, p.name])];
+    const profileRow = selectRow("Resident Profile", draft.residentProfileId ?? "", options, (v) => { draft.residentProfileId = v || null; });
+    section.appendChild(profileRow);
+
+    const newProfileBtn = document.createElement("button");
+    newProfileBtn.type = "button";
+    newProfileBtn.className = "workshop-phone-small-button";
+    newProfileBtn.textContent = "New Profile…";
+    newProfileBtn.addEventListener("click", () => {
+      const name = window.prompt("Name this resident's own AI profile:", draft.name || "New Resident");
+      if (!name) return;
+      const profile = residentProfileStore.create(name);
+      draft.residentProfileId = profile.id;
+      onChange();
+    });
+    section.appendChild(newProfileBtn);
+
+    const hint = document.createElement("p");
+    hint.className = "app-subtitle";
+    hint.textContent = "Configure this profile's own personality, memory, and behaviour in AI Mission Control.";
+    section.appendChild(hint);
+  }
 
   if (draft.movementStyle !== "static") {
     section.appendChild(sliderRow("Walk Speed", draft.walkSpeed, 0.2, 4, 0.1, (v) => { draft.walkSpeed = v; }, (v) => v.toFixed(1) + " m/s"));

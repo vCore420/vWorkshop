@@ -267,14 +267,23 @@ export const ComputerDeskDefinition = {
       // uses for the identical reason: a cylinder reads as a small wheel
       // once it's rotated this way, not as a coin lying flat.
       const castor = cylinder(0.022, 0.022, 0.02, Materials.rubber("#141414"), 10);
+      // Version 4, Phase 2 ("Playtesting Notes, Continued") — Phase 14's
+      // own fix below (`castor.rotation.y = angle`) turned out to be a
+      // complete no-op, not a partial one: Three.js's default Euler order
+      // ('XYZ') composes as `Rx(Ry(v))` — Y is applied *first*, while the
+      // cylinder's own symmetry axis still points along local Y, so
+      // rotating around it changes nothing (rotating anything around its
+      // own axis of symmetry never does); only *then* does the fixed
+      // `Rx(90°)` tilt run, landing on the exact same orientation
+      // regardless of `angle`. Every castor still rendered identically —
+      // confirmed by re-deriving the actual matrix product, not just
+      // reading the code. Setting `rotation.order = "YXZ"` reverses which
+      // rotation is innermost: now `Ry(Rx(v))` — the fixed tilt runs
+      // first (swinging the symmetry axis into the horizontal plane),
+      // and *then* the Y rotation sweeps that already-tilted axis around
+      // by `angle`, which is what actually varies per castor.
+      castor.rotation.order = "YXZ";
       castor.rotation.x = Math.PI / 2;
-      // Phase 14 ("Further Environmental Polish") — this never turned
-      // with its own leg (unlike `arm` above), so every castor shared one
-      // fixed orientation regardless of which of the 5 evenly-spaced
-      // positions it sat at; only the leg at angle 0 ever looked right,
-      // and every other one looked progressively more misaligned with
-      // its own arm the further round the circle it was — "each leg off
-      // by a different amount." The same `angle` the arm already turns by.
       castor.rotation.y = angle;
       // Rotating around X swaps this cylinder's height (0.02) and radius
       // (0.022) axes — its vertical extent is now governed by the

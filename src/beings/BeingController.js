@@ -10,11 +10,38 @@ import { autoMapSkeleton, isSkeletonMapUsable } from "../player/WorkshopSkeleton
 import { applyPoseToMappedSkeleton } from "../player/AnimationRetargeting.js";
 import { ClipPlayer } from "../player/AnimationPlayback.js";
 import { compileBody } from "./BodyCompiler.js";
+import { ResidentMovement, getIdleLocation, randomIdleLocationId, MIN_REST_SECONDS } from "../resident/ResidentMovement.js";
+import { getPersonalityModifiers } from "../resident/ResidentContext.js";
+import { currentTimeBucket, currentWeatherId, isRainingNow, isGoldenHourNow } from "../resident/ResidentWorldSignals.js";
+import { FURNITURE_LAYOUT } from "../data/layoutDefault.js";
 
 const SAVE_SYNC_INTERVAL = 2; // seconds — how often a moving Being's live position is written back to BeingInstanceStore, not every frame (see this file's own comment)
 const MIN_CONTINUITY_SECONDS = 30; // a Being reasonably notices and moves on within this short a gap; below it, nothing visibly changes on reload, matching "nothing should feel scripted"
 const AWARENESS_RADIUS = 3.5;
 const AWARENESS_FULL_RADIUS = 1.8;
+// Version 4, Phase 7 — the "quiet familiarity" half of the old
+// ResidentController.js, reconstructed from docs/RESIDENT.md's own
+// documented behaviour (the original file's exact source didn't survive
+// its own deletion this phase — see this file's own "Resident life" comment
+// below for the full account). MOOD_DRIFT bounds match "every
+// two-to-five minutes" exactly as documented; PATTERN_SAMPLE_INTERVAL's
+// precise original value wasn't recorded anywhere and is a reasonable
+// reconstruction, not a recovered constant.
+const MOOD_DRIFT_MIN_SECONDS = 120;
+const MOOD_DRIFT_MAX_SECONDS = 300;
+const PATTERN_SAMPLE_INTERVAL = 30;
+const RELATIONSHIP_AWARENESS_RADIUS = 3;
+const MOOD_CANDIDATES = ["content", "curious", "happy"]; // the only three docs/RESIDENT.md's own "Mood, Emotion, and Personality" section documents drift ever picking among
+// Version 4, Phase 7a — the idle-location weighting half of the old
+// ResidentController._windowWatchWeights(), same reconstruction caveat as
+// above: the exact original multiplier values didn't survive the file's
+// own deletion, these are reasonable values matching the documented
+// *behaviour*, not recovered originals. Matches PlayerPatternMemory.js's
+// own workbench/computer-desk zone radius (2.4) for "watching the player
+// work" — the same real furniture positions, deliberately not a second,
+// slightly-different radius.
+const CLOCK_WATCH_MINUTES = 6;
+const WORKBENCH_WATCH_RADIUS = 2.4;
 
 /**
  * BeingController
@@ -63,13 +90,31 @@ const AWARENESS_FULL_RADIUS = 1.8;
  * animating nothing convincingly.
  */
 export class BeingController {
-  constructor({ beingLibrary, beingInstanceStore, modelLoader, modelLibrary, animationLibraryStore }) {
+  constructor({
+    beingLibrary,
+    beingInstanceStore,
+    modelLoader,
+    modelLibrary,
+    animationLibraryStore,
+    beingResidentStateStore = null,
+    residentProfileStore = null,
+    environmentSystem = null,
+    timeOfDaySystem = null,
+    musicSystem = null,
+    projectsStore = null,
+  }) {
     this.beingLibrary = beingLibrary;
     this.beingInstanceStore = beingInstanceStore;
     this.modelLoader = modelLoader;
     this.modelLibrary = modelLibrary;
     this.animationLibraryStore = animationLibraryStore;
-    this._runtime = new Map(); // instanceId -> { root, entity, wanderTarget, patrolRoute, patrolIndex, restTimer, bobPhase, awarenessBlend, syncTimer, modelMesh, skeleton: {map, rest} | null, clipPlayer, activeClipId }
+    this.beingResidentStateStore = beingResidentStateStore; // Version 4, Phase 7 — resident-capable Beings only, see _updateResidentTravel()/_updateResidentLife()
+    this.residentProfileStore = residentProfileStore; // Version 4, Phase 7 — trait/dial modifiers for mood drift, see _driftMood()
+    this.environmentSystem = environmentSystem; // Version 4, Phase 7 — weather signal for pattern sampling, see _updateResidentLife()
+    this.timeOfDaySystem = timeOfDaySystem; // Version 4, Phase 7 — time-of-day signal for pattern sampling, see _updateResidentLife()
+    this.musicSystem = musicSystem; // Version 4, Phase 7 — "listening to music" activity sampling, see _samplePatterns()
+    this.projectsStore = projectsStore; // Version 4, Phase 7a — "an active project pulls toward the workbench," see _residentLocationWeights()
+    this._runtime = new Map(); // instanceId -> { root, entity, wanderTarget, patrolRoute, patrolIndex, restTimer, bobPhase, awarenessBlend, syncTimer, modelMesh, skeleton: {map, rest} | null, clipPlayer, activeClipId, residentMovement: ResidentMovement | null, moodDriftTimer, patternSampleTimer }
     this._playerPos = new THREE.Vector3();
   }
 
@@ -104,6 +149,11 @@ export class BeingController {
       const definition = instance && this.beingLibrary.get(instance.definitionId);
       if (!instance || !definition || definition.movementStyle === "static" || instance.despawned) continue;
 
+      if (definition.movementStyle === "residentTravel") {
+        this._applyResidentContinuity(instance, definition, runtime, cappedElapsedSeconds);
+        continue;
+      }
+
       const home = new THREE.Vector3(instance.homePosition[0], instance.homePosition[1], instance.homePosition[2]);
       const target = pickWanderTarget(home, instance.homeRadius, colliders);
       runtime.root.position.copy(target);
@@ -113,6 +163,43 @@ export class BeingController {
       runtime.restTimer = randomRestDuration();
       this.beingInstanceStore.update(id, { position: [target.x, target.y, target.z] });
     }
+  }
+
+  /** Version 4, Phase 7a — Bubble's own bespoke continuity, restored.
+   *  `ResidentController._applyContinuity()`'s original answer: has enough
+   *  time passed that she'd plausibly have moved on from exactly where she
+   *  was left? Below `MIN_REST_SECONDS` (90s — the shortest she'd ever
+   *  actually rest somewhere, the same real constant `ResidentMovement.js`
+   *  uses for its own ordinary wandering), no — the outer loop's own,
+   *  looser 30s `MIN_CONTINUITY_SECONDS` gate already got her here, but
+   *  this stricter, resident-specific threshold is what actually decides
+   *  whether she moves. Past it: a genuinely new named location (weighted
+   *  the same way an ordinary autonomous pick would be — see
+   *  `_residentLocationWeights()` — `playerPos: null` since nobody's in
+   *  the room yet to be "watched"), arrived at directly via
+   *  `setDraggedPosition()`/`setDraggedLookAt()`, no travel ease — the
+   *  same primitives Bubble's own drag-to-reposition already uses,
+   *  docs/PERSISTENCE.md's own "Bubble Continuity" section. */
+  _applyResidentContinuity(instance, definition, runtime, cappedElapsedSeconds) {
+    if (cappedElapsedSeconds < MIN_REST_SECONDS) return;
+    const bundle = this.beingResidentStateStore?.getOrCreate(instance.id);
+    const residentState = bundle?.residentState;
+    if (!residentState) return;
+
+    const currentId = residentState.idleLocationId;
+    const weights = this._residentLocationWeights(definition, bundle, null);
+    const nextId = randomIdleLocationId(currentId, weights);
+    const nextLocation = getIdleLocation(nextId);
+
+    if (!runtime.residentMovement) {
+      runtime.residentMovement = new ResidentMovement(nextId, nextLocation.position);
+    } else {
+      runtime.residentMovement.setDraggedPosition(nextLocation.position);
+      runtime.residentMovement.setDraggedLookAt(nextLocation.lookAt);
+    }
+    runtime.root.position.copy(nextLocation.position);
+    residentState.setIdleLocation(nextId);
+    residentState.currentPosition = { x: nextLocation.position.x, y: nextLocation.position.y, z: nextLocation.position.z };
   }
 
   _colliders() {
@@ -147,7 +234,7 @@ export class BeingController {
     if (definition.interactionBehaviour !== "none") {
       entity.addComponent(
         new InteractableComponent({
-          prompt: { talk: "Talk", wave: "Say hello", inspect: "Inspect" }[definition.interactionBehaviour] ?? "Interact",
+          prompt: { talk: "Talk", wave: "Say hello", inspect: "Inspect", aiResident: "Talk" }[definition.interactionBehaviour] ?? "Interact",
           radius: 1.8,
           onInteract: () => this.engine.events.emit("being:interact", { instanceId: instance.id, definitionId: definition.id }),
         })
@@ -169,6 +256,12 @@ export class BeingController {
       skeleton: null, // {map: {jointId: THREE.Object3D}, rest: {jointId: THREE.Quaternion}} once a usable mapping exists — see this file's own "Animation playback" comment
       clipPlayer: new ClipPlayer(),
       activeClipId: null,
+      residentMovement: null, // Version 4, Phase 7 — lazily built only for movementStyle "residentTravel", see _updateResidentTravel()
+      residentPlayerCommand: null, // null | "stay" | "follow" | "goto" — see setResidentCommand()/sendResidentTo()
+      residentGoToTarget: null, // THREE.Vector3 | null — only meaningful while residentPlayerCommand === "goto"
+      // Version 4, Phase 7 — "quiet familiarity" timers, only ever decremented for a resident-capable instance (see _updateResidentLife()); staggered the same way syncTimer already is above.
+      moodDriftTimer: MOOD_DRIFT_MIN_SECONDS + Math.random() * (MOOD_DRIFT_MAX_SECONDS - MOOD_DRIFT_MIN_SECONDS),
+      patternSampleTimer: Math.random() * PATTERN_SAMPLE_INTERVAL,
     };
     this._runtime.set(instance.id, runtime);
 
@@ -275,9 +368,32 @@ export class BeingController {
   }
 
   _updateOne(dt, instance, definition, runtime, colliders, otherPositions, playerPos) {
+    // "Quiet familiarity" — mood drift and preference/pattern/relationship
+    // sampling apply to any resident-capable instance regardless of its
+    // own movement style (resident-ness is interactionBehaviour +
+    // residentProfileId, an orthogonal question to how it moves), so this
+    // runs ahead of the movement-style branch below rather than being
+    // folded into _updateResidentTravel() specifically.
+    if (this.beingResidentStateStore?.isResidentCapable(instance)) {
+      this._updateResidentLife(dt, instance, definition, runtime);
+    }
+
     const home = new THREE.Vector3(instance.homePosition[0], instance.homePosition[1], instance.homePosition[2]);
 
     // --- Movement style ---
+    if (definition.movementStyle === "residentTravel") {
+      // Owns position, Y-bob, and facing completely (ResidentMovement's
+      // own update() already computes all three) — skip the generic
+      // idle-bob/awareness blocks below entirely for this style, the same
+      // way "static" already skips movement, so the two systems never
+      // fight over the same transform. Still shares animation playback
+      // with every other Being below; persistence sync happens inside
+      // _updateResidentTravel() itself, since it needs syncY: true unlike
+      // the generic path just below.
+      this._updateResidentTravel(dt, instance, definition, runtime, playerPos);
+      if (runtime.skeleton) this._updateAnimation(dt, instance, definition, runtime);
+      return;
+    }
     if (definition.movementStyle === "wander" || definition.movementStyle === "stayNearHome") {
       this._updateWander(dt, instance, definition, runtime, home, colliders);
     } else if (definition.movementStyle === "patrol") {
@@ -314,16 +430,269 @@ export class BeingController {
       runtime.root.rotation.y += idleOffset.rotationY * dt * 0.5;
     }
 
-    // --- Periodic persistence sync (see this file's own top comment on why not every frame) ---
-    runtime.syncTimer -= dt;
-    if (runtime.syncTimer <= 0) {
-      runtime.syncTimer = SAVE_SYNC_INTERVAL;
-      instance.position = [runtime.root.position.x, instance.position[1], runtime.root.position.z];
-      instance.rotationY = runtime.root.rotation.y;
-    }
+    this._syncPeriodically(instance, runtime, dt);
 
     // --- Animation playback (see this class's own "Animation playback" comment) ---
     if (runtime.skeleton) this._updateAnimation(dt, instance, definition, runtime);
+  }
+
+  /** Periodic persistence sync (see this file's own top comment on why
+   *  not every frame) — factored out since `residentTravel` shares it too
+   *  (Version 4, Phase 7). `syncY` defaults off: for every ordinary
+   *  movement style, Y is a purely cosmetic idle-bob offset around a
+   *  fixed base height, deliberately never baked into the saved position.
+   *  `residentTravel` passes it on, since its own Y genuinely differs
+   *  between idle locations (a chair versus standing), not a bob. */
+  _syncPeriodically(instance, runtime, dt, { syncY = false } = {}) {
+    runtime.syncTimer -= dt;
+    if (runtime.syncTimer <= 0) {
+      runtime.syncTimer = SAVE_SYNC_INTERVAL;
+      instance.position = [runtime.root.position.x, syncY ? runtime.root.position.y : instance.position[1], runtime.root.position.z];
+      instance.rotationY = runtime.root.rotation.y;
+    }
+  }
+
+  /** Version 4, Phase 7 — Bubble's own bespoke idle-location travel,
+   *  reused wholesale via `ResidentMovement.js` rather than reimplemented
+   *  as a wander variant (decided with Vi, to preserve her exact
+   *  movement feel rather than switch her to a generic style). Owns
+   *  position, Y, and facing completely — see this method's own call
+   *  site in `_updateOne()` for why the generic idle-bob/awareness blocks
+   *  are skipped for this style.
+   *
+   *  **Version 4, Phase 7a — two of Phase 7's own three named
+   *  simplifications, restored.** Preference-weighted spot selection is
+   *  now real (`_residentLocationWeights()`, passed as
+   *  `maybePickNewLocation()`'s own `weights` argument), and personality
+   *  trait/dial modifiers now genuinely reach `ResidentMovement`'s own
+   *  `setRestDurationMultiplier()`/`setMovementSpeedMultiplier()`/
+   *  `setMotionDamping()`, resolved fresh each frame via
+   *  `getPersonalityModifiers()` — cheap and pure, so no separate
+   *  "profile changed" tracking is needed. The third — autonomous travel
+   *  not pausing during a conversation, since `BeingController` still has
+   *  no reach into the conversation overlay's own lifecycle — remains,
+   *  honestly, unresolved. */
+  _updateResidentTravel(dt, instance, definition, runtime, playerPos) {
+    const bundle = this.beingResidentStateStore?.getOrCreate(instance.id);
+    const residentState = bundle?.residentState ?? null;
+
+    if (!runtime.residentMovement) {
+      runtime.residentMovement = new ResidentMovement(residentState?.idleLocationId ?? null, residentState?.currentPosition ?? null);
+      if (residentState && !residentState.idleLocationId) residentState.setIdleLocation(getIdleLocation(null).id);
+    }
+
+    const modifiers = getPersonalityModifiers(this._residentProfile(definition));
+    runtime.residentMovement.setRestDurationMultiplier(modifiers.restDurationMultiplier);
+    runtime.residentMovement.setMovementSpeedMultiplier(modifiers.movementSpeedMultiplier);
+    runtime.residentMovement.setMotionDamping(modifiers.motionDamping);
+
+    // Player commands — Stay Here / Follow Me / Return Home / a one-time
+    // Goto — the same shape `ResidentController.js`'s own `playerCommand`
+    // field already drove, now per-instance via `setResidentCommand()`/
+    // `sendResidentTo()` below rather than one shared field. "Return Home"
+    // is a one-shot `travelTo()` handled directly in that method, not a
+    // standing mode, so it isn't checked here.
+    if (runtime.residentPlayerCommand === "goto" && runtime.residentGoToTarget) {
+      const dx = runtime.residentGoToTarget.x - runtime.residentMovement.currentPosition.x;
+      const dz = runtime.residentGoToTarget.z - runtime.residentMovement.currentPosition.z;
+      if (Math.hypot(dx, dz) < 0.15) {
+        runtime.residentPlayerCommand = null;
+        runtime.residentGoToTarget = null;
+      } else {
+        runtime.residentMovement.stepToward(runtime.residentGoToTarget, dt);
+      }
+    } else if (runtime.residentPlayerCommand === "follow" && playerPos) {
+      runtime.residentMovement.stepToward(playerPos, dt);
+    } else if (runtime.residentPlayerCommand !== "stay") {
+      const currentId = residentState?.idleLocationId ?? null;
+      const weights = this._residentLocationWeights(definition, bundle, playerPos);
+      const newId = runtime.residentMovement.maybePickNewLocation(dt, currentId, weights);
+      if (newId && residentState) {
+        residentState.setIdleLocation(newId);
+        // "Bumped a little at a time... arriving somewhere" (docs/RESIDENT.md's
+        // own Preferences section) — the arrival-triggered half of pattern
+        // sampling; the slow periodic half (weather/time/activities/
+        // relationships) lives in _samplePatterns() below.
+        bundle?.residentPreferences?.bump("locations", newId);
+      }
+    }
+    // "stay" — no autonomous travel pick, matching ResidentController's
+    // own gate; awareness/look-at below still applies regardless.
+
+    const before = runtime.root.position.clone();
+    const motion = runtime.residentMovement.update(dt, { thinking: false, idleBehaviour: "gentleFloat" });
+    runtime.root.position.copy(motion.position);
+
+    // The same "blend the idle look-at toward the player when close"
+    // ResidentController.js already does, reusing this class's own
+    // existing awareness-blend calculation rather than inventing a
+    // second one. Version 4, Phase 7a — the radii themselves now scale
+    // with the Independence/Talkativeness dials' own
+    // `awarenessRadiusMultiplier`, computed above.
+    const lookTarget = motion.lookAt.clone();
+    const awarenessRadius = AWARENESS_RADIUS * modifiers.awarenessRadiusMultiplier;
+    const awarenessFullRadius = AWARENESS_FULL_RADIUS * modifiers.awarenessRadiusMultiplier;
+    if (definition.awarenessMode !== "ignorePlayer" && playerPos) {
+      const dist = runtime.root.position.distanceTo(playerPos);
+      let target = 0;
+      if (dist <= awarenessFullRadius) target = 1;
+      else if (dist <= awarenessRadius) target = 1 - (dist - awarenessFullRadius) / (awarenessRadius - awarenessFullRadius);
+      runtime.awarenessBlend += (target - runtime.awarenessBlend) * Math.min(1, dt * 3);
+      if (runtime.awarenessBlend > 0.01) lookTarget.lerp(playerPos, runtime.awarenessBlend);
+    }
+    const toLook = new THREE.Vector3().subVectors(lookTarget, runtime.root.position);
+    if (toLook.lengthSq() > 0.0001) {
+      runtime.root.rotation.y = lerpAngle(runtime.root.rotation.y, Math.atan2(toLook.x, toLook.z), Math.min(1, dt * 4));
+    }
+
+    // ResidentMovement doesn't expose a clean "am I currently
+    // translating" flag — comparing real frame-to-frame movement is an
+    // honest, robust substitute for driving walk/idle animation state.
+    instance.currentState = before.distanceTo(runtime.root.position) > 0.001 ? "moving" : "idle";
+
+    if (residentState) residentState.currentPosition = { x: motion.position.x, y: motion.position.y, z: motion.position.z };
+
+    this._syncPeriodically(instance, runtime, dt, { syncY: true });
+  }
+
+  /** Version 4, Phase 7 — "quiet familiarity," the other half of the old
+   *  `ResidentController.js`'s per-frame work (mood drift, preference/
+   *  pattern/relationship sampling), reconstructed from docs/RESIDENT.md's
+   *  own documented behaviour rather than copied — the original file's
+   *  source didn't survive its own deletion this phase, and this gap was
+   *  only caught by a live check against what the docs already promised
+   *  (see this phase's own account in docs/ROADMAP.md). Applies to any
+   *  resident-capable instance, not just Bubble — the same "reference
+   *  implementation, not a special case" standard every other resident
+   *  mechanism in this codebase already holds itself to. */
+  _updateResidentLife(dt, instance, definition, runtime) {
+    const bundle = this.beingResidentStateStore.getOrCreate(instance.id);
+    const { residentState, residentPreferences, playerPatternMemory } = bundle;
+    if (!residentState) return;
+
+    runtime.moodDriftTimer -= dt;
+    if (runtime.moodDriftTimer <= 0) {
+      runtime.moodDriftTimer = MOOD_DRIFT_MIN_SECONDS + Math.random() * (MOOD_DRIFT_MAX_SECONDS - MOOD_DRIFT_MIN_SECONDS);
+      this._driftMood(definition, residentState, residentPreferences);
+    }
+
+    runtime.patternSampleTimer -= dt;
+    if (runtime.patternSampleTimer <= 0) {
+      runtime.patternSampleTimer = PATTERN_SAMPLE_INTERVAL;
+      this._samplePatterns(instance, runtime, residentState, residentPreferences, playerPatternMemory);
+    }
+  }
+
+  /** A weighted pick among content/curious/happy — the only three
+   *  docs/RESIDENT.md's own "Mood, Emotion, and Personality" section
+   *  documents drift ever choosing between — biased by the resident's own
+   *  selected traits/dials (`ResidentContext.getPersonalityModifiers()`,
+   *  the identical merged source `ResidentConversation.js` already reads
+   *  for its own system-prompt line), nudged toward `happy` when the
+   *  current weather or time of day matches an already-accumulated
+   *  favourite, and weighted heavily toward whatever mood it already is so
+   *  it settles rather than flickers between reconsiderations. */
+  _driftMood(definition, residentState, residentPreferences) {
+    const modifiers = getPersonalityModifiers(this._residentProfile(definition));
+    const weights = {};
+    for (const mood of MOOD_CANDIDATES) {
+      weights[mood] = (modifiers.expressionBias[mood] ?? 1) * (mood === residentState.mood ? 3 : 1);
+    }
+    const favWeather = residentPreferences?.favourite("weather");
+    const favTimeOfDay = residentPreferences?.favourite("timeOfDay");
+    if ((favWeather && favWeather === currentWeatherId(this.environmentSystem)) || (favTimeOfDay && favTimeOfDay === currentTimeBucket(this.timeOfDaySystem))) {
+      weights.happy *= 1.5;
+    }
+    residentState.setMood(pickWeighted(weights, MOOD_CANDIDATES));
+  }
+
+  /** The slow-timer half of pattern sampling — weather, time of day,
+   *  window/music activities, the player's own live position, and
+   *  relationship affinity toward any other Being currently idled nearby.
+   *  The "arriving somewhere" location bump is separate — see
+   *  `_updateResidentTravel()`'s own call to `residentPreferences.bump()`
+   *  right where it already calls `residentState.setIdleLocation()`. */
+  _samplePatterns(instance, runtime, residentState, residentPreferences, playerPatternMemory) {
+    const bucket = currentTimeBucket(this.timeOfDaySystem);
+    residentPreferences?.bump("timeOfDay", bucket);
+    residentPreferences?.bump("weather", currentWeatherId(this.environmentSystem));
+
+    if (residentState.idleLocationId === "lookingOutWindow") {
+      residentPreferences?.bump("activities", isRainingNow(this.environmentSystem) ? "watchingRain" : "watchingTheSky");
+    }
+    if (residentState.idleLocationId === "byMusicPlayer" && this.musicSystem?.isPlaying) {
+      residentPreferences?.bump("activities", "listeningToMusic");
+    }
+
+    if (playerPatternMemory && this._playerPos) playerPatternMemory.sample(this._playerPos, bucket);
+
+    for (const [otherId, otherRuntime] of this._runtime) {
+      if (otherId === instance.id) continue;
+      if (runtime.root.position.distanceTo(otherRuntime.root.position) <= RELATIONSHIP_AWARENESS_RADIUS) {
+        residentPreferences?.bump("relationships", String(otherId));
+      }
+    }
+  }
+
+  /** `definition.residentProfileId` resolved against `residentProfileStore`
+   *  — the one place both `_driftMood()` and `_residentLocationWeights()`
+   *  need "which profile is this instance's own," factored out once a
+   *  second caller needed the identical two-line resolution. */
+  _residentProfile(definition) {
+    return definition.residentProfileId ? this.residentProfileStore?.get(definition.residentProfileId) : null;
+  }
+
+  /** Version 4, Phase 7a — the idle-location weighting half of the old
+   *  `ResidentController._windowWatchWeights()`, restored (see this file's
+   *  own top comment on why the exact original multiplier values are a
+   *  reconstruction, not a recovery). Every behaviour
+   *  `docs/RESIDENT.md`'s own "A quiet habit" and "Resident awareness,
+   *  extended" sections name, in one place: rain or a windy sky pulls
+   *  toward the window; so does golden hour; a storm, or simply
+   *  nightfall, pulls toward the Quiet Corner instead — sheltering, or
+   *  simply quieter; a few minutes either side of the hour pulls toward
+   *  the clock; an active project on the workbench, or the player
+   *  genuinely standing near the workbench/computer desk, both pull
+   *  toward the workbench; and a genuine, already-accumulated favourite
+   *  location gets a real, if modest, boost — scaled down by the
+   *  Independence dial's own `favouriteLocationPullMultiplier`, a
+   *  self-possessed resident less pulled by habit than an ordinary one.
+   *  `playerPos` is `null` at continuity time (see
+   *  `_applyResidentContinuity()`) — nobody's in the room yet to be
+   *  "watched," so that one bump simply never fires then. Never a
+   *  guarantee — one more weighted option among several in the same
+   *  ordinary pick that always existed. */
+  _residentLocationWeights(definition, bundle, playerPos) {
+    const weights = {};
+    const bump = (id, multiplier) => {
+      weights[id] = (weights[id] ?? 1) * multiplier;
+    };
+
+    const weatherId = currentWeatherId(this.environmentSystem);
+    if (isRainingNow(this.environmentSystem) || weatherId === "windy") bump("lookingOutWindow", 1.8);
+    if (isGoldenHourNow(this.timeOfDaySystem)) bump("lookingOutWindow", 1.6);
+    if (weatherId === "storm") bump("besideQuietCorner", 1.8);
+    if (currentTimeBucket(this.timeOfDaySystem) === "night") bump("besideQuietCorner", 1.5);
+
+    const hour = this.timeOfDaySystem?.currentTime ?? 12;
+    const minutesFromHour = Math.abs((((hour % 1) * 60 + 30) % 60) - 30); // how many minutes either side of the nearest hour mark
+    if (minutesFromHour <= CLOCK_WATCH_MINUTES) bump("besideClock", 2);
+
+    if ((this.projectsStore?.byStatus("active")?.length ?? 0) > 0) bump("aboveWorkbench", 1.4);
+
+    if (playerPos) {
+      const workbenchPos = FURNITURE_LAYOUT.workbench.position;
+      if (Math.hypot(playerPos.x - workbenchPos[0], playerPos.z - workbenchPos[2]) < WORKBENCH_WATCH_RADIUS) bump("aboveWorkbench", 1.5);
+      const deskPos = FURNITURE_LAYOUT.computerDesk.position;
+      if (Math.hypot(playerPos.x - deskPos[0], playerPos.z - deskPos[2]) < WORKBENCH_WATCH_RADIUS) bump("besideComputer", 1.5);
+    }
+
+    const modifiers = getPersonalityModifiers(this._residentProfile(definition));
+    for (const [locId, w] of Object.entries(modifiers.locationWeights)) bump(locId, w);
+    const favouriteLocation = bundle?.residentPreferences?.favourite("locations");
+    if (favouriteLocation) bump(favouriteLocation, 1 + 0.5 * (modifiers.favouriteLocationPullMultiplier ?? 1));
+
+    return weights;
   }
 
   _updateAnimation(dt, instance, definition, runtime) {
@@ -394,6 +763,53 @@ export class BeingController {
     return false;
   }
 
+  /** Version 4, Phase 7 — Stay Here / Follow Me, and clearing back to
+   *  ordinary autonomous wandering (`command: null`) — the per-instance
+   *  replacement for `ResidentController.playerCommand`'s own field,
+   *  called from wherever a Phone/Computer resident dashboard used to
+   *  call `residentController.stayHere()`/`.followMe()`/`.resumeWandering()`.
+   *  A no-op for any instance not actually using `movementStyle:
+   *  "residentTravel"` — there's nothing for this to mean otherwise. */
+  setResidentCommand(instanceId, command) {
+    const runtime = this._runtime.get(instanceId);
+    if (!runtime) return;
+    runtime.residentPlayerCommand = command;
+    if (command !== "goto") runtime.residentGoToTarget = null;
+  }
+
+  /** Read-only counterpart — a Phone/Computer dashboard's own "is this
+   *  currently active" button state, the same thing
+   *  `residentController.playerCommand` used to expose directly. */
+  getResidentCommand(instanceId) {
+    return this._runtime.get(instanceId)?.residentPlayerCommand ?? null;
+  }
+
+  /** A one-time errand (the `moveTo` Workshop Function's own use, and
+   *  Return Home below) — clears itself back to ordinary autonomous
+   *  wandering once arrived, exactly like `ResidentController`'s own
+   *  "goto" branch already did. */
+  sendResidentTo(instanceId, position) {
+    const runtime = this._runtime.get(instanceId);
+    if (!runtime) return;
+    runtime.residentPlayerCommand = "goto";
+    runtime.residentGoToTarget = position instanceof THREE.Vector3 ? position : new THREE.Vector3(position.x, position.y, position.z);
+  }
+
+  /** Travels directly to the first idle location — `ResidentMovement.
+   *  travelTo()`'s own real journey animation, not an instant snap —
+   *  then resumes ordinary autonomous wandering on arrival, the same as
+   *  any other idle-location arrival. */
+  returnResidentHome(instanceId) {
+    const runtime = this._runtime.get(instanceId);
+    if (!runtime?.residentMovement) return;
+    const bundle = this.beingResidentStateStore?.get(instanceId);
+    const home = getIdleLocation(null);
+    runtime.residentPlayerCommand = null;
+    runtime.residentGoToTarget = null;
+    runtime.residentMovement.travelTo(home.id);
+    if (bundle) bundle.residentState.setIdleLocation(home.id);
+  }
+
   dispose() {
     this._offInstances?.();
   }
@@ -403,6 +819,20 @@ function lerpAngle(from, to, t) {
   let diff = ((to - from + Math.PI) % (Math.PI * 2)) - Math.PI;
   if (diff < -Math.PI) diff += Math.PI * 2;
   return from + diff * t;
+}
+
+/** A plain cumulative-weight random pick — the same "roll against a running
+ *  total" shape `ResidentMovement.randomIdleLocationId()`'s own optional
+ *  `weights` argument already established, applied here to moods instead
+ *  of idle locations since the two domains don't share a candidate list. */
+function pickWeighted(weights, candidates) {
+  const total = candidates.reduce((sum, c) => sum + (weights[c] ?? 1), 0);
+  let roll = Math.random() * total;
+  for (const c of candidates) {
+    roll -= weights[c] ?? 1;
+    if (roll <= 0) return c;
+  }
+  return candidates[candidates.length - 1];
 }
 
 function clampToRadius(point, center, radius) {
