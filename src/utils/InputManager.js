@@ -52,7 +52,7 @@ const KEY_TO_ACTION = {
   KeyB: "phone",
   KeyZ: "zoom",
   KeyV: "toggleView",
-  KeyG: "emoteWheel",
+  Tab: "emoteWheel", // Version 4, Phase 2 ("Playtesting Notes, Continued") — rebound from KeyG; see EmoteWheelSystem.js's own update() comment for the modal-safety guard this needed alongside the rebind.
   KeyM: "compass",
 };
 

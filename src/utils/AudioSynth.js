@@ -303,12 +303,15 @@ export function playClockChime(audioContext, destinationNode) {
  * life without becoming distracting." Bubble had no audio at all before
  * this phase. A single soft triangle-wave tone with a quick upward pitch
  * bend, under 200 milliseconds and quiet even at its peak — deliberately
- * the smallest, gentlest sound in the Workshop's entire library, since
- * it fires on its own (see `ResidentController._maybeAnnounceThinking()`),
- * with no click or door behind it to already have primed a listener's
- * attention. Distinct in character from `playClockChime()` (two
- * sustained sine tones, a resonant interval) — this is a single quick
- * flicker, reading as "a thought, passing" rather than "a bell, rung."
+ * the smallest, gentlest sound in the Workshop's entire library, since it
+ * fires on its own, with no click or door behind it to already have
+ * primed a listener's attention. Distinct in character from
+ * `playClockChime()` (two sustained sine tones, a resonant interval) —
+ * this is a single quick flicker, reading as "a thought, passing" rather
+ * than "a bell, rung." Currently unheard, Version 4 Phase 7 onward — its
+ * old caller, `ResidentController._maybeAnnounceThinking()`, was deleted
+ * along with the rest of that file and nothing replaced it; see
+ * docs/AUDIO.md's own "Residents gained their first sound" correction.
  */
 export function playResidentThinking(audioContext, destinationNode) {
   const now = audioContext.currentTime;

@@ -12,6 +12,7 @@ import { TimeOfDaySystem } from "./systems/TimeOfDaySystem.js";
 import { EnvironmentSystem, WEATHER_STATES } from "./systems/EnvironmentSystem.js";
 import { AtmosphereProfileStore } from "./systems/AtmosphereProfileStore.js";
 import { currentTimeBucket } from "./resident/ResidentWorldSignals.js";
+import { getIdleLocation } from "./resident/ResidentMovement.js";
 import { AudioSystem } from "./systems/AudioSystem.js";
 import { CameraSystem } from "./systems/CameraSystem.js";
 import { LadderSystem } from "./systems/LadderSystem.js";
@@ -70,19 +71,12 @@ import { AIConnectionManager } from "./ai/AIConnectionManager.js";
 import { ModelRegistry } from "./ai/ModelRegistry.js";
 import { ResidentProfileStore } from "./ai/ResidentProfileStore.js";
 import { ExpressionSetStore } from "./resident/ExpressionSetStore.js";
-import { ResidentState } from "./resident/ResidentState.js";
-import { ResidentBehaviour } from "./resident/ResidentBehaviour.js";
 import { ResidentConnection } from "./resident/ResidentConnection.js";
-import { ResidentController } from "./resident/ResidentController.js";
 import { createWorkshopFunctionDispatcher } from "./ai/WorkshopFunctions.js";
 import { WorldAwareness } from "./world/WorldAwareness.js";
 import { WorldEventLog } from "./world/WorldEventLog.js";
 import { WorkshopEventLog } from "./host/WorkshopEventLog.js";
 import { createResidentConversationOverlay } from "./resident/ResidentConversation.js";
-import { ResidentPreferences } from "./resident/ResidentPreferences.js";
-import { PlayerPatternMemory } from "./resident/PlayerPatternMemory.js";
-import { ResidentCuriosity } from "./resident/ResidentCuriosity.js";
-import { ConversationMemory } from "./resident/ConversationMemory.js";
 import { ModelAssetStore } from "./beings/ModelAssetStore.js";
 import { ModelLibrary } from "./beings/ModelLibrary.js";
 import { ModelLoader } from "./beings/ModelLoader.js";
@@ -90,6 +84,8 @@ import { BeingLibrary } from "./beings/BeingLibrary.js";
 import { BeingInstanceStore } from "./beings/BeingInstanceStore.js";
 import { BeingController } from "./beings/BeingController.js";
 import { BeingSpawnerSystem } from "./beings/BeingSpawnerSystem.js";
+import { BeingResidentStateStore } from "./beings/BeingResidentStateStore.js";
+import { BUBBLE_DEFINITION_ID } from "./beings/DefaultBeings.js";
 import { PlayerCharacterSystem } from "./player/PlayerCharacterSystem.js";
 import { PlayerAnimationSystem } from "./player/PlayerAnimationSystem.js";
 import { AnimationLibraryStore } from "./player/AnimationLibraryStore.js";
@@ -312,33 +308,14 @@ hostConnectionManager.init();
 
 // "This is not an AI assistant. It is the Workshop's first resident." —
 // ResidentConnection is a thin adapter over aiConnectionManager (see its
-// own comment for why it isn't a second connection manager);
-// ResidentBehaviour/ResidentState are shared between ResidentController
-// (the engine system driving the resident every frame) and the
-// conversation overlay below, which is why both are constructed here
-// rather than owned internally by either one.
-const residentState = new ResidentState();
-const residentBehaviour = new ResidentBehaviour();
+// own comment for why it isn't a second connection manager). Version 4,
+// Phase 7 ("Being ↔ Resident Convergence") — Bubble is a real
+// `BeingLibrary` instance now, not a singular `ResidentController`; her
+// own `ResidentState`/`ResidentPreferences`/`PlayerPatternMemory`/
+// `ResidentCuriosity`/`ConversationMemory` are constructed per-instance
+// by `BeingResidentStateStore` below (see that file's own comment),
+// never as shared singletons here.
 const residentConnection = new ResidentConnection(aiConnectionManager);
-// "Residents should begin forming preferences... begin remembering
-// behavioural patterns rather than only conversations... occasionally
-// notice the Workshop around it... focus on remembering meaningful
-// things rather than everything." Four small, single-responsibility
-// pieces, the same "separate responsibilities" instinct src/resident/
-// already follows for everything else — see docs/RESIDENT.md.
-const residentPreferences = new ResidentPreferences();
-const playerPatternMemory = new PlayerPatternMemory();
-const residentCuriosity = new ResidentCuriosity();
-const conversationMemory = new ConversationMemory();
-// "Major milestones" — the one category ConversationMemory populates from
-// the Workshop itself rather than from message text; see its own
-// watchProjects() comment for how it avoids treating every
-// already-finished project as a fresh milestone on the very next load.
-conversationMemory.watchProjects(projectsStore, () => residentProfileStore.getActive()?.memory?.categories);
-// Phase 11 ("Workshop Character") — "Persistent" now genuinely persists;
-// see ConversationMemory.js's own comment for why the mode check lives
-// inside save() rather than at this registration site.
-conversationMemory.configurePersistence(() => residentProfileStore.getActive()?.memory?.mode);
 const settingsStore = new SettingsStore();
 const atmosphereProfileStore = new AtmosphereProfileStore();
 const appearanceStore = new PlayerAppearanceStore();
@@ -411,10 +388,6 @@ const emoteWheelSystem = engine.addSystem(new EmoteWheelSystem({ animationLibrar
 void emoteWheelSystem;
 const compassSystem = engine.addSystem(new CompassSystem());
 void compassSystem;
-const residentController = engine.addSystem(
-  new ResidentController({ residentState, residentBehaviour, residentConnection, residentProfileStore, expressionSetStore, residentPreferences, playerPatternMemory, musicSystem })
-);
-void residentController;
 
 // "Beings should also become Workshop assets" — the same three-way split
 // (index / raw bytes / loader-and-cache) src/browser and src/ai already
@@ -423,24 +396,33 @@ void residentController;
 // by BeingLibrary specifically.
 const beingLibrary = new BeingLibrary();
 const beingInstanceStore = new BeingInstanceStore();
+// Version 4, Phase 7 ("Being ↔ Resident Convergence") — the new,
+// per-Being-instance-keyed home for what used to be five flat singleton
+// stores (ResidentState/Preferences/PlayerPatternMemory/Curiosity/
+// ConversationMemory), created only for instances whose own definition
+// actually opted into `interactionBehaviour: "aiResident"`. See that
+// file's own comment.
+const beingResidentStateStore = new BeingResidentStateStore({ residentProfileStore, beingLibrary, beingInstanceStore, projectsStore });
 // BeingController (renders/moves every placed Being) and
 // BeingSpawnerSystem (the ghost-preview placement workflow) both need to
 // be registered — and therefore initialised — before ComputerSystem,
 // since BeingManagerApp.js reads `beingController.engine` the same way
 // MediaApp.js already reads `musicSystem.engine`, rather than needing its
 // own dedicated engine dependency.
-const beingController = engine.addSystem(new BeingController({ beingLibrary, beingInstanceStore, modelLoader, modelLibrary, animationLibraryStore }));
+const beingController = engine.addSystem(
+  new BeingController({ beingLibrary, beingInstanceStore, modelLoader, modelLibrary, animationLibraryStore, beingResidentStateStore, residentProfileStore, environmentSystem, timeOfDaySystem, musicSystem, projectsStore })
+);
 const beingSpawnerSystem = engine.addSystem(new BeingSpawnerSystem({ beingLibrary, beingInstanceStore }));
 
 // "A living world is one that quietly notices... rather than individual
 // systems inventing their own logic, they should all observe the same
 // world state." Constructed here, once every dependency it reads from
 // already exists (see WorldAwareness.js's own comment on why it owns no
-// state of its own, only knows where to find it) — `worldAwareness`
-// itself is handed to `residentController` a few lines below, after
-// `residentController` exists, since some of these same dependencies
-// (`beingInstanceStore` included) weren't ready yet at that constructor's
-// own call site further up this file.
+// state of its own, only knows where to find it). Version 4, Phase 7 —
+// no longer takes `residentState`: that field only ever fed
+// `snapshot().residentMood`, which nothing in the codebase actually read
+// even before this phase (confirmed by search) — genuinely dead data,
+// not something this phase's own convergence needed to replace.
 const worldEventLog = new WorldEventLog();
 const worldAwareness = new WorldAwareness({
   timeOfDaySystem,
@@ -449,10 +431,8 @@ const worldAwareness = new WorldAwareness({
   cameraSystem,
   projectsStore,
   beingInstanceStore,
-  residentState,
   worldEventLog,
 });
-residentController.worldAwareness = worldAwareness;
 
 // Version 3, Phase 8b ("Bubble Gains Hands") — the fixed, Workshop-owned
 // function table every granted resident calls through (see
@@ -469,11 +449,11 @@ const workshopFunctionDispatcher = createWorkshopFunctionDispatcher({
   blueprintStore,
   beingInstanceStore,
   beingLibrary,
+  beingController,
   environmentSystem,
   timeOfDaySystem,
   lightingSystem,
   musicSystem,
-  residentController,
 });
 
 // "Begin introducing lightweight world events... weather changing,
@@ -540,14 +520,25 @@ const workshopEventLog = new WorkshopEventLog();
     workshopEventLog.record("saveFailed", "A Workshop save attempt failed.", "error");
   });
 }
-// "Interaction: Talk, Wave, Inspect, None." Deliberately not a chat
-// interface — a Being isn't connected to Ollama the way the Workshop's
-// own resident is (see docs/AI.md/docs/RESIDENT.md) — a brief, honest
-// acknowledgment via the same "hud:toast" mechanism the rest of the
-// Workshop already uses for short, transient messages.
+// "Interaction: Talk, Wave, Inspect, AI Resident, None." Every behaviour
+// but the new one (Version 4, Phase 7, "Being ↔ Resident Convergence")
+// is deliberately not a chat interface — a brief, honest acknowledgment
+// via the same "hud:toast" mechanism the rest of the Workshop already
+// uses for short, transient messages. `aiResident` is the real thing:
+// reuses `BeingController.js`'s own already-generic dispatch (not
+// `ResidentEntity.js`'s old singular, hardcoded wiring) to open the same
+// registered `residentConversation` overlay any resident-capable Being
+// shares, parameterised by which instance/profile this one actually is.
 engine.events.on("being:interact", ({ instanceId, definitionId }) => {
   const definition = beingLibrary.get(definitionId);
   const instance = beingInstanceStore.get(instanceId);
+  if (definition?.interactionBehaviour === "aiResident" && definition?.residentProfileId) {
+    engine.events.emit("interaction:trigger", {
+      overlayId: "residentConversation",
+      context: { beingInstanceId: instanceId, residentProfileId: definition.residentProfileId },
+    });
+    return;
+  }
   const name = instance?.name || definition?.name || "This Being";
   const text = {
     talk: `${name}: "${definition?.description || "..."}"`,
@@ -631,13 +622,7 @@ const computerSystem = engine.addSystem(
     modelRegistry,
     residentProfileStore,
     expressionSetStore,
-    residentBehaviour,
     residentConnection,
-    residentState,
-    residentPreferences,
-    playerPatternMemory,
-    residentCuriosity,
-    conversationMemory,
     cameraSystem,
     interiorSystem,
     hostManager,
@@ -648,6 +633,7 @@ const computerSystem = engine.addSystem(
     beingLibrary,
     beingInstanceStore,
     beingController,
+    beingResidentStateStore,
     beingSpawnerSystem,
     dangerZoneActions,
     audioSystem,
@@ -711,9 +697,7 @@ const phoneApps = buildPhoneApps({
   pageRegistry,
   browserStore,
   residentProfileStore,
-  residentController,
   residentConnection,
-  residentBehaviour,
   environmentSystem,
   timeOfDaySystem,
   musicSystem,
@@ -771,14 +755,19 @@ persistenceSystem.registerProvider("imageLibrary", imageLibraryStore);
 persistenceSystem.registerProvider("browser", browserStore);
 persistenceSystem.registerProvider("aiConnection", aiConnectionManager);
 persistenceSystem.registerProvider("aiResidents", residentProfileStore);
-persistenceSystem.registerProvider("residentState", residentState);
-persistenceSystem.registerProvider("residentPreferences", residentPreferences);
-persistenceSystem.registerProvider("playerPatternMemory", playerPatternMemory);
-persistenceSystem.registerProvider("residentCuriosity", residentCuriosity);
-persistenceSystem.registerProvider("conversationMemory", conversationMemory);
 persistenceSystem.registerProvider("modelLibrary", modelLibrary);
 persistenceSystem.registerProvider("beingLibrary", beingLibrary);
 persistenceSystem.registerProvider("beingInstances", beingInstanceStore);
+// Version 4, Phase 7 — registered *after* the two providers just above,
+// deliberately: `PersistenceSystem._applyEnvelope()` calls `load()` on
+// each registered provider in registration order, and
+// `BeingResidentStateStore.load()` needs `beingLibrary`/`beingInstanceStore`
+// to already be fully loaded so it can walk every placed instance and
+// determine which ones are actually resident-capable (see that file's
+// own `load()` comment) — replaces the five flat singleton registrations
+// (`residentState`/`residentPreferences`/`playerPatternMemory`/
+// `residentCuriosity`/`conversationMemory`) that used to live here.
+persistenceSystem.registerProvider("beingResidentState", beingResidentStateStore);
 persistenceSystem.registerProvider("animationLibrary", animationLibraryStore);
 persistenceSystem.registerProvider("poseLibrary", poseLibraryStore);
 persistenceSystem.registerProvider("plugins", engine.plugins);
@@ -804,12 +793,8 @@ overlayManager.register(
   createResidentConversationOverlay({
     residentConnection,
     residentProfileStore,
-    residentBehaviour,
+    beingResidentStateStore,
     projectsStore,
-    residentPreferences,
-    playerPatternMemory,
-    residentCuriosity,
-    conversationMemory,
     worldObjectsStore,
     environmentSystem,
     timeOfDaySystem,
@@ -817,6 +802,7 @@ overlayManager.register(
     worldAwareness,
     worldTimeService,
     functionDispatcher: workshopFunctionDispatcher,
+    audioSystem,
   })
 );
 overlayManager.register("window", createWindowOverlay({ environmentSystem, timeOfDaySystem, settingsStore }));
@@ -839,11 +825,27 @@ hostManager.services.register("expressionSets", expressionSetStore);
 hostManager.services.register("workshopEventLog", workshopEventLog);
 hostManager.services.register(
   "residents",
-  new ResidentService({ residentProfileStore, residentState, residentBehaviour, conversationMemory })
+  new ResidentService({ residentProfileStore, beingLibrary, beingInstanceStore, beingResidentStateStore })
 );
 hostManager.services.register(
   "diagnostics",
-  new DiagnosticsService({ engine, persistenceSystem, aiConnectionManager, hostConnectionManager, hostManager, pageRegistry, browserStore, searchIndex, residentController, workshopEventLog, worldEventLog })
+  new DiagnosticsService({
+    engine,
+    persistenceSystem,
+    aiConnectionManager,
+    hostConnectionManager,
+    hostManager,
+    pageRegistry,
+    browserStore,
+    searchIndex,
+    residentProfileStore,
+    residentConnection,
+    beingLibrary,
+    beingInstanceStore,
+    beingResidentStateStore,
+    workshopEventLog,
+    worldEventLog,
+  })
 );
 // "The Host should understand assets independently of the Builder or
 // Browser... assets should be capable of registering themselves with the
@@ -1110,9 +1112,9 @@ registerWorkshopPages(pageRegistry, searchIndex, {
   browserStore,
   hostProjectsService: hostManager.services.get("projects"),
   residentProfileStore,
-  residentState,
-  residentBehaviour,
-  conversationMemory,
+  beingLibrary,
+  beingInstanceStore,
+  beingResidentStateStore,
   aiConnectionManager,
   engine,
   persistenceSystem,
@@ -1146,6 +1148,41 @@ await engine.init();
 // WorkbenchSystem/MusicSystem/PlayerCharacterSystem's own finalizeInitialState().
 _setEntryStatus("Finishing touches\u2026");
 worldObjectsSystem.spawnAll();
+// Version 4, Phase 7 ("Being \u2194 Resident Convergence") \u2014 Bubble's own
+// seeded *definition* always exists (DefaultBeings.js), but a definition
+// alone never auto-places into the world (see BeingLibrary.js's own
+// comment \u2014 "creating a Being should not automatically place it").
+// The old ResidentController unconditionally spawned an entity at
+// startup; this is that guarantee's replacement, run once every load \u2014
+// a brand-new save (never migrated, no prior instance at all) and an
+// already-migrated save (SaveMigrations.js's own v5\u2192v6 step already
+// created her instance) both reach this idempotent either way.
+// `beingInstanceStore.create()` alone is enough for her to actually
+// appear \u2014 it emits `instances:changed`, which `BeingController` already
+// reconciles into a live spawn on its own, the identical mechanism
+// `WorkshopFunctions.js`'s own `placeObject` already relies on for
+// ordinary Beings.
+{
+  const bubbleDefinition = beingLibrary.get(BUBBLE_DEFINITION_ID);
+  if (bubbleDefinition) {
+    // Resolved once, only if never set \u2014 profile ids are minted at
+    // runtime (see DefaultBeings.js's own comment), so this can't be a
+    // literal in the seed data the way an animation clip id already is.
+    // Never reassigned afterward, even if a player later changes which
+    // profile is "active" in Mission Control for editing purposes \u2014
+    // that shouldn't silently reassign which profile is actually
+    // embodying her.
+    if (!bubbleDefinition.residentProfileId) {
+      const defaultProfileId = residentProfileStore.getActive()?.id ?? null;
+      if (defaultProfileId) beingLibrary.update(BUBBLE_DEFINITION_ID, { residentProfileId: defaultProfileId });
+    }
+    const hasInstance = beingInstanceStore.all().some((i) => i.definitionId === BUBBLE_DEFINITION_ID);
+    if (!hasInstance) {
+      const spot = getIdleLocation(null).position;
+      beingInstanceStore.create({ definitionId: BUBBLE_DEFINITION_ID, position: [spot.x, spot.y, spot.z] });
+    }
+  }
+}
 workbenchSystem.finalizeInitialState();
 await musicSystem.finalizeInitialState(); // async: checks each library root's still-live permission state
 await playerCharacterSystem.finalizeInitialState(); // async: resolves any part textures before the first rig build

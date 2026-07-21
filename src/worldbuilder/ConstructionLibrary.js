@@ -239,6 +239,40 @@ export const CONSTRUCTION_PIECES = [
     behaviours: [{ type: "door", properties: { openOffset: 90, hingeOffset: -0.9 } }],
   }),
 
+  // Version 4, Phase 2 ("Playtesting Notes, Continued") — genuinely
+  // independent double-door leaves, the real fix `doubleDoor` above could
+  // only honestly gesture at ("would still mean two separate placed
+  // objects, each with its own hinge" — docs/WORLDBUILDER.md). No new
+  // engine capability was needed to build this: each leaf is exactly the
+  // same size as one half of the combined `doubleDoor` piece (0.88 wide),
+  // carrying the *identical* `door` behaviour the single `door` piece
+  // above already proves works correctly — `hingeOffset` is this leaf's
+  // own half-width (0.88 / 2 = 0.44), hinging at its own outer edge,
+  // exactly the same "real hinge, half-width offset" reasoning `door`'s
+  // own -0.45 already established, just mirrored for the right leaf.
+  // Placed side by side (left leaf's own right edge against the right
+  // leaf's own left edge, matching how the combined `doubleDoor` piece's
+  // two parts already sit), the doorway looks identical when closed but
+  // each leaf now genuinely swings on its own. `doubleDoor` itself is
+  // left completely untouched — an existing save with one already placed
+  // keeps working exactly as it does today; these two are a purely
+  // additive, more realistic alternative alongside it, not a replacement.
+  piece({
+    id: "doorLeafLeft",
+    name: "Door Leaf (Left)",
+    description: "One independent leaf of a double door, hinged on its own left edge. Place two side by side — one Left, one Right — for genuine French-door behaviour, each leaf swinging on its own; see the Double Door piece for the simpler one-click combined alternative.",
+    parts: [{ id: "a", type: "box", position: [0, 1.05, 0], rotationY: 0, scale: [0.88, 2.1, 0.05], color: DOOR_COLOR }],
+    behaviours: [{ type: "door", properties: { openOffset: 90, hingeOffset: -0.44 } }],
+  }),
+
+  piece({
+    id: "doorLeafRight",
+    name: "Door Leaf (Right)",
+    description: "One independent leaf of a double door, hinged on its own right edge. Place two side by side — one Left, one Right — for genuine French-door behaviour, each leaf swinging on its own; see the Double Door piece for the simpler one-click combined alternative.",
+    parts: [{ id: "a", type: "box", position: [0, 1.05, 0], rotationY: 0, scale: [0.88, 2.1, 0.05], color: DOOR_COLOR }],
+    behaviours: [{ type: "door", properties: { openOffset: 90, hingeOffset: 0.44 } }],
+  }),
+
   piece({
     id: "window",
     name: "Window",

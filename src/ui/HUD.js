@@ -66,7 +66,7 @@ export class HUD {
     lostBtn.addEventListener("click", () => engine.getSystem(CameraSystem)?.recoverToSpawn());
     const emoteBtn = document.createElement("button");
     emoteBtn.type = "button";
-    emoteBtn.textContent = "Emotes (G)";
+    emoteBtn.textContent = "Emotes (Tab)"; // Version 4, Phase 2 — rebound from G, see InputManager.js's own KEY_TO_ACTION comment
     emoteBtn.addEventListener("click", () => engine.getSystem(EmoteWheelSystem)?.toggle());
     // Version 3, Phase 12 ("Accessibility & Comfort Pass") — "the compass
     // toggle needs one [a button] in the top-left, similar to the

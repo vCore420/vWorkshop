@@ -47,7 +47,6 @@ export class WorldAwareness {
     cameraSystem,
     projectsStore,
     beingInstanceStore,
-    residentState,
     worldEventLog,
   } = {}) {
     this._timeOfDaySystem = timeOfDaySystem;
@@ -56,7 +55,6 @@ export class WorldAwareness {
     this._cameraSystem = cameraSystem;
     this._projectsStore = projectsStore;
     this._beingInstanceStore = beingInstanceStore;
-    this._residentState = residentState;
     this._worldEventLog = worldEventLog;
   }
 
@@ -95,7 +93,6 @@ export class WorldAwareness {
       room: "workshop", // the one room the Workshop currently has — see docs/WORLD.md's own account of why this stays a plain constant rather than a real lookup until a second room exists
       activeProjects: this._projectsStore?.byStatus("active") ?? [],
       nearbyBeings: this._beingInstanceStore?.all().filter((b) => !b.despawned) ?? [],
-      residentMood: this._residentState?.mood ?? null,
       recentEvents: this._worldEventLog?.recent() ?? [],
     };
   }
