@@ -24,7 +24,7 @@
  * with a stale or now-meaningless shape.
  */
 
-export const CURRENT_SAVE_VERSION = 4;
+export const CURRENT_SAVE_VERSION = 5;
 
 const MIGRATIONS = {
   // v1 -> v2: furniture position/rotation used to be saved and blindly
@@ -87,6 +87,26 @@ const MIGRATIONS = {
       envelope.providers.journal = {
         entries: [{ id: `migrated-${when}`, createdAt: when, updatedAt: when, text: legacyText.text }],
       };
+    }
+    return envelope;
+  },
+  // v4 -> v5: Version 4, Phase 1 ("Host, Actually Reaching Your Files") —
+  // PermissionsService's single `filesystem` grant split into
+  // `filesystem-read` and `filesystem-write` (see PermissionsService.js's
+  // own comment on why: reading and writing became genuinely different
+  // capabilities with genuinely different risk, not just one bridge to
+  // gate). A player who'd already granted the old blanket `filesystem`
+  // keeps exactly the behaviour they had — listing/reading keeps working,
+  // nothing regresses — by becoming `filesystem-read: true`. It does
+  // *not* also become `filesystem-write: true`: writing is a strictly
+  // more powerful, newly-real capability nobody actually consented to
+  // yet, and "granted" stays an explicit opt-in here the same way it's
+  // been since this service's very first version.
+  4: (envelope) => {
+    const grants = envelope.providers?.hostPermissions?.grants;
+    if (grants && typeof grants.filesystem === "boolean") {
+      grants["filesystem-read"] = grants.filesystem;
+      delete grants.filesystem;
     }
     return envelope;
   },
