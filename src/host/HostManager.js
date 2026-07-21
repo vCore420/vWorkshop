@@ -72,7 +72,7 @@ export class HostManager {
     this.pluginRegistry = new PluginRegistry(pageRegistry, assetService);
     this.permissions = new PermissionsService();
 
-    const programsService = new ProgramsService();
+    const programsService = new ProgramsService({ hostConnectionManager, permissionsService: this.permissions });
     this.services.register("programs", programsService);
     this.services.register("applications", programsService); // alias — see this class's own comment
 

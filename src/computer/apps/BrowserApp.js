@@ -46,7 +46,7 @@ import { escapeHtml } from "../../utils/domSafety.js";
  * hatch for exactly this case, not an error message that only appears
  * some of the time.
  */
-export function createBrowserApp({ browserStore, pageRegistry, hostManager }) {
+export function createBrowserApp({ browserStore, pageRegistry, hostManager, hostConnectionManager }) {
   return {
     id: "browser",
     label: "Browser",
@@ -381,6 +381,74 @@ export function createBrowserApp({ browserStore, pageRegistry, hostManager }) {
           // PermissionsService, never inside the page itself.
           if (event.data.granted) hostManager?.permissions.grant(event.data.id);
           else hostManager?.permissions.revoke(event.data.id);
+          const tabId = activeTabId();
+          if (frames.has(tabId)) loadIntoFrame(tabId, browserStore.getCurrentUrl(tabId));
+        } else if (event.data?.type === "workshop-browser-set-companion-token" && event.data.token) {
+          // host://permissions' own Companion Pairing section — see
+          // HostPages.js's own permissionsPage() comment. The real
+          // in-memory token store always happens here, never inside the
+          // page itself, matching every other permissions-page control.
+          hostConnectionManager?.setToken(event.data.token);
+          const tabId = activeTabId();
+          if (frames.has(tabId)) loadIntoFrame(tabId, browserStore.getCurrentUrl(tabId));
+        } else if (event.data?.type === "workshop-browser-files-navigate" && typeof event.data.path === "string") {
+          // host://files' own folder rows and breadcrumbs — see
+          // HostPages.js's own filesBrowserPage() comment for why this is
+          // service state + reload rather than a URL change (PageRegistry
+          // would lowercase a case-sensitive path).
+          hostManager?.services.get("files")?.setCurrentPath(event.data.path);
+          const tabId = activeTabId();
+          if (frames.has(tabId)) loadIntoFrame(tabId, browserStore.getCurrentUrl(tabId));
+        } else if (event.data?.type === "workshop-browser-files-open" && typeof event.data.path === "string") {
+          // host://files' own file rows' "Open" action.
+          const filesService = hostManager?.services.get("files");
+          try {
+            const file = await filesService?.openFile(event.data.path);
+            filesService?.setOpenFile(file);
+            filesService?.clearLastError();
+          } catch (err) {
+            filesService?.setLastError(err.message);
+          }
+          const tabId = activeTabId();
+          if (frames.has(tabId)) loadIntoFrame(tabId, browserStore.getCurrentUrl(tabId));
+        } else if (event.data?.type === "workshop-browser-files-save" && typeof event.data.path === "string" && typeof event.data.contents === "string") {
+          // host://files' own editor "Save" button. The just-typed
+          // contents are kept as the open file's own state regardless of
+          // whether the save itself succeeds — a failed save (wrong
+          // pairing token, permission revoked mid-session) shouldn't cost
+          // someone their edit, only require trying again.
+          const filesService = hostManager?.services.get("files");
+          filesService?.setOpenFile({ ...filesService.getOpenFile(), path: event.data.path, contents: event.data.contents });
+          try {
+            const result = await filesService?.saveFile(event.data.path, event.data.contents);
+            filesService?.setOpenFile({ path: event.data.path, contents: event.data.contents, size: result?.size, modified: result?.modified });
+            filesService?.clearLastError();
+          } catch (err) {
+            filesService?.setLastError(err.message);
+          }
+          const tabId = activeTabId();
+          if (frames.has(tabId)) loadIntoFrame(tabId, browserStore.getCurrentUrl(tabId));
+        } else if (event.data?.type === "workshop-browser-files-close") {
+          // host://files' own editor "Close" button — back to the folder
+          // listing for whatever the current browse path already is.
+          hostManager?.services.get("files")?.clearOpenFile();
+          const tabId = activeTabId();
+          if (frames.has(tabId)) loadIntoFrame(tabId, browserStore.getCurrentUrl(tabId));
+        } else if (event.data?.type === "workshop-browser-launch-application" && typeof event.data.id === "string") {
+          // host://applications' own per-program "Launch" button — see
+          // HostPages.js's own applicationsPage() comment. Every value in
+          // event.data.args is still just a candidate string typed into a
+          // form field at this point; ProgramsService/HostConnectionManager
+          // pass it straight through, and it's the Companion itself that
+          // actually validates (or rejects) it before spawning anything —
+          // see workshop-host-companion.js's own buildArgv() comment.
+          const programsService = hostManager?.services.get("applications");
+          try {
+            await programsService?.launchApplication(event.data.id, event.data.args);
+            programsService?.clearLastError();
+          } catch (err) {
+            programsService?.setLastError(err.message);
+          }
           const tabId = activeTabId();
           if (frames.has(tabId)) loadIntoFrame(tabId, browserStore.getCurrentUrl(tabId));
         } else if (event.data?.type === "workshop-browser-pin-project" && event.data.path) {

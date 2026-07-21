@@ -10,6 +10,7 @@ import { StorageUtils } from "../../utils/StorageUtils.js";
 import { EXPRESSION_TYPES, EXPRESSION_GRID_SIZE } from "../../resident/ExpressionTypes.js";
 import { escapeHtml } from "../../utils/domSafety.js";
 import { nextDomId } from "../../utils/domIds.js";
+import { formatBytes } from "../../utils/formatBytes.js";
 import { WORKSHOP_FUNCTIONS } from "../../ai/WorkshopFunctions.js";
 
 const STATUS_LABELS = {
@@ -1406,12 +1407,6 @@ export function createAIApp({
       };
     },
   };
-}
-
-function formatBytes(bytes) {
-  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
-  if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(0)} MB`;
-  return `${bytes} B`;
 }
 
 function capitalize(text) {
