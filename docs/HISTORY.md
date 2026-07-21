@@ -2102,4 +2102,58 @@ fresh port per `.claude/DEV_NOTES.md`'s own standing guidance. See
 about trusting delegated research, and `docs/ROADMAP_V4.md` for where
 this points next.
 
+**Version 4, Phase 1 — Host, Actually Reaching Your Files (v4.0.1).**
+The first Version 4 phase, and a real, previously-undocumented gap found
+before any of it was built: `FilesService.listFiles()` had been genuinely
+real since the Workshop Platform phase, but `host://files` rendered
+through the same no-content placeholder page every still-unimplemented
+service uses — the one real File Service capability had no door into it
+at all. This phase built that door, and made reading and writing a file
+genuinely real alongside it (launching a local application deliberately
+deferred to its own future v4.0.1b — arbitrary program execution is a
+different category of risk than reading or writing a file). The Workshop
+Host Companion gained `GET /file` and `PUT /file`, both text-only,
+2 MB-capped, and gated behind a custom preflight-forcing header plus a
+pairing token printed to the Companion's own terminal at startup, never
+persisted — a meaningfully higher bar than the original `/files`
+listing's origin-restriction alone, since file *contents* don't share
+that endpoint's "worst case is a website learned some names" reasoning.
+`PermissionsService`'s single `filesystem` boolean split into
+`filesystem-read`/`filesystem-write` (migrated forward honestly — an
+existing blanket grant becomes read-only, never assumed to cover the
+newly-real, more powerful write capability), and `host://files` became a
+real folder browser with a small text-editor view. A real bug surfaced
+during live verification, not assumed away: a failed file-open's error
+was being silently cleared the moment the folder listing next
+re-rendered successfully, so the honest error banner never actually
+appeared — root-caused and fixed, reverified live. See
+`docs/ROADMAP.md`'s own Phase 1 account for the full story, including
+what was deliberately left alone.
+
+**Version 4, Phase v4.0.1b — Application Launching from the Host
+(v4.0.1b).** The one capability Phase 1 deliberately deferred, closed the
+same disciplined way: investigate, plan the security design with Vi
+explicitly (allow-list format, argument policy, pairing bar), get
+approval, then implement. The core safety property held throughout — the
+browser can never choose what runs, only reference a program an operator
+configured in their own JSON allow-list and, where a program's own config
+declares it, supply values for pre-declared argument slots, each
+validated against one of exactly two fixed types (a workspace-contained
+path, or an exact enum match) before anything spawns, always via
+`child_process.spawn(..., {shell: false})`. The Companion gained `GET
+/programs` and `POST /launch`, both behind the identical header+token
+pairing bar file writes already use. `ProgramsService`/`PermissionsService`/
+`host://applications` gained the same three-condition (connected, granted,
+paired) shape `FilesService` established, and `runningApplications()`
+finally got populated — a gap that field's own comment had named as
+"shape is ready, only the bridge was missing" since the Workshop Platform
+phase. A real correctness bug (a CSS selector built by string-
+concatenating a program id) was caught and fixed before it ever reached a
+live page, not after. Verified live end to end — Companion endpoints
+first, then the full UI: permission grant, pairing, real listing, a real
+launch with a real pid, a validated `workspacePath` argument, and honest
+rejections for a missing required argument and a nonexistent command.
+Deliberately not built: stopping or monitoring a launched program. See
+`docs/ROADMAP.md`'s own Phase v4.0.1b account for the full story.
+
 </details>

@@ -158,7 +158,11 @@ it's meant to feel like it belongs to the object. Ten tabs live on it:
 
 - **Projects** — every project you've got, planning through done (the same
   data as the pinboard and workbench, just the full picture)
-- **Journal** — a page of notes, separate from the physical notebook
+- **Journal** — a dated log, not a single page: entries stay put once
+  written, a "New entry" button starts today's, and a rail of past
+  entries reads back through what came before. Separate from the
+  physical notebook, which stays a single page you're always
+  mid-sentence in
 - **Browser** — the Workshop's own connection to everything: the wider
   internet, and (via `workshop://`/`host://`/`plugin://` pages) the
   Workshop itself, the Workshop Host, and any plugin that registers a

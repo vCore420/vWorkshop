@@ -1,16 +1,16 @@
 # Version 4 — Draft Roadmap (a recommendation, not a plan)
 
-Written by Claude Sonnet 5, from the completed Version 3 codebase — 258
-files under `src/`, ~44,000 lines, 14 phases plus one "One Contribution"
-entry (`docs/CONTRIBUTIONS.md`). Like `docs/ROADMAP_V3.md` before it,
-this deliberately does not invent new ambitions — it reports where the
+Written by Claude Sonnet 5, from the completed Version 3 codebase —
+~260 files under `src/`, ~50,000 lines, 14 phases plus one "One
+Contribution" entry (`docs/CONTRIBUTIONS.md`). Like `docs/ROADMAP_V3.md`
+before it, this deliberately does not invent new ambitions — it reports where the
 repository itself, in its own comments, docs, and unresolved seams,
 already says it wants to go. Reorder, merge, or discard freely; the
 sequencing here follows dependency and risk, nothing more sacred.
 
 ## How this roadmap was built
 
-Three separate passes over the codebase, not guesswork:
+Four separate passes over the codebase, not guesswork:
 
 1. **A dead-code and duplication sweep** across all 258 `src/` files — a
    full import-graph reachability check from `main.js`, plus greps for
@@ -37,6 +37,12 @@ Three separate passes over the codebase, not guesswork:
    implementation, not just the docs describing it, to separate a real
    gap from an honestly-labelled placeholder working exactly as
    intended.
+4. **Vi's own post-Version-3 field notes** (`Notes.md`, root — deleted
+   once folded in here, so this document is the one place they live
+   now), from actually playing the finished version. Phase 2 and Phase 3
+   below come directly from this list, not from anything the automated
+   passes above found — the most direct, least-filtered kind of evidence
+   a roadmap can have.
 
 The phases below are this evidence, organised and prioritised — not a
 flat wishlist.
@@ -111,7 +117,118 @@ whether the existing binary "filesystem permission" toggle needs to
 become separate read/write/execute grants before write access or program
 launching should be trusted with it.
 
-## Phase 2 V4.2 — Verification Tooling (the project's own honesty)
+## Phase 2 V4.2 — Playtesting Notes, Continued
+
+**Purpose:** carry forward Vi's own post-Version-3 field notes
+(`Notes.md`, root) — small, concrete geometry and interaction bugs,
+several of them reports that a Phase 14 fix (Version 3's own final
+catch-all phase) didn't fully hold, found by actually playing the
+finished version rather than through further code review.
+
+**Why it matters:** this is the same reason Phase 14 itself existed —
+"the environmental, furniture, and geometry playtesting notes that would
+have belonged [earlier] had they been found in time." Several items
+below are specifically reports that a Phase 14 fix didn't fully hold
+(the front door hinge, the computer chair's wheel arms, the Wardrobe
+layout, the Emote Wheel's own design) — valuable, honest information in
+its own right, worth investigating each one fresh rather than trusting
+the earlier fix's own account was complete.
+
+**Systems involved:** `src/entities/room/WorkshopRoom.js`/
+`DoorBehaviour.js` (front door), `src/entities/furniture/ComputerDesk.js`
+(chair), `src/phone/PhoneSystem.js`/`SettingsPhoneApp.js` (wallpaper
+application), `src/worldbuilder/ConstructionLibrary.js` (double doors),
+`src/entities/room/WorkshopRoom.js` (outdoor bench),
+`src/systems/EmoteWheelSystem.js`, `src/computer/apps/WardrobeApp.js`/
+`css/builder.css`, the HUD compass (`css/main.css`/touch layout).
+
+**Playtesting notes driving this phase:**
+
+- The architectural front door still doesn't hinge correctly, even
+  after Phase 14 Wave 2's own attempt: it's attached to the wall's
+  inside edge, and its highest points visibly swing outward (south),
+  away from the house, as it opens. It should stay attached to the
+  *outside* wall edge and hinge cleanly from that point, opening and
+  closing without moving away from the house at all. Worth a fresh,
+  more careful look at the actual pivot geometry rather than assuming
+  Wave 2's own fix holds — the same caution Phase 14 itself already
+  named for the first-person shadow issue it re-investigated.
+- The computer chair's wheel arms still don't line up correctly,
+  despite Phase 14 Wave 1's own castor-rotation fix — worth
+  re-investigating what that fix actually addressed versus what's still
+  visibly wrong.
+- Phone wallpapers don't actually change when picked, despite Phase 13
+  Wave 1's own wallpaper-customization work — a real regression or an
+  incomplete original fix, either way worth root-causing rather than
+  assuming the feature already works. (The Phone's Settings screen
+  getting a real redesign is its own phase — see Phase 3 below — but
+  this specific "doesn't apply" bug should be fixed regardless of that
+  larger phase's own timing, and that phase depends on this one being
+  fixed first.)
+- Double Door construction pieces still pivot both leaves together to
+  one shared corner, rather than opening independently like real French
+  doors — the other half of the "honest half-fix" Phase 14 Wave 2's own
+  account already named as deliberately deferred (a real architecture
+  change, not attempted then on purpose). Worth attempting now that it's
+  been named twice.
+- The outdoor bench Phase 14 Wave 5 added against the south wall is
+  facing the wrong direction.
+- The Emote Wheel, redesigned as a real radial layout in Phase 14 Wave
+  4, is "getting better but still off in design" — worth a further pass
+  with a concrete reference point this time: something closer to
+  FiveM's `qb-radialmenu` in feel. Separately, and independently
+  fixable: the wheel should open on Tab, not G.
+- The main Wardrobe app, widened and given a real grid layout in Phase
+  14 Wave 4, still overflows — its own form controls run too wide,
+  causing horizontal scrolling rather than fitting the panel. Worth a
+  further layout pass, and this time worth deciding upfront how it
+  should behave on a narrow/mobile viewport rather than treating that as
+  a separate, later concern.
+- The HUD compass clips against the top button row on touch/mobile
+  devices specifically — fine on desktop, needs its own repositioning
+  for the smaller layout.
+
+**Risks / considerations:** like Phase 14 before it, this is a grab-bag
+by nature — resist inventing a unifying narrative. Treat every "still
+wrong after a previous fix" item with real skepticism about what the
+earlier fix actually addressed rather than assuming it was close; a
+fresh investigation pass first, the same discipline every phase this
+project has used.
+
+## Phase 3 V4.3 — The Phone's Settings, Made Real
+
+**Purpose:** rebuild the Phone's own Settings app around what a real
+phone's settings actually look and feel like — live wallpaper previews
+instead of a generic dropdown, real brightness control, a genuine
+light/dark theme choice — rather than the current generic form
+controls.
+
+**Why it matters:** named directly — "I want this to look more real and
+less basic drop down boxes and generic UI elements." Squarely in the
+Phone's own established identity as a real device (Phase 13's own "The
+Phone Becomes a Device" phase already set this precedent for the rest
+of the Phone), just not yet extended to its own Settings screen
+specifically.
+
+**Systems involved:** `src/phone/apps/SettingsPhoneApp.js`,
+`src/phone/PhoneSystem.js` (wallpaper/appearance application — depends
+on Phase 2's own wallpaper-doesn't-apply bug being fixed first),
+`css/phone.css`.
+
+**Opportunities it creates:** a natural template for "make a settings
+surface feel like a real device control panel, not a form" that any
+future device-feeling surface could reuse if it ever wanted the same
+treatment — though that's explicitly not required by this phase.
+
+**Risks / considerations:** "more realistic" should mean real visual
+and interaction fidelity (live previews, real controls that visibly do
+something), not real hardware behaviour this project has no access to —
+brightness should visibly affect the Phone's own rendered screen, not
+claim to change the actual device screen. Keep the scope to the Phone's
+own Settings screen; resist letting this grow into a wider
+device-realism initiative without being asked.
+
+## Phase 4 V4.4 — Verification Tooling (the project's own honesty)
 
 **Purpose:** not a Workshop feature — an investigation into, and either
 a fix or a documented, reliable workaround for, the unreliable-screenshot
@@ -153,7 +270,7 @@ a valuable, honest thing to determine conclusively — "documented as a
 standing limitation, pixel-readback is the standing workaround" is a
 real outcome, not a failure to close the phase.
 
-## Phase 3 V4.3 — Lighting Fixtures for the Construction Library
+## Phase 5 V4.5 — Lighting Fixtures for the Construction Library
 
 **Purpose:** build the `gardenLight`/`streetLight`/`lantern`/`floodlight`/
 `campfire` pieces the Construction Library has reserved as a category
@@ -178,7 +295,7 @@ Wave 5 already started (the bench, the window planters).
 `LightingSystem` wiring — resist inventing a new light-behaviour system
 when `registerPracticalLight()` already covers what's needed.
 
-## Phase 4 V4.4 — Being ↔ Resident Convergence, Investigation
+## Phase 6 V4.6 — Being ↔ Resident Convergence, Investigation
 
 **Purpose:** determine concretely what it would take for a resident —
 Bubble's own conversation memory, traits, preferences, curiosity,
@@ -240,15 +357,15 @@ investigation is explicitly about *architecture* — whether a Being can
 carry resident-shaped state — not about giving any resident new AI
 functions or capabilities. Keep those two questions separate.
 
-## Phase 5 V4.5 — Being ↔ Resident Convergence, Implementation
+## Phase 7 V4.7 — Being ↔ Resident Convergence, Implementation
 
-**Purpose:** build whatever Phase 4 concludes is the right shape — most
+**Purpose:** build whatever Phase 6 concludes is the right shape — most
 likely, `BeingLibrary` definitions gaining an optional resident capability
 (conversation, memory, expressions, world-awareness) the Being Creator
 can enable, with Bubble becoming the Workshop's own shipped example of
 one rather than a hardcoded special case.
 
-**Why it matters / Systems involved:** inherits Phase 4's findings
+**Why it matters / Systems involved:** inherits Phase 6's findings
 directly — this phase shouldn't start until that one has a concrete,
 concluded shape to build.
 
@@ -259,7 +376,7 @@ that one default resident is enough. Every existing player's save and
 experience should be unaffected unless they deliberately create their
 own resident-capable Being.
 
-## Phase 6 V4.6 — The Rest of IK
+## Phase 8 V4.8 — The Rest of IK
 
 **Purpose:** continue the animation/IK work Version 3's own Phase 1
 began but explicitly didn't finish — foot placement during an actual
@@ -271,7 +388,7 @@ skeleton-mapping override UI.
 1's own closing account, and independently re-flagged in both
 `docs/ANIMATION.md`'s and `docs/BEINGS.md`'s own "Future extension
 points" ever since — never revisited across all 14 phases of Version 3.
-Also a natural complement to Phase 4/5's convergence work: a
+Also a natural complement to Phase 6/7's convergence work: a
 player-made resident-capable Being reads as more alive with real IK
 behind it.
 
@@ -284,7 +401,7 @@ risk note already said so, and it's still true. Scope tightly to one
 real gait/contact case at a time; resist trying to solve general-purpose
 IK in a single phase.
 
-## Phase 7 V4.7 — Atmosphere, Continued
+## Phase 9 V4.9 — Atmosphere, Continued
 
 **Purpose:** real falling-particle snow, a visible lightning bolt with
 thunder (today a light-flash only), a real constellation catalogue, and
@@ -311,7 +428,7 @@ much to snow and lightning. Seasonal effects should change what already
 exists (vegetation colour, day length, resident behaviour) rather than
 adding wholesale new geometry.
 
-## Phase 8 V4.8 — Plugin SDK, a Real Decision
+## Phase 10 V4.10 — Plugin SDK, a Real Decision
 
 **Purpose:** resolve a tension `src/host/PluginService.js`'s own comment
 already names outright — "the Workshop has three ways a plugin can
@@ -342,7 +459,7 @@ that still needs `main.js` edits for some capabilities is the same
 honesty problem in a different shape — decide one way or the other, then
 follow all the way through.
 
-## Phase 9 V4.9 — Dormant Seams: Use or Retire
+## Phase 11 V4.11 — Dormant Seams: Use or Retire
 
 **Purpose:** a deliberate, one-by-one pass through the "architecture
 built, content or wiring deferred" pattern this roadmap's own research
@@ -380,7 +497,7 @@ nothing found in this review changes that.
 **A second default resident is a new, explicit non-goal this
 version** — decided directly, not inferred: "we are not going to expand
 the amount of default residents to the world, one is enough and the
-player can make more." Phase 4/5's own convergence work is the
+player can make more." Phase 6/7's own convergence work is the
 intended answer to that "more," delivered as a player capability rather
 than default Workshop content.
 

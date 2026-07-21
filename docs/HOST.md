@@ -150,12 +150,29 @@ placeholder at all.**
 - **Permissions** is fully real, persisted data — see its own section.
 - **Project Service's pinned projects** are fully real, persisted data —
   see its own section.
-- **File Service's `listFiles()`** is fully real *when* the Workshop Host
-  Companion is running *and* Filesystem permission is granted — the one
-  place this phase actually reaches outside the browser. Every other
-  File Service method (opening, creating, renaming, copying, moving,
-  deleting, watching, associations) stays honestly unimplemented even
-  then — see "The Workshop Host Companion" below for exactly why.
+- **File Service's `listFiles()`, `openFile()`, and `saveFile()`** are
+  fully real *when* the Workshop Host Companion is running *and* the
+  relevant permission is granted (`filesystem-read` for listing/opening,
+  `filesystem-write` for saving — split into two independent grants as of
+  Version 4, Phase 1; see "Permissions" below) — the one place this Host
+  actually reaches outside the browser. `openFile()`/`saveFile()`
+  additionally need the Companion to recognise a pairing token, entered
+  once at `host://permissions`. Every other File Service method
+  (creating an empty file, renaming, copying, moving, deleting, watching,
+  associations) stays honestly unimplemented even then — see "The
+  Workshop Host Companion" below for exactly why.
+- **Application Service's `listPrograms()` and `launchApplication()`**
+  (Version 4, Phase v4.0.1b) are fully real *when* the Companion is
+  running, `applications` permission is granted, *and* the Companion is
+  paired — the exact same three-condition shape File Service's write
+  path uses. What can actually be launched is entirely the Companion
+  operator's own configured allow-list (`host-companion/README.md`'s own
+  "Launching a configured program" section) — never a path or command the
+  Workshop, or the browser, can supply itself. `this.installed`/
+  `this.favourites`/`this.recent` stay genuinely empty — *discovering*
+  what's installed on the machine is a different, larger, still-
+  unimplemented capability from launching one of the programs an operator
+  explicitly configured.
 - **Automation Service's task descriptors** are real data, with nothing
   yet reading or executing them — see "Automation Service" below.
 
@@ -175,13 +192,43 @@ property of every browser, for good reason. The Workshop Host Companion
 
 **What it actually is.** A zero-dependency Node.js HTTP server — only
 Node's own built-in modules, so running it is exactly `node
-workshop-host-companion.js`, nothing to install first. Two endpoints:
-`GET /status` (reveals nothing sensitive) and `GET /files?path=...`
-(lists names, sizes, and modified times — never file contents — inside
-one folder chosen when it's started, with path traversal rejected
-outright). Full account, including the security reasoning behind
-deliberately stopping at these two endpoints, lives in
-`host-companion/README.md` — read that before running it.
+workshop-host-companion.js`, nothing to install first. `GET /status`
+(reveals nothing sensitive) and `GET /files?path=...` (lists names,
+sizes, and modified times — never file contents) stay origin-restricted
+only, the original, lighter bar. **Version 4, Phase 1** added `GET
+/file?path=...` (reads one text file's contents) and `PUT /file?path=...`
+(writes/overwrites one text file's contents) — both confined to the same
+one folder, with the same path-traversal rejection, but additionally
+gated behind a random pairing token the Companion prints to its own
+terminal at startup (never written to disk, regenerated every restart)
+and a custom request header that forces a real CORS preflight — see
+`workshop-host-companion.js`'s own top-of-file comment for why file
+*contents* got a higher bar than a mere directory listing. Both new
+endpoints stay text-only (a NUL-byte heuristic rejects anything that
+looks binary) and capped at 2 MB. Full account, including the security
+reasoning, lives in `host-companion/README.md` — read that before
+running it.
+
+**Version 4, Phase v4.0.1b added `GET /programs` and `POST /launch`** —
+launching a local application, the one capability every earlier version
+of this document named as deliberately deferred. The core safety
+property: **the browser can never supply an arbitrary command or path.**
+It can only reference a program by `id` from an allow-list the Companion
+operator configures themselves (an optional JSON file, passed as a second
+CLI argument when starting the Companion, loaded once at startup), and
+optionally supply values for *that program's own pre-declared* argument
+slots, each independently validated against one of exactly two fixed
+validator types (`workspacePath` — reusing the identical
+`resolveWithinWorkspace()` check `/files`/`/file` already use;
+`enum` — an exact match against a config-declared list) before anything
+is spawned. Spawning always uses `child_process.spawn(command, argv,
+{shell: false})` — args passed as a real argv array, never concatenated
+into a shell string — closing off shell-metacharacter injection entirely.
+Both new endpoints require the same header+token pairing bar `PUT /file`
+does; unlike the read/write split above, there's no lighter tier for
+merely *listing* what's configured. `host-companion/README.md`'s own
+"Launching a configured program" section has the full config format and
+reasoning — read that before configuring or extending this.
 
 **How it's started.** Manually, by the player, from a terminal or the
 included `start.sh`/`start.ps1` launcher — never automatically, never
@@ -194,18 +241,27 @@ it running, and the Workshop treats that as the ordinary, expected case.
 never-blocking pattern `AIConnectionManager.js` already established for
 Ollama (see `docs/AI.md`). `status` is `"connecting"` |
 `"connected"` | `"disconnected"`, and nothing about the rest of the
-Workshop changes behaviour based on it except `FilesService.js`, the one
-consumer that actually uses a live connection.
+Workshop changes behaviour based on it except `FilesService.js` and
+(Version 4, Phase v4.0.1b) `ProgramsService.js` — the two consumers that
+actually use a live connection.
 
 **How it fits the platform architecture.** It's the proof that "the Host
 should quietly provide capabilities... without exposing unnecessary
 complexity to the player" scales past *simulated* capabilities — when
-the Companion is running and Filesystem permission is granted,
-`host://files` genuinely lists a real folder on the player's own
+the Companion is running and Filesystem Read permission is granted,
+`host://files` genuinely browses a real folder on the player's own
 computer, through the exact same page a person was already looking at
-when nothing was connected. Nothing about `HostPages.js`, `BrowserApp.js`,
-or any page's own HTML needed to change between those two states; only
-`FilesService.getStatus()`'s own returned sentence did.
+when nothing was connected; grant Filesystem Write and pair the Companion
+and the same page's file rows open into a real, small text editor that
+saves back to disk. `host://applications` follows the identical shape —
+grant Launch Applications and pair the Companion, and the same page's
+"Not yet available" status line becomes a real list of the operator's own
+configured programs with working Launch buttons. (Unlike the original
+single-endpoint version of this section's own claim, `HostPages.js`/
+`BrowserApp.js` genuinely did need real changes to build both of these —
+a correction worth naming plainly rather than leaving the old, now-
+inexact claim standing.) Each service's own `getStatus()` still does the
+work of describing which of those states is currently true.
 
 ## Permissions
 
@@ -213,18 +269,31 @@ or any page's own HTML needed to change between those two states; only
 access, hardware access, plugin capabilities, automation permissions,
 future network access. The goal is simply to prepare a sensible
 architecture for future Workshop expansion." `PermissionsService.js` —
-five categories, each a persisted boolean, all `false` by default
-("granted" is something a person opts into, the same instinct behind
-`MemoryConfiguration.js`'s own `mode: "disabled"` default).
+seven categories as of Version 4, Phase 1 (five original, plus
+`filesystem` splitting in two — see below), each a persisted boolean, all
+`false` by default ("granted" is something a person opts into, the same
+instinct behind `MemoryConfiguration.js`'s own `mode: "disabled"`
+default).
 
-**Already has real teeth, not just a future promise.** Filesystem is the
-one category with something real to gate today —
-`FilesService.listFiles()` checks `isGranted("filesystem")` *before*
-attempting any real call to the Companion, denying the request with an
-honest, specific error even when the Companion itself is reachable. The
-other four categories (hardware, plugins, automation, network) have
-nothing real to protect yet, which is exactly why they stay simple
-booleans rather than something more elaborate.
+**Already has real teeth, not just a future promise.** Filesystem and
+Applications both gate something genuinely real today. Filesystem is two
+independent grants, since Version 4, Phase 1 — `FilesService.listFiles()`/
+`openFile()` check `isGranted("filesystem-read")`, `saveFile()` checks
+`isGranted("filesystem-write")` — they were one `filesystem` boolean
+until reading and writing became genuinely different capabilities with
+genuinely different risk; revoking the ability to write shouldn't also
+revoke the ability to read, or vice versa. `applications`, prepared
+alongside them that same phase, became real too as of Version 4, Phase
+v4.0.1b — `ProgramsService.listPrograms()`/`launchApplication()` both
+check `isGranted("applications")`. Every one of these checks runs
+*before* attempting any real call to the Companion, denying the request
+with an honest, specific error even when the Companion itself is
+reachable. Granting `applications` only lets the *Workshop* ask to launch
+one of the programs the Companion's own operator already approved —
+never a path or command the Workshop chooses itself, see "The Workshop
+Host Companion" above. `hardware`/`plugins`/`automation`/`network` are
+the categories still with nothing real to protect, which is exactly why
+they stay simple booleans rather than something more elaborate.
 
 `host://permissions` is genuinely interactive — a real checkbox per
 category, `BrowserApp.js`'s own new `workshop-browser-set-permission`
@@ -437,16 +506,33 @@ account.
   Workshop assumes it's running; the overwhelming majority of sessions
   will never have it started, and everything works exactly as before in
   that case.
-- **Only one File Service capability is real even with the Companion
-  connected** — listing a folder's contents. Opening, creating, renaming,
-  copying, moving, deleting, watching, and file associations all stay
-  honestly unimplemented — see `host-companion/README.md`'s own security
-  reasoning for why that's a considered boundary, not an oversight.
+- **Three File Service capabilities are real with the Companion connected
+  and paired** — listing a folder, reading one text file, saving one text
+  file. Opening a folder in the OS's own file manager, creating an empty
+  file, renaming, copying, moving, deleting, watching, and file
+  associations all stay honestly unimplemented — see
+  `host-companion/README.md`'s own security reasoning for why that's a
+  considered boundary, not an oversight.
+- **File reading/writing is text-only and capped at 2 MB per file** — a
+  binary file (detected by a NUL-byte heuristic) or a file over that size
+  is honestly rejected, not silently mangled or truncated.
+- **Launching a program only ever runs an operator-configured allow-list
+  entry** (Version 4, Phase v4.0.1b) — `ProgramsService.launchApplication()`
+  can never be given a path or command of its own choosing, only an `id`
+  the Companion's own operator already approved, plus values for that
+  program's own declared, individually-validated argument slots. There is
+  still no "application discovery" (finding what's installed on the
+  machine without being told) — that's a different, larger, still-
+  unimplemented capability.
+- **A launched program can't be stopped, checked on, or have its output
+  read from here** — `runningApplications()` is Workshop-side bookkeeping
+  of what was launched (id, pid, start time), not a live process monitor.
+  Killing an arbitrary tracked process is a meaningfully different, riskier
+  capability than starting one, and wasn't asked for this phase.
 - **Automation task descriptors don't execute** — see "Automation
   Service" above.
-- **Permissions don't gate hardware, plugins, automation, or network
-  yet** — there's nothing real behind any of those four categories to
-  protect.
+- **Permissions don't gate hardware, plugins, automation, or network** —
+  there's nothing real behind any of those four categories to protect.
 - **`HostManager.getOverviewStatus()`'s "Running" is always true** — the
   Host doesn't have a separate process to actually be running or not
   (the Companion does, separately, and is reflected in its own service's
@@ -456,11 +542,20 @@ account.
 
 ## Future extension points
 
-- **More Companion endpoints, carefully** — opening a file with its
-  default handler is the natural next step, once there's a real design
-  for doing so safely from something any browser tab can reach (see
-  `host-companion/README.md`'s own security section for exactly what
-  that would need to address first).
+- **Stopping or monitoring a launched program** — `runningApplications()`
+  records what was launched; there's no way to check whether it's still
+  running, read its output, or stop it. Named as its own deliberately
+  deferred capability in Version 4, Phase v4.0.1b's own account (see
+  `docs/ROADMAP.md`), not an oversight.
+- **A free-form argument type for `acceptsArgs`** — today a program's
+  declared argument slots are only ever `workspacePath` or `enum`; an
+  operator who wants a program to accept arbitrary text has no way to
+  declare that safely yet. Deliberately left out of Phase v4.0.1b rather
+  than inventing a validator design under time pressure.
+- **The rest of File Service** — creating an empty file, renaming,
+  copying, moving, deleting, watching for changes, file associations, and
+  opening a folder in the OS's own file manager all remain honestly
+  unimplemented; none of them were asked for by Version 4, Phase 1.
 - **The Ollama migration itself**, following the Companion's own shape.
 - **Real additional Asset kinds** — Materials, Textures, Audio, Particles
   — one `registerKind()` call each, the moment a real backing store

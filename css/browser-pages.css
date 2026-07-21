@@ -358,3 +358,49 @@ body {
   border-color: #d4af37;
   color: #d4af37;
 }
+
+/* host://files — Version 4, Phase 1 */
+.workshop-home-tile.workshop-files-row {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.workshop-files-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+.workshop-files-breadcrumb-button {
+  background: none;
+  border: none;
+  font: inherit;
+  color: var(--teal);
+  text-decoration: underline;
+  text-decoration-color: var(--teal-bright);
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.workshop-files-breadcrumb-button:hover { color: var(--brass); }
+.workshop-files-breadcrumb-sep { color: var(--ink-soft); }
+.workshop-files-textarea {
+  display: block;
+  width: 100%;
+  min-height: 360px;
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--paper-dark);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+}
+.workshop-files-textarea:focus { outline: none; border-color: var(--brass); }
+.workshop-files-textarea[readonly] { background: rgba(0, 0, 0, 0.04); }

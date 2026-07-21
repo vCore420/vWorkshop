@@ -5399,6 +5399,204 @@ Version 4," matching the closing essays Version 1 and Version 2 each
 left behind. `CLAUDE.md` updated to reference `docs/ROADMAP_V4.md`
 alongside its Version 3 predecessor.
 
+## Version 4, Phase 1 (V4.1) — Host, Actually Reaching Your Files (v4.0.1)
+
+**Goal:** `docs/ROADMAP_V4.md`'s own Phase 1 — make the Host's one real
+File Service capability (`listFiles()`) actually reachable, and extend it
+to real reading and writing, gated by real security rather than the
+optimism of "the Companion is reachable so it must be fine."
+
+**A real gap, found before anything was built.** Investigation before
+implementation (per this project's own standing discipline) turned up
+something `docs/HOST.md` had never actually claimed but also never
+corrected: `FilesService.listFiles()` had been genuinely real since the
+Workshop Platform phase, but nothing in the Browser ever called it —
+`host://files` rendered through the same generic, no-content `servicePage()`
+every still-unimplemented service uses. The one real capability the Host
+had was, in practice, unreachable. This phase fixed that architecturally,
+not just added the two new capabilities the roadmap named.
+
+**Scope, decided with Vi before implementation:** read and write this
+phase; launching a local application deliberately deferred to its own
+future phase (v4.0.1b) — arbitrary program execution is a categorically
+different risk than reading or writing one file, and the roadmap's own
+risk note said as much. A "Launch Applications" permission category is
+prepared, ungated, ahead of that phase, the same honest pattern
+`hardware`/`automation`/`network` already use.
+
+**The Companion (`host-companion/workshop-host-companion.js`, 0.1.0 →
+0.2.0-preview).** Two new endpoints, `GET /file` (read) and `PUT /file`
+(write/create), reusing the existing `resolveWithinWorkspace()` path
+guard unchanged. Both stay text-only (a NUL-byte heuristic rejects
+binary content) and capped at 2 MB. Because file *contents* are
+meaningfully more sensitive than the directory *listing* `/files`
+already exposed, both new endpoints require two things together: a
+custom `X-Workshop-Host-Token` header (which forces a real CORS
+preflight, genuinely blocking a disallowed origin's request rather than
+merely its response) and the token's own value — a random secret printed
+once to the Companion's own terminal at startup, held in memory only,
+regenerated every restart. `/status` and `/files` keep their original,
+lighter bar unchanged.
+
+**Permissions, split for real risk.** `PermissionsService`'s single
+`filesystem` boolean became `filesystem-read` and `filesystem-write` —
+independently grantable and revokable, since reading and writing stopped
+being the same risk the moment writing became real. A save migration
+(`SaveMigrations.js`, v4 → v5) carries an existing `filesystem: true`
+grant forward as `filesystem-read: true` only — write stays an explicit,
+fresh opt-in, never inherited from a blanket grant nobody gave with
+writing in mind.
+
+**`host://files` becomes a real file browser and small text editor.**
+Folder listings, breadcrumb navigation, and a plain `<textarea>` editor
+with Save/Close, built on `FilesService`'s new transient (non-persisted)
+browse-position state rather than URL query parameters — `PageRegistry`
+lowercases full URLs including query strings, which would have silently
+corrupted case-sensitive folder names. Every action reuses the
+`postMessage`-then-reload-in-place idiom `BrowserApp.js` already had
+several examples of, rather than inventing a second navigation mechanism.
+`host://permissions` gained a "Companion Pairing" section for entering
+the terminal-printed token.
+
+**A real bug, found during verification, not assumed away.** The first
+live playtest of a failed file-open (no pairing token yet) showed no
+error at all — the folder-listing page's own success path was
+unconditionally clearing `FilesService`'s `lastError` the moment
+`listFiles()` next succeeded, silently erasing the very error the failed
+open had just set before the error banner ever got a chance to render.
+Root-caused and fixed (the listing branch no longer clears an error it
+didn't cause), then reverified live: the banner now shows correctly, and
+a failed save keeps the player's just-typed edit in the textarea rather
+than losing it, confirmed by revoking Filesystem Write mid-edit and
+watching the draft survive the failed attempt.
+
+**Verified live, end to end**, not just `node --check`: the real
+Companion process, pointed at `.claude/test-assets/` (kept there for
+future reuse, plus two small new fixture files under
+`test-assets/files-browser/`); a real open → edit → save round trip
+confirmed by reading the file back from disk outside the Workshop
+entirely; `Soldier.glb` (2.1 MB) and `CesiumMan.glb` (binary) each
+correctly rejected with their own specific, honest error; a path-traversal
+attempt rejected; CORS preflight confirmed to omit `Access-Control-Allow-Origin`
+for a disallowed origin; the v4 → v5 migration run directly against a
+seeded legacy envelope and against one with no `hostPermissions` at all.
+Debug hooks removed and `.claude/launch.json` reverted to port 8000
+before this account was written.
+
+**What wasn't touched.** `ProgramsService.launchApplication()` still
+throws; `FilesService`'s other stubs (`createFile`, `renameFile`,
+`copyFile`, `moveFile`, `deleteFile`, `watchFile`, `getFileAssociations`,
+`openFolder`, dialog methods) stay honestly unimplemented — none of them
+were asked for this phase. `AIApp.js`'s own `formatBytes()` was
+consolidated into a new shared `src/utils/formatBytes.js` (gaining a KB
+tier neither the old copy nor `host://files`' own listing could do
+without) rather than writing a second, slightly different byte formatter
+— the same "reach for the shared thing" reflex the Version 3 close-out
+audit already re-established for this codebase.
+
+`docs/HOST.md` and `host-companion/README.md` both updated throughout —
+the Companion section, Permissions section, Known Simplifications, and
+Future Extension Points all now describe read/write as real and name
+v4.0.1b explicitly for launching a program, rather than leaving the
+old, now-inexact single-endpoint account standing.
+
+## Version 4, Phase v4.0.1b — Application Launching from the Host
+
+**Goal:** the one capability Phase 1 deliberately deferred, named
+explicitly in that phase's own docs as v4.0.1b — `ProgramsService.
+launchApplication()` becomes real. The most security-sensitive
+capability built into the Host so far: arbitrary program execution from
+something a browser tab can reach is a categorically different risk than
+reading or writing one file.
+
+**Scope, decided with Vi before implementation (same investigate → plan
+→ approve → implement discipline Phase 1 used):** the allow-list of
+launchable programs is a JSON config file the Companion operator writes
+and passes as a second, optional CLI argument — never a path or command
+the browser can supply itself. The browser *may* supply extra arguments,
+but only for slots a program's own config entry explicitly declares, each
+independently validated by the Companion before anything spawns. Pairing
+is required for both seeing and using the allow-list — no lighter,
+listing-only tier the way `/files` gets relative to `/file`.
+
+**The core safety property, held throughout:** the browser can never
+choose what runs. It can only reference a pre-configured program by `id`
+and, where declared, supply values for pre-declared argument slots, each
+checked against exactly one of two fixed validator types
+(`workspacePath` — reusing `resolveWithinWorkspace()` unchanged;
+`enum` — exact match against a config-declared list) *before* anything is
+spawned. Spawning always uses `child_process.spawn(command, argv, {shell:
+false})` — a real argv array, never a shell string — closing off
+shell-metacharacter injection regardless of what a validated value
+contains. No free-form/regex argument type exists; a program that needs
+one simply doesn't declare `acceptsArgs` for it.
+
+**The Companion (`host-companion/workshop-host-companion.js`, 0.2.0 →
+0.3.0-preview).** `GET /programs` (the configured allow-list — id, name,
+icon, and each slot's name/type/required/values for building a form;
+`command`/base `args`/`argTemplate` never leave the process) and `POST
+/launch` (id + optional named args), both requiring the identical
+header+token pairing bar `PUT /file` already established. A malformed
+individual config entry is skipped with a console warning rather than
+crashing the whole Companion. Launching waits for Node's own `"spawn"`/
+`"error"` event before responding, so `launched: true` is never returned
+for a command the OS actually failed to start — confirmed live against a
+deliberately-nonexistent configured command, which correctly surfaced
+`"...exe" wasn't found on this machine"` rather than a false positive.
+
+**`ProgramsService`/`PermissionsService`/`HostPages`/`BrowserApp`**
+gained the identical three-condition ("Companion connected *and*
+permission granted *and* paired") shape `FilesService`'s write path
+already established. `runningApplications()` — real, in-memory Workshop-
+side bookkeeping of every successful launch (id, pid, start time) — is
+now genuinely populated, closing the "shape is ready, only the bridge was
+missing" gap that field's own comment named since the Workshop Platform
+phase. **Deliberately not built:** any way to stop, monitor, or read
+output from a launched program — Workshop-side bookkeeping of what was
+launched is not a process supervisor, and killing an arbitrary tracked
+process is a meaningfully different, riskier capability than starting one
+that wasn't asked for. `host://applications` moved off its illustrative-
+only preview onto a real page — configured programs with working Launch
+buttons and, for any declared `workspacePath`/`enum` slot, a matching
+input — falling back to the identical illustrative-preview treatment
+every other still-unimplemented service uses whenever it isn't available.
+
+**A real correctness fix caught before it shipped, not after.** The
+applications page's own inline script originally built a CSS attribute
+selector by string-concatenating a program's `id` directly
+(`'[data-arg-for="' + id + '"]'`) — harmless today since ids come from
+the Companion operator's own trusted config, but a program id containing
+a literal quote character would have produced a broken or misleading
+selector. Fixed to filter by dataset comparison instead before this ever
+reached a live page, the same standard of not depending on a trust
+boundary holding forever when the safe form costs nothing extra.
+
+**Verified live, end to end.** The Companion's own endpoints exercised
+directly first (config loading and validation, including a deliberately
+malformed entry skipped with a warning; token-gating on both new
+endpoints; a real successful launch with a real pid returned; unknown-id,
+missing-required-arg, undeclared-arg, path-traversal, and nonexistent-
+file rejections; CORS preflight behaviour) before building anything on
+top of it. Then the real UI, end to end: permission-grant → pairing →
+real program listing → a real launch through the actual Launch button →
+`runningApplications()` reflecting it live → the `workspacePath` argument
+field validated and launched for real → a missing-required-argument
+rejection shown as an honest banner → a bad-command launch surfacing its
+own specific, honest error → revoking `applications` mid-session
+correctly reverting the page to its "not available" state. Debug hooks
+removed and `.claude/launch.json` reverted to port 8000 before this
+account was written.
+
+**What wasn't touched.** `FilesService`'s own still-unimplemented methods
+(`createFile`, `renameFile`, `copyFile`, `moveFile`, `deleteFile`,
+`watchFile`, `getFileAssociations`, `openFolder`, dialog methods) — none
+of them were in scope for this phase either. `docs/HOST.md` and
+`host-companion/README.md` both updated throughout, including a new
+"Launching a configured program" section in the latter walking through
+the config format, both validator types, and the reasoning behind the
+`shell: false` spawn — the same "explain the reasoning, not just the
+shape" care the file read/write section got in Phase 1.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space
