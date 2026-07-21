@@ -641,6 +641,7 @@ const computerSystem = engine.addSystem(
     cameraSystem,
     interiorSystem,
     hostManager,
+    hostConnectionManager,
     modelLibrary,
     modelAssetStore,
     modelLoader,
@@ -1119,7 +1120,7 @@ registerWorkshopPages(pageRegistry, searchIndex, {
   pageRegistry,
   searchIndex,
 });
-registerHostPages(pageRegistry, searchIndex, { hostManager, modelRegistry });
+registerHostPages(pageRegistry, searchIndex, { hostManager, modelRegistry, hostConnectionManager });
 registerAssetPages(pageRegistry, searchIndex, { objectLibraryStore, blueprintStore, animationLibraryStore, modelLibrary, imageLibraryStore, musicLibraryStore, worldObjectsStore, assetService, beingLibrary, getConstructionPiece });
 
 // "Plugins should be capable of registering Browser pages... naturally
