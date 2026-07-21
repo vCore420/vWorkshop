@@ -47,6 +47,10 @@ export class PhoneUI {
     this.phone.className = "workshop-phone";
     this.root.appendChild(this.phone);
 
+    this.screenEl = document.createElement("div");
+    this.screenEl.className = "workshop-phone-screen";
+    this.phone.appendChild(this.screenEl);
+
     const statusBar = document.createElement("div");
     statusBar.className = "workshop-phone-statusbar";
     this.statusTimeEl = document.createElement("span");
@@ -57,7 +61,7 @@ export class PhoneUI {
     statusIcons.textContent = "\u{1F4F6} \u{1F50B}"; // signal, battery — decorative, the same honesty standard as a real device's own always-full mockup screenshots
     statusIcons.setAttribute("aria-hidden", "true");
     statusBar.append(this.statusTimeEl, statusIcons);
-    this.phone.appendChild(statusBar);
+    this.screenEl.appendChild(statusBar);
 
     const header = document.createElement("div");
     header.className = "workshop-phone-header";
@@ -81,11 +85,11 @@ export class PhoneUI {
       onClick: () => this.callbacks.onClose(),
     });
     header.append(this.homeBtn, this.titleEl, closeBtn);
-    this.phone.appendChild(header);
+    this.screenEl.appendChild(header);
 
     this.content = document.createElement("div");
     this.content.className = "workshop-phone-content";
-    this.phone.appendChild(this.content);
+    this.screenEl.appendChild(this.content);
 
     // Version 3, Phase 13 ("The Phone Becomes a Device") — playtesting
     // found this pill-shaped indicator, previously purely cosmetic ("this
@@ -101,7 +105,7 @@ export class PhoneUI {
     homeIndicator.title = "Home";
     homeIndicator.setAttribute("aria-label", "Home");
     homeIndicator.addEventListener("click", () => this.callbacks.onGoHome());
-    this.phone.appendChild(homeIndicator);
+    this.screenEl.appendChild(homeIndicator);
 
     // Version 3, Phase 12 ("Accessibility & Comfort Pass") — `this.phone`
     // is only ever *visually* hidden (`.workshop-phone`'s own
@@ -131,10 +135,20 @@ export class PhoneUI {
    *  standard the rest of this file already holds to). Plain data
    *  attributes, not inline styles — `css/phone.css`'s own
    *  `[data-wallpaper]`/`[data-border]` rules do the actual work, so
-   *  every preset's real colour lives in exactly one place. */
-  setAppearance({ wallpaper, borderColor }) {
+   *  every preset's real colour lives in exactly one place.
+   *
+   *  Version 4, Phase 3 ("The Phone's Settings, Made Real") — `theme`
+   *  follows the identical `data-*` attribute pattern (`[data-theme]`
+   *  rules in `css/phone.css` do the real work, this class still has no
+   *  idea what "dark" actually changes). `brightness` is different in
+   *  kind — a continuous value, not one of a few named presets — so it's
+   *  a CSS custom property instead, read by `.workshop-phone-screen`'s
+   *  own `filter: brightness(var(--phone-brightness, 1))`. */
+  setAppearance({ wallpaper, borderColor, theme, brightness }) {
     if (wallpaper) this.phone.dataset.wallpaper = wallpaper;
     if (borderColor) this.phone.dataset.border = borderColor;
+    if (theme) this.phone.dataset.theme = theme;
+    if (brightness !== undefined) this.screenEl.style.setProperty("--phone-brightness", brightness);
   }
 
   show() {

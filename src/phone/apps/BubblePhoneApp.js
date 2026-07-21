@@ -1,48 +1,65 @@
 import { iconMarkup } from "../../utils/ProceduralIcons.js";
+import { BUBBLE_DEFINITION_ID } from "../../beings/DefaultBeings.js";
 
 /**
  * createBubblePhoneApp
  * -----------------------
  * "This should become the player's quick interaction point with the
  * Workshop's first resident... future residents should naturally
- * integrate into this application." Deliberately built against
- * `residentProfileStore`/`residentController`/`residentConnection`
- * directly rather than anything Bubble-specific — a future second
- * resident reusing this exact same trio of stores would already work
- * here with no changes beyond however a future multi-resident picker
- * chooses which one's own state to display.
+ * integrate into this application."
  *
- * Version 3, Phase 13 ("The Phone Becomes a Device"), Wave 2 — "each app
- * should read as distinctly itself." This is the one app that's
- * fundamentally about a *person* (well, a resident), not a list or a
- * control panel, so its own distinctness leans into that: a real
- * presence dot (the same signal a messaging app's own contact list
- * already uses that convention for) and a Talk button styled as an
- * actual speech bubble, not a generic full-width rectangle every other
- * app's own primary action already is.
+ * Version 4, Phase 7 ("Being ↔ Resident Convergence") — Bubble is a real
+ * `BeingLibrary` definition/instance now, not a singular
+ * `ResidentController`. **Decided with Vi**: this app keeps working
+ * exactly as before, resolved as Bubble's own specific, well-known Being
+ * instance (`BUBBLE_DEFINITION_ID`) rather than a global singleton — a
+ * genuine multi-resident picker (any resident-capable Being getting its
+ * own dashboard here) is a real, separate feature, deliberately not
+ * attempted this phase. `residentConnection` is unchanged — Ollama
+ * reachability isn't per-resident state. Command buttons (Stay/Follow/
+ * Return Home) now call `beingController`'s own per-instance methods
+ * instead of a singular `residentController`'s. One honest simplification:
+ * the old "In conversation" status line is gone — that lived on a
+ * `ResidentBehaviour` instance that's now genuinely ephemeral, scoped to
+ * one open conversation overlay, with nothing outside it left to read;
+ * awake/connection status alone remain fully accurate.
  */
-export function createBubblePhoneApp({ residentProfileStore, residentController, residentConnection, residentBehaviour, engine }) {
+export function createBubblePhoneApp({ residentProfileStore, beingLibrary, beingInstanceStore, beingController, residentConnection, engine }) {
+  function findBubbleInstance() {
+    return beingInstanceStore.all().find((i) => i.definitionId === BUBBLE_DEFINITION_ID) ?? null;
+  }
+
   return {
     id: "bubble",
     label: "Bubble",
     glyph: "bubble",
     mount(container) {
-      const profile = residentProfileStore.getActive();
+      const bubbleInstance = findBubbleInstance();
+      const definition = beingLibrary.get(BUBBLE_DEFINITION_ID);
+      const profile = definition?.residentProfileId ? residentProfileStore.get(definition.residentProfileId) : null;
 
       const header = document.createElement("div");
       header.className = "workshop-phone-bubble-header";
       const presenceDot = document.createElement("span");
       presenceDot.className = "workshop-phone-presence-dot";
-      presenceDot.setAttribute("aria-hidden", "true"); // the text status lines below already say the same thing in words
+      presenceDot.setAttribute("aria-hidden", "true"); // the text status line below already says the same thing in words
       const heading = document.createElement("h2");
       heading.textContent = profile?.name || "Bubble";
       header.append(presenceDot, heading);
       container.appendChild(header);
 
+      if (!bubbleInstance) {
+        const missing = document.createElement("p");
+        missing.className = "app-subtitle";
+        missing.textContent = "Bubble isn't in the Workshop right now.";
+        container.appendChild(missing);
+        return () => {};
+      }
+
       const statusSection = document.createElement("div");
       statusSection.className = "workshop-phone-section";
       // `refreshStatus()` runs on a 1s interval below — a live region here,
-      // not on the whole app, so only these two lines are ever announced.
+      // not on the whole app, so only this line is ever announced.
       statusSection.setAttribute("aria-live", "polite");
       const statusText = document.createElement("p");
       statusText.className = "app-subtitle";
@@ -65,7 +82,10 @@ export function createBubblePhoneApp({ residentProfileStore, residentController,
       talkLabel.textContent = "Talk";
       talkBtn.append(talkIcon, talkLabel);
       talkBtn.addEventListener("click", () => {
-        engine.events.emit("interaction:trigger", { overlayId: "residentConversation", context: {} });
+        engine.events.emit("interaction:trigger", {
+          overlayId: "residentConversation",
+          context: { beingInstanceId: bubbleInstance.id, residentProfileId: definition?.residentProfileId ?? null },
+        });
         engine.events.emit("phone:closeRequested");
       });
       actionsSection.appendChild(talkBtn);
@@ -84,27 +104,25 @@ export function createBubblePhoneApp({ residentProfileStore, residentController,
       homeBtn.className = "workshop-phone-small-button";
       homeBtn.textContent = "Return Home";
       homeBtn.addEventListener("click", () => {
-        residentController.returnHome();
+        beingController.returnResidentHome(bubbleInstance.id);
         refreshCommandButtons();
       });
 
       function refreshCommandButtons() {
-        const command = residentController.playerCommand;
-        stayBtn.textContent = command === "stay" ? "Staying \u2014 tap to resume wandering" : "Stay Here";
+        const command = beingController.getResidentCommand(bubbleInstance.id);
+        stayBtn.textContent = command === "stay" ? "Staying — tap to resume wandering" : "Stay Here";
         stayBtn.classList.toggle("active", command === "stay");
         stayBtn.setAttribute("aria-pressed", String(command === "stay"));
-        followBtn.textContent = command === "follow" ? "Following \u2014 tap to resume wandering" : "Follow Me";
+        followBtn.textContent = command === "follow" ? "Following — tap to resume wandering" : "Follow Me";
         followBtn.classList.toggle("active", command === "follow");
         followBtn.setAttribute("aria-pressed", String(command === "follow"));
       }
       stayBtn.addEventListener("click", () => {
-        if (residentController.playerCommand === "stay") residentController.resumeWandering();
-        else residentController.stayHere();
+        beingController.setResidentCommand(bubbleInstance.id, beingController.getResidentCommand(bubbleInstance.id) === "stay" ? null : "stay");
         refreshCommandButtons();
       });
       followBtn.addEventListener("click", () => {
-        if (residentController.playerCommand === "follow") residentController.resumeWandering();
-        else residentController.followMe();
+        beingController.setResidentCommand(bubbleInstance.id, beingController.getResidentCommand(bubbleInstance.id) === "follow" ? null : "follow");
         refreshCommandButtons();
       });
       refreshCommandButtons();
@@ -116,21 +134,14 @@ export function createBubblePhoneApp({ residentProfileStore, residentController,
 
       function refreshStatus() {
         const awake = residentConnection.isAwake;
-        const conversing = residentBehaviour.mode === "conversing";
-        statusText.textContent = `Status: ${conversing ? "In conversation" : awake ? "Awake" : "Sleeping \u2014 waiting for Ollama"}`;
-        connectionText.textContent = `Connection: ${{ connected: "Connected", connecting: "Connecting\u2026", disconnected: "Waiting for Ollama\u2026" }[residentConnection.status] ?? "Unknown"}`;
-        // One dot, one of four states \u2014 the same presence-indicator
-        // convention a messaging app's own contact list already uses.
-        // Conversing wins over every other signal (a real, more specific
-        // activity); a `data-` attribute, not a class per state, so
-        // `css/phone.css` owns every actual colour in one place.
-        presenceDot.dataset.presence = conversing
-          ? "conversing"
-          : residentConnection.status === "connecting"
-            ? "connecting"
-            : awake
-              ? "awake"
-              : "sleeping";
+        statusText.textContent = `Status: ${awake ? "Awake" : "Sleeping — waiting for Ollama"}`;
+        connectionText.textContent = `Connection: ${{ connected: "Connected", connecting: "Connecting…", disconnected: "Waiting for Ollama…" }[residentConnection.status] ?? "Unknown"}`;
+        // One dot, one of three states now (see this file's own header
+        // comment on why "conversing" is no longer tracked outside an
+        // actually-open conversation) — a `data-` attribute, not a class
+        // per state, so `css/phone.css` owns every actual colour in one
+        // place.
+        presenceDot.dataset.presence = residentConnection.status === "connecting" ? "connecting" : awake ? "awake" : "sleeping";
       }
       refreshStatus();
 

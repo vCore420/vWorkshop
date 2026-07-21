@@ -62,6 +62,14 @@ export const DEFAULT_SETTINGS = {
   phone: {
     wallpaper: "paper", // "paper" | "sage" | "glow" | "wood"
     borderColor: "oak", // "oak" | "walnut" | "brass" | "teal"
+    // Version 4, Phase 3 ("The Phone's Settings, Made Real") — a real
+    // brightness control and a genuine light/dark theme, not just a
+    // restyle of the two fields above. `brightness` floors at 0.3, not
+    // 0 — a real phone's own minimum brightness still shows something,
+    // it doesn't go fully unreadable. See `PhoneUI.js`'s own
+    // `setAppearance()` for how each actually applies.
+    brightness: 1, // 0.3 - 1
+    theme: "light", // "light" | "dark"
   },
 };
 

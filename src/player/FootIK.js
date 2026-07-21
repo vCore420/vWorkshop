@@ -109,6 +109,62 @@ function applyLegIK(hipPivot, kneePivot, anklePivot, targetWorld, poleWorld) {
  *  a safe no-op if the current rig is an imported model (`pivots: {}`,
  *  no leg pivots to find), the same convention every other pivot
  *  consumer in this project already relies on. */
+/** Called once per frame by PlayerAnimationSystem, only while crouching.
+ *  Version 4, Phase 4 — Vi's own field report: "the player model doesn't
+ *  lower when crouching, it animates, the camera moves, but the players
+ *  feet leave the ground instead of the whole body moving down." Root
+ *  cause, confirmed live against the real rig before writing this fix:
+ *  `CROUCH_CLIP`'s authored hip/knee bend is pure forward kinematics
+ *  with nothing correcting it, and folds each leg *up* rather than
+ *  settling it down — with `torsoPivot` never translating (`docs/
+ *  PLAYER.md`'s own "no vertical translation at all" account), that
+ *  shortfall shows up as the foot lifting into the air (measured 0.216m
+ *  for the default body), not the body lowering. A foot-planting gap,
+ *  not a missing capability — reuses the exact same `applyLegIK()`/
+ *  `solveTwoBoneIK()` machinery `applyTerrainFootIK()` above already
+ *  proved correct, just targeting straight down from each hip by the
+ *  *standing* leg span (read live from the rig's own rest-pose segment
+ *  lengths, so this is correct for every body proportion the Wardrobe
+ *  can produce, not tuned for one default).
+ *
+ *  **An honest limit, discovered while implementing this, not
+ *  papered over:** the standing pose already sits at ~99.99% of the
+ *  leg's own maximum reach (see this file's own header, above) — which
+ *  means there is no real slack left to *also* bend the knee forward
+ *  while keeping the ankle at exactly the same height. Any target
+ *  noticeably closer than full extension (enough to produce a visibly
+ *  bent knee) necessarily reintroduces some of the same vertical float
+ *  this fix exists to remove. Given the actual reported bug was the
+ *  foot floating 21.6cm off the ground, not "the knee doesn't bend
+ *  enough," this targets *exact* height correctness over a dramatic
+ *  bend — the resulting crouch reads as the torso's own already-authored
+ *  forward lean over straightened legs, not a deep knee-bent squat.
+ *  Making the hip/torso genuinely drop in world space — the real fix for
+ *  a proper bent-knee crouch — is the deeper, already-named "foot IK's
+ *  own job, a later milestone" limitation (`docs/PLAYER.md`), squarely
+ *  `docs/ROADMAP_V4.md`'s own future "Rest of IK" phase, not this one's. */
+export function applyCrouchFootIK(pivots) {
+  if (!pivots?.torso) return;
+  const torsoWorldQuat = pivots.torso.getWorldQuaternion(new THREE.Quaternion());
+
+  for (const side of SIDES) {
+    const hip = pivots[`upperLeg${side}`];
+    const knee = pivots[`lowerLeg${side}`];
+    const ankle = pivots[`foot${side}`];
+    if (!hip || !knee || !ankle) continue;
+
+    const hipWorldPos = hip.getWorldPosition(new THREE.Vector3());
+    const standingSpan = knee.position.length() + ankle.position.length();
+    const target = hipWorldPos.clone();
+    target.y -= standingSpan;
+
+    const poleOffset = POLE_HINT_LOCAL[side].clone().applyQuaternion(torsoWorldQuat);
+    const poleWorld = hipWorldPos.clone().add(poleOffset);
+
+    applyLegIK(hip, knee, ankle, target, poleWorld);
+  }
+}
+
 export function applyTerrainFootIK(pivots, terrainSystem) {
   if (!terrainSystem || !pivots?.torso) return;
   const torsoWorldPos = pivots.torso.getWorldPosition(new THREE.Vector3());

@@ -1,6 +1,7 @@
 import { composeSystemPrompt } from "../ai/PromptComposer.js";
 import { buildConversationContext } from "./ResidentContext.js";
 import { WORKSHOP_FUNCTIONS } from "../ai/WorkshopFunctions.js";
+import { ResidentBehaviour } from "./ResidentBehaviour.js";
 
 /**
  * createResidentConversationOverlay
@@ -70,6 +71,36 @@ import { WORKSHOP_FUNCTIONS } from "../ai/WorkshopFunctions.js";
  * empty, a small, honest transparency line renders per call — "Bubble
  * turned the lights off" — resolved from `WORKSHOP_FUNCTIONS`' own
  * labels, never fabricated from anything the model merely *said* it did.
+ *
+ * **Version 4, Phase 7 ("Being ↔ Resident Convergence") — one registered
+ * overlay now serves *any* resident-capable Being, not one fixed
+ * singleton.** `OverlayManager.open(overlayId, context)` already passed
+ * `context` straight into `mount()`; this factory used to close over
+ * fixed store instances at registration time instead of reading it.
+ * `mount(panelEl, context)` now resolves `context.residentProfileId` via
+ * `residentProfileStore.get()` (never `getActive()` — there is no single
+ * "active" resident anymore) and `context.beingInstanceId` via
+ * `beingResidentStateStore.getOrCreate()` for that instance's own
+ * `residentPreferences`/`playerPatternMemory`/`residentCuriosity`/
+ * `conversationMemory` bundle — genuinely per-Being data now, not one
+ * shared singleton four different Beings would otherwise fight over.
+ * Everything below this point in the file is unchanged from before —
+ * the whole body already only ever called methods on whatever `profile`/
+ * `residentPreferences`/etc. resolved to, never assumed which one.
+ * `residentBehaviour` is now a fresh, throwaway instance built once per
+ * conversation (never persisted, never was) rather than one shared,
+ * injected singleton — honestly, its own mode/mood/expression state has
+ * no visual consumer for a Being-based resident today (no separate face
+ * mesh to express on, no movement-mode this file's own `startConversation()`/
+ * `endConversation()` calls currently gate) — kept wired rather than
+ * ripped out, so the exact same calls stay ready the moment a future
+ * phase gives a Being's own face somewhere to show it.
+ *
+ * **Version 4, Phase 7a** — a new optional `audioSystem` dependency
+ * restores the resident's own soft "thinking" sound cue (see
+ * `AudioSynth.js`'s own `playResidentThinking()` comment), unheard since
+ * Phase 7 deleted `ResidentController.js`'s own per-frame watcher for it;
+ * see the real `setThinking(true)` call site below.
  */
 const REVEAL_WORD_DELAY_MS = 40;
 
@@ -82,12 +113,8 @@ function describeFunctionCall(call, residentName) {
 export function createResidentConversationOverlay({
   residentConnection,
   residentProfileStore,
-  residentBehaviour,
+  beingResidentStateStore,
   projectsStore = null,
-  residentPreferences = null,
-  playerPatternMemory = null,
-  residentCuriosity = null,
-  conversationMemory = null,
   worldObjectsStore = null,
   environmentSystem = null,
   timeOfDaySystem = null,
@@ -95,6 +122,7 @@ export function createResidentConversationOverlay({
   worldAwareness = null,
   worldTimeService = null,
   functionDispatcher = null,
+  audioSystem = null,
 }) {
   const history = []; // [{role: "user"|"assistant", content}] — this session only
   const sentMessages = []; // just the player's own sent text, in order — Up/Down history
@@ -107,10 +135,36 @@ export function createResidentConversationOverlay({
     // document to read — see css/overlays.css's own comment on
     // `.overlay--companion` for the full reasoning.
     materialClass: "companion",
-    mount(panelEl) {
+    mount(panelEl, overlayContext = {}) {
+      const { beingInstanceId, residentProfileId } = overlayContext;
+      // Fresh per conversation — see this file's own header comment on
+      // why this is no longer one shared, injected singleton.
+      const residentBehaviour = new ResidentBehaviour();
+      const bundle = beingResidentStateStore.getOrCreate(beingInstanceId);
+      const { residentPreferences, playerPatternMemory, residentCuriosity, conversationMemory } = bundle;
+
+      // A thin wrapper scoping the shared `functionDispatcher` to this
+      // specific instance — `WorkshopFunctions.js`'s own `moveTo` needs
+      // to know *which* resident-capable Being is acting, since there's
+      // no longer a singular `residentController` this could assume. See
+      // that file's own `invoke()`/`moveTo` comments.
+      const scopedFunctionDispatcher = functionDispatcher
+        ? {
+            definitionsFor: (p) => functionDispatcher.definitionsFor(p),
+            invoke: (name, args) => functionDispatcher.invoke(name, args, { beingInstanceId }),
+          }
+        : null;
+
       residentBehaviour.startConversation();
 
-      const profile = residentProfileStore.getActive();
+      const profile = residentProfileStore.get(residentProfileId);
+      if (!profile) {
+        const noProfile = document.createElement("p");
+        noProfile.className = "app-subtitle";
+        noProfile.textContent = "This resident's own AI profile no longer exists — pick or create one for it in the Being Creator first.";
+        panelEl.appendChild(noProfile);
+        return () => residentBehaviour.endConversation();
+      }
       const context = buildConversationContext(profile, {
         residentCuriosity,
         residentPreferences,
@@ -337,6 +391,13 @@ export function createResidentConversationOverlay({
         isThinking = true;
         longWait = false;
         residentBehaviour.setThinking(true);
+        // Version 4, Phase 7a — the real false→true edge this resident's
+        // own soft "thinking" cue fires on (see AudioSynth.js's own
+        // playResidentThinking() comment); its old watcher lived on the
+        // deleted ResidentController.js's own per-frame loop. AudioSystem
+        // only ever reads .x/.y/.z off whatever position it's given, so
+        // the plain {x,y,z} already on residentState works directly.
+        audioSystem?.playInteractionSound("residentThinking", { position: bundle.residentState.currentPosition });
         renderMessages();
         longWaitTimer = setTimeout(() => {
           longWait = true;
@@ -344,7 +405,7 @@ export function createResidentConversationOverlay({
         }, 8000);
         try {
           const systemPrompt = composeSystemPrompt(profile, context);
-          const { content, promptEvalCount, evalCount, functionCalls } = await residentConnection.sendMessage(profile, history, systemPrompt, functionDispatcher);
+          const { content, promptEvalCount, evalCount, functionCalls } = await residentConnection.sendMessage(profile, history, systemPrompt, scopedFunctionDispatcher);
           clearTimeout(longWaitTimer);
           isThinking = false;
           longWait = false;

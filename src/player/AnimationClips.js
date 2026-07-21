@@ -184,16 +184,28 @@ const LAND_CLIP = {
 
 // "The current crouch animation appears inverted and pushes the player
 // downward into the floor... feet remain planted, player lowers
-// naturally." Root cause: this clip (like JUMP/FALL/LAND above) is a
-// symmetric, non-alternating pose — unlike WALK/RUN's alternating gait,
-// which stays a valid-looking cycle under a global sign flip (swapping
-// which leg is "forward" is invisible to the eye), a symmetric knee-bend
-// flipped the same way in both legs bends the *wrong direction*, which
-// reads as sinking into the ground rather than settling into a crouch.
-// These values are renegated from their original authoring (see
-// PlayerCharacter.js's own applyPose() comment for the full root-cause
-// account) to compensate for applyPose()'s own X/Z negation, restoring
-// the originally-intended, correct-looking pose.
+// naturally." Root cause (Version 3, Phase 1): this clip (like JUMP/
+// FALL/LAND above) is a symmetric, non-alternating pose — unlike WALK/
+// RUN's alternating gait, which stays a valid-looking cycle under a
+// global sign flip (swapping which leg is "forward" is invisible to the
+// eye), a symmetric knee-bend flipped the same way in both legs bends
+// the *wrong direction*, which reads as sinking into the ground rather
+// than settling into a crouch. The torso/arm values below are renegated
+// from their original authoring (see PlayerCharacter.js's own
+// applyPose() comment for the full root-cause account) to compensate
+// for applyPose()'s own X/Z negation, restoring the originally-intended
+// lean and arm carriage.
+//
+// Version 4, Phase 4 — the leg values that root-cause fix left in place
+// are gone. They were never actually foot-planted at any rotation (see
+// `applyCrouchFootIK()`'s own header in FootIK.js for the live-measured
+// numbers: the old 0.85/-1.5 pair floated the foot 0.216m off the
+// ground) — `PlayerAnimationSystem` now overrides `upperLeg*`/
+// `lowerLeg*` every crouch frame via real two-bone IK targeting the
+// standing ankle height, so any value authored here would never be
+// seen. Left at `0` rather than deleted from the pose entirely, so a
+// reader sees explicitly that legs are accounted for, not silently
+// missing.
 const CROUCH_CLIP = {
   id: "default-crouch",
   name: "Crouch",
@@ -203,14 +215,14 @@ const CROUCH_CLIP = {
   speed: 1,
   frames: [
     frame(1.6, {
-      upperLegLeft: [0.85, 0, 0], upperLegRight: [0.85, 0, 0],
-      lowerLegLeft: [-1.5, 0, 0], lowerLegRight: [-1.5, 0, 0],
+      upperLegLeft: [0, 0, 0], upperLegRight: [0, 0, 0],
+      lowerLegLeft: [0, 0, 0], lowerLegRight: [0, 0, 0],
       torso: [-0.28, 0, 0],
       upperArmLeft: [-0.1, 0, -0.05], upperArmRight: [-0.1, 0, 0.05],
     }),
     frame(1.6, {
-      upperLegLeft: [0.82, 0, 0], upperLegRight: [0.82, 0, 0],
-      lowerLegLeft: [-1.45, 0, 0], lowerLegRight: [-1.45, 0, 0],
+      upperLegLeft: [0, 0, 0], upperLegRight: [0, 0, 0],
+      lowerLegLeft: [0, 0, 0], lowerLegRight: [0, 0, 0],
       torso: [-0.26, 0, 0],
       upperArmLeft: [-0.08, 0, -0.05], upperArmRight: [-0.08, 0, 0.05],
     }),

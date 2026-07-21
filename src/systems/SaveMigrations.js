@@ -1,3 +1,5 @@
+import { DEFAULT_BEINGS, BUBBLE_DEFINITION_ID } from "../beings/DefaultBeings.js";
+
 /**
  * SaveMigrations
  * ----------------
@@ -24,7 +26,7 @@
  * with a stale or now-meaningless shape.
  */
 
-export const CURRENT_SAVE_VERSION = 5;
+export const CURRENT_SAVE_VERSION = 6;
 
 const MIGRATIONS = {
   // v1 -> v2: furniture position/rotation used to be saved and blindly
@@ -108,6 +110,100 @@ const MIGRATIONS = {
       grants["filesystem-read"] = grants.filesystem;
       delete grants.filesystem;
     }
+    return envelope;
+  },
+  // v5 -> v6: Version 4, Phase 7 ("Being ↔ Resident Convergence") —
+  // Bubble stopped being a singular ResidentController and became a real
+  // BeingLibrary definition/instance, like every other Being. Three
+  // things this migration has to get right so a real player's actual
+  // relationship with her survives intact, not resets:
+  //   1. Her own seeded definition (DefaultBeings.js's own
+  //      BUBBLE_DEFINITION_ID) needs to actually exist in this save's own
+  //      beingLibrary — BeingLibrary.load()'s own "respect saved data
+  //      as-is" rule means a save that already has ANY Being data
+  //      (Person/Cat/Dog, or a player's own creations) never re-seeds new
+  //      starter entries, so her definition would otherwise simply be
+  //      missing. A save with no Being data at all needs nothing here —
+  //      BeingLibrary's own re-seed path already adds her.
+  //   2. A real placed instance of her needs to exist in beingInstances —
+  //      main.js's own boot-time reconciliation only creates one if
+  //      she's genuinely never existed at all; this migration positions
+  //      her at exactly where she actually was, not a fresh default spot.
+  //   3. Her five old flat singleton providers (residentState/
+  //      residentPreferences/playerPatternMemory/residentCuriosity/
+  //      conversationMemory) move into the new beingResidentState
+  //      provider's own per-instance-keyed map, under her new instance's
+  //      own id — real conversation history, mood, and preferences,
+  //      never reset to blank.
+  5: (envelope) => {
+    envelope.providers = envelope.providers ?? {};
+    const oldResidentState = envelope.providers.residentState ?? null;
+    const oldResidentPreferences = envelope.providers.residentPreferences ?? null;
+    const oldPlayerPatternMemory = envelope.providers.playerPatternMemory ?? null;
+    const oldResidentCuriosity = envelope.providers.residentCuriosity ?? null;
+    const oldConversationMemory = envelope.providers.conversationMemory ?? null;
+
+    envelope.providers.beingLibrary = envelope.providers.beingLibrary ?? {};
+    envelope.providers.beingLibrary.beings = envelope.providers.beingLibrary.beings ?? {};
+    const hadNoBeingsAtAll = Object.keys(envelope.providers.beingLibrary.beings).length === 0;
+    if (!hadNoBeingsAtAll && !envelope.providers.beingLibrary.beings[BUBBLE_DEFINITION_ID]) {
+      const seed = DEFAULT_BEINGS.find((b) => b.id === BUBBLE_DEFINITION_ID);
+      if (seed) envelope.providers.beingLibrary.beings[BUBBLE_DEFINITION_ID] = structuredClone(seed);
+    }
+    // Resolved directly here, from the raw envelope, rather than left for
+    // main.js's own boot-time reconciliation — that step runs *after*
+    // every provider (including this one) has already loaded, which is
+    // too late for the resident-capability check just below to see it.
+    // Not overwritten if some earlier pass already resolved it.
+    const bubbleDefinition = envelope.providers.beingLibrary.beings[BUBBLE_DEFINITION_ID];
+    if (bubbleDefinition && !bubbleDefinition.residentProfileId) {
+      bubbleDefinition.residentProfileId = envelope.providers.aiResidents?.activeProfileId ?? null;
+    }
+
+    // A save that never actually had a resident session (shouldn't
+    // happen — ResidentProfileStore always seeds one — but this
+    // migration doesn't assume it) needs neither an instance nor a
+    // resident-state bundle created for her.
+    if (oldResidentState || oldConversationMemory || oldResidentPreferences || oldPlayerPatternMemory || oldResidentCuriosity) {
+      envelope.providers.beingInstances = envelope.providers.beingInstances ?? {};
+      envelope.providers.beingInstances.instances = envelope.providers.beingInstances.instances ?? [];
+      let bubbleInstance = envelope.providers.beingInstances.instances.find((i) => i.definitionId === BUBBLE_DEFINITION_ID);
+      if (!bubbleInstance) {
+        const pos = oldResidentState?.currentPosition;
+        const position = pos ? [pos.x, pos.y, pos.z] : [0, 0, 0];
+        const nextId = envelope.providers.beingInstances.nextId ?? envelope.providers.beingInstances.instances.length + 1;
+        bubbleInstance = {
+          id: nextId,
+          definitionId: BUBBLE_DEFINITION_ID,
+          name: null,
+          position,
+          rotationY: oldResidentState?.facingDirection ?? 0,
+          homePosition: position,
+          homeRadius: 2.5,
+          currentAnimationClipId: null,
+          currentState: "idle",
+          despawned: false,
+          createdAt: new Date().toISOString(),
+        };
+        envelope.providers.beingInstances.instances.push(bubbleInstance);
+        envelope.providers.beingInstances.nextId = nextId + 1;
+      }
+
+      envelope.providers.beingResidentState = envelope.providers.beingResidentState ?? {};
+      envelope.providers.beingResidentState[bubbleInstance.id] = {
+        residentState: oldResidentState ?? undefined,
+        residentPreferences: oldResidentPreferences ?? undefined,
+        playerPatternMemory: oldPlayerPatternMemory ?? undefined,
+        residentCuriosity: oldResidentCuriosity ?? undefined,
+        conversationMemory: oldConversationMemory ?? undefined,
+      };
+    }
+
+    delete envelope.providers.residentState;
+    delete envelope.providers.residentPreferences;
+    delete envelope.providers.playerPatternMemory;
+    delete envelope.providers.residentCuriosity;
+    delete envelope.providers.conversationMemory;
     return envelope;
   },
 };

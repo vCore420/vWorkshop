@@ -2,7 +2,7 @@ import { applyPose } from "./PlayerCharacter.js";
 import { MOVEMENT_STATE_TO_CLIP_ID } from "./AnimationClips.js";
 import { advanceFrame, computeBlendedPose, ClipPlayer } from "./AnimationPlayback.js";
 import { mergePoses, JOINT_GROUPS } from "./AnimationLayers.js";
-import { applyTerrainFootIK } from "./FootIK.js";
+import { applyTerrainFootIK, applyCrouchFootIK } from "./FootIK.js";
 import { TerrainSystem } from "../systems/TerrainSystem.js";
 
 /**
@@ -189,6 +189,13 @@ export class PlayerAnimationSystem {
     // Runs after applyPose() so it corrects the base pose already
     // applied above, not instead of it.
     if (this._movementState === "idle") applyTerrainFootIK(pivots, this._terrainSystem);
+    // Version 4, Phase 4 — the crouch counterpart: `CROUCH_CLIP`'s own
+    // authored leg bend floats the foot off the ground with nothing
+    // correcting it (see `applyCrouchFootIK()`'s own header in
+    // FootIK.js for the full root-cause account and honest limit).
+    // Mutually exclusive with the idle branch above by construction —
+    // `_movementState` is a single string, never both at once.
+    else if (this._movementState === "crouch") applyCrouchFootIK(pivots);
   }
 
   _advance(dt) {
