@@ -302,6 +302,24 @@ needs to drop lower than an already-near-straight standing leg can
 reach; see `FootIK.js`'s own header for the full account of that
 asymmetry and what closing it would actually require.
 
+**A second, fixed-target caller (Version 4, Phase 4)**: `applyCrouchFootIK()`,
+in the same file, wired to movement state `"crouch"` instead of `"idle"`
+— a real playtesting report ("the feet leave the ground instead of the
+whole body moving down") traced to `CROUCH_CLIP`'s own authored leg
+angles being pure forward kinematics with nothing correcting them, which
+floated the foot 0.216m off the ground given the rig's fixed hip height
+(`docs/PLAYER.md`'s own "no vertical translation at all" account). Unlike
+the terrain caller, the target here is always the same fixed point —
+straight down from the hip by the standing leg's own span, read live from
+the rig's own segment lengths — not a per-frame terrain sample, so this
+caller needs no `TerrainSystem` at all and works identically indoors,
+outdoors, or on Builder geometry. Reuses `applyLegIK()`, not a second
+solver — exactly the "several doors in, one implementation" shape this
+file already established for the terrain case. See `docs/PLAYER.md`'s own
+account for the honest limit this specific target hits (no slack left for
+a visibly bent knee while also holding exact height, given the standing
+leg is already at ~99.99% of its own reach).
+
 **What still doesn't do this**: "hand placement, object interaction,
 looking at targets" remain honest future extension points — none of them
 are automatically applied to the Player or a Being yet. Building any of
@@ -460,10 +478,10 @@ points."
   result can't currently be hand-corrected if it gets one joint wrong; a
   person can only accept what it found or not use that model for
   retargeted playback at all.
-- **IK is wired for one real gameplay case (Player ground adaptation,
-  while idle) and not yet the rest** (hand placement, object
-  interaction, looking at targets, and foot placement during a walk
-  cycle) — see "Inverse Kinematics" above.
+- **IK is wired for two real gameplay cases (Player ground adaptation
+  while idle, and crouch foot-planting — Version 4, Phase 4) and not yet
+  the rest** (hand placement, object interaction, looking at targets, and
+  foot placement during a walk cycle) — see "Inverse Kinematics" above.
 - **Procedural layering only exists on the Player rig** — `BeingController.js`
   doesn't yet support a second, layered clip on top of a Being's own
   idle/walk.

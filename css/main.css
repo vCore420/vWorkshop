@@ -215,7 +215,16 @@ html, body {
   pointer-events: none;
 }
 .emote-wheel.hidden { display: none; }
-.emote-wheel-card {
+/* Version 4, Phase 2 ("Playtesting Notes, Continued") — the ring used to
+   sit inside a bordered/backgrounded `.emote-wheel-card`, the same visual
+   treatment an ordinary settings panel gets. The brief's own "should
+   remain lightweight, elegant and unobtrusive" reads more like a radial
+   menu that floats directly over the game view than a panel that happens
+   to be circular — the card chrome is gone for the ring itself now, kept
+   only for the empty state below (`.emote-wheel-empty-card`), which still
+   needs a real, bounded surface for a heading and a sentence of text to
+   sit on. */
+.emote-wheel-empty-card {
   pointer-events: auto;
   background: var(--surface-glass-strong);
   border: 1px solid var(--teal-bright);
@@ -227,75 +236,104 @@ html, body {
   text-align: center;
   box-shadow: var(--shadow-panel);
 }
-.emote-wheel-card h3 {
+.emote-wheel-empty-card h3 {
   margin: 0 0 var(--space-3);
   font-family: var(--font-display);
   color: var(--paper);
   font-size: var(--text-lg);
 }
-/* Version 3, Phase 14 ("Further Environmental Polish") — "we could
-   design a radial wheel with options for each emote in a section of the
-   radial circle." Each button's own `--angle` (set per-button in
-   EmoteWheelSystem.js's own _render()) drives a standard CSS-only radial
-   placement: rotate the button around the ring's own centre by that
-   angle, translate outward by the ring's own radius, then rotate back by
-   the same negative angle so the button's own label stays upright rather
-   than reading sideways/upside-down at points around the circle. */
+/* Version 3, Phase 14 ("Further Environmental Polish") — "we could design
+   a radial wheel with options for each emote in a section of the radial
+   circle." Version 4, Phase 2 — rebuilt as genuine pie-wedge segments
+   (closer to FiveM's qb-radialmenu in feel) rather than circles sitting
+   on a ring: each button now fills the *entire* ring (`inset: 0`) and is
+   cut down to its own slice with a `clip-path: polygon(...)` computed in
+   JS (`wedgeClipPath()`, EmoteWheelSystem.js) — a real, independently
+   clickable wedge-shaped hit area, not a decorative background behind a
+   circular button. The icon+label inside each wedge still uses the
+   original rotate/translate/counter-rotate technique (`--angle`, set per
+   item in `_render()`) to sit at the wedge's own mid-angle and stay
+   upright — that part of the original technique was already correct and
+   is reused, not replaced. */
 .emote-wheel-ring {
   position: relative;
-  width: min(300px, 78vw);
-  height: min(300px, 78vw);
-  --wheel-radius: min(115px, 34vw);
+  width: min(340px, 82vw);
+  height: min(340px, 82vw);
+  --wheel-radius: min(122px, 30vw);
 }
+.emote-wheel-ring button.emote-wheel-wedge {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+.emote-wheel-ring button.emote-wheel-wedge:hover,
+.emote-wheel-ring button.emote-wheel-wedge:focus-visible {
+  background: rgba(127, 216, 196, 0.22);
+}
+.emote-wheel-item {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 68px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--paper);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-align: center;
+  line-height: 1.15;
+  transform: translate(-50%, -50%) rotate(var(--angle)) translateY(calc(-1 * var(--wheel-radius))) rotate(calc(-1 * var(--angle)));
+  pointer-events: none; /* clicks land on the wedge button beneath, never fight with this label overlay */
+}
+.emote-wheel-item-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+/* The centre hub — Version 4, Phase 2: larger and more prominent than
+   its old plain-text self, and now a genuine second close affordance
+   (clickable, alongside Tab/Escape) rather than purely decorative.
+   `z-index: 2` keeps it clickable above the wedges, which all extend
+   to the ring's own exact centre. */
 .emote-wheel-hub {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 84px;
-  font-family: var(--font-display);
-  color: var(--paper);
-  font-size: var(--text-sm);
-  pointer-events: none;
-}
-.emote-wheel-ring button {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 72px;
-  height: 72px;
+  z-index: 2;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  background: rgba(255, 255, 255, 0.06);
+  padding: var(--space-2);
+  background: var(--surface-glass-strong);
+  border: 1px solid var(--teal-bright);
+  box-shadow: var(--shadow-panel);
   color: var(--paper);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
   text-align: center;
-  line-height: 1.2;
   cursor: pointer;
-  transform: translate(-50%, -50%) rotate(var(--angle)) translateY(calc(-1 * var(--wheel-radius))) rotate(calc(-1 * var(--angle)));
-  transition: transform var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+  pointer-events: auto;
+  transition: border-color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard);
 }
-/* Good little hover effects" — a small outward pop (scale) plus the
-   same teal highlight every other Emote Wheel button already used,
-   layered onto the *same* base placement transform above (a hover state
-   can't partially override one property inside a transform list, so
-   the whole chain is repeated here with `scale()` appended). */
-.emote-wheel-ring button:hover,
-.emote-wheel-ring button:focus-visible {
-  border-color: var(--teal-bright);
-  background: rgba(127, 216, 196, 0.2);
-  transform: translate(-50%, -50%) rotate(var(--angle)) translateY(calc(-1 * var(--wheel-radius))) rotate(calc(-1 * var(--angle))) scale(1.12);
+.emote-wheel-hub:hover,
+.emote-wheel-hub:focus-visible {
+  border-color: var(--brass-bright, var(--teal-bright));
+  background: rgba(127, 216, 196, 0.18);
 }
 .emote-wheel-hint {
   margin: var(--space-3) 0 0;
   font-size: var(--text-xs);
   font-family: var(--font-mono);
   color: var(--paper-dark);
+  pointer-events: none;
 }
 
 /* ---------- Compass ---------- */
@@ -310,6 +348,21 @@ html, body {
   transition: opacity var(--duration-medium) var(--ease-standard);
 }
 #compass-root.visible { opacity: 1; }
+
+/* Version 4, Phase 2 ("Playtesting Notes, Continued") — "the HUD compass
+   clips against the top button row on touch/mobile devices specifically —
+   fine on desktop." Root cause: `tokens.css`'s own global `@media
+   (pointer: coarse) { button { min-height: 40px; } }` (a real, deliberate
+   touch-comfort baseline, not a bug) grows every `.hud-corner-controls`
+   button taller on touch, pushing that row's own bottom edge from ~40px
+   down to ~56px — squarely into the compass's fixed 18px-52px band. The
+   compass itself has no touch-specific positioning at all today; this is
+   that. */
+@media (pointer: coarse) {
+  #compass-root {
+    top: max(64px, calc(env(safe-area-inset-top) + 46px));
+  }
+}
 
 /* ---------- Build Mode box-select ---------- */
 #build-select-root {

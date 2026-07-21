@@ -766,7 +766,8 @@ entirely on custom objects":
 - **Structural** — Wall, Half Wall, Corner Wall, Floor, Ceiling, Roof,
   Roof Corner, Pillar, Beam, Stairs, Ladder, plus the original Cube and
   Plane.
-- **Openings** — Doorway, Door, Double Door, Window, Window Pane, Large
+- **Openings** — Doorway, Door, Double Door, Door Leaf (Left), Door Leaf
+  (Right) (Version 4, Phase 2 — see below), Window, Window Pane, Large
   Window, Large Window Pane, Archway (the first construction piece built
   from the new Arch primitive — see "Preset shapes" above). Window Pane
   and Large Window Pane (Version 3, Phase 5) pair with their matching
@@ -793,20 +794,35 @@ entirely on custom objects":
   ready to be wired to anything a future system listens for — see
   docs/PLUGIN_GUIDE.md), Sign, Fence, Gate (a fence-styled Door).
 
-**Double Door and Gate both make the same honest simplification the
-original Door already did**: `DoorBehaviour` swings the *entire* compiled
-object as one piece — it has no concept of "which part is the door
-leaf." Version 3, Phase 10 ("Real Assets, Honestly Introduced") gave it
-a real `hingeOffset` property (see that behaviour's own comment), so the
-whole object can now pivot at a true edge instead of spinning around its
-own origin — but that's still one edge for the *whole* compiled object.
-A double door built from two side-by-side panels therefore still swings
-open as one rigid double-wide unit pivoting at one shared edge, not two
-independently-hinged leaves the way the workshop's own French doors do.
-Building genuinely independent leaves would still mean two separate
-placed objects, each with its own hinge — not attempted here for the
-sake of staying inside the existing behaviour system rather than
-special-casing one construction piece.
+**Gate still makes the same honest simplification the original Door
+does**: `DoorBehaviour` swings the *entire* compiled object as one
+piece — it has no concept of "which part is the door leaf." Version 3,
+Phase 10 ("Real Assets, Honestly Introduced") gave it a real
+`hingeOffset` property (see that behaviour's own comment), so the whole
+object can now pivot at a true edge instead of spinning around its own
+origin — but that's still one edge for the *whole* compiled object,
+which is exactly right for a single-leaf piece like Gate.
+
+**Double Door made that same simplification too, until Version 4, Phase
+2 ("Playtesting Notes, Continued").** The original `Double Door` piece —
+two side-by-side panels compiled into one object — still swings open as
+one rigid double-wide unit pivoting at one shared edge, and is left
+completely untouched: any existing save with one already placed keeps
+working exactly as it does today. Alongside it, two new, genuinely
+independent pieces, **Door Leaf (Left)** and **Door Leaf (Right)** —
+each its own separately-placed object, sized to match one half of the
+combined piece exactly, each carrying the *identical, unmodified*
+`DoorBehaviour`/`hingeOffset` mechanism the single `Door` piece already
+uses (hinging at its own outer edge, mirrored between the two). No new
+behaviour-system capability was needed to build this — the "two separate
+placed objects, each with its own hinge" direction this section used to
+describe as unattempted turned out to need nothing more than defining
+two more Construction Library pieces around machinery that already
+existed and already worked. Placed side by side, the doorway looks
+identical to the combined piece when closed, but each leaf now
+genuinely swings on its own — confirmed live: opening one leaf leaves
+the other's position and rotation completely unchanged, and each leaf's
+own open/close cycle round-trips back to its exact starting transform.
 
 **Version 3, Phase 14 ("Further Environmental Polish")** — `hingeOffset`
 existed since Phase 10, but every one of Door, Double Door, and Gate

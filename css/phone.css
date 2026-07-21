@@ -33,6 +33,54 @@
   transform: translateY(0);
 }
 
+/* Version 4, Phase 3 ("The Phone's Settings, Made Real") — the theme-
+   aware layer every app screen's own colours now read from, instead of
+   hardcoding a light-mode value directly. Defined once here (the light
+   defaults — identical to what every rule below used to hardcode, so
+   light mode is visually unchanged) and overridden at `[data-theme=
+   "dark"]`. Reuses existing tokens rather than inventing new hex values:
+   dark mode is "paper on ink" — this codebase's own light-mode pairing
+   ("ink on paper"), simply inverted, the same two tokens doing double
+   duty rather than a second dark-specific palette. Accent colours
+   (`--screen-glow`, `--brass-bright`, active/hover states) are
+   deliberately untouched below — real accents don't need to invert. */
+.workshop-phone {
+  --phone-ink: var(--ink);
+  --phone-ink-soft: var(--ink-soft);
+  --phone-surface-subtle: rgba(0, 0, 0, 0.04);
+  --phone-surface-subtle-lighter: rgba(0, 0, 0, 0.03);
+  --phone-border-subtle: rgba(0, 0, 0, 0.12);
+  --phone-page-bg: white;
+  --phone-base-1: var(--paper);
+  --phone-base-2: var(--paper-dark);
+}
+.workshop-phone[data-theme="dark"] {
+  --phone-ink: var(--paper);
+  --phone-ink-soft: rgba(237, 227, 208, 0.65);
+  --phone-surface-subtle: rgba(255, 255, 255, 0.08);
+  --phone-surface-subtle-lighter: rgba(255, 255, 255, 0.06);
+  --phone-border-subtle: rgba(255, 255, 255, 0.16);
+  --phone-page-bg: var(--wood-dark);
+  --phone-base-1: var(--ink);
+  --phone-base-2: var(--wood-dark);
+}
+
+/* "Real brightness control... should visibly affect the Phone's own
+   rendered screen, not claim to change the actual device screen." Wraps
+   everything that's actually *display* (status bar, header, app
+   content, home indicator — see `PhoneUI.js`'s own constructor comment)
+   so the filter below dims the screen exactly the way a real phone's
+   own backlight would, never the physical wood/brass case around it. A
+   transparent flex pass-through otherwise — same column layout the
+   case itself used to apply directly to these same four children. */
+.workshop-phone-screen {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  filter: brightness(var(--phone-brightness, 1));
+}
+
 /* Version 3, Phase 13 ("The Phone Becomes a Device") — "let a player
    change... the phone's own border colour." Four curated cases, each an
    existing token, not a colour picker; `[data-border="oak"]` is
@@ -131,8 +179,14 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  background: var(--paper);
-  color: var(--ink);
+  /* `background` is declared once, further down (the wallpaper-tint
+     rule, Version 3 Phase 13 / Version 4 Phase 2) — this selector's own
+     `background: var(--paper)` used to sit here too, but the wallpaper
+     rule already always wins for that property (same selector, later in
+     the file) and always resolves to a real value even with no
+     `data-wallpaper` set, so keeping both was two declarations for one
+     property, one of them permanently shadowed. */
+  color: var(--phone-ink);
   padding: var(--space-2) var(--space-3);
   display: flex;
   flex-direction: column;
@@ -204,26 +258,46 @@
 
 /* ==========================================================================
    Home screen — "a simple grid of icons... minimal, clear, readable,
-   comfortable," now with the wallpaper-and-icon-tile treatment a real
+   comfortable," with the wallpaper-and-icon-tile treatment a real
    home screen has instead of plain bordered boxes on a flat surface.
    ========================================================================== */
-.workshop-phone-content:has(.workshop-phone-home-grid) {
-  background: radial-gradient(ellipse at 50% -10%, var(--phone-wallpaper-tint, color-mix(in srgb, var(--brass) 16%, transparent)), transparent 60%), linear-gradient(180deg, var(--paper) 0%, var(--paper-dark) 100%);
-}
 /* Version 3, Phase 13 — "let a player change the home screen's own
-   wallpaper." Every preset keeps the same paper/paper-dark base (the
-   home screen's own text is dark ink, so the surface itself always
-   needs to stay light) and only shifts which existing accent token
-   tints the radial glow above it — a curated set of the Workshop's own
-   colours, not a free-form picker. `"paper"` (this file's own long-
-   standing default) needs no rule of its own; it's the fallback above. */
-.workshop-phone[data-wallpaper="sage"] .workshop-phone-content:has(.workshop-phone-home-grid) {
+   wallpaper." Every preset only shifts which existing accent token tints
+   the radial glow above the base — a curated set of the Workshop's own
+   colours, not a free-form picker. `"paper"` (this file's own
+   long-standing default) needs no rule of its own; it's the fallback
+   below.
+   Version 4, Phase 2 ("Playtesting Notes, Continued") — this used to be
+   scoped to `.workshop-phone-content:has(.workshop-phone-home-grid)`,
+   which only ever matches while the Home screen specifically is mounted.
+   The wallpaper picker itself lives in the Settings app, a different
+   screen — so picking a wallpaper never visibly changed anything on the
+   screen actually being looked at, only a button's own active-state
+   highlight; the tint only appeared after backing all the way out to
+   Home, and even there it's a subtle blend easy to miss. Dropping the
+   `:has()` gate makes this the phone's own backdrop on every screen,
+   the same way a real phone's wallpaper isn't confined to its home
+   screen — not a Settings-screen redesign (see `docs/ROADMAP_V4.md`'s
+   own separate Phase 3 for that), just making the existing choice
+   actually visible where it's made.
+   Version 4, Phase 3 ("The Phone's Settings, Made Real") — the base itself
+   (previously always `var(--paper)`/`var(--paper-dark)`, "the phone's own
+   screen text is dark ink throughout, so the surface itself always needs
+   to stay light") is no longer light-only, now that a real dark theme
+   exists: `--phone-base-1`/`--phone-base-2` resolve to paper/paper-dark
+   in light mode and ink/wood-dark in dark mode, so the identical tint
+   formula below now layers over whichever base the current theme
+   actually is. */
+.workshop-phone-content {
+  background: radial-gradient(ellipse at 50% -10%, var(--phone-wallpaper-tint, color-mix(in srgb, var(--brass) 16%, transparent)), transparent 60%), linear-gradient(180deg, var(--phone-base-1) 0%, var(--phone-base-2) 100%);
+}
+.workshop-phone[data-wallpaper="sage"] .workshop-phone-content {
   --phone-wallpaper-tint: color-mix(in srgb, var(--teal-bright) 18%, transparent);
 }
-.workshop-phone[data-wallpaper="glow"] .workshop-phone-content:has(.workshop-phone-home-grid) {
+.workshop-phone[data-wallpaper="glow"] .workshop-phone-content {
   --phone-wallpaper-tint: color-mix(in srgb, var(--screen-glow) 16%, transparent);
 }
-.workshop-phone[data-wallpaper="wood"] .workshop-phone-content:has(.workshop-phone-home-grid) {
+.workshop-phone[data-wallpaper="wood"] .workshop-phone-content {
   --phone-wallpaper-tint: color-mix(in srgb, var(--wood-light) 20%, transparent);
 }
 .workshop-phone-home-grid {
@@ -264,7 +338,7 @@
 .workshop-phone-app-label {
   font-size: 0.68rem;
   text-align: center;
-  color: var(--ink-soft);
+  color: var(--phone-ink-soft);
 }
 
 /* ==========================================================================
@@ -286,7 +360,7 @@
   width: 100%;
   padding: 8px;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--phone-border-subtle);
   background: var(--screen-glow);
   color: #14211d;
   font-weight: 600;
@@ -296,9 +370,9 @@
 .workshop-phone-small-button {
   padding: 6px 10px;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  background: rgba(0, 0, 0, 0.04);
-  color: var(--ink);
+  border: 1px solid var(--phone-border-subtle);
+  background: var(--phone-surface-subtle);
+  color: var(--phone-ink);
   cursor: pointer;
   font-size: var(--text-xs);
 }
@@ -314,9 +388,9 @@
   width: 100%;
   padding: 8px;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  background: rgba(0, 0, 0, 0.03);
-  color: var(--ink);
+  border: 1px solid var(--phone-border-subtle);
+  background: var(--phone-surface-subtle-lighter);
+  color: var(--phone-ink);
   font-family: inherit;
   font-size: var(--text-xs);
   resize: vertical;
@@ -338,7 +412,7 @@
   gap: 8px;
   padding: 6px 8px;
   border-radius: var(--radius-sm);
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--phone-surface-subtle-lighter);
 }
 .workshop-phone-list-row.active {
   outline: 1px solid var(--screen-glow);
@@ -355,7 +429,7 @@
   height: 16px;
   border-radius: 50%;
   flex-shrink: 0;
-  border: 1px solid rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--phone-border-subtle);
 }
 
 .workshop-phone-being-row {
@@ -364,7 +438,7 @@
   gap: 6px;
   padding: 8px;
   border-radius: var(--radius-sm);
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--phone-surface-subtle-lighter);
   margin-bottom: 6px;
 }
 .workshop-phone-being-row.despawned {
@@ -381,9 +455,9 @@
   flex: 1;
   min-height: 0;
   width: 100%;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--phone-border-subtle);
   border-radius: var(--radius-sm);
-  background: white;
+  background: var(--phone-page-bg);
 }
 
 /* ==========================================================================
@@ -413,7 +487,7 @@
   height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: var(--ink-soft); /* sleeping/unknown — the honest default until refreshStatus() sets a real one */
+  background: var(--phone-ink-soft); /* sleeping/unknown — the honest default until refreshStatus() sets a real one */
 }
 .workshop-phone-presence-dot[data-presence="awake"] {
   background: var(--screen-glow);
@@ -426,7 +500,7 @@
   background: var(--brass);
 }
 .workshop-phone-presence-dot[data-presence="sleeping"] {
-  background: var(--ink-soft);
+  background: var(--phone-ink-soft);
 }
 .workshop-phone-talk-button {
   display: flex;
@@ -437,7 +511,7 @@
   padding: 10px;
   margin-bottom: 6px;
   border-radius: var(--radius-pill);
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--phone-border-subtle);
   background: var(--screen-glow);
   color: #14211d;
   font-weight: 600;
@@ -469,7 +543,7 @@
   padding: 0;
   border: 2px solid transparent;
   border-radius: var(--radius-md);
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--phone-surface-subtle-lighter);
   overflow: hidden;
   cursor: pointer;
   text-align: left;
@@ -486,7 +560,7 @@
 .workshop-phone-outfit-name {
   padding: 6px 8px;
   font-size: var(--text-xs);
-  color: var(--ink);
+  color: var(--phone-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -512,9 +586,9 @@
   gap: 4px;
   padding: 8px 4px;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  background: rgba(0, 0, 0, 0.04);
-  color: var(--ink);
+  border: 1px solid var(--phone-border-subtle);
+  background: var(--phone-surface-subtle);
+  color: var(--phone-ink);
   cursor: pointer;
   font-size: var(--text-xs);
   text-align: center;
@@ -543,8 +617,8 @@
    from that default, so a non-toggle primary button (no `aria-pressed`
    attribute at all, e.g. "I'm Lost!") is untouched by this rule. */
 .workshop-phone-primary-button[aria-pressed="false"] {
-  background: rgba(0, 0, 0, 0.04);
-  color: var(--ink);
+  background: var(--phone-surface-subtle);
+  color: var(--phone-ink);
 }
 .workshop-phone-control-tile[aria-pressed="true"],
 .workshop-phone-small-button[aria-pressed="true"] {
@@ -571,9 +645,9 @@
   width: 100%;
   padding: 10px 4px;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  background: rgba(0, 0, 0, 0.04);
-  color: var(--ink);
+  border: 1px solid var(--phone-border-subtle);
+  background: var(--phone-surface-subtle);
+  color: var(--phone-ink);
   cursor: pointer;
   font-size: var(--text-xs);
   text-align: center;
@@ -600,7 +674,7 @@
   display: flex;
   flex-shrink: 0;
   font-size: 1em;
-  color: var(--ink-soft);
+  color: var(--phone-ink-soft);
 }
 .workshop-phone-browser-addressbar {
   display: flex;
@@ -609,14 +683,14 @@
   padding: 8px 12px;
   margin-bottom: 6px;
   border-radius: var(--radius-pill);
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--phone-border-subtle);
+  background: var(--phone-surface-subtle-lighter);
 }
 .workshop-phone-browser-addressbar-icon {
   display: flex;
   flex-shrink: 0;
   font-size: 1em;
-  color: var(--ink-soft);
+  color: var(--phone-ink-soft);
 }
 .workshop-phone-browser-addressbar input {
   flex: 1;
@@ -624,7 +698,7 @@
   border: none;
   background: none;
   outline: none;
-  color: var(--ink);
+  color: var(--phone-ink);
   font-family: inherit;
   font-size: var(--text-xs);
 }
@@ -634,7 +708,7 @@
   gap: 6px;
   padding: 4px 4px 4px 0;
   border-radius: var(--radius-pill);
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--phone-surface-subtle-lighter);
   flex-shrink: 0;
 }
 .workshop-phone-browser-back-button {
@@ -646,7 +720,7 @@
   border-radius: 50%;
   border: none;
   background: none;
-  color: var(--ink);
+  color: var(--phone-ink);
   cursor: pointer;
   font-size: 1.2em;
   flex-shrink: 0;
@@ -661,7 +735,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--text-xs);
-  color: var(--ink-soft);
+  color: var(--phone-ink-soft);
 }
 
 /* Emotes — the same tap-to-trigger tile grid as Beings' own roster (the
@@ -679,9 +753,9 @@
   width: 100%;
   padding: 10px 4px;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  background: rgba(0, 0, 0, 0.04);
-  color: var(--ink);
+  border: 1px solid var(--phone-border-subtle);
+  background: var(--phone-surface-subtle);
+  color: var(--phone-ink);
   cursor: pointer;
   font-size: var(--text-xs);
   text-align: center;
@@ -715,5 +789,80 @@
 .workshop-phone-settings-header-icon {
   display: flex;
   font-size: 1.2em;
-  color: var(--ink-soft);
+  color: var(--phone-ink-soft);
+}
+
+/* Version 4, Phase 3 ("The Phone's Settings, Made Real") — "live
+   wallpaper previews instead of a generic dropdown." A real colour chip
+   per option (the exact gradient formula `.workshop-phone-content` itself
+   renders, see `SettingsPhoneApp.js`'s own `buildWallpaperPicker()`),
+   not a text-labelled button — genuinely reads as picking a wallpaper,
+   not choosing an item from a list. */
+.workshop-phone-wallpaper-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: var(--space-2);
+}
+.workshop-phone-wallpaper-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+}
+.workshop-phone-wallpaper-swatch-chip {
+  display: block;
+  width: 44px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--phone-border-subtle);
+  transition: box-shadow var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+}
+.workshop-phone-wallpaper-swatch:hover .workshop-phone-wallpaper-swatch-chip {
+  border-color: var(--screen-glow);
+}
+.workshop-phone-wallpaper-swatch.active .workshop-phone-wallpaper-swatch-chip {
+  border-color: var(--screen-glow);
+  box-shadow: 0 0 0 2px var(--screen-glow);
+}
+.workshop-phone-wallpaper-swatch-label {
+  font-size: 0.68rem;
+  color: var(--phone-ink-soft);
+}
+
+/* Same live-swatch idea, reusing `.workshop-phone-swatch` (Wardrobe's own
+   circular colour chip) rather than a second bespoke style — sized up
+   slightly from its usual 16px list-row context, since here it's the
+   primary control, not a secondary decoration next to a name. */
+.workshop-phone-border-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.workshop-phone-border-swatch-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 4px 8px 4px 4px;
+  border-radius: var(--radius-pill);
+  color: var(--phone-ink);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+.workshop-phone-border-swatch-button:hover,
+.workshop-phone-border-swatch-button.active {
+  background: var(--phone-surface-subtle);
+}
+.workshop-phone-border-swatch {
+  width: 20px;
+  height: 20px;
+}
+.workshop-phone-border-swatch-button.active .workshop-phone-border-swatch {
+  box-shadow: 0 0 0 2px var(--screen-glow);
 }

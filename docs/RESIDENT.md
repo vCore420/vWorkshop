@@ -1,12 +1,76 @@
 # The First Resident
 
 "This is not an AI assistant. It is the Workshop's first resident." A
-small, semi-transparent, floating bubble that simply lives in the
-Workshop — present before it's spoken to, still there when Ollama is
-offline, gradually familiar rather than summoned. This document covers
-how it's built; `docs/ARCHITECTURE.md` covers how it fits into the rest
-of the Workshop, `docs/AI.md` covers Mission Control, the configuration
-this resident consumes but never duplicates.
+presence that simply lives in the Workshop — present before it's spoken
+to, still there when Ollama is offline, gradually familiar rather than
+summoned. This document covers how it's built; `docs/ARCHITECTURE.md`
+covers how it fits into the rest of the Workshop, `docs/AI.md` covers
+Mission Control, the configuration a resident consumes but never
+duplicates.
+
+**Version 4, Phase 7 ("Being ↔ Resident Convergence") — Bubble is now a
+real `BeingLibrary` definition/instance, not a singular, hardcoded
+entity.** Most of what this document describes below — movement,
+preferences, curiosity, memory, mood/emotion/personality, Mission
+Control's own configuration surfaces — is entirely unchanged in
+*behaviour*; what changed is *whose per-frame loop drives it* and *whose
+own visual body carries it*. Read this short section first; it's the key
+to every "Corrected, Phase 7" note further down:
+
+- **Embodiment changed completely.** "Decided with Vi: a resident-capable
+  Being keeps its own player-designed visual identity... the resident's
+  own translucent/glowing visual treatment is deliberately not offered as
+  an alternative embodiment" (`docs/BEINGS.md`'s own account of the
+  Phase 6 decision this phase built). Bubble now renders as an ordinary
+  Being body (see `docs/BEINGS.md`), not the semi-transparent floating
+  bubble this document's own "Embodiment," "Resident Embodiments," and
+  "Expression System" sections describe below. That machinery
+  (`ResidentRenderer.js`, `ExpressionSetStore.js`'s own live rendering
+  path) is **real, unmodified, and genuinely orphaned** — nothing in the
+  Workshop constructs a `ResidentRenderer` anymore, for Bubble or any
+  future resident-capable Being, since a Being's own body is what renders
+  now, always. Every section below describing what the bubble's shape,
+  glow, or drawn face currently *does* should be read as "what this
+  mechanism would do, for a resident with no Being body to wear instead"
+  — see each section's own "Corrected, Phase 7" note for exactly what
+  that means today.
+- **`ResidentController.js` and `ResidentEntity.js` were retired, not
+  kept running in parallel** — "one implementation, several doors in"
+  ruled out a second, competing per-frame resident loop. Everything
+  either file used to do now happens inside `BeingController.js`, scoped
+  to any Being instance whose definition has `interactionBehaviour:
+  "aiResident"` and a `residentProfileId` set — Bubble is the Workshop's
+  own first example of one, not a special case the code still checks for
+  by name.
+- **The five flat singleton stores became one, per-instance-keyed
+  store.** `ResidentState`/`ResidentPreferences`/`PlayerPatternMemory`/
+  `ResidentCuriosity`/`ConversationMemory` are the exact same,
+  byte-for-byte unmodified classes this document already describes below
+  — what changed is that `BeingResidentStateStore.js`
+  (`src/beings/BeingResidentStateStore.js`) now owns one fresh bundle of
+  all five per resident-capable Being instance id, instead of `main.js`
+  constructing one shared instance of each and wiring it everywhere by
+  hand. See "Persistence," below, for the saved-shape consequence.
+- **A real gap, found and closed the same phase.** `ResidentController.js`
+  did more than move the resident — it also drove mood drift and the
+  slow preference/pattern/relationship sampling timer described in
+  "Mood, Emotion, and Personality" and "Preferences" below. The first
+  implementation pass ported movement only; a live check against this
+  very document caught that mood and preferences had gone silently inert
+  before the phase closed. `BeingController._updateResidentLife()`/
+  `_driftMood()`/`_samplePatterns()` are the reconstruction — see those
+  sections' own "Corrected, Phase 7" notes.
+- **Version 4, Phase 7a — the smaller gaps Phase 7 named and tallied
+  rather than fixed, closed.** Idle-location weather/clock/project/player
+  weighting ("A quiet habit," "Resident awareness, extended"),
+  personality trait/dial movement multipliers ("Personality Traits,"
+  "Behaviour Dials"), load-time continuity for a `residentTravel` Being
+  ("Bubble Continuity" in `docs/PERSISTENCE.md`), and Bubble's own
+  thinking-sound cue (`docs/AUDIO.md`) are all restored — every section
+  below marked "Corrected, Phase 7" for one of these five now instead
+  reads "Restored, Phase 7a." A sixth, a Mission Control display
+  inconsistency (`docs/AI.md`'s own "Status Card" section), was fixed the
+  same phase though it wasn't a Phase 7 regression.
 
 ## Design philosophy, briefly
 
@@ -14,16 +78,20 @@ this resident consumes but never duplicates.
 someone quietly lived here already?" Three decisions carry that:
 
 1. **It exists before it's spoken to.** There's no spawn/despawn logic
-   anywhere in `ResidentController.js` — the resident is created once,
-   in `init()`, exactly like a piece of furniture, and simply exists for
-   the rest of the session. Walking into the Workshop means walking into
-   its shared home, not summoning a chatbot.
+   tied to conversation anywhere — a resident-capable Being is an
+   ordinary placed `BeingInstanceStore` entry (see "Presence philosophy"
+   below for exactly how Bubble's own gets created), and simply exists
+   for the rest of the session. Walking into the Workshop means walking
+   into its shared home, not summoning a chatbot.
 2. **It consumes Mission Control's configuration; it never duplicates
-   it.** Identity, model, behaviour tuning all come from
-   `ResidentProfileStore.getActive()`, read live, every time they're
-   needed. `ResidentState.js` — the one thing this phase *does* persist
-   about the resident itself — is deliberately narrow: idle location and
-   mood, nothing that already has a home in Mission Control.
+   it.** Identity, model, behaviour tuning all come from the specific
+   `ResidentProfileStore` profile a resident-capable Being's own
+   `residentProfileId` names (`ResidentProfileStore.get(id)` — Version 4,
+   Phase 7 corrected this from the earlier singular `.getActive()`; see
+   the "Version 4, Phase 7" note above), read live, every time they're
+   needed. `ResidentState.js` — the one thing persisted about a resident's
+   own runtime presence — is deliberately narrow: idle location and mood,
+   nothing that already has a home in Mission Control.
 3. **Digital, not magical.** "The resident should feel digital rather
    than magical" ruled out sparkly fairy-dust aesthetics in favour of
    real refraction (`MeshPhysicalMaterial`'s own `transmission`), a
@@ -33,37 +101,61 @@ someone quietly lived here already?" Three decisions carry that:
 ## Architecture: eight small, separated files — plus six more across two phases
 
 `src/resident/`, following the same "separate responsibilities" instinct
-`src/ai/` already established:
+`src/ai/` already established. **Corrected, Version 4 Phase 7:**
+`ResidentEntity.js` and `ResidentController.js` are deleted — retired,
+not kept running in parallel with the Being system (see the "Version 4,
+Phase 7" note at the top of this document). Everything below marked
+"tied together by `BeingController.js` now" is otherwise exactly as
+described; only who constructs it and who drives its per-frame update
+changed.
 
-- **`ResidentEntity.js`** — creates the ordinary ECS `Entity` (a
-  `MeshComponent` for the bubble's own root group, an
-  `InteractableComponent` for "walk up to chat"), wired the *exact* same
-  way `FurnitureSystem.js` wires an `overlayId`-based piece of furniture.
-  The resident needed no new interaction mechanism at all, only a new
-  interactable object using the one that already existed.
 - **`ResidentMovement.js`** — idle-location definitions (hand-placed
   relative to `FURNITURE_LAYOUT`'s own real coordinates, not arbitrary
   points) and the two entirely separate kinds of motion: slow travel
   between them, and continuous procedural bob/rotate/squash-stretch.
+  Reused wholesale, unmodified, by `BeingController._updateResidentTravel()`
+  as a new `"residentTravel"` `BeingBehaviours.js` movement style — see
+  `docs/BEINGS.md`'s own account.
 - **`ResidentBehaviour.js`** — player awareness (a single smoothed
   0-1 `awarenessBlend`, not a combinatorial state machine), the one
-  real mode distinction (idle vs. conversing), and — new this phase —
-  the short-term "emotion" layer; see "Mood, Emotion, Personality" below.
-- **`ResidentRenderer.js`** — the actual Three.js visual: the body (now
-  one of five shapes, see "Resident Embodiments"), its inner glow, its
-  small drawn face, its sparkle particles.
+  real mode distinction (idle vs. conversing), and the short-term
+  "emotion" layer; see "Mood, Emotion, Personality" below. Constructed
+  fresh inside `ResidentConversation.js`'s own `mount()` now, one instance
+  per opened conversation rather than one shared singleton — its own
+  state (mode/mood/expression) has **no visual consumer** for a
+  Being-embodied resident (see `ResidentRenderer.js`, next), kept wired
+  for a future embodiment that might read it again rather than ripped out.
+- **`ResidentRenderer.js`** — the actual Three.js visual described below
+  ("Embodiment," "Resident Embodiments," "Expression System"): the body,
+  its inner glow, its small drawn face, its sparkle particles. **Genuinely
+  orphaned as of Version 4, Phase 7** — nothing in the Workshop
+  constructs one anymore, for Bubble or any other resident-capable Being;
+  see the "Version 4, Phase 7" note at the top of this document.
 - **`ResidentConnection.js`** — a thin adapter over
   `AIConnectionManager`, translating its status into `isAwake` and
   carrying real conversation turns through Ollama's `/api/chat`.
+  Unchanged — still one shared instance, since a connection to Ollama
+  itself isn't per-resident.
 - **`ResidentConversation.js`** — the chat overlay, opened the same way
-  every other physical object's overlay opens.
-- **`ResidentState.js`** — the resident's own small persisted runtime
-  state (idle location, mood).
-- **`ResidentController.js`** — the one engine system tying the rest
-  together every frame, itself owning as little logic as possible.
+  every other physical object's overlay opens. Corrected, Phase 7:
+  resolves *which* Being instance and profile to read from
+  `context.beingInstanceId`/`context.residentProfileId`, passed in by
+  `main.js`'s own `being:interact` listener — one registered overlay
+  genuinely serves any resident-capable Being now, not only Bubble.
+- **`ResidentState.js`** — a resident's own small persisted runtime state
+  (idle location, mood) — unchanged internally; now one fresh instance
+  per resident-capable Being instance id, owned by
+  `BeingResidentStateStore.js` (`src/beings/`) rather than one shared
+  module-level singleton in `main.js`. See "Persistence" below.
+- ~~**`ResidentController.js`**~~ — deleted. Its per-frame work
+  (movement, mood drift, preference/pattern/relationship sampling) now
+  lives in `BeingController.js` (`src/beings/`), scoped per resident-
+  capable Being instance rather than to one hardcoded entity — see
+  `docs/BEINGS.md`'s own account of `_updateResidentTravel()`,
+  `_updateResidentLife()`, `_driftMood()`, and `_samplePatterns()`.
 
 This phase's own four additions follow the identical pattern — one small
-file, one job, read by `ResidentController.js`/`ResidentConversation.js`
+file, one job, read by `BeingController.js`/`ResidentConversation.js`
 the same way everything above already is:
 
 - **`ResidentTraits.js`** — pure functions turning a profile's selected
@@ -99,10 +191,20 @@ the same way everything above already is:
 than implementing its own copies" (from Mission Control's own
 phase) is honoured completely: nowhere in `src/resident/` is there a
 second `temperature` field, a second `model` field, a second identity —
-every one of those is read from `ResidentProfileStore.getActive()` at the
-moment it's needed.
+every one of those is read from the resident-capable Being's own
+`residentProfileId` at the moment it's needed.
 
 ## Embodiment: digital, not magical
+
+**Corrected, Version 4 Phase 7 — this entire section describes
+`ResidentRenderer.js`, which is genuinely orphaned code today** (see the
+"Version 4, Phase 7" note at the top of this document). Left intact below
+rather than deleted: it's real, working, unmodified code, still true of
+what it does when constructed — simply not constructed by anything in the
+Workshop anymore, since a resident-capable Being renders its own player-
+designed body instead. Kept as a reference for a possible future
+"unembodied resident" case (a profile with no Being attached yet) that
+doesn't exist today.
 
 "Semi-transparent bubble, soft internal glow, gentle sparkle effects,
 subtle internal movement, slight refraction, soft ambient lighting, tiny
@@ -147,14 +249,22 @@ eyes evenly and draws a flat, settled mouth (turned inward), while
 ## Presence philosophy
 
 "The resident should exist inside the Workshop at all times. It should
-never feel like it only exists when spoken to." Concretely: the resident
-is created in `ResidentController.init()`, the exact same lifecycle point
-furniture uses, and there is no code path anywhere that removes it from
-the scene during a normal session. Whatever idle location it was last at
-(`ResidentState.idleLocationId`, persisted) is exactly where it's found
-again next time — "returning to the Workshop should feel like returning
-to someone who has continued existing rather than somebody being
-recreated."
+never feel like it only exists when spoken to." Concretely: Bubble is an
+ordinary placed `BeingInstanceStore` entry, spawned by
+`BeingController.js` the exact same lifecycle point every other Being
+(and furniture, before it) uses, and there is no code path anywhere that
+removes her from the scene during a normal session. **Corrected, Version
+4 Phase 7:** she's no longer created directly in an `init()` call — a
+boot-time reconciliation step in `main.js` (right after Beings finish
+spawning) creates her placed instance the first time a save has none,
+idempotently, so a fresh Workshop and a migrated one both end up with
+exactly one Bubble, without ever duplicating her on a later load.
+Whatever idle location she was last at (`ResidentState.idleLocationId`,
+persisted, now inside her own `BeingResidentStateStore` bundle rather
+than a flat top-level field — see "Persistence" below) is exactly where
+she's found again next time — "returning to the Workshop should feel
+like returning to someone who has continued existing rather than
+somebody being recreated."
 
 ## Movement
 
@@ -218,6 +328,24 @@ it chimes is entirely possible now, where it simply couldn't have
 happened before. See `docs/HISTORY.md`'s own retrospective for the full
 reasoning behind choosing this as Version 2's own closing signature.
 
+**Restored, Version 4 Phase 7a.** `_windowWatchWeights()` lived on
+`ResidentController.js`, deleted in Phase 7 along with everything else in
+it — a real, named regression through the end of that phase, since
+`BeingController._updateResidentTravel()` called
+`ResidentMovement.maybePickNewLocation()` with `weights = null`
+(equal-odds) for one phase. `BeingController._residentLocationWeights()`
+is the reconstruction: rain, a windy sky, or golden hour all still pull
+toward the window; a storm or simply nightfall now pulls toward the Quiet
+Corner instead; a few minutes either side of the hour still pulls toward
+the clock — every behaviour this section and "Resident awareness,
+extended" below describe, verified live (a 4,000-trial statistical run
+during a mocked storm picked `besideQuietCorner` roughly twice as often
+as any other location). The exact original multiplier values didn't
+survive `ResidentController.js`'s own deletion — these are reasonable
+reconstructions of the documented *behaviour*, not recovered originals,
+the same honest caveat Phase 7's own mood-drift reconstruction already
+carried.
+
 ## Player awareness
 
 "Looking towards the player when nearby... watching the player walk
@@ -235,14 +363,32 @@ snapping to a fixed "aware"/"unaware" switch.
 
 "Walking up to the resident should allow the player to begin chatting."
 Opened through `InteractableComponent` exactly like any other physical
-object's overlay — no new interaction mechanism. Opening it calls
-`ResidentBehaviour.startConversation()` (forcing `awarenessBlend` to 1
-and pausing idle travel — "the resident should stop moving, turn towards
-the player, maintain attention throughout the conversation"); closing it,
-by any means `OverlayManager` already supports, calls `endConversation()`
-— "after the conversation naturally return to its previous behaviour"
-needed no explicit "resume" logic, since idle travel was only ever paused,
-never reset.
+object's overlay — no new interaction mechanism. **Corrected, Version 4
+Phase 7:** the interact handler is `BeingController.js`'s own generic
+one (every placed Being gets one), and `main.js`'s own `being:interact`
+listener is what actually opens the conversation overlay — checking
+`interactionBehaviour === "aiResident"` and a set `residentProfileId`
+before emitting `interaction:trigger` with `{overlayId:
+"residentConversation", context: {beingInstanceId, residentProfileId}}`
+— rather than `ResidentEntity.js`'s own now-deleted, hardcoded interact
+handler. Opening it still calls `ResidentBehaviour.startConversation()`
+(forcing `awarenessBlend` to 1 — see below for why "pausing idle travel"
+no longer literally happens); closing it, by any means `OverlayManager`
+already supports, still calls `endConversation()`.
+
+**A real, honest simplification, Version 4 Phase 7: idle travel no
+longer pauses during a conversation.** The old `ResidentController.js`
+reached into `ResidentBehaviour`'s own mode to gate its movement update;
+`BeingController.js` has no reach into a conversation overlay's own
+lifecycle from inside its per-frame Being loop, and adding one felt like
+exactly the kind of coupling "avoid tightly coupling these systems
+together" warns against. A resident-capable Being may keep gently easing
+toward a new idle spot while you're mid-conversation with it today —
+visible, honest, and named here rather than silently different from what
+this document used to promise. `startConversation()`/`endConversation()`
+are still called, and `awarenessBlend` still eases to 1 (see
+`_updateResidentTravel()`'s own look-at blend in `docs/BEINGS.md`) — only
+the *movement pause* itself didn't survive the migration.
 
 **A genuinely different overlay material (Version 3, Phase 6).** "The
 dialogue interface should better support watching Bubble while
@@ -326,60 +472,78 @@ experience these five changes are about.
 ## Offline behaviour
 
 "If Ollama is unavailable: the resident should remain inside the
-Workshop. It should never disappear." `ResidentConnection.isAwake` mirrors
-`AIConnectionManager.status` directly — when it's false,
-`ResidentRenderer.setAwake(false)` softens the bubble's own opacity,
-emissive intensity, inner glow, and light — "glow becomes softer" — and
-`ResidentBehaviour.computeExpression()` overrides everything else to
-`"sleeping"` regardless of mood — closed, gently curved eyes, no mouth at
-all.
+Workshop. It should never disappear." `ResidentConnection.isAwake` still
+mirrors `AIConnectionManager.status` directly, and a resident-capable
+Being obviously never disappears when it's false — it's an ordinary
+placed Being, not something spawned or despawned by connection state.
+**Corrected, Version 4 Phase 7:** the *visual* half of this section —
+`ResidentRenderer.setAwake(false)` softening the bubble's own opacity/
+glow/light, `ResidentBehaviour.computeExpression()` overriding to a drawn
+`"sleeping"` face — has no consumer for a Being-embodied resident (see
+the "Version 4, Phase 7" note at the top of this document); a
+resident-capable Being's own appearance doesn't currently change when
+Ollama goes offline.
 
-Interacting with a sleeping resident opens the conversation overlay as
-normal, but shows one calm sentence explaining it's waiting for its
-connection instead of a chat interface — "interaction simply explains
-that it is waiting for its connection," not an error dialog. Mission
-Control's own polling loop keeps trying in the background the entire
-time; nothing about the resident adds a second reconnection attempt of
-its own. The moment `AIConnectionManager.status` flips back to
-`"connected"`, `ResidentController` calls `setAwake(true)` on its very
-next frame — the glow brightens, the sparkle pulse resumes its normal
-pace — "no intrusive notification is necessary," and there isn't one.
+Interacting with a sleeping resident still opens the conversation
+overlay as normal and still shows one calm sentence explaining it's
+waiting for its connection instead of a chat interface — "interaction
+simply explains that it is waiting for its connection," not an error
+dialog — since that's `ResidentConversation.js`'s own honest text path,
+unrelated to the renderer. Mission Control's own polling loop keeps
+trying in the background the entire time; nothing about the resident
+adds a second reconnection attempt of its own.
 
 ## Persistence
 
-`ResidentState.js` is ordinary JSON through the normal `PersistenceSystem`
-path — idle location, mood, and current position, nothing more. Identity,
-model, behaviour tuning, memory, and embodiment settings are all
+`ResidentState.js` is still ordinary JSON, internally unchanged — idle
+location, mood, and current position, nothing more. Identity, model,
+behaviour tuning, memory, and embodiment settings are all
 `ResidentProfileStore`'s own concern already (see `docs/AI.md`);
 duplicating any of them here would be exactly the "implementing its own
 copies" the brief explicitly warned against. Conversation history isn't
-persisted at all this phase — see "Conversation" above.
+persisted at all — see "Conversation" above.
+
+**Corrected, Version 4 Phase 7 — the save shape itself changed.**
+`ResidentState`/`ResidentPreferences`/`PlayerPatternMemory`/
+`ResidentCuriosity`/`ConversationMemory` no longer register as five flat,
+singular `PersistenceSystem` providers (`"residentState"`,
+`"residentPreferences"`, etc.). `BeingResidentStateStore.js`
+(`src/beings/`) is the one provider now (`"beingResidentState"`),
+registered *after* `"beingLibrary"`/`"beingInstances"` — registration
+order matters here, since resolving which bundle belongs to which
+instance needs both to already exist — saving/loading a plain object
+keyed by Being instance id, one full bundle of all five classes per key.
+A save migration (`SaveMigrations.js`, v5→v6) moves an existing player's
+real flat data into this shape, keyed under Bubble's own newly-created
+instance id, rather than resetting it — see `docs/PERSISTENCE.md`'s own
+account of the migration.
 
 **Position persists, including mid-travel** (added in Workshop Polish).
 `currentPosition` is a plain field on `ResidentState`, mutated directly by
-`ResidentController` every frame rather than through an event-emitting
-setter — updating it that often would defeat `PersistenceSystem`'s own
-debouncing entirely; the ordinary autosave/beforeunload cycle already
-captures whatever it happens to be at save time. On load,
-`ResidentMovement`'s constructor accepts this as an optional starting
-position: if it doesn't already match the persisted `idleLocationId`'s own
-fixed point (meaning the resident was mid-journey when the Workshop was
-last saved), it begins a fresh travel from there toward that same
-destination, resuming rather than snapping straight to where it was
-headed or restarting from scratch.
+`BeingController._updateResidentTravel()` every frame (previously
+`ResidentController`) rather than through an event-emitting setter —
+updating it that often would defeat `PersistenceSystem`'s own debouncing
+entirely; the ordinary autosave/beforeunload cycle already captures
+whatever it happens to be at save time. On load, `ResidentMovement`'s
+constructor accepts this as an optional starting position: if it doesn't
+already match the persisted `idleLocationId`'s own fixed point (meaning
+the resident was mid-journey when the Workshop was last saved), it begins
+a fresh travel from there toward that same destination, resuming rather
+than snapping straight to where it was headed or restarting from scratch.
 
 **Facing direction, expression, and connection state** (added in Beings
-Creator) are the same plain-field pattern, but honestly *snapshots only*
-— written every frame, never read back to drive behaviour. The
-resident's actual visual orientation is already recomputed fresh each
-session from its idle location's own look-at target (itself restored via
-`idleLocationId`) plus continuous procedural sway, and its expression and
-connection state must always reflect the live mood and whatever
-`AIConnectionManager.status` genuinely is right now — a stale persisted
-"connected" from last session would be actively misleading rather than
-merely out of date. They exist for continuity and any future
-diagnostic/debug view that wants a "what was last known" read-out without
-needing to query every live system separately.
+Creator) were always *snapshots only* — written every frame, never read
+back to drive behaviour, existing purely for continuity and any future
+diagnostic/debug view. **Honestly, as of Version 4 Phase 7, nothing
+writes them anymore** — `BeingController._updateResidentTravel()` only
+carries forward `currentPosition` above; it doesn't also snapshot
+`facingDirection`/`expression`/`connectionState` the way
+`ResidentController.js` used to. Since nothing ever read them back either
+(true before this phase and still true now), this has no behavioural
+consequence — a genuinely inert field going from "written but unread" to
+"unwritten and unread" — but it's a real, honest gap for the "future
+diagnostic/debug view" this comment already named as their only intended
+consumer, not yet reconnected. See "Known simplifications" below.
 
 ## Personality Traits (long-term identity)
 
@@ -399,11 +563,24 @@ selected trait becomes something concrete — a rest-duration multiplier, an
 awareness-radius multiplier, a bias on certain idle locations, a bias on
 certain expressions — averaged (multipliers) or combined (biases) across
 however many traits are selected, always staying close to neutral (see
-its own comment: "roughly ±25-35%"). `ResidentController._onProfileChanged()`
-reads this once per profile change, not every frame, and hands the
-results to `ResidentMovement.setRestDurationMultiplier()` and to its own
-distance adjustment before calling `ResidentBehaviour.update()` — neither
-of those two files knows a single trait name.
+its own comment: "roughly ±25-35%").
+
+**Fully restored, Version 4 Phase 7a.** `ResidentController._onProfileChanged()`
+— the per-profile-change subscription that used to push these modifiers
+into `ResidentMovement` — is deleted for good; through the end of Phase 7,
+only the `expressionBias` half reached anything (`BeingController._driftMood()`'s
+own mood-weighting, which never stopped working). As of Phase 7a,
+`_updateResidentTravel()` itself resolves `getPersonalityModifiers()`
+fresh every frame (cheap and pure, so no separate "did the profile
+change" tracking is needed) and calls
+`setRestDurationMultiplier()`/`setMovementSpeedMultiplier()`/
+`setMotionDamping()` directly, plus scales the awareness radii by
+`awarenessRadiusMultiplier` — verified live: an extreme test profile
+(Energy and Calmness both at their limits) produced real, correctly
+averaged multiplier values on `ResidentMovement`'s own internal state,
+genuinely different from a neutral profile's `1, 1, 1`. Only
+`locationWeights` needed a second consumer, `_residentLocationWeights()`
+— see "A quiet habit," above.
 
 `traitPersonalityLine(traitsConfig)` (also in `ResidentTraits.js`) is the
 one line this feeds back into conversation — "Your temperament leans
@@ -442,22 +619,29 @@ dramatic" as a hard constraint rather than a suggestion:
   Idle Behaviour's own discrete "Still and Attentive" damping; the two
   multiply together rather than either overriding the other).
 - **Independence** reduces how insistently a favourite location pulls
-  (`favouriteLocationPullMultiplier`, read by `ResidentController.
-  _windowWatchWeights()`) and narrows the effective awareness radius —
-  self-possessed, not aloof.
+  (`favouriteLocationPullMultiplier`) and narrows the effective awareness
+  radius — self-possessed, not aloof. **Restored, Version 4 Phase 7a:**
+  read by `BeingController._residentLocationWeights()`'s own favourite-
+  location boost, and by `_updateResidentTravel()`'s own scaled awareness
+  radii — a real, live effect again, not merely computed.
 - **Talkativeness** widens the effective awareness radius slightly (a
   talkative resident notices someone nearby a little sooner) and
   contributes a short conversational-style line when it leans far enough
   from neutral to be worth saying ("You tend to be talkative, offering
-  fuller answers rather than short ones.").
+  fuller answers rather than short ones.") — the conversational half is
+  unaffected by any of the above; it still reaches the system prompt
+  exactly as described below.
 
 `ResidentContext.getPersonalityModifiers(profile)` is where a profile's
 traits and dials actually combine — `ResidentTraits.mergeModifiers()`
 averages every multiplier across both sources and multiplies weight/bias
-objects together, so `ResidentController.js` never needs to know which
-source produced which number. The same function's own `conversationStyleLine`
-concatenates whatever style hints traits and dials each had to say,
-appended to the system prompt alongside the traits' own personality line.
+objects together, so neither `BeingController.js` nor
+`ResidentConversation.js` ever needs to know which source produced which
+number. The same function's own `conversationStyleLine` concatenates
+whatever style hints traits and dials each had to say, appended to the
+system prompt alongside the traits' own personality line — this half is
+entirely unaffected by anything above; only the movement-facing
+multipliers this function also computes currently go unread.
 
 ## Mood, Emotion, and Personality — three timescales
 
@@ -468,33 +652,52 @@ purpose, rather than one field trying to mean all three:
 - **Personality** (long-term, essentially fixed for as long as a profile
   stays configured that way) is the selected traits above — nothing here
   changes on its own.
-- **Mood** (medium-term) is `ResidentState.mood` — persisted, and now
-  genuinely alive: `ResidentController._maybeDriftMood()` reconsiders it
-  every two-to-five minutes (`MOOD_DRIFT_MIN_SECONDS`/`MAX_SECONDS`), a
-  weighted pick among `content`/`curious`/`happy` biased by the resident's
-  own selected traits, by whether its accumulated favourite weather or
-  time of day happens to be true right now, and — heavily — by whatever
-  mood it already is, so it settles rather than flickers between
-  reconsiderations. This is deliberately not a per-message mood computed
-  from conversation sentiment or anything similarly elaborate — "subtle
-  behaviour changes are preferable to obvious state changes." Version 3
-  Phase 11 gave it its first surfacing outside the resident itself: the
-  Browser Home page's own Residents tile (`WorkshopPages.js`'s
-  `homePage()`) reads it alongside the existing "Continuing: [project]"
-  line, via `ExpressionTypes.getExpressionType()`'s own label lookup
-  rather than a second mood-label map.
+- **Mood** (medium-term) is `ResidentState.mood` — persisted, and
+  genuinely alive: `BeingController._driftMood()` (previously
+  `ResidentController._maybeDriftMood()` — retired along with the rest of
+  that file, reconstructed for Version 4 Phase 7 after a live check found
+  the first implementation pass had ported movement but let this go
+  silently inert) reconsiders it every two-to-five minutes
+  (`MOOD_DRIFT_MIN_SECONDS`/`MAX_SECONDS`), a weighted pick among
+  `content`/`curious`/`happy` biased by the resident's own selected
+  traits/dials (`ResidentContext.getPersonalityModifiers()`'s own
+  `expressionBias` — see "Personality Traits" above), by whether its
+  accumulated favourite weather or time of day happens to be true right
+  now, and — heavily — by whatever mood it already is, so it settles
+  rather than flickers between reconsiderations. Verified live this
+  phase: driven through roughly 53 simulated minutes, Bubble's own mood
+  genuinely cycled through `neutral → happy → curious → content → happy →
+  content → curious → happy → content`. This is deliberately not a
+  per-message mood computed from conversation sentiment or anything
+  similarly elaborate — "subtle behaviour changes are preferable to
+  obvious state changes." Version 3 Phase 11 gave it its first surfacing
+  outside the resident itself: the Browser Home page's own Residents tile
+  (`WorkshopPages.js`'s `homePage()`) reads it alongside the existing
+  "Continuing: [project]" line, via `ExpressionTypes.getExpressionType()`'s
+  own label lookup rather than a second mood-label map — unaffected by
+  anything this phase changed, and (now that mood drifts again) genuinely
+  live once more rather than frozen.
 - **Emotion** (short-term) is `ResidentBehaviour.emotion` — never
   persisted, set by `triggerEmotion(expression, seconds)` and decaying
   back to nothing on its own. The one place this is actually called is
   `ResidentConversation.js`, right as a conversation opens: a brief
   `"curious"` blip if `ResidentCuriosity` has something to say, a brief
   `"happy"` one otherwise — "small changes should carry meaning," not a
-  new permanent state.
+  new permanent state. Still called exactly this way, Version 4 Phase 7
+  onward — `ResidentBehaviour` is simply constructed fresh per
+  conversation now rather than injected as a shared singleton.
 
-`ResidentBehaviour.computeExpression()`'s own priority order is exactly
-"short-term overrides medium-term overrides long-term default":
+`ResidentBehaviour.computeExpression()`'s own priority order is still
+exactly "short-term overrides medium-term overrides long-term default":
 `sleeping` (offline) > `thinking` (mid-reply) > `emotion` (if one's
-currently active) > `mood` > `"content"`.
+currently active) > `mood` > `"content"`. **Corrected, Version 4 Phase
+7:** this whole computation has no visual consumer today for a
+Being-embodied resident — see the "Version 4, Phase 7" note at the top of
+this document and `ResidentRenderer.js`'s own entry in "Architecture,"
+above. The mood/emotion *data* is real and genuinely live (mood drifts,
+emotion still triggers and decays); only the drawn face that used to
+display the result of this priority order doesn't exist for a Being
+today.
 
 ## Preferences
 
@@ -502,13 +705,22 @@ currently active) > `mood` > `"content"`.
 weather, times of day, music, activities... weighted choices are
 preferred [over rigid rules]." `ResidentPreferences.js` holds four plain
 `{key: count}` bags (`locations`, `weather`, `timeOfDay`, `activities`),
-bumped a little at a time as Bubble actually goes about its ordinary idle
-life — arriving somewhere (`ResidentController.update()`, right where it
-already calls `ResidentState.setIdleLocation()`), and on a slow shared
-timer (`_maybeSamplePatterns()`, every `PATTERN_SAMPLE_INTERVAL` seconds)
-that also notices the current weather, time of day, and whether music is
-playing nearby (`MusicSystem.isPlaying`) or the window's currently worth
-watching.
+bumped a little at a time as a resident-capable Being actually goes about
+its ordinary idle life — arriving somewhere
+(`BeingController._updateResidentTravel()`, right where it already calls
+`ResidentState.setIdleLocation()`), and on a slow shared timer
+(`BeingController._samplePatterns()`, every `PATTERN_SAMPLE_INTERVAL`
+seconds) that also notices the current weather, time of day, and whether
+music is playing nearby (`MusicSystem.isPlaying`) or the window's
+currently worth watching. **Corrected, Version 4 Phase 7:** this used to
+be `ResidentController.update()`/`_maybeSamplePatterns()`, hardcoded to
+the one singular Bubble; the reconstruction (a live check against this
+document caught that the first implementation pass had ported movement
+only and let this go silently inert — see the "Version 4, Phase 7" note
+at the top of this document) applies to any resident-capable Being
+instance, verified live over roughly 53 simulated minutes: weather,
+time-of-day, location, and activity bags all genuinely accumulated real
+counts.
 
 `favourite(dimension)` (via the shared `AffinityTracker.leadingAffinity()`
 — see "A quiet familiarity, shared" below) only ever returns something
@@ -521,26 +733,39 @@ one-time seed toward one weather state matching its own selected traits
 `EmbodimentConfiguration.js`'s default teal colour already carries, not a
 rule that overrides what actually happens afterward.
 
-Favourites feed back into the same `_windowWatchWeights()` idle-location
-weighting traits already use (a favourite place gets a real, if modest,
-boost) and into `_maybeDriftMood()` (enjoying a favourite weather or time
-of day right now nudges mood toward `happy`) — "Daily Habits" (watching
-the sunrise, watching rain, floating near the record player while music
-plays, returning to favourite spots) is the *visible result* of this
-system, not a separate routine that had to be built on top of it.
+Favourites used to feed back into `_windowWatchWeights()`'s own
+idle-location weighting (a favourite place getting a real, if modest,
+boost toward being picked again) — **corrected, Version 4 Phase 7: this
+specific feedback loop doesn't run today**, since `_windowWatchWeights()`
+itself no longer exists (see "A quiet habit"'s own correction, above).
+Favourites still feed into `_driftMood()` (enjoying a favourite weather
+or time of day right now nudges mood toward `happy`) — verified live,
+genuinely working. "Daily Habits" (watching the sunrise, watching rain,
+floating near the record player while music plays, returning to
+favourite spots) is, once again as of Version 4 Phase 7a, the *visible
+result* of this system — both halves genuinely work: the noticing and
+accumulating (surfacing in conversation via
+`ResidentContext.buildPreferenceLine()`), and the *movement* half, a
+genuine favourite-location pull inside
+`BeingController._residentLocationWeights()`, restored after one phase
+offline.
 
 **Living World phase: a fifth bag, `relationships`.** "Residents should
 become aware of one another... who they spend time near." With a single
 AI resident, "one another" today means Bubble and the Workshop's own
 Beings — keyed by Being instance id, bumped by the same
-`_maybeSamplePatterns()` timer whenever Bubble genuinely idles within a
-few metres of one (`BEING_AWARENESS_RADIUS` in `ResidentController.js`).
-"Relationships should remain lightweight during this phase but provide a
-strong architectural foundation for future development" is true by
-construction — this is the identical `bump()`/`favourite()` mechanism
-every other dimension already uses, so a second AI resident later needs
-no new relationship system of its own, only its own instance of this
-same class.
+`BeingController._samplePatterns()` timer (previously
+`ResidentController._maybeSamplePatterns()`) whenever a resident-capable
+Being genuinely idles within a few metres of another placed Being
+(`RELATIONSHIP_AWARENESS_RADIUS` in `BeingController.js`, previously
+`BEING_AWARENESS_RADIUS` in `ResidentController.js`) — verified live this
+phase with a Being placed deliberately nearby. "Relationships should
+remain lightweight during this phase but provide a strong architectural
+foundation for future development" is true by construction — this is the
+identical `bump()`/`favourite()` mechanism every other dimension already
+uses, so a second AI resident later needs no new relationship system of
+its own, only its own instance of this same class (which, as of Phase 7,
+is exactly what a second resident-capable Being genuinely gets).
 
 ## Behaviour Memory
 
@@ -548,9 +773,11 @@ same class.
 only conversations... the player often builds near the workbench...
 usually visits in the evening... frequently sits in the Quiet Corner...
 the goal is quiet familiarity rather than prediction." This is
-specifically about the *player*, not Bubble — `PlayerPatternMemory.js`,
-a sibling of `ResidentPreferences.js` in shape (the same two-bag,
-`leadingAffinity()`-gated pattern), sampled by the same slow timer.
+specifically about the *player*, not the resident itself —
+`PlayerPatternMemory.js`, a sibling of `ResidentPreferences.js` in shape
+(the same two-bag, `leadingAffinity()`-gated pattern), sampled by the
+same slow timer (`BeingController._samplePatterns()`, Version 4 Phase 7
+onward — previously `ResidentController._maybeSamplePatterns()`).
 
 Four named zones (`workbench`, `computerDesk`, `quietCorner`,
 `musicCabinet`), positioned from `FURNITURE_LAYOUT`'s own real
@@ -616,8 +843,9 @@ object" note doesn't repeat forever once it's been mentioned once.
 ## Continuity (Version 3, Phase 11)
 
 Related to curiosity but distinct: `ResidentContext.buildContinuityLine()`
-turns the shared `WorldTimeService.getContinuity()` result (already used
-by `ResidentController`/`BeingController` for on-load repositioning; see
+turns the shared `WorldTimeService.getContinuity()` result (used by
+`BeingController._applyContinuity()` for on-load repositioning — Version
+4 Phase 7 retired the separate `ResidentController` copy of this; see
 docs/PERSISTENCE.md) into one line about *how long the gap itself was*,
 handed to `composeSystemPrompt()`'s own `context.continuityLine`. A first
 session gets an honest "meeting them for the first time" line rather
@@ -626,6 +854,20 @@ ten minutes," "a few hours") rather than a raw duration, optionally
 joined with `PlayerPatternMemory.leadingWorkingHours()`. See
 docs/AI.md's own fuller account for exactly why this reads a shared
 value rather than computing its own.
+
+**A small, honest note, Version 4 Phase 7:** `_applyContinuity()`'s own
+generic reposition (a fresh wander-target point within home radius) and
+`residentTravel`'s own mid-journey resume (`ResidentMovement`'s
+constructor, "Position persists, including mid-travel" above) both fire
+for a resident-capable Being on load, but the second effectively wins —
+`_updateResidentTravel()` overwrites the position with whatever
+`ResidentMovement` itself computes on the very next update, since it has
+no awareness `_applyContinuity()` just ran. Harmless (no visible glitch,
+no crash — the resident's own real continuity logic was always the
+authoritative one here) but worth naming rather than leaving implicit,
+since "Beings should also begin participating in world continuity" reads
+as though it applies uniformly, and for this one movement style it's
+quietly a no-op.
 
 ## Conversation Memory
 
@@ -755,11 +997,11 @@ Attentive" damps the existing bob/sway/rotation to a bare minimum
 even at rest" standard elsewhere), "Slow Rotate" layers a genuine
 continuous turn on top of the existing gentle oscillation.
 
-`ResidentController._onProfileChanged()` is what actually pushes an
-updated embodiment to the renderer — subscribed to
-`ResidentProfileStore`'s own `"residents:changed"` event, so an edit made
-in Mission Control while Bubble is already alive in the room takes effect
-immediately, not just on next load.
+`ResidentController._onProfileChanged()` used to be what pushed an
+updated embodiment to the renderer this way. **Genuinely inert as of
+Version 4 Phase 7** — see the "Version 4, Phase 7" note at the top of
+this document; there's no `ResidentRenderer` for anything to push to
+anymore.
 
 ## Expression System (Workshop Personality phase)
 
@@ -833,12 +1075,13 @@ against a separate store elsewhere" shape `provider`/`model` already
 use, and exactly why this is "the reference implementation for [the]
 shared [resident] architecture": a future second resident's own profile
 would carry its own `expressionSetId` the same way, no new mechanism
-required. `ResidentController._onProfileChanged()` resolves it (falling
-back to `null`/built-in for `"default"` *or* for a set id that no
-longer resolves to anything real — see `ExpressionSetStore.js`'s own
+required. `ResidentController._onProfileChanged()` used to resolve it
+(falling back to `null`/built-in for `"default"` *or* for a set id that
+no longer resolves to anything real — see `ExpressionSetStore.js`'s own
 comment on why a missing reference is an expected, honestly-handled
-case, not an error) and hands the result to `ResidentRenderer
-.setExpressionSet()`; a second listener on `ExpressionSetStore`'s own
+case, not an error) and hand the result to `ResidentRenderer
+.setExpressionSet()` — genuinely inert as of Version 4 Phase 7, the same
+as the embodiment push above. A second listener on `ExpressionSetStore`'s own
 `"expressionSets:changed"` event means editing the *contents* of the
 currently-active set (drawing a new pixel expression, say) updates
 Bubble live, not just switching which set is active.
@@ -936,10 +1179,11 @@ Continuing the account above:
   other choice honestly says so rather than pretending to connect. See
   `src/ai/ProviderRegistry.js` and docs/AI.md's own "Additional Providers"
   section.
-- **Behaviour Dials** (new) — genuinely active; combined with traits by
-  `ResidentContext.getPersonalityModifiers()` into movement, awareness,
-  idle-location weighting, and a system-prompt style line. See "Behaviour
-  Dials" above.
+- **Behaviour Dials** (new) — combined with traits by
+  `ResidentContext.getPersonalityModifiers()` into a system-prompt style
+  line and into movement/awareness/idle-location-weighting multipliers —
+  both genuinely active as of Version 4 Phase 7a; see "Behaviour Dials"
+  and "Personality Traits" above for the full account.
 - **Memory categories and lifetimes** (new) — both genuinely read by
   `ConversationMemory.js`; see "Conversation Memory" above.
 - **Resident Sandbox / Resident Health** (new, in `AIApp.js` itself, not
@@ -974,18 +1218,35 @@ const state = worldAwareness.snapshot();
 //   room: "workshop",
 //   activeProjects: [...],
 //   nearbyBeings: [...],
-//   residentMood: "content" | ...,
 //   recentEvents: [...] }
 ```
 
+**Corrected, Version 4 Phase 7: `residentMood` was already dropped
+before this phase, and this class no longer takes a `residentState`
+dependency at all** — a grep confirmed zero consumers of the field
+anywhere in the codebase even before Bubble's own migration, genuinely
+dead data cleaned up as part of this phase's own retirement of the flat
+singleton stores, not a loss caused by it.
+
 **Deliberately query-based, not event-based** — `snapshot()` is called
-whenever a consumer actually wants to know something
-(`ResidentController.js`'s own slow pattern-sampling timer, currently the
-only real consumer), not fired continuously. A future consumer wanting
-to react the *instant* something changes should listen to the same
-underlying events this class itself reads from (`environment:changed`,
-`timeofday:changed`, and so on) — `WorldAwareness` summarises their
-current state on demand, it doesn't wrap or replace them.
+whenever a consumer actually wants to know something, not fired
+continuously. **Corrected, Version 4 Phase 7:** the slow per-frame
+pattern-sampling timer this used to name as the one real consumer
+(`ResidentController._maybeSamplePatterns()`) no longer calls into
+`WorldAwareness` at all — its reconstruction,
+`BeingController._samplePatterns()`, reads `EnvironmentSystem`/
+`TimeOfDaySystem`/`MusicSystem` directly instead (the simpler, original
+dependency shape this class itself was factored out of — see this
+section's own opening paragraph), matching what it actually needs
+without pulling in fields (`nearbyBeings`, `room`, `recentEvents`) it has
+no use for. `WorldAwareness`'s own real, live consumer today is
+`ResidentContext.buildWorldKnowledgeLine()`, called once per opened
+conversation (or Resident Sandbox preview) — a query at a specific
+moment, not a polling loop. A future consumer wanting to react the
+*instant* something changes should listen to the same underlying events
+this class itself reads from (`environment:changed`, `timeofday:changed`,
+and so on) — `WorldAwareness` summarises their current state on demand,
+it doesn't wrap or replace them.
 
 **Every dependency is optional, every field degrades gracefully** — a
 Workshop with no `musicSystem` wired in still gets a valid snapshot back
@@ -1035,6 +1296,18 @@ separate one.
 
 ### Resident awareness, extended
 
+**Restored, Version 4 Phase 7a, the same way and for the same reason as
+"A quiet habit," above** — every behaviour below now lives in
+`BeingController._residentLocationWeights()`, verified live (a player
+mock positioned at the workbench genuinely doubled its own weight,
+stacking multiplicatively with an active project's own boost). One small,
+honest implementation difference from the original: "remaining near
+ongoing projects" reads `projectsStore.byStatus("active")` directly
+rather than through `WorldAwareness.snapshot().activeProjects` — matching
+the same "read the system directly, not through the broader snapshot"
+pattern `_samplePatterns()` already established for weather/time/music
+(see "Preferences," above), not a second, inconsistent choice.
+
 Three new small, believable behaviours, each layered directly into the
 exact weighted-merge mechanism `_windowWatchWeights()` already used for
 window-watching and favourite places — "everything should quietly
@@ -1062,10 +1335,10 @@ Corner — sheltering, reusing the identical pull night already
 established rather than inventing a second one. `WorldAwareness.snapshot()`
 also gained a `season` field this phase (`Astronomy.getSeason()`,
 read-only, computed fresh from the real calendar date) — nothing
-currently reads it from `ResidentController.js`; it's there for a future
-phase that wants Bubble to notice the season the same way it already
-notices weather and time. See `docs/ATMOSPHERE.md`'s "Living World
-Integration" section for the fuller account.
+currently reads it; it's there for a future phase that wants a resident
+to notice the season the same way it already notices weather and time.
+See `docs/ATMOSPHERE.md`'s "Living World Integration" section for the
+fuller account.
 
 None of these are guarantees — every one is one more weighted option
 among several in the same ordinary `maybePickNewLocation()` pick idle
@@ -1074,10 +1347,18 @@ own brief asks for.
 
 ## Known simplifications (by design, for this phase)
 
-- **One resident, not several** — `ResidentController` assumes a single
-  bubble; `docs/AI.md`'s own multiple-profile support already lets
-  someone configure several *personalities*, but only the active one is
-  ever embodied at once this phase.
+- ~~**One resident, not several**~~ — **resolved, Version 4 Phase 7.**
+  This used to name `ResidentController`'s own single-bubble assumption
+  as a real architectural limit; that file is deleted, and any number of
+  Being definitions can now set `interactionBehaviour: "aiResident"` with
+  their own `residentProfileId`, each getting a fully independent
+  `BeingResidentStateStore` bundle (own mood, own preferences, own
+  conversation memory). Verified live this phase: a second resident-
+  capable Being, distinct from Bubble, held a genuinely separate
+  conversation with a genuinely separate profile name, and
+  `beingResidentStateStore.get()` returned two different bundle objects
+  for the two instances. See the "Version 4, Phase 7" note at the top of
+  this document, and `docs/BEINGS.md`'s own account.
 - **No voice** — text only, matching "Voice" being listed as an explicit
   future capability, not this phase's own.
 - **Conversation Memory's extraction is heuristic, not semantic** — three
@@ -1130,21 +1411,31 @@ own brief asks for.
   colour** — `WorldEventLog` is a memory, not a trigger; nothing currently
   changes behaviour *because* an event was logged, only because the
   underlying world state (weather, time, an active project) itself
-  changed, which `_windowWatchWeights()` already reads independently.
+  changed — read, before Version 4 Phase 7, by `_windowWatchWeights()`;
+  see "A quiet habit"'s own Phase 7 correction for why that reading
+  doesn't currently happen either.
 
 ## Future extension points
 
-- **Multiple residents** — `ResidentController` constructing more than
-  one `ResidentMovement`/`ResidentRenderer`/entity pair, one per active
-  profile a person wants embodied at once, is the natural next step;
-  nothing about the current architecture assumes exactly one. Each of
-  this phase's own new files (`ResidentTraits`, `ResidentPreferences`,
-  `ResidentCuriosity`) already takes a profile/instance as an argument
-  rather than assuming a singleton, which is what would make this
-  tractable. The Workshop Personality phase's own `expressionSetId`
-  joins this list — already a plain per-profile reference, resolved
-  fresh by whoever renders that profile, exactly the shape a second
-  simultaneously-embodied resident would need.
+- ~~**Multiple residents**~~ — **built, Version 4 Phase 7, not just
+  investigated.** This bullet used to track a Version 4 Phase 6
+  investigation into whether `ResidentTraits`/`ResidentPreferences`/
+  `ResidentCuriosity`/`ConversationMemory` could genuinely support more
+  than one resident, and named five concrete blockers standing in the
+  way (`ResidentController` always reading `.getActive()`, `ResidentEntity.js`
+  hardcoding a single entity name and overlay id, one fixed overlay
+  registration closed over shared singletons, flat singular persistence
+  keys, and `ConversationMemory` needing real restructuring). All five
+  are gone: `ResidentController.js`/`ResidentEntity.js` are deleted,
+  `ResidentConversation.js` resolves instance/profile from its own
+  `context` argument, `BeingResidentStateStore.js` gives every
+  resident-capable Being instance its own persistence key, and
+  `ConversationMemory` is now one fresh instance per bundle (its own
+  internal code needed no changes at all — confirmed in the Phase 6
+  investigation, and true in the shipped result). See the "Version 4,
+  Phase 7" note at the top of this document, the "One resident, not
+  several" entry above (now resolved), and `docs/BEINGS.md`'s own
+  account of the shipped architecture.
 - **Real triggers for `sad` and `surprised`** — both fully exist in the
   vocabulary and the Expression Creator today; what's missing is an
   honest, well-motivated *reason* for either to appear automatically
@@ -1188,16 +1479,21 @@ own brief asks for.
   narrow, two-mode state machine is deliberately simple; a future
   behaviour system could layer richer states on top without touching
   `ResidentMovement`/`ResidentRenderer` at all.
-- **Event-driven `WorldAwareness` consumers** — today's one real consumer
-  (`ResidentController.js`) only ever polls on its own slow timer; a
-  future system wanting to react the instant something changes has the
-  identical underlying events (`environment:changed`,
-  `timeofday:changed`, `worldEvents:changed`) already available to listen
-  to directly.
-- **Beings reading `WorldAwareness` too** — `BeingController.js` doesn't
-  consume it yet; a Being noticing the weather or an active project would
-  follow the exact same pattern `ResidentController.js` already
-  establishes, not a new one.
+- **Event-driven `WorldAwareness` consumers** — today's real consumer
+  (`ResidentContext.buildWorldKnowledgeLine()`, queried once per opened
+  conversation — see "World Awareness"'s own Phase 7 correction, above)
+  only ever polls on demand; a future system wanting to react the instant
+  something changes has the identical underlying events
+  (`environment:changed`, `timeofday:changed`, `worldEvents:changed`)
+  already available to listen to directly.
+- **Beings reading `WorldAwareness` too** — `BeingController.js` reads
+  `EnvironmentSystem`/`TimeOfDaySystem`/`MusicSystem` directly for its own
+  pattern-sampling timer (Version 4 Phase 7 — see "Preferences" above),
+  not through `WorldAwareness`; a Being wanting the *richer* fields only
+  `WorldAwareness.snapshot()` computes (`nearbyBeings`, `activeProjects`,
+  `recentEvents`) would still be new wiring, just no longer needing
+  `ResidentController.js` as a pattern to imitate, since that file no
+  longer exists.
 - **A real room lookup for `WorldAwareness.room`**, the moment a second
   room exists to distinguish.
 

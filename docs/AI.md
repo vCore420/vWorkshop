@@ -73,13 +73,19 @@ now more than ever, since a real resident (Bubble) already does exactly
 that.
 
 `AIApp.js` (the Mission Control application itself) is the one place that
-knows about all of them at once, plus this phase's own new reads:
-`residentBehaviour`/`residentState` (for Resident Health),
-`residentConnection`/`ConversationMemory`/`ResidentCuriosity`/
-`ResidentPreferences`/`PlayerPatternMemory` (for the Sandbox). It still
-owns no state of its own beyond which section is expanded and its own
-sandbox conversation — the same "app renders a store, doesn't duplicate
-it" shape every other Workshop app already follows.
+knows about all of them at once, plus (Resident Health, Sandbox)
+`residentConnection` and — **corrected, Version 4 Phase 7** —
+`beingLibrary`/`beingInstanceStore`/`beingResidentStateStore` rather than
+the five flat singleton stores this used to name directly
+(`residentBehaviour`/`residentState`/`ConversationMemory`/
+`ResidentCuriosity`/`ResidentPreferences`/`PlayerPatternMemory`). A small
+`bubbleBundle()` helper resolves Bubble's own current instance and
+resident-state bundle via `DefaultBeings.BUBBLE_DEFINITION_ID`, the same
+way every other Phase 7 consumer of hers does — see `docs/BEINGS.md`'s
+own "AI Residents as a Being type" account. It still owns no state of its
+own beyond which section is expanded and its own sandbox conversation —
+the same "app renders a store, doesn't duplicate it" shape every other
+Workshop app already follows.
 
 ## Connection
 
@@ -257,14 +263,16 @@ neutral), each shown as a slider with plain-language endpoints ("Reserved
 ↔ Talkative") rather than a bare number. `src/resident/ResidentDials.js`
 turns a dial's *deviation* from neutral into a small modifier — never
 more than roughly ±30–40% at the extremes — combined with the discrete
-traits above by `ResidentContext.getPersonalityModifiers()` into the one
-set of numbers `ResidentController.js` actually applies to movement,
-awareness, and idle-location weighting. See docs/RESIDENT.md's own
-"Behaviour Dials" section for exactly how each dial maps onto something
-real, including movement pace (Energy), motion damping (Calmness), and a
-short conversational-style line woven into the system prompt
-(Talkativeness/Playfulness/Reflection/Calmness/Energy, when they lean far
-enough from neutral to be worth saying).
+traits above by `ResidentContext.getPersonalityModifiers()` into one set
+of numbers, applied to a resident-capable Being's mood drift
+(`BeingController._driftMood()`), its own movement pace/rest duration/
+motion damping/awareness radius (`_updateResidentTravel()`, restored
+Version 4 Phase 7a after one phase computed-but-unread — see
+docs/RESIDENT.md's own "Personality Traits" and "Behaviour Dials"
+sections for the full account), and a short conversational-style line
+woven into the system prompt (Talkativeness/Playfulness/Reflection/
+Calmness/Energy, when they lean far enough from neutral to be worth
+saying) — every one of these genuinely live today.
 
 Traits and dials are deliberately complementary, not overlapping: traits
 are "which flavour" (a small, named archetype), dials are "how strongly"
@@ -406,10 +414,13 @@ without asking, a Workshop Function is what it *does*.
 naturally begin feeling different because of the choices made within
 them." `WorldTimeService` already computed exactly "how long was the
 player away" (`getContinuity()` returning `{isFirstSession,
-cappedElapsedSeconds}`) for `ResidentController`/`BeingController` to
-reposition things plausibly on load; this reads the same already-
-resolved value into conversation too, rather than inventing a second
-continuity mechanism. A first-ever session gets its own honest greeting
+cappedElapsedSeconds}`) for `BeingController` to reposition things
+plausibly on load (`ResidentController` did the same, independently,
+before Version 4 Phase 7 retired it — see docs/PERSISTENCE.md's own
+"Bubble Continuity" correction for why that specific repositioning didn't
+survive the migration intact); this reads the same already-resolved
+value into conversation too, rather than inventing a second continuity
+mechanism. A first-ever session gets its own honest greeting
 ("you're meeting them for the first time") instead of a fabricated gap.
 Otherwise a short, bucketed phrase ("about ten minutes," "a few hours,"
 "most of a day" — never a raw number, which would read as a clock, not
@@ -445,7 +456,11 @@ claimed — see `docs/ROADMAP.md`'s own Phase 8b account.
 **One genuine bug caught only by driving real per-frame movement rather
 than trusting the first frame's state** (see `.claude/DEV_NOTES.md`'s
 own standing warning about exactly this): `ResidentController`'s own
-arrival check for `moveTo` originally compared full 3D distance, but
+arrival check for `moveTo` — the equivalent logic lives in
+`BeingController._updateResidentTravel()`'s own `"goto"` branch as of
+Version 4 Phase 7, unaffected by this historical fix, since it inherited
+the corrected horizontal-only comparison directly — originally compared
+full 3D distance, but
 `ResidentMovement.stepToward()` deliberately moves along the ground
 plane only (it zeroes the Y component of its own direction vector) —
 whenever a target's Y didn't closely match the resident's own natural
@@ -470,8 +485,12 @@ Genuinely isolated from the real conversation:
   with its own button, never touching what Bubble itself remembers of
   actual conversations.
 - **Never calls `residentBehaviour.triggerEmotion()`/`setThinking()`** —
-  a sandbox test never causes Bubble's actual presence in the room to
-  react, turn, or show a thinking expression.
+  a sandbox test never touches the real conversation's own
+  `ResidentBehaviour` instance at all. (As of Version 4 Phase 7, neither
+  call currently has a visible effect even in the real conversation — see
+  docs/RESIDENT.md's own "Mood, Emotion, and Personality" correction —
+  but the isolation itself is unaffected: a sandbox test still can't
+  reach or mutate anything the real conversation owns.)
 - **Never writes to `ConversationMemory`** — a test message is never
   scanned for a project mention, preference, or goal the way a real
   message would be. "Memory Inspection" is read-only: the Sandbox shows
@@ -555,6 +574,24 @@ calm, honest follow-up line — "Embodied as Bubble... its appearance and
 traits above are already reflected there" once connected, since that's
 been true since the previous phase.
 
+**Fixed, Version 4 Phase 7a.** Through the end of Phase 7, "the active
+profile" above meant Mission Control's own `ResidentProfileStore.getActive()`
+— which profile is currently open for *editing* — not necessarily
+whichever profile Bubble's own `residentProfileId` actually points to.
+The two were the same by default, but a player who created a second
+profile and clicked it "active" for editing would see the Status Card's
+own name/model/provider reflect *that* profile while the Resident Health
+grid's mood/location below it kept reading Bubble's own real, unrelated
+bundle — a real, narrow inconsistency, not a crash. `AIApp.js` now
+resolves a new `residentDefinitionProfile()` helper — Bubble's own real
+profile, via her Being definition's `residentProfileId` — for the Status
+Card and Health grid specifically, regardless of which profile is
+"active" for editing; every editing section below still reads
+`activeProfile()` exactly as before. Verified live: with a second profile
+created and made active for editing, the Status Card and Health grid
+correctly kept showing Bubble's own real name/model/provider, while the
+Identity section below correctly showed the newly active profile.
+
 ## Mission Control Integration
 
 "Please ensure every major Mission Control setting now has a meaningful
@@ -594,10 +631,20 @@ complete account, section by section:
   to one fixed tier — the seam (`CATEGORY_LIFETIMES`) is already a plain
   map keyed by category id, ready for a future per-category selector.
 - **Multiple residents, resident relationships, shared memories, resident
-  collaboration** — `ResidentPreferences`/`PlayerPatternMemory`/
-  `ConversationMemory` are all written against a resident/profile
-  instance rather than assuming a singleton (see docs/RESIDENT.md's own
-  "Future extension points"), which is what would make this tractable.
+  collaboration** — **corrected, Version 4 Phase 6:** this used to claim
+  `ResidentPreferences`/`PlayerPatternMemory`/`ConversationMemory` are
+  "all written against a resident/profile instance rather than assuming
+  a singleton." Verified directly and that's not accurate today — all
+  three currently assume a singleton in their actual wiring (zero-arg
+  constructors, one shared `main.js` instance each, flat persistence
+  keys), and `ConversationMemory`'s own header comment self-admits it
+  isn't even conceptually segmented per profile yet. What *would* make
+  this tractable is real, scoped: re-key `ResidentPreferences`/
+  `PlayerPatternMemory` per instance (their own internal logic doesn't
+  need to change) and give `ConversationMemory` the restructuring it
+  actually needs. See `docs/RESIDENT.md`'s own corrected "Multiple
+  residents" entry and `docs/ROADMAP.md`'s Phase 6 account for the full,
+  concrete investigation.
 - **Advanced embodiment** — a truly custom shape (an imported model,
   perhaps reusing `ModelLoader.js` the way Beings already do) for the
   `custom` embodiment type, which currently honestly falls back to the

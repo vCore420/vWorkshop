@@ -262,6 +262,14 @@
    not a pretend zero" trick `.builder-phone-row input[type="number"]`'s
    own `width: 0` already uses one screen over. */
 .panel-row input[type="range"] { flex: 1; min-width: 0; }
+/* Version 4, Phase 2 ("Playtesting Notes, Continued") — the identical bug
+   class as the range-input fix directly above, just never given the same
+   treatment for `<select>`: a `.panel-row` dropdown's own intrinsic width
+   (driven by its longest `<option>` text) can't shrink below that size on
+   its own, which forced `.wardrobe-form`'s two-column grid wider than its
+   880px-max panel — see WardrobeApp.js's own model/material dropdowns —
+   producing horizontal scroll instead of the dropdown simply fitting. */
+.panel-row select { flex: 1; min-width: 0; }
 
 /* ---------- Wardrobe overlay material ---------- */
 /* Reuses the exact same createWardrobeApp() the computer's Wardrobe app

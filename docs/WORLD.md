@@ -428,6 +428,13 @@ since this is "the workshop itself feels more lived-in from outside,"
 not new interactable content, and distinct from populating the wider
 surrounding world (still a non-goal — see below).
 
+**Version 4, Phase 2 ("Playtesting Notes, Continued") — the bench was
+facing the wrong way.** Its backrest sat *further* from the wall than the
+seat (`benchZ + 0.17`, `+Z` being "further from the house" throughout
+this file), leaving the open, backless edge nearly flush against the wall
+and the backrest itself out in the yard — fixed to the ordinary
+arrangement (backrest near the wall, open seating edge toward the yard).
+
 **Version 3, Phase 2 ("Living Spaces") — the fascia's own trim colour,
 unified.** The door frame, baseboard, and framed-sketch frame all
 deliberately share one dark wood tone (`"#3d2a1c"` — see the baseboard's
@@ -671,10 +678,29 @@ weren't actually added yet** — a gap between this document's own claim
 and the code that went unnoticed until the World Builder phase (Version
 2, Phase 9) actually populated Nature and Paths for real; see this
 document's own "World Builder (Version 2, Phase 9)" section further
-below for the full, corrected account. Lighting (garden light, street
-light, lantern, floodlight, campfire) remains reserved but still
-unpopulated — a genuine future extension point, not claimed as done here
-any longer.
+below for that phase's own account, which — accurately, for what it
+covers — left Lighting still reserved.
+
+**Version 4, Phase 5 — Lighting is real too, now, just not from the
+phase this section's account can actually trace.** All five ids
+(`gardenLight`/`streetLight`/`lantern`/`floodlight`/`campfire`) have real
+geometry and a real, working `lightSource` behaviour in
+`ConstructionLibrary.js` today — confirmed live (a spawned `campfire`
+instance produced a genuine new `THREE.PointLight` in the scene) and
+confirmed reachable in the real Builder Library UI, not just present in
+the data model. This document's own three separate "still unpopulated"
+claims (this one, and the two below in "Known simplifications") were
+stale — the code had already moved past them, silently, with no
+`docs/HISTORY.md` changelog entry marking when. Exactly which phase
+actually built them isn't reconstructable from the available records —
+this document's own Phase 9 account is specific and internally
+consistent about leaving Lighting out, so the addition happened
+somewhere after that, undocumented. `docs/WORLDBUILDER.md` already
+described the end state correctly ("Lighting — Garden Light, Street
+Light, and other fixtures, each carrying the same Light Source behaviour
+the original ceiling Light does"); this document simply never caught up
+to it. See `docs/ROADMAP.md`'s own Phase 5 account for the full story
+of how this was found.
 
 With the catalogue now well past its original size, the library screen
 groups pieces by category (`CONSTRUCTION_GROUPS`, a compact id → group
@@ -903,9 +929,12 @@ visual in this project already follows.
   future Nature-library "pond" piece or a painted low terrain basin
   looks like; a real, animated water surface (even a simple one) is
   future work.
-- **Lighting fixtures remain reserved, still unpopulated** — see
-  "Builder Library" above; `gardenLight`/`streetLight`/`lantern`/
-  `floodlight`/`campfire` stay ids without real pieces behind them yet.
+- ~~Lighting fixtures remain reserved, still unpopulated~~ — no longer
+  true; see "Builder Library" above (Version 4, Phase 5) for the
+  corrected account. Kept here, struck through rather than deleted, since
+  this bullet is what the Phase 9 work in this same section genuinely
+  left true at the time — the correction belongs to a later, undated
+  addition, not a mistake in this phase's own account.
 - **One bounded terrain patch, not a whole editable world** — 200m
   square (grown from the original 48m in the Workshop Reliability phase
   — see below), fixed size and position, centred on the Workshop, plus a
@@ -974,8 +1003,6 @@ simply replace, back when the patch was only 48m — is gone entirely.
 - **A real water surface** — even a simple animated, semi-transparent
   plane would satisfy "ponds, streams" honestly, without attempting
   large-scale simulation the brief itself explicitly didn't ask for.
-- **Lighting fixtures**, completing the reserved category with the same
-  `lightSource` behaviour the original ceiling light already uses.
 - **Terrain-aware collision** for steep slopes, not just height.
 - **Manual terrain-brush falloff curves** (smoothstep instead of linear)
   for an even softer edge, if the current linear falloff ever reads as
@@ -1019,6 +1046,26 @@ it is" standard the Desk phase's monitor hinge and the Workbench's vice
 crank already set. Purely cosmetic: the panel's actual rotation still
 happens around its own pivot group, entirely unaffected by hinges
 attached to the mesh itself.
+
+**Version 4, Phase 2 ("Playtesting Notes, Continued") — the pivot group
+itself wasn't where the hinge plates above implied it was.** Version 3
+Phase 14 moved each panel's pivot to the wall's true outer face, correctly
+— but left the panel *mesh* offset by the full wall thickness (0.3m) from
+that pivot, specifically so the closed door's world position wouldn't
+visibly shift. That preserved the closed look at the cost of the open
+one: a leaf sitting 0.3m away from its own rotation axis doesn't swing
+like a hinge, it orbits a point that isn't on it — traced numerically to
+~0.5m of drift at the door's own fully-open angle, reading exactly like
+"swings outward, away from the house" rather than a clean hinge. Fixed by
+offsetting the mesh by half its own physical depth instead of the wall's
+full thickness, so the panel's hinge-side edge now lands exactly on the
+pivot — confirmed live: the hinge-side corner's own world position at
+closed and fully-open (1.9 rad) now match to the sub-millimetre, for both
+panels. The closed door's world position does shift as a genuine, correct
+consequence (now sitting near the outer face, inside the wall's own
+opening, rather than flush with the interior face) — a leaf actually
+hinged at the outer face has to live near it, not the far side of the
+wall, for "hinge" to mean anything geometrically.
 
 **Lighting fixtures, twice over.** A small ceiling canopy plate where
 each pendant's cord meets the ceiling — the cord used to simply emerge

@@ -134,7 +134,7 @@ represents, reused rather than invented twice more).
 
 Bubble had no audio at all before this phase — reviewed and found
 genuinely absent, not just quiet. `ResidentController._maybeAnnounceThinking()`
-plays a single, very soft cue exactly on the false→true edge of
+played a single, very soft cue exactly on the false→true edge of
 `residentBehaviour.isThinking` (never continuously while thinking,
 never on the way back to idle — thinking *ending* has no equivalent
 moment worth marking), at Bubble's own current position for real
@@ -142,6 +142,22 @@ distance falloff. The quietest, briefest sound in the entire Workshop,
 by design — "communicate life without becoming distracting" is a
 description of restraint, not licence to give a chatty companion a full
 sound design.
+
+**Restored, Version 4 Phase 7a.** `ResidentController.js` — the
+per-frame system that used to watch a shared `residentBehaviour` for this
+edge transition — is deleted for good; through the end of Phase 7, with
+`ResidentBehaviour` now constructed fresh per conversation, nothing
+outside that one conversation was left watching its `isThinking` field
+for a false→true edge to cue a sound from, and the resident went one
+phase entirely silent. `ResidentConversation.js` gained a new optional
+`audioSystem` dependency and calls it directly —
+`audioSystem?.playInteractionSound("residentThinking", { position:
+bundle.residentState.currentPosition })` — right at the existing
+`residentBehaviour.setThinking(true)` call, no per-frame watcher needed
+at all. Verified live: the call fires synchronously the moment a message
+is sent (before Ollama's own response even comes back), with a real,
+non-null position matching the resident's own actual location at the
+time.
 
 ## Architectural review
 

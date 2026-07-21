@@ -592,3 +592,38 @@
     min-height: 0;
   }
 }
+
+/* Version 4, Phase 2 ("Playtesting Notes, Continued") — Wardrobe's own
+   `.builder-root`/`.builder-preview`/`.builder-form` family (deliberately
+   kept separate from `.builder-workspace` above, precisely so widening
+   one couldn't narrow the other as a side effect — see this file's own
+   top comment) never inherited that class's own narrow-viewport stacking
+   as a result. `.builder-root` is the *only* consumer of this class
+   family today (Builder/Being Creator/Animation Editor all moved to
+   `.builder-workspace` already), so this is safe to scope here without
+   risking any of those three. Same 700px breakpoint, same stack-the-
+   preview-above-the-form technique, reused rather than reinvented —
+   `docs/RESPONSIVE.md`'s own point about a shared convention "a future
+   app... gets the same responsive behaviour automatically" applies just
+   as well retroactively. `.wardrobe-form`'s own two-column grid also
+   collapses to one column here, since a 700px-narrow stacked panel has
+   no real width to split into two columns of anyway. */
+@media (max-width: 700px) {
+  .builder-root {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .builder-preview {
+    width: auto;
+    flex: none;
+    min-height: 260px;
+    height: 42vh;
+  }
+  .builder-form {
+    flex: none;
+    min-height: 0;
+  }
+  .wardrobe-form {
+    grid-template-columns: 1fr;
+  }
+}

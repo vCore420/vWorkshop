@@ -86,6 +86,19 @@ click/tap-reachable equivalent every other keyboard-shortcut action in
 the corner-controls group already had, matching the existing "I'm Lost!"
 button's own styling and placement rather than a new pattern.
 
+**Version 4, Phase 2 ("Playtesting Notes, Continued") — that same corner
+button row is what ends up clipping the compass on touch.** The global
+touch-comfort baseline above (`@media (pointer: coarse) { button {
+min-height: 40px; } }`) grows `.hud-corner-controls`'s own five buttons
+taller specifically on touch, pushing the row's bottom edge down into
+`#compass-root`'s fixed vertical band — invisible on desktop/mouse, where
+that media query never matches, exactly matching the original report's
+own "fine on desktop... touch/mobile specifically." Fixed with the
+compass's own matching `@media (pointer: coarse)` override, pushing its
+`top` down enough to clear the row's taller touch-sized height, rather
+than changing the corner-controls row itself (which has nothing wrong
+with it — it's doing exactly what the touch-comfort baseline intends).
+
 **A global focus-visible fallback** (`tokens.css`) gives every
 interactive element a clear keyboard-focus ring unless it already
 defines its own more specific one — `:focus-visible`, not `:focus`, so
@@ -119,6 +132,23 @@ phase follows that instinct directly:
   inherited by every app that already uses that shared class — a future
   fourth app built on the same class gets the same responsive behaviour
   automatically, with nothing to opt into.
+
+**Version 4, Phase 2 ("Playtesting Notes, Continued") — the Wardrobe app
+never inherited any of this**, and it showed: `<select>` elements inside
+its own form overflowed the panel on any width, and the panel had no
+narrow-viewport stacking at all. Not because the pattern above didn't
+exist yet — Wardrobe was deliberately kept on a separate, older class
+family (`.builder-root`/`.builder-form`, predating `.builder-workspace`)
+specifically so widening one couldn't narrow the other as a side effect
+(see `css/builder.css`'s own top comment). The fix mirrors this section's
+own convention rather than finally migrating Wardrobe onto the shared
+class: the identical 700px breakpoint, the identical stack-preview-above-
+form technique, applied as a second, parallel media query scoped to
+`.builder-root`'s own selectors — real reuse of the *pattern*, without
+touching the deliberate separation of the *class*. `.builder-root` turned
+out to be Wardrobe's exclusive class today regardless (Builder/Being
+Creator/Animation Editor have all since moved to `.builder-workspace`),
+so this carries no risk to those three either way.
 
 ## Known simplifications (by design, for this phase)
 

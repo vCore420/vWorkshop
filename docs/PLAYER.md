@@ -548,6 +548,41 @@ the *camera's* eye height down, nothing about the *mesh* ever moves —
 cam.getCurrentEyeHeight()`) algebraically always resolves to `_footY`,
 standing or crouched.
 
+**Version 4, Phase 4 — a real, separate bug this same fixed-root fact
+was quietly causing: the feet floated instead of the body settling
+down.** Vi's own field report, playtesting: "the player model doesn't
+lower when crouching... the players feet leave the ground instead of
+the whole body moving down." Root-caused live, not guessed —
+`CROUCH_CLIP`'s own authored hip/knee bend was pure forward kinematics
+with nothing correcting it, and with the hip position fixed (per the
+paragraph above), that bend folded each leg *up* rather than settling it
+down: measured 0.216m of foot lift for the default body proportions.
+Fixed by reusing `FootIK.js`'s already-proven `solveTwoBoneIK()`/
+`applyLegIK()` machinery (previously only wired to the `"idle"` movement
+state, for terrain contact) — a new `applyCrouchFootIK()` targets each
+ankle back to the standing vertical span from its own hip, read live
+from the rig's own segment lengths so it's correct for every body
+proportion the Wardrobe can produce, not tuned for one default.
+`CROUCH_CLIP`'s own authored leg angles are now inert (zeroed, with a
+comment explaining why — see `AnimationClips.js`); only the torso lean
+and arm pose it authors still apply.
+
+**An honest limit, not papered over**: the standing pose already sits at
+~99.99% of the leg's own maximum reach (see `FootIK.js`'s own header),
+which leaves no real slack to also bend the knee forward while keeping
+the ankle at exactly the same height — any target close enough to
+produce a visibly bent knee necessarily reintroduces some of the same
+float this fix removes. Given the actually-reported bug was 21.6cm of
+float, not "the knee doesn't bend enough," this fix targets exact height
+correctness (re-measured live after the fix: 0.0001m residual, matching
+the two-bone solver's own built-in safety margin) over a dramatic bend —
+the corrected crouch reads as the torso's already-authored forward lean
+over straightened legs, not a deep knee-bent squat. A genuine bent-knee
+crouch would mean the hip/torso actually translating downward in world
+space, which is the deeper limitation this paragraph opened with — still
+squarely `docs/ROADMAP_V4.md`'s own future "Rest of IK" phase, not
+something a foot-planting fix can honestly claim to solve.
+
 Standing has always relied on a coincidence to hide this: the
 first-person camera happens to sit precisely inside the head mesh, so
 ordinary backface culling hides it. Crouching breaks that coincidence —
@@ -573,10 +608,21 @@ reflection should always show the full character. Verified directly
 against the live engine — root position staying pinned to `_footY`
 throughout a simulated crouch, eye height easing to exactly
 `standingHeight × 0.78`, and every layer-enabled state checked mid-crouch
-and across a view-mode toggle — rather than by a rendered screenshot,
-which this environment's tooling couldn't produce during this pass; see
-"Known limitations" above for the one residual claim (the torso staying
-hidden too) that's analysis-backed rather than visually confirmed.
+and across a view-mode toggle.
+
+**Version 4, Phase 4 — the torso claim below is no longer
+analysis-only.** `computer{action:"screenshot"}` still isn't available in
+this environment (re-confirmed the same phase; see `.claude/DEV_NOTES.md`),
+but a genuine rendered-frame pixel-readback is: the torso mesh was
+temporarily swapped to an unlit, saturated debug material, rendered from
+the exact first-person eye position a crouched player has (post-foot-fix,
+see above) looking straight ahead, and the frame read back pixel-by-pixel
+— zero matching pixels anywhere in a 1280×720 frame, confirmed against two
+independent controls (a camera clearly outside the character, and the
+same crouched eye position turned to look down at the legs instead) that
+both correctly *did* show the debug colour, ruling out a broken test
+producing a false "invisible" reading. See "Known limitations" below —
+this specific claim is now visually confirmed, not just analysis-backed.
 
 ### Body models: the same rig, different starting proportions
 
@@ -748,8 +794,9 @@ where it came from.
 
 ### The Emote Wheel: plays assets, decides nothing
 
-`EmoteWheelSystem.js` (toggled with **G**) is deliberately almost
-nothing: it reads every non-movement clip in the library and calls
+`EmoteWheelSystem.js` (toggled with **Tab**, rebound from G in Version 4,
+Phase 2 — see below) is deliberately almost nothing: it reads every
+non-movement clip in the library and calls
 `PlayerAnimationSystem.play(clipId)` when one is picked. "The Emote Wheel
 should simply play animation assets" is true by construction — this file
 has never seen a pose, a frame, or a pivot name. It closes itself the
@@ -769,6 +816,45 @@ keeps every label upright regardless of where on the circle it sits.
 Same close-on-pick behaviour, untouched; new hover/focus state (a small
 outward scale plus the same teal highlight the rest of the Workshop's
 own interactive elements already use).
+
+**Version 4, Phase 2 ("Playtesting Notes, Continued") — real pie-wedge
+segments, and a rebind that needed a real safety guard alongside it.**
+Playtesting called the ring-of-circles version "getting better but still
+off in design," naming FiveM's `qb-radialmenu` as a concrete reference.
+Rebuilt as genuine wedges: each gesture's own button now fills the whole
+ring and is cut to its own slice with a JS-computed `clip-path:
+polygon(...)` (`wedgeClipPath()`, sampling the arc every ~12° so even a
+wide wedge — few total gestures — reads as a real curved slice, not a
+straight-edged triangle) — a real, independently clickable wedge-shaped
+hit area, not a circular button sitting on a decorative background.
+Confirmed live: every wedge's own last boundary point matches the next
+wedge's first point exactly, tiling the full circle with zero gaps or
+overlaps. Icons are a small, honest keyword heuristic against a clip's
+own name (wave→👋, clap→👏, bow→🙇, and so on), falling back to a plain
+generic glyph for anything player-authored that doesn't match — this
+project ships no binary/image assets by design, so there's no icon
+library to draw from instead. The centre hub is larger, and now a real
+second close affordance (clickable, alongside Tab/Escape); the bordered/
+backgrounded card wrapper is gone for the ring itself, so it floats
+directly over the game view, closer to "should remain lightweight,
+elegant and unobtrusive" than a panel that happens to be circular.
+
+The wheel also moved from **G** to **Tab** — but `EmoteWheelSystem.
+update()` had never checked anything about modal state before this,
+which was apparently never a practical problem for G (rarely pressed
+while the Computer/Phone/an overlay panel was open) but would have been a
+severe, constant one for Tab specifically: Tab is the standard key those
+exact panels already use continuously to cycle focus between their own
+controls (`focusTrap.js`). The fix reuses `input.pointerLocked` — the
+same already-computed, already-universal signal every modal in this
+codebase relies on (`exitPointerLock()`/`requestPointerLock()`, called by
+Computer, Phone, Workbench, and every `OverlayManager` panel) — rather
+than inventing a second, parallel way to ask "is a modal currently open."
+Confirmed live, three ways: Tab opens the wheel during free-roam;
+Tab does nothing while a modal holds focus; Tab still closes the wheel
+once it's already open, even though opening it releases pointer lock
+itself (the one case a plain `pointerLocked` check alone would have
+missed).
 
 **Version 3, Phase 10 ("Real Assets, Honestly Introduced")** gave the
 wheel real default content — `AnimationClips.js`'s own `DEFAULT_ANIMATION_CLIPS`
@@ -969,13 +1055,18 @@ first one.
   camera moved, but so, deliberately, does the head" below for why a real
   visibility rule was needed there specifically.
 - **The torso's own first-person invisibility while crouched is still
-  the backface-culling coincidence, not a rule.** Analysis (the crouched
-  eye height stays well inside the torso mesh's own bounds, for every
-  body proportion the Wardrobe can produce) says this should hold, and
-  live engine state (eye height, root position, layer state) was
-  confirmed directly — but this specific claim wasn't confirmed against
-  an actual rendered frame, only computed. Worth a visual check once
-  screenshot tooling is available in this environment.
+  the backface-culling coincidence, not a rule** — and, as of Version 4
+  Phase 4, genuinely confirmed against a real rendered frame, not just
+  computed: a pixel-readback with the torso swapped to a saturated debug
+  material found zero matching pixels from the crouched first-person eye
+  position, validated against two controls that correctly did show it.
+  Still a coincidence relying on the camera sitting inside the mesh
+  volume, not an explicit visibility rule the way the head's own
+  `FIRST_PERSON_HIDDEN_LAYER` is — a body proportion extreme enough to
+  put the crouched eye height outside the torso mesh's own bounds
+  (unlikely for anything the Wardrobe's own sliders can currently
+  produce, but not structurally impossible) would still show it. Worth
+  re-checking if the Wardrobe's own proportion ranges ever widen.
 - **The reflection is an approximation, not a true mirror**, and the
   third-person camera's own collision reuses the player's flat wall/
   furniture push-out rather than a real 3D check — see their own sections

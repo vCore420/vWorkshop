@@ -97,15 +97,24 @@ honestly out of reach, not attempted.
 ## Resident Diagnostics
 
 "Current behaviour. Current mood. Current task. Conversation state.
-Navigation state. Idle state." `ResidentController.getDiagnostics()` —
-one flat object gathering what already lives across
-`ResidentBehaviour`/`ResidentState`/`ResidentConnection`/
-`ResidentMovement`/the active profile, the identical "nothing new
-computed, just gathered" shape `WorldAwareness.snapshot()` already
-established. "Future residents should naturally inherit this
-architecture" is true the same way `WorldAwareness` already is — a
-second `ResidentController` instance would return the same shape from
-the same method, nothing here assumes there's only ever one.
+Navigation state. Idle state." One flat object gathering what already
+lives across `ResidentState`/`ResidentConnection`/the resolved profile,
+the identical "nothing new computed, just gathered" shape
+`WorldAwareness.snapshot()` already established. **Corrected, Version 4
+Phase 7:** this used to be one method call,
+`ResidentController.getDiagnostics()`; that class is deleted, and
+`DiagnosticsService._buildResidentsSection()` now builds the identical
+shape itself, resolving Bubble via `BUBBLE_DEFINITION_ID` across
+`beingLibrary`/`beingInstanceStore`/`beingResidentStateStore`/
+`residentProfileStore` directly (see that method's own code comment:
+"than a singular `ResidentController.getDiagnostics()`") — a real, if
+smaller, structural change, not merely a rename. "Future residents
+should naturally inherit this architecture" is true differently than
+before: not a second `ResidentController` instance returning the same
+shape, but the identical resolution now working for *any* resident-
+capable Being instance id, were this method ever generalised beyond
+Bubble specifically (it isn't yet — see `docs/BEINGS.md`'s own account of
+this phase's deliberate single-resident dashboard scoping).
 
 ## Plugin Diagnostics
 

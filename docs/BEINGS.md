@@ -614,6 +614,104 @@ resident is one object worth syncing constantly, where dozens of Beings
 syncing 60 times a second each would be wasteful for a value that only
 needs to be roughly current at save time.
 
+## AI Residents as a Being type (Version 4, Phase 7)
+
+"Future AI Residents should naturally become another type of Being
+rather than requiring a separate architecture" — built, not just
+investigated (Version 4 Phase 6 traced the shape; this phase built it,
+including migrating the Workshop's own first resident, Bubble, onto it).
+`docs/RESIDENT.md` covers the resident-specific mechanics in full
+depth (movement, mood, preferences, memory, Mission Control
+configuration); this section covers the Being-side schema and the one
+engine system, `BeingController.js`, that now drives all of it.
+
+**Schema — two new fields, both purely additive.**
+`BeingBehaviours.js`'s `INTERACTION_BEHAVIOURS` gained `"aiResident"`
+alongside `talk`/`wave`/`inspect`/`none`; `BeingLibrary._buildDefinition()`
+gained `residentProfileId: null`, a plain reference into
+`ResidentProfileStore` — the same "a plain id, resolved against a
+separate store elsewhere" shape `idleAnimationClipId` already uses, not
+a second identity system. `importDefinition()` nulls it on import, the
+same treatment `modelId` already gets, since a profile id is per-Workshop
+and an imported file has no access to one.
+
+**`BeingResidentStateStore.js` (`src/beings/`) — one new persistence
+provider**, keyed by Being instance id rather than one flat singular
+key. Each entry is a fresh bundle of the exact same, byte-for-byte
+unmodified `ResidentState`/`ResidentPreferences`/`PlayerPatternMemory`/
+`ResidentCuriosity`/`ConversationMemory` classes `docs/RESIDENT.md`
+already describes — created only for an instance whose definition sets
+`residentProfileId`, via `isResidentCapable()`. Registered with
+`PersistenceSystem` after `"beingLibrary"`/`"beingInstances"` —
+registration order matters, since resolving a bundle needs both to
+already exist.
+
+**`BeingController.js` — the one system tying all of it together now**,
+replacing the deleted `ResidentController.js`/`ResidentEntity.js`:
+
+- **`"residentTravel"`, a new `BeingBehaviours.js` movement style** —
+  `ResidentMovement.js` reused wholesale, unmodified, via
+  `_updateResidentTravel()`. **Decided with Vi:** preserve the exact
+  existing movement feel rather than switch to a generic wander/patrol
+  style, since Bubble's own idle-location travel was already well-tuned
+  and distinctive. Three honest, named simplifications versus the
+  original `ResidentController.js` at Phase 7's own close — see
+  `docs/RESIDENT.md`'s own "A quiet habit" and "Conversation" sections
+  for the fuller account: no preference-weighted idle-spot selection, no
+  personality trait/dial movement multipliers, and no movement pause
+  during conversation. **Version 4, Phase 7a restored the first two** —
+  `_residentLocationWeights()` and a per-frame
+  `getPersonalityModifiers()` resolution, both verified live — leaving
+  only the third, conversation-pause, genuinely unresolved (still no
+  reach from `BeingController` into the conversation overlay's own
+  lifecycle). `setResidentCommand()`/`getResidentCommand()`/
+  `sendResidentTo()`/`returnResidentHome()` are the new per-instance
+  replacements for `ResidentController`'s own `playerCommand`/
+  `stayHere()`/`followMe()`/`resumeWandering()`/`returnHome()`.
+- **`_updateResidentLife()`/`_driftMood()`/`_samplePatterns()`** — mood
+  drift and preference/pattern/relationship sampling, reconstructed from
+  `docs/RESIDENT.md`'s own documented behaviour after a live check caught
+  that the first implementation pass had ported movement only and let
+  this go silently inert (the original `ResidentController.js` source
+  didn't survive its own deletion). Applies to *any* resident-capable
+  Being instance, gated by `isResidentCapable()` rather than movement
+  style, since resident-ness (`interactionBehaviour` + `residentProfileId`)
+  is orthogonal to how an instance moves. Verified live over roughly 53
+  simulated minutes: mood genuinely cycled through several states,
+  weather/time-of-day/location/activity preference bags all accumulated
+  real counts, and a Being placed deliberately nearby had its relationship
+  affinity bumped repeatedly.
+- **Interaction reuses the existing generic `being:interact` dispatch** —
+  `main.js`'s own listener checks `interactionBehaviour === "aiResident"`
+  and a set `residentProfileId` before opening the conversation overlay
+  (`context: {beingInstanceId, residentProfileId}`) instead of showing
+  the ordinary toast; an ordinary Being's own toast interaction is
+  entirely unaffected — confirmed live, side by side.
+
+**Bubble's own migration.** A fourth seeded `DefaultBeings.js` entry
+(`BUBBLE_DEFINITION_ID`), `movementStyle: "residentTravel"`,
+`interactionBehaviour: "aiResident"`. `SaveMigrations.js`'s v5→v6
+migration moves an existing player's real `residentState`/
+`residentPreferences`/`playerPatternMemory`/`residentCuriosity`/
+`conversationMemory` data into her new instance's own
+`beingResidentState` bundle rather than resetting it, and resolves her
+`residentProfileId` from the save's own raw `aiResidents.activeProfileId`
+*inside* the migration itself — not left for `main.js`'s own boot-time
+reconciliation, which runs after every provider has already loaded and
+would be too late for `BeingResidentStateStore.load()`'s own
+resident-capability check to see it. A boot-time reconciliation step
+still exists, idempotent, for the "no prior save at all" and "profile
+still unresolved" cases specifically. See `docs/PERSISTENCE.md`'s own
+account of the migration, including the real ordering bug this caught
+and fixed during verification.
+
+**Being Creator UI.** A conditional "Resident Profile" picker appears
+once `interactionBehaviour` is set to `"aiResident"`, the same gating
+pattern the file already uses for `movementStyle !== "static"` — options
+from `residentProfileStore.all()`, plus a "New Profile…" affordance.
+Deliberately just a reference, not inline CRUD — renaming, duplicating,
+and configuring a profile in depth stay Mission Control's own job.
+
 ## Known simplifications (by design, for this phase)
 
 - **Interaction is a toast message, not a conversation** — Beings aren't
@@ -655,15 +753,10 @@ needs to be roughly current at save time.
   own hierarchy, or replacing one of its parts; see "Imported Models"
   above for why this phase kept the two paths separate.
 
-- **Future AI Residents as a Being type.** "Future AI Residents should
-  naturally become another type of Being rather than requiring a separate
-  architecture." Today's resident (`docs/RESIDENT.md`) and this Being
-  system are still two separate things — the resident predates it and
-  isn't itself a `BeingLibrary` definition yet. The natural convergence:
-  a Being's own Interaction behaviour could grow a real "AI Resident"
-  option that reads from `ResidentProfileStore`/`AIConnectionManager`
-  exactly the way the existing resident already does, rather than the
-  resident staying its own permanently separate system.
+- ~~**Future AI Residents as a Being type**~~ — **built, Version 4 Phase
+  7**, not merely investigated. See "AI Residents as a Being type" above
+  for the shipped architecture, and `docs/RESIDENT.md` for the full
+  resident-specific mechanics now attached to it.
 - **Wildlife, Villages, player-created companions, Plugin Beings** — all
   explicitly anticipated; none require new architecture, only new
   `BeingBehaviours.js` values or new saved definitions using what already

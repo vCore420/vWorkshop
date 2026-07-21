@@ -182,6 +182,19 @@ slightly thicker seat cushion, and a few degrees of recline on the
 backrest round out the chair — every one of these sits directly above
 the same floor space the old parts already occupied.
 
+**Version 4, Phase 2 ("Playtesting Notes, Continued") — the castors'
+own Phase 14 fix turned out to be a no-op.** `castor.rotation.y = angle`
+looked like the same "same angle the arm already turns by" fix `arm`
+itself uses one line up, but a cylinder is rotationally symmetric about
+its own axis — under Three.js's default Euler order, that Y-rotation was
+being applied *before* the fixed 90° lay-flat tilt, while the cylinder
+was still perfectly symmetric about the very axis being rotated, so it
+changed nothing for any castor at any angle. Setting
+`castor.rotation.order = "YXZ"` reverses which rotation runs first,
+letting `angle` actually reach the rendered mesh — confirmed live by
+reading back each of the five castors' own world-space orientation and
+finding five genuinely distinct directions, not one repeated five times.
+
 **One small, deliberately restrained environmental-storytelling
 addition.** A small pen holder with two pens, in the desk's back-left
 corner — specifically chosen to balance the lamp's own back-right

@@ -2156,4 +2156,203 @@ rejections for a missing required argument and a nonexistent command.
 Deliberately not built: stopping or monitoring a launched program. See
 `docs/ROADMAP.md`'s own Phase v4.0.1b account for the full story.
 
+**Version 4, Phase 2 — Playtesting Notes, Continued (v4.0.2a–v4.0.2e).**
+Five independent waves carrying forward Vi's own post-Version-3
+playtesting notes, several of them reports that a Version 3 Phase 14 fix
+didn't fully hold — investigated fresh each time rather than assumed
+close, matching that same phase's own precedent for a grab-bag of this
+shape. **Wave A**: four small, unambiguous fixes — an inverted-sign
+backrest on the outdoor bench; computer chair castors whose own Phase 14
+fix turned out to be a complete no-op (re-derived from Three.js's actual
+Euler composition formula: a cylinder rotated around its own symmetry
+axis before a fixed tilt, changing nothing for any of the five, at any
+angle — fixed by reordering which rotation runs first); Wardrobe form
+overflow (a `<select>` missing the same fix an `input[type="range"]`
+already got for the identical bug, plus a new, reused 700px stacking
+breakpoint); and the HUD compass clipping against the corner-controls row
+specifically on touch (the existing global touch-comfort baseline growing
+that row taller, verified structurally since this sandboxed browser can't
+actually emulate `pointer: coarse`). **Wave B**: the phone wallpaper
+"doesn't change" bug turned out not to be broken wiring at all — the
+entire data flow was already correct — but a tint rule scoped to the Home
+screen only, which is never the screen the picker itself is on; fixed by
+broadening it to the phone's own backdrop everywhere. **Wave C**: the
+front door hinge, Phase 14's own pivot-to-outer-face fix undermined one
+level down by a mesh offset that kept the leaf 0.3m from its own rotation
+axis — traced to ~0.5m of open-door drift, fixed to zero. **Wave D**: the
+Emote Wheel rebuilt as genuine pie-wedge segments (closer to FiveM's
+`qb-radialmenu`, per Vi's own reference point) with keyword-heuristic
+emoji icons, and rebound from G to Tab — a rebind that needed a real
+modal-safety guard first, reusing `input.pointerLocked`, the same signal
+every modal in this codebase already computes, rather than risking the
+wheel toggling on every focus-cycle keypress inside the Computer, Phone,
+or any overlay panel. **Wave E**: Double Door construction pieces,
+independently hinged at last — named as a deferred architecture question
+twice before, resolved this time by discovering the already-real single
+`Door` piece's own hinge mechanism was all that was ever needed, applied
+to two new, separately-placed leaf pieces rather than requiring new
+engine capability; the original combined piece stays untouched for
+existing saves. Every wave verified live against the real running
+engine — world-matrix reads for the geometry fixes, structural CSS/DOM
+reads for the wallpaper and wedge work, and a genuine spawn-two-doors-and-
+toggle-them-independently test for the closing wave — not trusted on
+sight. See `docs/ROADMAP.md`'s own five per-wave accounts for the full
+story of each.
+
+**Version 4, Phase 3 — The Phone's Settings, Made Real (v4.0.3).** "Less
+basic drop down boxes and generic UI elements" for the Phone's own
+Settings app: real brightness, a genuine light/dark theme, and live
+colour previews replacing the existing wallpaper/border text buttons.
+Investigation found the deeper gap wasn't the picker — every app screen
+on the Phone hardcoded light-mode colours directly, so a theme choice
+had nothing to actually change; decided with Vi to make dark theme
+phone-wide rather than scoped to Settings/Home, via a new theme-aware
+CSS custom property layer swapped in across roughly fifteen existing
+rule blocks. Brightness is a real `filter` on a new screen-only wrapper
+in `PhoneUI.js`, so dimming the display never dims the wood-and-brass
+case around it. Verified live across three independent app screens
+(Wardrobe, Emotes, Browser chrome), not just Settings itself; one
+combined-selector query briefly suggested a real colour bug on a
+Wardrobe card, traced to a UA-default button-colour artifact rather than
+anything actually broken. `docs/PHONE.md` updated in place, including
+correcting its own Phase 13 Wave 2 claim that Settings would stay
+unchanged. See `docs/ROADMAP.md`'s own Phase 3 account for the full
+story.
+
+**Version 4, Phase 4 — Verification Tooling, and a Real Crouch Bug It
+Surfaced (v4.0.4).** Not a Workshop feature — an investigation into the
+unreliable-screenshot problem, re-confirmed still real (still times out,
+still `document.hasFocus()` false) and its one named escape hatch (a
+genuinely different real browser surface) actually tested rather than
+speculated about, and found unavailable this session. The working
+pixel-readback technique, previously narrated prose only, became a small
+reusable helper. A field report given while scoping the phase — "the
+players feet leave the ground instead of the whole body moving down"
+while crouching — turned out to be a real, numerically confirmable bug:
+`CROUCH_CLIP`'s authored leg pose was pure forward kinematics with
+nothing correcting it, floating the foot 0.216m off the ground given the
+rig's already-documented fixed hip height. Fixed by extending `FootIK.js`'s
+existing, already-proven two-bone solver to the crouch state (previously
+only wired for idle-state terrain contact) rather than hand-tuning static
+angles that would only work for one body proportion — re-verified live to
+a 0.0001m residual. That fix, in turn, let the original torso-visibility
+claim finally be checked against a real rendered frame instead of
+analysis alone: a false start (an exact-colour match reading zero even in
+an obviously-correct control shot, traced to ordinary lighting shifting a
+lit material's colour, not a real result) was caught and fixed before
+trusting the result — zero torso pixels from the real crouched
+first-person view, validated against two independent controls. Two new,
+previously-undocumented renderer setup gotchas in this environment (a
+0×0 canvas, a `null` camera aspect producing a silently-degenerate
+projection matrix) were found and recorded along the way. `docs/PLAYER.md`
+and `docs/ANIMATION.md` updated in place. See `docs/ROADMAP.md`'s own
+Phase 4 account for the full story.
+
+**Version 4, Phase 5 — Lighting Fixtures for the Construction Library
+(v4.0.5).** The roadmap asked for five lighting pieces "still zero real
+pieces behind any of them." Investigation, before any code was written,
+found all five already real — genuine geometry and a working
+`lightSource` behaviour, confirmed live by spawning one and watching a
+real `THREE.PointLight` appear in the scene, and confirmed reachable in
+the actual Builder Library UI. The roadmap's own guess at which mechanism
+to reuse (`LightingSystem.registerPracticalLight()`) was also wrong —
+that's for hardcoded room lights joining the Workshop's own light switch,
+not freely-placed Builder pieces. The real gap was three stale claims in
+`docs/WORLD.md` still describing these fixtures as unpopulated
+placeholders, traceable to the historical World Builder phase (Version 2,
+Phase 9) — which accurately left Lighting out at the time — with the
+actual addition happening later, undocumented, in a phase no surviving
+record names. Decided with Vi: fix the docs and close honestly rather
+than build a duplicate of already-real work — no `src/` changes this
+phase. See `docs/ROADMAP.md`'s own Phase 5 account for the full story.
+
+**Version 4, Phase 6 — Being ↔ Resident Convergence, Investigation
+(v4.0.6).** Five independent docs each named this as their own top future
+extension point; investigation traced whether it was really as close as
+that aggregate impression suggested, module by module, rather than
+trusting it. It mostly was, with real nuance the docs had glossed over:
+`src/ai/` is already almost entirely profile-generic; the resident-side
+stores are unevenly per-instance (`ResidentTraits`/`ResidentContext`/
+`ResidentMovement` genuinely are, `ResidentPreferences`/`ResidentCuriosity`
+only assume it in wiring, `ConversationMemory` self-admittedly isn't
+segmented per profile at all — a gap `docs/RESIDENT.md`'s own prior claim
+never named). Five concrete blockers to a second live resident were
+traced to exact file:line. A real, independently-confirmed doc bug
+surfaced along the way: `docs/PHONE.md` overstated how generic Bubble's
+own Phone app is — its registry id/label/heading fallback are hardcoded
+to `"Bubble"`, three times. Concluded a concrete architecture for a
+future Phase 7 to build (a new Being `interactionBehaviour`, a
+`residentProfileId` field, a new per-instance-keyed store, reusing
+`BeingController`'s existing generic interaction dispatch over the
+resident's own singular `ResidentEntity.js` wiring) — decided with Vi
+that a resident-capable Being keeps its own player-designed visual
+identity rather than taking on the resident's own glowing embodiment.
+`docs/RESIDENT.md`, `docs/BEINGS.md`, and `docs/PHONE.md` updated in
+place; no `src/` changes this phase, by design. See `docs/ROADMAP.md`'s
+own Phase 6 account for the full story.
+
+**Version 4, Phase 7 — Being ↔ Resident Convergence, Implementation
+(v4.0.7).** Built exactly what Phase 6 concluded: Bubble migrated from a
+singular `ResidentController.js`/`ResidentEntity.js` onto a real, seeded
+`BeingLibrary` definition/instance, with `ResidentMovement.js` reused
+wholesale as a new `residentTravel` movement style — decided with Vi to
+preserve her exact travel feel rather than switch to a generic style. The
+blast radius ran well past the approved plan's own file list
+(`ComputerSystem`, `AIApp.js`, `BubblePhoneApp.js`, `ResidentService.js`,
+`DiagnosticsService.js`, `WorkshopPages.js` all needed real rewiring,
+discovered mid-implementation) — decided with Vi, mid-phase, to keep
+Bubble's own dashboard working correctly rather than also build a
+multi-resident picker UI this same phase. Two real bugs, caught by
+verification rather than assumed away: a migration-ordering bug where
+Bubble's `residentProfileId` resolved *after* the provider load that
+needed it, silently losing her real old data on first migration (a
+hand-built v5 fixture run through the live `migrateEnvelope()` caught
+it, fixed by resolving inside the migration itself); and a second,
+larger gap where the first implementation pass ported Bubble's own
+movement but let `ResidentController.js`'s other per-frame job — mood
+drift and preference/pattern/relationship sampling — go silently inert,
+caught only because a documentation sweep cross-checked
+`docs/RESIDENT.md`'s own claims against the shipped code. Brought to Vi
+as a live finding rather than silently patched or silently left broken;
+"port it now, same phase" restored it, reconstructed from the documented
+behaviour and verified live over roughly 53 simulated minutes (mood
+genuinely cycled through nine states; preference/pattern/relationship
+bags all accumulated real counts). Several smaller gaps the same docs
+sweep surfaced — idle-location weather/clock weighting, personality
+trait/dial movement multipliers, load-time continuity for a
+`residentTravel` Being, Bubble's own thinking-sound cue, and a Mission
+Control profile-display edge case — were named honestly rather than
+fixed, tallied for a future phase. `docs/RESIDENT.md`, `docs/BEINGS.md`,
+`docs/PERSISTENCE.md`, `docs/AI.md`, `docs/PHONE.md`,
+`docs/ARCHITECTURE.md`, `docs/ATMOSPHERE.md`, and `docs/AUDIO.md` updated
+in place. See `docs/ROADMAP.md`'s own Phase 7 account for the full
+story.
+
+**Version 4, Phase 7a — Closing Phase 7's Tallied Gaps (v4.0.7a).** All
+five gaps Phase 7 named and tallied, closed — none were product
+decisions, each a mechanical restoration of documented behaviour that
+depended on `ResidentController.js`'s own deleted per-frame loop.
+Idle-location weighting (`_residentLocationWeights()`, restoring "A quiet
+habit" and "Resident awareness, extended") verified two ways: seven
+deterministic weight checks all matched exactly, and a 4,000-trial
+statistical run through the real movement pipeline picked the expected
+location roughly twice as often as any other during a mocked storm.
+Personality trait/dial movement multipliers restored, verified against
+`getPersonalityModifiers()`'s own predicted values on an extreme test
+profile. Load-time continuity for a `residentTravel` Being restored —
+verified below and above the 90-second threshold, confirming a genuine
+no-op versus a real, direct reposition with `ResidentMovement`'s own
+internal state kept in sync. Bubble's own thinking-sound cue restored,
+verified firing synchronously at the real send moment with a real
+position. A sixth, unrelated fix found by the same sweep: Mission
+Control's Status Card/Resident Health grid could show a different
+profile than Bubble's own real one if a second profile was created and
+activated for editing — fixed and verified live with a real second
+profile. Left honestly unresolved: autonomous travel still doesn't pause
+during a conversation, since `BeingController` has no reach into the
+overlay's own lifecycle — real future work, not attempted this phase.
+`docs/RESIDENT.md`, `docs/PERSISTENCE.md`, `docs/AUDIO.md`, `docs/AI.md`,
+`docs/ATMOSPHERE.md`, and `docs/BEINGS.md` updated in place. See
+`docs/ROADMAP.md`'s own Phase 7a account for the full story.
+
 </details>

@@ -268,6 +268,13 @@ exact wording. Never guaranteed, never scripted — one more weighted
 option among several in the same ordinary idle-location pick that always
 existed.
 
+**Restored, Version 4 Phase 7a.** `_windowWatchWeights()` lived on
+`ResidentController.js`, retired in Phase 7 along with the rest of it and
+offline for one phase; `BeingController._residentLocationWeights()` is
+the reconstruction — see `docs/RESIDENT.md`'s own "A quiet habit"
+correction for the full account, including a live statistical
+verification of the storm/Quiet-Corner pull specifically.
+
 ## Known simplifications (by design, for this phase)
 
 - **`sunColor` (the light's own colour) keeps its original fixed-hour

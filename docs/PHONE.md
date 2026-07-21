@@ -114,20 +114,27 @@ demonstrating the real, stable contract a plugin author can rely on.
   a small phone screen; the full editor stays on the computer.
 - **Bubble** — Talk (opens the same conversation overlay as
   interacting with Bubble in the world), Stay Here, Follow Me, Return
-  Home, and status/connection readouts. Stay/Follow/Return Home are new
-  `ResidentController` commands (`playerCommand`, plus `stepToward()` on
-  `ResidentMovement` for continuous, frame-by-frame following, separate
-  from the idle-location ease-travel system that's tuned for occasional,
-  slow journeys instead). Built against the resident stores generically
-  enough that a future second resident would already work here.
-  Version 3, Phase 8b added a fourth `playerCommand` value, `"goto"` —
-  not a Phone button (there's no player-facing reason to type raw
-  coordinates), only ever set by `ResidentController.goTo(position)`, the
+  Home, and status/connection readouts. **Corrected, Version 4 Phase 7:**
+  Stay/Follow/Return Home now call `BeingController.setResidentCommand()`/
+  `.getResidentCommand()`/`.returnResidentHome()` — the per-Being-instance
+  replacements for `ResidentController`'s own single `playerCommand`
+  field and `stayHere()`/`followMe()`/`resumeWandering()`/`returnHome()`
+  methods, since that class is deleted. The underlying mechanism
+  (`setResidentCommand()`, keyed by instance id) is genuinely generic —
+  any resident-capable Being's own dashboard could call it — but
+  `BubblePhoneApp.js` itself stays deliberately scoped to Bubble
+  specifically this phase (resolved via `BUBBLE_DEFINITION_ID`, the same
+  as `docs/AI.md`'s own Mission Control dashboard): **decided with Vi**,
+  building a genuine multi-resident picker UI here was out of scope for
+  this phase, in favour of keeping Bubble's own dashboard working
+  correctly first. A fourth command, `"goto"`, still isn't a Phone
+  button — there's no player-facing reason to type raw coordinates —
+  set only by `BeingController.sendResidentTo(instanceId, position)`, the
   one-time errand the `moveTo` Workshop Function uses (see docs/AI.md's
   own "Workshop Functions" section). Same shape as the other three:
-  `update()` keeps stepping toward the target every frame until close
-  enough to count as arrived, then clears itself back to ordinary
-  autonomous wandering, exactly like Return Home already does.
+  `_updateResidentTravel()` keeps stepping toward the target every frame
+  until close enough to count as arrived, then clears itself back to
+  ordinary autonomous wandering, exactly like Return Home already does.
 - **Browser** — Workshop docs and bookmarks/saved pages, rendered inline
   via the exact `{title, html}` shape `PageRegistry.resolve()` already
   produces for the full computer Browser; ordinary external links (like
@@ -141,8 +148,9 @@ demonstrating the real, stable contract a plugin author can rely on.
   shortcut already does, then closes the phone; two access points, one
   wheel.
 - **Settings** — a small, deliberately partial subset (volume, camera
-  sensitivity, invert, time format, the phone's own wallpaper/border) of
-  the full computer Settings app — see "Becoming a Device" below.
+  sensitivity, invert, time format, the phone's own wallpaper/border,
+  brightness, and light/dark theme) of the full computer Settings app —
+  see "Becoming a Device" and "The Phone's Settings, Made Real" below.
 
 ## Craftsmanship (Version 2, Phase 23b — Interface & Design Refinement)
 
@@ -217,6 +225,24 @@ place either surface's change actually lands — plain `data-wallpaper`/
 "doesn't know what a Being, an outfit is" standard the rest of this
 file already holds it to.
 
+**Version 4, Phase 2 ("Playtesting Notes, Continued") — that data flow
+was always genuinely correct; the visible *effect* of it wasn't.** The
+`[data-wallpaper]` tint rule was scoped to
+`.workshop-phone-content:has(.workshop-phone-home-grid)` — which only
+ever matches while the Home screen specifically is mounted. The picker
+itself lives in the Settings app, a different screen, so choosing a
+wallpaper never visibly changed anything on the screen where the choice
+was actually made — only a button's own active-state highlight — and the
+tint only appeared after backing out to Home, where it's a subtle blend
+easy to miss besides. Fixed by dropping the `:has()` gate: the tint is
+now the phone's own backdrop on every screen, the same way a real
+device's wallpaper isn't confined to its home screen. Confirmed live: the
+Settings screen's own `getComputedStyle().backgroundImage` was `"none"`
+before this fix and a real, correctly-tinted gradient after it, without
+navigating away from Settings at all. Deliberately scoped to "the
+wallpaper is visibly there" — not a live-preview redesign of the Settings
+picker itself, which is `docs/ROADMAP_V4.md`'s own separate Phase 3.
+
 **A 12-hour/24-hour format toggle, the same setting on both surfaces.**
 `SettingsStore.get("display").timeFormat` (`"24h"` default, or `"12h"`)
 — `src/utils/TimeFormat.js`'s own `formatClockTime(hour, format)` reads
@@ -253,11 +279,15 @@ from it — never a departure invented for its own sake (see
 for wallpaper presets and just as true here).
 
 - **Bubble** — a companion, not a list. A real presence dot
-  (`data-presence`: `awake`/`conversing`/`connecting`/`sleeping`, driven
-  by the same `residentConnection`/`residentBehaviour` state the rest of
-  the app already reads) sits beside the heading, and the Talk button is
-  shaped like an actual speech bubble instead of the generic full-width
-  rectangle every other app's primary action already is.
+  (`data-presence`: `awake`/`connecting`/`sleeping`, driven by
+  `residentConnection`'s own state) sits beside the heading, and the Talk
+  button is shaped like an actual speech bubble instead of the generic
+  full-width rectangle every other app's primary action already is.
+  **Corrected, Version 4 Phase 7:** the fourth `"conversing"` presence
+  state (previously reading `residentBehaviour`, a shared singleton) was
+  dropped along with it — `ResidentBehaviour` is constructed fresh per
+  conversation now, with nothing outside that one conversation left to
+  read its mode from.
 - **Wardrobe** — a closet, so outfits are a grid of garment cards, not a
   scrolling list of rows. The swatch is each outfit's own real
   `appearance.parts.torso.color` now, not the fixed placeholder colour
@@ -296,6 +326,68 @@ for wallpaper presets and just as true here).
   or a device to browse, so every slider, checkbox, and toggle row stays
   exactly as it was; the only touch is the same small gear mark next to
   its own heading every other app's identity-defining mark now gets.
+  **No longer true as of Version 4, Phase 3** ("The Phone's Settings,
+  Made Real," below) — the wallpaper/border rows became live swatch
+  previews and a new Display section was added; "plainest app,
+  unchanged" stopped being the honest description once dark theme and
+  brightness needed a real home.
+
+## The Phone's Settings, Made Real (Version 4, Phase 3 — v4.0.3)
+
+"I want this to look more real and less basic drop down boxes and
+generic UI elements" — `docs/ROADMAP_V4.md`'s own brief for this phase.
+Two genuinely new controls (`SettingsStore.get("phone").brightness`,
+range 0.3–1, and `.theme`, `"light"` | `"dark"`) and a redesign of the
+two that already existed.
+
+**A theme-aware custom property layer, phone-wide.** Every app screen on
+the Phone — not just Settings/Home — had been hardcoding light-mode
+colours directly (`var(--ink)`, `rgba(0,0,0,0.03–0.12)` scattered across
+roughly fifteen rule blocks in `css/phone.css`). Picking "Dark" now means
+something on every screen: a `--phone-ink`/`--phone-surface-subtle`/
+`--phone-border-subtle`/`--phone-base-1`/`--phone-base-2` (etc.) layer,
+defined once at `.workshop-phone` and overridden at
+`.workshop-phone[data-theme="dark"]`, reusing the existing paper/ink
+token pairing inverted rather than inventing new hex values. Confirmed
+live across three independent app screens (Wardrobe, Emotes, Browser),
+not just Settings itself — the one claim this design specifically had to
+earn.
+
+**Brightness dims the screen, not the case.** `PhoneUI.js` gained a
+`.workshop-phone-screen` wrapper around the status bar, header, content,
+and home indicator — everything that renders *as* the display — leaving
+the wood-and-brass case (border, box-shadow) outside it. `filter:
+brightness(var(--phone-brightness, 1))` targets only that wrapper, so a
+player dimming their phone dims what's showing, not the physical object
+holding it — confirmed live: dragging the slider changes the screen's
+own computed `filter` while the case's border and box-shadow stay
+byte-for-byte identical.
+
+**Wallpaper and border pickers became real previews**, not text
+buttons. Each wallpaper swatch renders the actual gradient formula (base
++ tint) via inline style, reading the same live CSS custom properties
+`.workshop-phone-content` itself resolves against — so a swatch already
+reflects whichever theme is active, and selecting one produces a
+background that matches the swatch pixel-for-pixel (confirmed live:
+identical resolved `background-image` strings before and after
+selecting). Border presets reuse the same circular `.workshop-phone-swatch`
+component Wardrobe's own outfit cards already established, rather than a
+second swatch style invented for this screen alone.
+
+**A new Display section**, separate from Appearance — Theme (☀️ Light /
+🌙 Dark toggle buttons) and Brightness (the existing `buildSliderRow()`
+helper, unchanged in behaviour, just given a 0.3–1 range instead of its
+default 0–1).
+
+**Scope held deliberately narrow**: the PC Settings app's own Phone tab
+(`SettingsApp.js`'s `renderPhone()`) is untouched — still a plain
+`<select>` for wallpaper/border, no brightness or theme controls added
+there. A player sets their device's own screen from the device itself;
+the desktop surface still writes to the same `settingsStore`, so a
+change from either place still shows up on the actual phone immediately,
+exactly as "Becoming a Device" above already established — this phase
+just didn't duplicate the new controls onto a surface that was never the
+device being customised.
 
 ## Known simplifications (by design, for this phase)
 
@@ -310,8 +402,25 @@ for wallpaper presets and just as true here).
 
 - **Plugin applications** — `registerPhoneAppFactory()` is the exact
   mechanism; nothing about it is Workshop-app-specific.
-- **Additional residents** — Bubble's own app is already written
-  generically against the resident stores, not the name "Bubble."
+- **Additional residents — the underlying limit is resolved, the Phone
+  UI is a deliberately separate, still-open extension point.** This
+  bullet used to track a Version 4 Phase 6 finding that Bubble's own app
+  was less generic than an earlier draft of this document claimed — the
+  app's own registry id, home-screen label, and heading fallback were
+  the literal string `"bubble"`/`"Bubble"`, three times. **Corrected,
+  Version 4 Phase 7:** the underlying reason a second resident couldn't
+  exist at all is gone — `BeingResidentStateStore` genuinely isolates
+  any number of resident-capable Beings (see `docs/RESIDENT.md`'s own
+  "One resident, not several," now resolved). `BubblePhoneApp.js` itself
+  still names Bubble specifically (`BUBBLE_DEFINITION_ID`) — **decided
+  with Vi**, a genuine multi-resident picker UI here was scoped out of
+  this phase deliberately, in favour of keeping Bubble's own dashboard
+  working correctly first (see "Home Screen," above, for the same
+  decision applied to her Phone app specifically). A second
+  resident-capable Being today would work fully — conversation, memory,
+  movement, mood — just without a Phone dashboard of its own yet; a
+  future phase generalising `BubblePhoneApp.js` into a picker over every
+  resident-capable Being is real, well-scoped work, not a redesign.
 - **AI Conversations, Camera Tools, Workshop Projects** — each a
   natural new tile on the same home grid, no architecture change
   required.

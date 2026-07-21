@@ -57,41 +57,57 @@ watching. Showing that journey would undercut the very thing this phase
 is about — nothing should feel like it was staged for the player's
 benefit.
 
-## Bubble Continuity
+## Bubble Continuity — restored, Version 4 Phase 7a
 
 "Bubble should never teleport randomly. Its position should make sense
 based upon elapsed time... arrive at a believable location when the
-Workshop loads." `ResidentController._applyContinuity()` is deliberately
-not a real simulation of every idle-location hop that would have
-happened — the player never saw any of them, so modelling each one has
-no payoff. It's a single, honest answer instead: has enough time passed
-that Bubble would plausibly have moved on from exactly where it was
-left?
+Workshop loads." `BeingController._applyResidentContinuity()` is the
+current mechanism — deliberately not a real simulation of every
+idle-location hop that would have happened, but a single, honest answer
+instead: has enough time passed that Bubble would plausibly have moved on
+from exactly where she was left? Below `MIN_REST_SECONDS` (90 seconds),
+no; past it, a genuinely new named idle location (weighted the same way
+an ordinary autonomous pick would be — see `docs/RESIDENT.md`'s own "A
+quiet habit"), arrived at directly via `setDraggedPosition()`/
+`setDraggedLookAt()`, no travel ease.
 
-Below `MIN_REST_SECONDS` (90 seconds — the shortest Bubble would ever
-actually rest somewhere, already a real constant `ResidentMovement.js`
-uses for its own ordinary wandering), the answer is no — reopening the
-Workshop moments after closing it shows Bubble exactly where it was, not
-somewhere new, or "nothing should feel scripted" stops being true. Past
-that threshold, `_applyContinuity()` picks one new idle location (never
-the one it was already at) and arrives there directly, via the same
-`setDraggedPosition()`/`setDraggedLookAt()` primitives dragging Bubble
-already uses to reposition it instantly without an in-progress travel
-ease fighting the new position.
+**A real, honest regression through the end of Version 4 Phase 7,
+closed the same phase's own follow-up.** `ResidentController.js`'s
+original version of this was deleted with nothing replacing it for one
+phase — she resumed exactly where she was left regardless of how long
+the gap was, since she went through the generic Being reposition below
+like any other, which turned out to be a no-op for her specific movement
+style (see "Being Continuity," below). Verified live: driven directly
+below the 90-second threshold (a genuine no-op — identical position and
+location id) and above it (a new named location, position snapped
+exactly to that location's own coordinates, `ResidentMovement`'s own
+internal state kept in sync with no desync artifact).
 
 ## Being Continuity
 
 "This does not require advanced AI. Simple continuity is sufficient."
-`BeingController._applyContinuity()` is simpler still than Bubble's own
-— a Being's wander/patrol target is already just a point within its own
-home radius, not a named location to choose between, so continuity is
-exactly one call to the same `pickWanderTarget()` its ordinary wandering
-already uses. A `movementStyle: "static"` Being never moves regardless
-of elapsed time, matching exactly what it would have done if the player
-had stayed and watched the whole time. `wanderTarget`/`patrolRoute` both
-reset to `null` afterward, so the next ordinary wander/patrol pick
-starts fresh from the new position rather than reaching back toward a
-now-irrelevant old target.
+`BeingController._applyContinuity()` — a Being's wander/patrol target is
+already just a point within its own home radius, not a named location to
+choose between, so continuity is exactly one call to the same
+`pickWanderTarget()` its ordinary wandering already uses. A
+`movementStyle: "static"` Being never moves regardless of elapsed time,
+matching exactly what it would have done if the player had stayed and
+watched the whole time. `wanderTarget`/`patrolRoute` both reset to `null`
+afterward, so the next ordinary wander/patrol pick starts fresh from the
+new position rather than reaching back toward a now-irrelevant old
+target.
+
+**A `movementStyle: "residentTravel"` instance is routed to
+`_applyResidentContinuity()` instead** (see "Bubble Continuity," above)
+— through the end of Version 4 Phase 7, before that method existed, this
+generic pass ran for a `residentTravel` Being too, and was a genuine
+no-op for it: whatever position it set got overwritten before the first
+rendered frame by `_updateResidentTravel()`'s own lazy `ResidentMovement`
+construction, which seeded itself from the *persisted*
+`residentState.currentPosition` with no awareness continuity had just
+run. Harmless at the time (no crash, no visible jump) — Phase 7a's own
+explicit routing is what actually closed the gap, not a change to this
+generic pass itself.
 
 ## Environment Continuity
 
@@ -257,11 +273,17 @@ file needing to change at all.
 
 ## Future extension points
 
-- **Multiple Buildings / Additional Residents** — every continuity
-  handler here is written against the *stores*, not anything
-  Workshop-singular; a second building's own Beings, or a second
-  resident, already participate in continuity the moment they exist,
-  with no changes to this architecture.
+- **Multiple Buildings** — every continuity handler here is written
+  against the *stores*, not anything Workshop-singular; a second
+  building's own Beings already participate in continuity the moment
+  they exist, with no changes to this architecture.
+- ~~**Additional Residents**~~ — **fully resolved, Version 4 Phase 7/7a.**
+  Any number of resident-capable Beings genuinely get their own isolated
+  `BeingResidentStateStore` bundle (verified live: two distinct instances
+  held two distinct conversations with two distinct bundle objects), and
+  each gets a genuinely believable load-time reposition too — "Bubble
+  Continuity," above, applies to any `residentTravel` instance, not
+  Bubble by name.
 - **Automation, Workbench Projects, Construction** — `WorkshopProjectStore`
   is exactly the seam; a future phase adds the UI and the "what does
   100% actually produce" logic, not a new persistence architecture.
