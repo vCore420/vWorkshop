@@ -224,9 +224,53 @@ auto-mapped, its bone *names* are cached there; every subsequent spawn of
 the same model resolves those names against its own fresh clone
 immediately, rather than re-running the heuristic matcher every time.
 
-**What this doesn't do**: there's no manual override UI yet for fixing
-one wrong entry in an otherwise-good auto-detected mapping — see "Known
-simplifications" below.
+**A manual override UI, closed (Version 4, Phase 8d — "The Rest of
+IK").** The last of Phase 8's own four pieces. `ModelLibrary.
+setSkeletonMap()` already existed and already had a real consumer
+(`BeingController._resolveSkeleton()` already preferred a cached map
+over re-running the heuristic) — what was missing was a UI for actually
+writing one. `BeingCreatorApp.js`'s own "Skeleton Mapping" section
+(right below "Model," shown whenever a model is selected) is one
+dropdown per `WORKSHOP_JOINTS` entry — the identical `selectRow()` shape
+the primitives side's own "Rig Joint" editor already used, just pointed
+at an imported model's own real bone names instead of a primitive part.
+An untouched model's dropdowns show the *live* auto-detected guess for
+each joint, not a blank list — the same "an honest preview of what
+actually happens" standard this section's own live preview already held
+itself to. Changing any one joint promotes the *entire current effective
+mapping* — every other joint's own already-correct detection included —
+into a real, saved override with just that one field corrected, rather
+than starting a player over from a blank slate for joints they never
+meant to touch. "Reset to Auto-Detected" clears it back to `null`, the
+identical "forget this and re-detect" contract `setSkeletonMap()` always
+documented.
+
+**A real, related bug found and fixed in the same pass:** the live
+preview (`refreshPreview()`) used to call `autoMapSkeleton()`
+unconditionally for an imported model, on every single refresh — never
+reading the *cached* map at all. Without a fix, a correction made
+through the new UI would have had no visible effect in the very editor
+used to make it. Now cached-first, auto-detect-fallback, the identical
+order `_resolveSkeleton()` already established for a genuinely placed
+Being. **A second, smaller timing issue caught by testing live, not
+assumed fine:** naively clearing the preview's own skeleton/bone-name
+state before the model's own async reload finished (needed for the
+cached-map fix above) produced a real, measured flash of "Not mapped" in
+every dropdown for the ~100-300ms a reload takes — most visibly right
+after "Reset to Auto-Detected," which briefly looked like it had cleared
+the mapping entirely rather than restored the auto-detected one. Fixed
+by leaving the previous values in place until the new ones are actually
+computed, so the preview only ever *updates*, never visibly *blanks*
+first. Verified live end to end against a real, previously-validated
+test asset (`Soldier.glb`, the same Mixamo export this section's own
+Version 3, Phase 1 account above used) — not a synthetic fixture: all 14
+auto-detected joints read correctly with nothing cached yet, one
+deliberate override promoted the full map with every other joint's own
+correct detection intact, a genuinely placed Being using the same model
+picked up the override on its own next spawn
+(`BeingController._resolveSkeleton()`, confirmed by reading
+`runtime.skeleton.map` directly), and "Reset to Auto-Detected" restored
+the live auto-detected value with no intervening blank state.
 
 **Being Creator phase (v2.0.7): a second, exact alternative that needs no
 heuristic at all.** A body built entirely from Workshop primitives
@@ -375,9 +419,50 @@ held object and a light-switch reach can genuinely overlap in time
 (nothing stops carrying a book while flipping a light on), and opposite
 hands mean the two poses never need to coordinate or fight over the same
 arm. See `docs/WORLDBUILDER.md`'s own "Pickupable" account for the
-behaviour/event side of picking something up in the first place, and this
-document's "Known simplifications" below for what's honestly not
-attempted this wave (looking at targets, still open).
+behaviour/event side of picking something up in the first place.
+
+**Looking at targets, closed (Version 4, Phase 8c — "The Rest of IK").**
+The last of the four pieces this section's own header has named since
+Version 3, Phase 1 — and architecturally distinct from everything above:
+a single joint aiming at a point, not a two-bone chain reaching for one,
+so none of `TwoBoneIK.js`'s own law-of-cosines math applies. The real,
+already-visible motivation: every Being with `awarenessMode !==
+"ignorePlayer"` already turns its *whole body* to face the player when
+aware of them (`BeingController.js`'s own `awarenessBlend`, shipping
+since Version 4, Phase 6/7) — a standing Being pivoting entirely just to
+track the player reads stiffer than a real creature, which turns its
+head first. `LookAtIK.applyLookAt(headPivot, targetWorld, blend,
+maxAngleRad)` (`src/player/`, a new sibling file alongside
+`TwoBoneIK.js`/`FootIK.js`/`HandIK.js`) resolves the target into the
+head's own parent-local space, clamps the angle off the rig's own
+rest-forward (confirmed, not assumed, to be local `+Z` — the existing
+whole-body turn's own `Math.atan2(toPlayer.x, toPlayer.z)` yaw already
+proves this) to `maxAngleRad` via an exact axis-angle rotation, then
+slerps by `blend`. Two call sites in `BeingController.js`, both purely
+additive right after the existing whole-body-turn code, neither changing
+it: the generic awareness block, and the `residentTravel` one (for the
+edge case of a player-made resident-capable Being using that movement
+style — Bubble herself is unaffected, guarded out entirely by having no
+`runtime.skeleton` at all). `blend` reuses `runtime.awarenessBlend`
+directly — already computed, already smoothed, no new triggering state
+needed. Because the head reads its parent's *current* world quaternion
+each frame, this composes for free with the body's own already-turning
+yaw: the head reaches the target first, the body catches up over the
+next few frames, both converging together — no reduction to the existing
+body-turn amount was needed or attempted.
+
+**A real refinement made mid-implementation, not shipped as first
+written:** the initial clamp used a normalized-lerp approximation
+(`restForward.lerp(targetDir, maxAngle/angle).normalize()`) — cheaper,
+but measured live to overshoot the intended clamp by several degrees at
+a 90° input angle, an avoidable inaccuracy in exactly the kind of
+feel-work this phase's own risk note warns is easy to get subtly wrong.
+Replaced with an exact axis-angle rotation before shipping; verified
+live afterward to land precisely on `maxAngleRad` (not "close to it") for
+every input angle tested, including directly-behind (a degenerate case
+handled with a fallback swing axis, the same defensive pattern
+`TwoBoneIK.js`'s own `solveTwoBoneIK()` already uses for its degenerate
+pole-hint case).
 
 ## Procedural Animation Layers
 
@@ -524,16 +609,24 @@ points."
 
 ## Known simplifications (by design, for this phase)
 
-- **No manual skeleton-mapping override UI** — `autoMapSkeleton()`'s own
-  result can't currently be hand-corrected if it gets one joint wrong; a
-  person can only accept what it found or not use that model for
-  retargeted playback at all.
-- **IK is wired for five real gameplay cases (Player ground adaptation
-  while idle, crouch foot-planting — Version 4, Phase 4 — walk-cycle foot
-  placement — Version 4, Phase 8a — and holding a picked-up object /
-  reaching for the light switch — Version 4, Phase 8b) and not yet the
-  last one** (looking at targets, for the head/torso) — see "Inverse
-  Kinematics" above.
+- **All four of Phase 8's own pieces are now shipped** — walk-cycle foot
+  placement (8a), hand placement/object interaction (8b), look-at
+  targets (8c), and manual skeleton-mapping correction (8d, this one) —
+  see "Skeleton Mapping" above and "Inverse Kinematics" above for each
+  account.
+- **All six real gameplay IK cases `docs/ROADMAP_V4.md`'s own Phase 8
+  brief named are now wired** (Player ground adaptation while idle,
+  crouch foot-planting — Version 4, Phase 4 — walk-cycle foot placement
+  — Phase 8a — holding a picked-up object / reaching for the light
+  switch — Phase 8b — and a Being's own head turning toward the player —
+  Phase 8c) — see "Inverse Kinematics" above. The one still-open IK
+  thread is the reach-limited downward-correction gap named in "Future
+  extension points" below — a different, smaller kind of gap than "not
+  wired yet."
+- **A Being's own head-look clamp is a single fixed angle for every
+  rig** (`HEAD_LOOK_MAX_ANGLE`, ~72°) — real anatomical variation (a cat
+  or dog's own real range of neck motion differs from a person's) isn't
+  modelled; every rig gets the identical, honest approximation.
 - **The held-object pose is a fixed carry spot, not a precise hand-
   contact fit** — a picked-up object sits at a small, honest local offset
   from the wrist pivot's own origin (see `HandInteractionSystem.js`'s own
@@ -562,16 +655,25 @@ points."
 
 ## Future extension points
 
-- **Manual skeleton-map correction** — a small UI (a joint dropdown per
-  Workshop joint, listing the model's own bone names) editing
-  `ModelLibrary`'s own cached `skeletonMap` directly.
-- **The last piece of "The Rest of IK"** — "looking at targets" for the
-  head/torso, `docs/ROADMAP.md`'s own Phase 8c; walk-cycle foot placement
-  and hand placement/object interaction both already shipped (Phase 8a,
-  8b) — see "Inverse Kinematics" above. Also still open: closing the
-  reach-limited downward-correction gap `FootIK.js`'s own header
-  documents (retuning the idle clip's own knee bend, or a root-height
-  adjustment in `CameraSystem`).
+- **Editing the *contents* of an already-manually-corrected mapping has
+  no dedicated UI polish beyond the dropdowns themselves** — no undo, no
+  "which joints did I actually change" diff view; each dropdown just
+  shows and edits the current effective value, the same level of
+  simplicity `docs/WORLDBUILDER.md`'s own Behaviours editor already
+  accepts for every other per-field correction in this codebase.
+- **The player's own head-in-mirror look-at** — `LookAtIK.applyLookAt()`
+  (Phase 8c) would work identically for the Player rig, but Phase 8c
+  deliberately scoped to Beings only (decided with Vi): the payoff is
+  narrower (only visible during a mirror/reflective-surface check — see
+  "Reflections and third person" in `docs/PLAYER.md`) and would need its
+  own separate design question (what should the player look at, since
+  there's no existing awareness state for them the way a Being already
+  has). A real, cheap follow-up if it comes up again, not attempted this
+  wave.
+- **Closing the reach-limited downward-correction gap** `FootIK.js`'s
+  own header documents (retuning the idle clip's own knee bend, or a
+  root-height adjustment in `CameraSystem`) — the one IK gap from earlier
+  phases that's still genuinely open; see "Inverse Kinematics" above.
 - **A wider item system** — stacking, an inventory, carrying more than
   one object — Phase 8b's own `book`/Pickupable is deliberately just a
   beginning, per Vi's own framing; see "Known simplifications" above.

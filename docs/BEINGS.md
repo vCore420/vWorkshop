@@ -389,7 +389,14 @@ whether it happens.
 **Awareness** is one smoothed 0-1 blend value, the same "no combinatorial
 state machine" approach `ResidentBehaviour.js`'s own awareness already
 uses — easing toward looking at the player within a radius, easing back
-as they leave it.
+as they leave it. **Version 4, Phase 8c ("The Rest of IK")** added a
+real head/neck turn on top of the whole-body one this same value already
+drove — `LookAtIK.applyLookAt()` (`docs/ANIMATION.md`'s own "Inverse
+Kinematics" section), reusing this exact `awarenessBlend` value with no
+new triggering state. A rigged Being's head now leads a look before the
+body catches up, rather than the whole body pivoting at once; an
+unrigged or imported-model Being (no tagged `head` joint) is unaffected,
+still just turning as it always did.
 
 **Interaction** doesn't open a chat interface — a Being isn't connected to
 Ollama the way the Workshop's own resident is. Talking, waving, or

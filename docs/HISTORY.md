@@ -2444,4 +2444,65 @@ overreaching this phase's own scope. `docs/ANIMATION.md`,
 `docs/WORLDBUILDER.md`, and `docs/ARCHITECTURE.md` updated in place. See
 `docs/ROADMAP.md`'s own Phase 8b account for the full story.
 
+**Version 4, Phase 8c — Look-At Targets (v4.0.8c).** The third of
+Phase 8's ("The Rest of IK") four pieces — "looking at targets," a
+named future extension point since Version 3, Phase 1. A real,
+already-visible gap: every Being with awareness already turns its
+*whole body* to face the player; nothing about the head moved
+independently, reading stiffer than a real creature. Architecturally
+distinct from the rest of Phase 8's own work — a single joint aiming at
+a point, not a two-bone chain — a new `LookAtIK.applyLookAt()`
+(`src/player/`) clamps the angle off the rig's own confirmed rest-
+forward via an exact axis-angle rotation, then slerps by
+`runtime.awarenessBlend`, already-computed state reused directly with
+no new triggering logic. Two purely additive call sites in
+`BeingController.js`, right after the existing whole-body-turn code,
+neither changing it — the head reaches the target first, the body
+catches up over the next few frames, converging for free since the head
+reads its parent's current world quaternion each frame. A real
+refinement made mid-implementation: the first clamp (a normalized-lerp
+approximation) measured live to overshoot by several degrees at a 90°
+input — replaced with an exact axis-angle rotation before closing,
+verified afterward to land precisely on the intended clamp for every
+angle tested. Decided with Vi: scoped to Beings only, not also the
+player's own head in mirror reflections — a real, cheap follow-up with
+its own separate design question, named honestly rather than stretched
+into this pass. Also fixed, before this phase started at Vi's own
+request: Bubble's own conversation overlay couldn't be closed — her
+`InteractableComponent` never set `opensOverlay: true`, so
+`InteractionSystem` never marked the conversation "active," and both
+Escape and the close button silently no-op on `exitActive()`'s own
+guard — present since Phase 7 first built the `aiResident` path, not a
+Phase 7b regression; fixed with one line and verified live through both
+close paths plus a regression check. Verified live throughout,
+numerically: head rotation toward the player, an exact clamp at 90°/
+directly-behind, easing back out of range, and complete non-effect on
+Bubble and unrigged/imported-model Beings, all confirmed against the
+real running engine. `docs/ANIMATION.md` and `docs/BEINGS.md` updated in
+place. See `docs/ROADMAP.md`'s own Phase 8c account for the full story.
+
+**Version 4, Phase 8d — Manual Skeleton-Mapping Override UI (v4.0.8d).**
+The last of Phase 8's ("The Rest of IK") four pieces, closing it
+entirely. `ModelLibrary.setSkeletonMap()` already existed with its own
+doc comment naming the exact gap: "no editing UI exists yet." A new
+"Skeleton Mapping" section in `BeingCreatorApp.js` — one dropdown per
+Workshop joint, the identical `selectRow()` shape the primitives side's
+own "Rig Joint" editor already used — shows the live auto-detected guess
+for an untouched model (not a blank list), and changing one joint
+promotes the entire current effective mapping into a real saved override
+with just that field corrected, rather than a blank slate. Two real bugs
+found and fixed in the same pass: the live preview used to ignore the
+cached map entirely, always re-running the heuristic — fixed to prefer
+cached-first, the same order `_resolveSkeleton()` already used for a
+placed Being; and fixing that surfaced a real, measured flash of "Not
+mapped" during the model's async reload, fixed by keeping previous
+values visible until new ones are ready rather than blanking first.
+Verified live end to end against `.claude/test-assets/Soldier.glb` (the
+same real Mixamo export Version 3, Phase 1 already validated at 14/14
+joints) — including a genuinely placed Being, spawned through the real
+`BeingController` pipeline, correctly picking up a manual correction on
+its own next spawn. `docs/ANIMATION.md` updated in place; all four
+original Phase 8 pieces now shipped. See `docs/ROADMAP.md`'s own Phase
+8d account for the full story.
+
 </details>

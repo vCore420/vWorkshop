@@ -6573,6 +6573,161 @@ tried to keep beyond its own scope. A precise hand-contact fit for the
 held object (it sits at a small, fixed offset from the wrist, not a grip
 tailored to its actual shape) is the same honest simplification.
 
+## Version 4, Phase 8c — Look-At Targets (v4.0.8c)
+
+**Goal:** the third of `docs/ROADMAP_V4.md`'s own Phase 8 ("The Rest of
+IK") four pieces — "looking at targets," the one piece of Phase 1's
+original IK scope that stayed a named future extension point across
+every phase since. A real, already-visible gap, not a hypothetical one:
+every Being with `awarenessMode !== "ignorePlayer"` already turns to
+face the player when nearby (`BeingController.js`'s own `awarenessBlend`
+mechanism, shipping since Phase 6/7), but the turn is whole-body only —
+nothing about the head moves independently, reading stiffer than a real
+creature, which turns its head first and only brings its body around if
+it keeps looking.
+
+**Architecturally distinct from the rest of Phase 8's own work.** A
+single joint aiming at a point, not a two-bone chain reaching for one —
+none of `TwoBoneIK.js`'s own law-of-cosines math applies. A new file,
+`LookAtIK.js` (`src/player/`, a sibling to `TwoBoneIK.js`/`FootIK.js`/
+`HandIK.js`), exports `applyLookAt(headPivot, targetWorld, blend,
+maxAngleRad)`: resolves the target into the head's own parent-local
+space, clamps the angle off the rig's own rest-forward to `maxAngleRad`
+via an exact axis-angle rotation, then slerps by `blend`. The rig's own
+rest-forward convention (local `+Z`) wasn't guessed at — confirmed
+directly from the fact that the *existing* whole-body turn's own
+`Math.atan2(toPlayer.x, toPlayer.z)` yaw already proves it. Two call
+sites in `BeingController.js`, both purely additive right after the
+existing whole-body-turn code, neither touching it: the generic
+awareness block, and the `residentTravel` one (for a player-made
+resident-capable Being using that movement style; Bubble herself is
+unaffected, having no `runtime.skeleton` at all for a
+`residentEmbodiment` body). `blend` reuses `runtime.awarenessBlend`
+directly — already computed, already smoothed, no new triggering state.
+Because the head reads its parent's *current* world quaternion each
+frame, this composes for free with the body's own already-turning yaw:
+the head reaches the target first, the body catches up over the next few
+frames, both converging together.
+
+**A real refinement made mid-implementation, not shipped as first
+written.** The initial clamp used a normalized-lerp approximation —
+cheaper, but measured live to overshoot the intended clamp by several
+degrees at a 90° input angle, an avoidable inaccuracy in exactly the kind
+of feel-work this phase's own risk note warns is easy to get subtly
+wrong. Replaced with an exact axis-angle rotation before closing;
+verified live afterward to land precisely on `maxAngleRad` for every
+input angle tested (a target straight ahead, to the side, and directly
+behind — the last handled with a fallback swing axis, the same
+degenerate-case pattern `TwoBoneIK.js`'s own `solveTwoBoneIK()` already
+uses for its pole hint).
+
+**Decided with Vi:** scoped to Beings only this wave, not also extended
+to the player's own head in mirror reflections — a real, cheap follow-up
+(the identical `applyLookAt()` would work unchanged for the Player rig)
+but a narrower payoff needing its own separate design question (what
+should the player look at, since there's no existing awareness state for
+them), named honestly as future work rather than stretched into this
+pass.
+
+**Also fixed, before this phase started, at Vi's own request:** Bubble's
+own conversation overlay couldn't be closed — Escape and the overlay's
+own close button both route through `InteractionSystem.exitActive()`,
+which silently no-ops when nothing is marked "active." Root cause: her
+`InteractableComponent` never set `opensOverlay: true`, so
+`InteractionSystem._trigger()` never marked the conversation as active
+in the first place (its own gate is `opensOverlay || focusPose`, and
+neither was ever set for the `aiResident` case specifically — every
+other Being interaction, `talk`/`wave`/`inspect`, correctly leaves it
+`false`, since those just show a toast with nothing to explicitly exit).
+One line: `opensOverlay: definition.interactionBehaviour ===
+"aiResident"`. Not a Phase 7b regression — present since Phase 7 first
+built the `aiResident` interaction path, simply never exercised
+end-to-end until now. Verified live through both close paths (the
+close-button's own `interaction:exitRequested` emission, and Escape via
+`InteractionSystem.update()`'s own `wasJustPressed("cancel")` check),
+plus a regression check confirming ordinary Being interactions are
+unaffected.
+
+**Verified live throughout**, numerically rather than visually: a
+spawned Person's own head genuinely rotates toward the player as
+`awarenessBlend` rises, stays at exactly 0° when the target is already
+at rest-forward, clamps to exactly `HEAD_LOOK_MAX_ANGLE` (not merely
+"close to it") for a target 90° to the side or directly behind, and
+eases back to 0° as the player leaves radius; Bubble and an
+unrigged/imported-model Being are both confirmed genuinely unaffected,
+with no errors across repeated update frames. `docs/ANIMATION.md` and
+`docs/BEINGS.md` updated in place.
+
+## Version 4, Phase 8d — Manual Skeleton-Mapping Override UI (v4.0.8d)
+
+**Goal:** the last of `docs/ROADMAP_V4.md`'s own Phase 8 ("The Rest of
+IK") four pieces, closing Phase 8 entirely. `WorkshopSkeleton.
+autoMapSkeleton()` already did real, working heuristic bone-name
+matching; `ModelLibrary.setSkeletonMap()` already existed as a real write
+API, its own doc comment naming the exact gap plainly: "no editing UI
+exists yet for fixing an individual wrong entry." This closes that gap —
+a real UI, not a new storage mechanism, since the storage already
+existed and already had a real consumer
+(`BeingController._resolveSkeleton()` already preferred a cached map
+over re-running the heuristic).
+
+**One dropdown per Workshop joint, the identical shape the primitives
+side already established.** `BeingCreatorApp.js`'s new "Skeleton
+Mapping" section (mounted right below "Model," the exact right place —
+shown only once a model is actually selected) reuses `selectRow()`, the
+same row helper `buildPartEditor()`'s own "Rig Joint" dropdown already
+uses for a primitive part, just pointed at an imported model's own real
+bone names instead. An untouched model's dropdowns show the *live*
+auto-detected guess for every joint, not a blank list — matching the
+"an honest preview of what actually happens" standard this section's own
+live preview already holds itself to, confirmed live against
+`.claude/test-assets/Soldier.glb` (the genuine Mixamo export this
+project's own Phase 1 validation already proved maps 14/14 joints
+correctly): every joint read back exactly right, with nothing cached
+yet. Changing any one joint "promotes" the *entire current effective
+mapping* — every other joint's own already-correct detection included —
+into a real, saved override with just that one field corrected, rather
+than starting a player over from a blank slate for joints they never
+meant to touch; verified live by overriding Head, then confirming every
+other one of the 14 auto-detected joints was preserved byte-for-byte in
+the saved map. "Reset to Auto-Detected" clears it back to `null`,
+`setSkeletonMap()`'s own already-documented "forget this and re-detect"
+contract — no new store method needed.
+
+**Two real bugs found and fixed in the same pass, neither hypothetical:**
+the live preview's own `refreshPreview()` used to call `autoMapSkeleton()`
+unconditionally for an imported model, every single refresh — never
+reading the cached map at all, meaning a correction made through the new
+UI would have had no visible effect in the very editor used to make it.
+Fixed to prefer the cached map first, falling back to the heuristic only
+when nothing's cached — the identical order `_resolveSkeleton()` already
+established for a genuinely placed Being. Fixing that surfaced a second,
+smaller issue, caught live rather than assumed fine: naively blanking the
+preview's own skeleton/bone-name state before the model's async reload
+finished produced a real, measured flash of "Not mapped" in every
+dropdown for the ~100-300ms a reload takes — most visibly right after
+"Reset to Auto-Detected," which briefly looked like it had cleared the
+mapping entirely rather than restored the correct one. Fixed by leaving
+the previous values in place until the new ones are actually computed,
+so the preview only ever *updates*, never visibly blanks first —
+re-verified live, synchronously immediately after the fix, with zero gap.
+
+**Verified live throughout, end to end, against a real production
+consumer, not just the UI's own state:** a genuinely placed Being using
+the same test model, spawned through the real `BeingController`
+pipeline, picked up the manual correction on its own next spawn —
+confirmed by reading `runtime.skeleton.map.head.name` directly and
+matching it to the override, with every other joint still correctly
+present. `docs/ANIMATION.md` updated in place — "Skeleton Mapping," its
+own "Known simplifications," and "Future extension points" all
+corrected; all four of Phase 8's own original pieces (walk-cycle foot
+placement, hand placement/object interaction, look-at targets, manual
+skeleton-mapping correction) are now shipped.
+
+**Also fixed this session, before Phase 8c started, at Vi's own
+request:** Bubble's own conversation overlay couldn't be closed —
+already accounted for in the Phase 8c entry above; not repeated here.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space
