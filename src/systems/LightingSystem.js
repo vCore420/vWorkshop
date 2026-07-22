@@ -245,6 +245,13 @@ export class LightingSystem {
     // interior face (~2.85) than before, sitting flush against it rather
     // than with a small, noticeable gap, while still avoiding z-fighting.
     plate.position.set(1.5, 1.3, 2.935);
+    // Version 4, Phase 8b ("The Rest of IK") — the plate is added directly
+    // to `engine.scene` below (`MeshComponent(plate, this.engine.scene)`),
+    // so its own local position already *is* its world position; captured
+    // once, here, rather than duplicating the literal above, so
+    // `lightSwitch:flipped` (below) and this plate's own placement can
+    // never quietly drift apart from each other.
+    this._lightSwitchWorldPosition = plate.position.clone();
 
     // Workshop Interior phase — "small interaction sounds... a switch
     // that actually does something." A real rocker toggle, physically
@@ -261,7 +268,15 @@ export class LightingSystem {
       new InteractableComponent({
         prompt: "Flip the light switch",
         radius: 0.9, // deliberately tighter than the standard "small object" 2.0m tier; see docs/REFINEMENT.md
-        onInteract: () => this.setLightsOn(!this.lightsOn),
+        onInteract: () => {
+          this.setLightsOn(!this.lightsOn);
+          // Version 4, Phase 8b — a real, named world position for
+          // `HandInteractionSystem.js`'s own one-shot left-arm reach
+          // (`HandIK.applyReachPose()`) to aim at; purely cosmetic, fired
+          // *after* the light has already actually toggled above, since
+          // the reach never needs to land for the switch itself to work.
+          this.engine.events.emit("lightSwitch:flipped", { position: this._lightSwitchWorldPosition.clone() });
+        },
       })
     );
     this.engine.entities.create(switchEntity);

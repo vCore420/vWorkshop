@@ -13,9 +13,11 @@ import { solveTwoBoneIK } from "./TwoBoneIK.js";
  *
  * - Only while standing still (`PlayerAnimationSystem` only calls this
  *   for movement state `"idle"`, which is only ever reached while
- *   grounded). Foot placement *during* a walk cycle is a genuinely
+ *   grounded). Foot placement *during* a walk cycle was a genuinely
  *   different, animation-phase-aware problem (which foot is currently
- *   planted, when) — not attempted here.
+ *   planted, when) — not attempted here at the time; see
+ *   `applyWalkFootIK()`, below, for Version 4 Phase 8a's own answer to
+ *   exactly that question.
  * - Only where `TerrainSystem` actually has height data. Indoors, on a
  *   Builder structure, or anywhere off the sculpted outdoor patch, this
  *   is a silent no-op and the ordinary flat-ground idle pose plays
@@ -163,6 +165,67 @@ export function applyCrouchFootIK(pivots) {
 
     applyLegIK(hip, knee, ankle, target, poleWorld);
   }
+}
+
+// Version 4, Phase 8a — which leg is in stance (foot planted, bearing
+// weight) for each of `WALK_CLIP`'s own four frames
+// (`AnimationClips.js`), read directly from that clip's own authored
+// angles: frame 0 has the left leg back and nearly straight
+// (`upperLegLeft: -0.5, lowerLegLeft: 0.15`) while the right leg swings
+// forward, bent; frame 2 is the mirror. Frames 1/3 are brief (0.14s)
+// passing poses with no single clear stance leg — omitted here, read as
+// "no correction this frame" by `applyWalkFootIK()` below. Safe to
+// hardcode against: `AnimationLibraryStore.isDefault()` keeps every
+// seeded clip, this one included, read-only — a player can't reshape
+// `WALK_CLIP` into something this mapping would no longer describe.
+const WALK_STANCE_SIDE_BY_FRAME = { 0: "Left", 2: "Right" };
+
+/** Version 4, Phase 8a ("The Rest of IK") — the walk-cycle counterpart
+ *  to `applyTerrainFootIK()` above, closing the gap this file's own
+ *  header used to name: "foot placement during a walk cycle is a
+ *  genuinely different, animation-phase-aware problem... not attempted
+ *  here." The problem was never the correction math — `applyLegIK()`
+ *  already generalises to either foot — it was knowing *which* foot to
+ *  correct at any instant, since correcting the swinging leg would flatten
+ *  its own intentional lift. `WALK_STANCE_SIDE_BY_FRAME` above is that
+ *  answer, read directly from the clip `PlayerAnimationSystem` is already
+ *  playing — `frameIndex` is simply forwarded from its own
+ *  `this._frameIndex`, already current for this frame by the time
+ *  `update()` calls this (see that file's own comment).
+ *
+ *  Deliberately narrower than `applyTerrainFootIK()` in one way: only
+ *  ever touches the single stance leg's own pivots, never both — the
+ *  swing leg's authored pose is untouched, exactly as the walk cycle
+ *  intended. A frame with no listed stance side (the brief passing poses)
+ *  is a silent no-op, the same "leave the authored pose alone rather than
+ *  guess" choice `applyTerrainFootIK()` already makes for a foot that
+ *  straddles off the sculpted terrain patch. */
+export function applyWalkFootIK(pivots, terrainSystem, frameIndex) {
+  const side = WALK_STANCE_SIDE_BY_FRAME[frameIndex];
+  if (!side || !terrainSystem || !pivots?.torso) return;
+
+  const torsoWorldPos = pivots.torso.getWorldPosition(new THREE.Vector3());
+  const referenceHeight = terrainSystem.getHeightAt(torsoWorldPos.x, torsoWorldPos.z);
+  if (referenceHeight === null) return; // not standing on the sculpted terrain at all
+
+  const hip = pivots[`upperLeg${side}`];
+  const knee = pivots[`lowerLeg${side}`];
+  const ankle = pivots[`foot${side}`];
+  if (!hip || !knee || !ankle) return; // imported model, or a rig missing this pivot — same convention every other consumer here already follows
+
+  const ankleWorldPos = ankle.getWorldPosition(new THREE.Vector3());
+  const footHeight = terrainSystem.getHeightAt(ankleWorldPos.x, ankleWorldPos.z);
+  if (footHeight === null) return; // the stance foot itself straddles off the sculpted patch
+
+  const target = ankleWorldPos.clone();
+  target.y += footHeight - referenceHeight;
+
+  const torsoWorldQuat = pivots.torso.getWorldQuaternion(new THREE.Quaternion());
+  const hipWorldPos = hip.getWorldPosition(new THREE.Vector3());
+  const poleOffset = POLE_HINT_LOCAL[side].clone().applyQuaternion(torsoWorldQuat);
+  const poleWorld = hipWorldPos.add(poleOffset);
+
+  applyLegIK(hip, knee, ankle, target, poleWorld);
 }
 
 export function applyTerrainFootIK(pivots, terrainSystem) {

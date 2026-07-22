@@ -157,6 +157,21 @@ export class InteractionSystem {
     return !!this.active?.interactable?.focusPose?.allowLookAround;
   }
 
+  /** Version 4, Phase 8b ("The Rest of IK") — whether this system already
+   *  has a real interact-key claim on the current frame, either an open
+   *  interaction (`this.active`) or a genuine nearby interactable
+   *  (`this._nearest`, only ever set within radius/look-at — see
+   *  `_scanForNearest()`). `HandInteractionSystem.js`'s own put-down
+   *  action needs exactly this: pressing interact while holding an item
+   *  should put it down, *unless* the player is currently standing in
+   *  front of something else interactable (another Pickupable, a door,
+   *  the light switch) — in which case that ordinary interaction should
+   *  win, the same "only one thing responds to the interact key at once"
+   *  rule every other interactable already follows implicitly. */
+  get hasNearestInteractable() {
+    return !!this.active || !!this._nearest;
+  }
+
   exitActive() {
     if (!this.active) return;
     const { interactable } = this.active;

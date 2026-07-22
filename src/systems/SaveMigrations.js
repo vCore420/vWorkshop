@@ -26,7 +26,7 @@ import { DEFAULT_BEINGS, BUBBLE_DEFINITION_ID } from "../beings/DefaultBeings.js
  * with a stale or now-meaningless shape.
  */
 
-export const CURRENT_SAVE_VERSION = 6;
+export const CURRENT_SAVE_VERSION = 7;
 
 const MIGRATIONS = {
   // v1 -> v2: furniture position/rotation used to be saved and blindly
@@ -204,6 +204,28 @@ const MIGRATIONS = {
     delete envelope.providers.playerPatternMemory;
     delete envelope.providers.residentCuriosity;
     delete envelope.providers.conversationMemory;
+    return envelope;
+  },
+  // v6 -> v7: Version 4, Phase 7b ("Restoring Bubble's Own Embodiment") —
+  // the v5->v6 migration above only ever adds Bubble's seed definition
+  // when she's entirely missing from a save; a save that already had her
+  // (every save that lived through Phase 7 itself) kept her old, now-
+  // deleted primitives shape forever, since BeingLibrary.load() never
+  // overwrites an existing definition with fresh seed data on its own.
+  // This finds exactly that case — a persisted Bubble definition still on
+  // the old `bodySource: "primitives"` — and brings only the fields that
+  // describe *how she's drawn* up to the new `"residentEmbodiment"`
+  // shape, leaving everything a player might actually have set for her
+  // (name, residentProfileId, movementStyle, awarenessMode, and so on)
+  // completely untouched.
+  6: (envelope) => {
+    const bubbleDefinition = envelope.providers?.beingLibrary?.beings?.[BUBBLE_DEFINITION_ID];
+    if (bubbleDefinition && bubbleDefinition.bodySource !== "residentEmbodiment") {
+      bubbleDefinition.bodySource = "residentEmbodiment";
+      bubbleDefinition.bodyParts = [];
+      bubbleDefinition.idleAnimationClipId = null;
+      bubbleDefinition.walkAnimationClipId = null;
+    }
     return envelope;
   },
 };

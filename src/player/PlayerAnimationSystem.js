@@ -2,7 +2,7 @@ import { applyPose } from "./PlayerCharacter.js";
 import { MOVEMENT_STATE_TO_CLIP_ID } from "./AnimationClips.js";
 import { advanceFrame, computeBlendedPose, ClipPlayer } from "./AnimationPlayback.js";
 import { mergePoses, JOINT_GROUPS } from "./AnimationLayers.js";
-import { applyTerrainFootIK, applyCrouchFootIK } from "./FootIK.js";
+import { applyTerrainFootIK, applyCrouchFootIK, applyWalkFootIK } from "./FootIK.js";
 import { TerrainSystem } from "../systems/TerrainSystem.js";
 
 /**
@@ -184,10 +184,8 @@ export class PlayerAnimationSystem {
     }
     applyPose(pivots, pose);
     // Version 3, Phase 1 ("Completing Promises") — "foot placement on
-    // terrain." Only while standing still — see FootIK.js's own header
-    // for why walking is a different, harder problem left for later.
-    // Runs after applyPose() so it corrects the base pose already
-    // applied above, not instead of it.
+    // terrain." Runs after applyPose() so it corrects the base pose
+    // already applied above, not instead of it.
     if (this._movementState === "idle") applyTerrainFootIK(pivots, this._terrainSystem);
     // Version 4, Phase 4 — the crouch counterpart: `CROUCH_CLIP`'s own
     // authored leg bend floats the foot off the ground with nothing
@@ -196,6 +194,13 @@ export class PlayerAnimationSystem {
     // Mutually exclusive with the idle branch above by construction —
     // `_movementState` is a single string, never both at once.
     else if (this._movementState === "crouch") applyCrouchFootIK(pivots);
+    // Version 4, Phase 8a ("The Rest of IK") — the walk-cycle
+    // counterpart FootIK.js's own header used to name as "not attempted
+    // here." `this._frameIndex` is already current for this frame (see
+    // `_advance(dt)` above); `applyWalkFootIK()` knows which single leg
+    // is in stance for that frame and corrects only that one, leaving
+    // the swinging leg's own authored lift untouched.
+    else if (this._movementState === "walk") applyWalkFootIK(pivots, this._terrainSystem, this._frameIndex);
   }
 
   _advance(dt) {

@@ -4,6 +4,10 @@ const _toTarget = new THREE.Vector3();
 const _toPole = new THREE.Vector3();
 const _bendAxis = new THREE.Vector3();
 const _upperDir = new THREE.Vector3();
+const _chainRootPos = new THREE.Vector3();
+const _chainParentQuat = new THREE.Quaternion();
+const _chainDir = new THREE.Vector3();
+const REST_DOWN = new THREE.Vector3(0, -1, 0);
 
 /**
  * TwoBoneIK
@@ -99,4 +103,46 @@ export function solveTwoBoneIK(rootPos, upperLength, lowerLength, target, poleHi
     bendAngle,
     reachable,
   };
+}
+
+/**
+ * Version 4, Phase 8b ("The Rest of IK") — the shared rig-glue
+ * `solveTwoBoneIK()`'s own header already named as any rig's job:
+ * turning a world-space direction into a local rotation via
+ * `Quaternion.setFromUnitVectors()`. `FootIK.js`'s own private
+ * `applyLegIK()` already does exactly this for the leg chain — this is
+ * the identical logic, exported here as a shared entry point for a
+ * second chain (an arm, reaching for an object) rather than either
+ * duplicating it or reaching into `FootIK.js`'s own private function,
+ * which stays untouched to avoid any regression risk to its own already-
+ * verified leg correction. Safe to reuse unmodified: every limb segment
+ * `PlayerCharacter.js`/`BodyCompiler.js` build (leg *and* arm alike)
+ * shares the identical rig convention — each child pivot's own rest
+ * position, quaternion identity, points straight down (local `-Y`) from
+ * its parent — confirmed directly in both files before writing this,
+ * not assumed from the leg case alone.
+ *
+ * Mutates `rootPivot`/`midPivot` in place (shoulder/elbow, or hip/knee)
+ * so the end effector (hand, or foot) reaches `targetWorld`, given
+ * `poleWorld` for the same reason `solveTwoBoneIK()`'s own header
+ * explains — the chain's one remaining degree of freedom. Returns the
+ * same `solved` object `solveTwoBoneIK()` produced, so a caller that
+ * wants `reachable`/`endPosition` (a reach animation checking whether it
+ * actually landed on its target, say) doesn't need to solve twice.
+ */
+export function applyTwoBoneChain(rootPivot, midPivot, endPivot, targetWorld, poleWorld) {
+  const rootWorldPos = rootPivot.getWorldPosition(_chainRootPos);
+  const upperLength = midPivot.position.length();
+  const lowerLength = endPivot.position.length();
+  const solved = solveTwoBoneIK(rootWorldPos, upperLength, lowerLength, targetWorld, poleWorld);
+
+  const rootParentWorldQuat = rootPivot.parent.getWorldQuaternion(_chainParentQuat);
+  const rootLocalDir = _chainDir.copy(solved.upperDirection).applyQuaternion(rootParentWorldQuat.invert()).normalize();
+  rootPivot.quaternion.setFromUnitVectors(REST_DOWN, rootLocalDir);
+
+  const midParentWorldQuat = rootPivot.getWorldQuaternion(_chainParentQuat);
+  const midLocalDir = _chainDir.copy(solved.lowerDirection).applyQuaternion(midParentWorldQuat.invert()).normalize();
+  midPivot.quaternion.setFromUnitVectors(REST_DOWN, midLocalDir);
+
+  return solved;
 }

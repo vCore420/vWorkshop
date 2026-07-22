@@ -135,7 +135,7 @@ export function createResidentConversationOverlay({
     // document to read — see css/overlays.css's own comment on
     // `.overlay--companion` for the full reasoning.
     materialClass: "companion",
-    mount(panelEl, overlayContext = {}) {
+    mount(panelEl, overlayContext = {}, engine) {
       const { beingInstanceId, residentProfileId } = overlayContext;
       // Fresh per conversation — see this file's own header comment on
       // why this is no longer one shared, injected singleton.
@@ -391,6 +391,12 @@ export function createResidentConversationOverlay({
         isThinking = true;
         longWait = false;
         residentBehaviour.setThinking(true);
+        // Version 4, Phase 7b — restores the "thinking" expression
+        // override/squash-stretch pulse for a resident-embodiment Being
+        // (see BeingController.js's own resident:thinkingChanged
+        // listener) at the exact same edge the Phase 7a audio cue below
+        // already uses.
+        engine?.events.emit("resident:thinkingChanged", { beingInstanceId, thinking: true });
         // Version 4, Phase 7a — the real false→true edge this resident's
         // own soft "thinking" cue fires on (see AudioSynth.js's own
         // playResidentThinking() comment); its old watcher lived on the
@@ -410,6 +416,7 @@ export function createResidentConversationOverlay({
           isThinking = false;
           longWait = false;
           residentBehaviour.setThinking(false);
+          engine?.events.emit("resident:thinkingChanged", { beingInstanceId, thinking: false });
           updateUsage(promptEvalCount, evalCount);
           await revealReply(content || "\u2026", functionCalls);
         } catch {
@@ -417,6 +424,7 @@ export function createResidentConversationOverlay({
           isThinking = false;
           longWait = false;
           residentBehaviour.setThinking(false);
+          engine?.events.emit("resident:thinkingChanged", { beingInstanceId, thinking: false });
           lastError = { text };
           renderMessages();
         }
