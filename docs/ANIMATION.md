@@ -290,17 +290,15 @@ target) is handled without dividing by zero.
 feeds `solveTwoBoneIK()` a real per-foot target — the outdoor sculpted
 terrain's own height under each foot, via `TerrainSystem.getHeightAt()` —
 called from `PlayerAnimationSystem.update()` right after `applyPose()`
-applies the base pose each frame, but *only* while standing still
-(movement state `"idle"`; foot placement during a walk cycle is a
-genuinely different, animation-phase-aware problem, still an honest
-future extension point, not this one) and only where `TerrainSystem` has
-height data at all (indoors and off the sculpted patch, this is a silent
-no-op). Verified against real sculpted terrain, not just read: the
-correction is exact when the target is within the leg's own reach, and
-honestly reach-limited — not broken, just visibly small — when a foot
-needs to drop lower than an already-near-straight standing leg can
-reach; see `FootIK.js`'s own header for the full account of that
-asymmetry and what closing it would actually require.
+applies the base pose each frame, while standing still (movement state
+`"idle"`) and only where `TerrainSystem` has height data at all (indoors
+and off the sculpted patch, this is a silent no-op). Verified against
+real sculpted terrain, not just read: the correction is exact when the
+target is within the leg's own reach, and honestly reach-limited — not
+broken, just visibly small — when a foot needs to drop lower than an
+already-near-straight standing leg can reach; see `FootIK.js`'s own
+header for the full account of that asymmetry and what closing it would
+actually require.
 
 **A second, fixed-target caller (Version 4, Phase 4)**: `applyCrouchFootIK()`,
 in the same file, wired to movement state `"crouch"` instead of `"idle"`
@@ -320,14 +318,66 @@ account for the honest limit this specific target hits (no slack left for
 a visibly bent knee while also holding exact height, given the standing
 leg is already at ~99.99% of its own reach).
 
-**What still doesn't do this**: "hand placement, object interaction,
-looking at targets" remain honest future extension points — none of them
-are automatically applied to the Player or a Being yet. Building any of
-them means feeding this solver a real target (an object's own position
-for hand placement, say) from whichever system owns that concern, which
-this phase intentionally didn't build — "the architecture should be
-established even where complete implementations are deferred" is a
-direct instruction, not a gap found by accident.
+**A third caller, restored (Version 4, Phase 8a — "The Rest of IK")**:
+`applyWalkFootIK()`, closing the gap this section itself used to name
+("foot placement during a walk cycle is a genuinely different,
+animation-phase-aware problem"). The obstacle was never the correction
+math — `applyLegIK()` already generalises to either leg — it was knowing
+*which* foot is currently planted, since correcting the swinging leg
+would flatten its own intentional lift. `WALK_CLIP`'s own four authored
+frames (`AnimationClips.js`) already answer that: frames 0 and 2 each
+have one leg back and nearly straight (stance) and the other forward and
+bent (swing), mirrored; frames 1 and 3 are brief (0.14s) passing poses
+with no single clear stance leg. A small internal lookup
+(`frameIndex → stance side`) reads `PlayerAnimationSystem`'s own current
+`_frameIndex` — already current for the frame by the time this runs —
+and applies the identical relative-height correction
+`applyTerrainFootIK()` already uses, but only to that one leg; the swing
+leg, and both legs during the brief transition frames, are left exactly
+as the authored pose set them. Safe to hardcode the frame mapping
+against: the seeded `"default-walk"` clip is read-only
+(`AnimationLibraryStore.isDefault()`), so a player can't reshape it into
+something this mapping would no longer describe. Verified live against
+real sculpted terrain: driving the player through both stance halves of
+the cycle at the identical root position, the stance foot's own ankle
+height measurably tracked the local terrain difference while the swing
+foot's ankle height was byte-for-byte identical to a flattened-terrain
+control — proof the correction reaches only the leg it's supposed to.
+
+**Hand placement and object interaction, closed (Version 4, Phase 8b —
+"The Rest of IK")**: `TwoBoneIK.applyTwoBoneChain()`, a shared, rig-
+agnostic export of the exact quaternion-conversion glue `FootIK.js`'s own
+private `applyLegIK()` already established — kept as a second, separate
+function rather than reaching into `FootIK.js`'s private one, so the
+already-verified leg correction carries zero regression risk from this
+phase's own work. Safe to reuse unchanged for an arm: `PlayerCharacter.js`
+and `BodyCompiler.js` were both read directly (not assumed) before
+writing this, confirming every limb segment either file builds — leg
+*and* arm alike — shares the identical rest convention `applyLegIK()`
+already relies on (each child pivot's own rest position, quaternion
+identity, points straight down, local `-Y`, from its parent). `HandIK.js`
+(`src/player/`) is the arm-specific caller: `applyHoldPose()`, a
+continuous correction bending the right arm toward a fixed "carrying
+something at chest height" spot every frame while an item is held; and
+`applyReachPose()`, a one-shot left-arm reach toward a world position
+over 0.6s, eased out and back via a sine envelope blending between the
+full IK solve and whatever the base pose already had (rather than
+snapping to the target and holding it). Both are called by a new system,
+`HandInteractionSystem.js` (`src/systems/`) — deliberately not folded
+into `PlayerAnimationSystem`, which stays completely untouched this
+phase; registered after it in `main.js`'s own system list is enough to
+guarantee this frame's base pose is already applied first, the identical
+"correction after the base pose" contract every `FootIK.js` caller
+already follows.
+
+**Right hand holds, left hand reaches** — deliberate, not arbitrary: a
+held object and a light-switch reach can genuinely overlap in time
+(nothing stops carrying a book while flipping a light on), and opposite
+hands mean the two poses never need to coordinate or fight over the same
+arm. See `docs/WORLDBUILDER.md`'s own "Pickupable" account for the
+behaviour/event side of picking something up in the first place, and this
+document's "Known simplifications" below for what's honestly not
+attempted this wave (looking at targets, still open).
 
 ## Procedural Animation Layers
 
@@ -478,10 +528,25 @@ points."
   result can't currently be hand-corrected if it gets one joint wrong; a
   person can only accept what it found or not use that model for
   retargeted playback at all.
-- **IK is wired for two real gameplay cases (Player ground adaptation
-  while idle, and crouch foot-planting — Version 4, Phase 4) and not yet
-  the rest** (hand placement, object interaction, looking at targets, and
-  foot placement during a walk cycle) — see "Inverse Kinematics" above.
+- **IK is wired for five real gameplay cases (Player ground adaptation
+  while idle, crouch foot-planting — Version 4, Phase 4 — walk-cycle foot
+  placement — Version 4, Phase 8a — and holding a picked-up object /
+  reaching for the light switch — Version 4, Phase 8b) and not yet the
+  last one** (looking at targets, for the head/torso) — see "Inverse
+  Kinematics" above.
+- **The held-object pose is a fixed carry spot, not a precise hand-
+  contact fit** — a picked-up object sits at a small, honest local offset
+  from the wrist pivot's own origin (see `HandInteractionSystem.js`'s own
+  comment), reading as "held in front of the body" rather than exactly
+  gripped between the fingers; a genuinely fitted grip per object shape
+  is real future work, not attempted this wave.
+- **Only one Construction piece (`book`) carries the Pickupable
+  behaviour** — real, and generically available to any player-authored
+  Builder object too (see `docs/WORLDBUILDER.md`'s own "Pickupable"
+  account), but deliberately not yet extended to a wider "item" system
+  (stacking, an inventory, multiple simultaneously-held objects) — "we
+  will expand this later" was Vi's own framing for this piece, not a
+  promise this phase tried to keep beyond its own scope.
 - **Procedural layering only exists on the Player rig** — `BeingController.js`
   doesn't yet support a second, layered clip on top of a Being's own
   idle/walk.
@@ -500,13 +565,16 @@ points."
 - **Manual skeleton-map correction** — a small UI (a joint dropdown per
   Workshop joint, listing the model's own bone names) editing
   `ModelLibrary`'s own cached `skeletonMap` directly.
-- **The rest of IK wired to real gameplay** — foot placement during an
-  actual walk cycle (not just while idle — a genuinely different,
-  animation-phase-aware problem), hand placement for object interaction,
-  "looking at targets" for the head/torso, and closing the reach-limited
-  downward-correction gap `FootIK.js`'s own header documents (retuning
-  the idle clip's own knee bend, or a root-height adjustment in
-  `CameraSystem`).
+- **The last piece of "The Rest of IK"** — "looking at targets" for the
+  head/torso, `docs/ROADMAP.md`'s own Phase 8c; walk-cycle foot placement
+  and hand placement/object interaction both already shipped (Phase 8a,
+  8b) — see "Inverse Kinematics" above. Also still open: closing the
+  reach-limited downward-correction gap `FootIK.js`'s own header
+  documents (retuning the idle clip's own knee bend, or a root-height
+  adjustment in `CameraSystem`).
+- **A wider item system** — stacking, an inventory, carrying more than
+  one object — Phase 8b's own `book`/Pickupable is deliberately just a
+  beginning, per Vi's own framing; see "Known simplifications" above.
 - **Layered playback for Beings**, the same `AnimationLayers.mergePoses()`
   mechanism `PlayerAnimationSystem.js` already uses.
 - **Real listeners for animation events** — a footstep sound system, a

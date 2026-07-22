@@ -6305,6 +6305,274 @@ future work, not attempted this phase.
 place — every "Corrected, Phase 7" note for one of these gaps now reads
 "Restored, Phase 7a."
 
+## Version 4, Phase 8a — Foot IK During Walking (v4.0.8a)
+
+**Goal:** the first of `docs/ROADMAP_V4.md`'s own Phase 8 ("The Rest of
+IK") four pieces — foot placement during an actual walk cycle, the exact
+gap `FootIK.js`'s own Version 3 Phase 1 header named and explicitly left
+for later. **Decided with Vi:** all four of Phase 8's own pieces
+(walk-cycle foot IK, hand placement/object interaction, look-at targets,
+a manual skeleton-mapping override UI) get tackled one at a time, each
+its own lettered sub-version, stopping to check in after each rather than
+running straight through — per the roadmap's own risk note to scope
+tightly and not attempt general-purpose IK in one phase. This is the
+first wave.
+
+**The exact gait-phase structure, read directly from `WALK_CLIP`**
+(`AnimationClips.js`, confirmed read-only via
+`AnimationLibraryStore.isDefault()`, so stable to hardcode against):
+frames 0 and 2 each hold one leg back and nearly straight (stance) while
+the other swings forward, bent — mirrored between the two; frames 1 and
+3 are brief (0.14s) passing poses with no single clear stance leg. A new
+`FootIK.applyWalkFootIK(pivots, terrainSystem, frameIndex)` reuses the
+file's own existing `applyLegIK()` and the identical relative-height
+correction `applyTerrainFootIK()` (the idle case) already uses, scoped to
+just the one stance leg for whichever frame is currently playing — the
+swing leg's own authored lift is never touched. One new branch in
+`PlayerAnimationSystem.update()`, alongside the existing idle/crouch
+ones, mutually exclusive by construction the same way those already are.
+
+**Verified live with a real, isolating numeric test, not a visual
+check.** Sculpted a real mound onto the outdoor terrain, then compared
+the same root position and the same walk-cycle frame under two
+conditions: real varying terrain, and terrain temporarily reporting a
+flat constant height everywhere. Across both stance halves of the cycle,
+the result was exact: the stance foot's own ankle height genuinely
+differed between the two conditions (a real correction was applied),
+while the swing foot's ankle height was byte-for-byte identical between
+them (never touched) — proof the correction reaches only the leg it's
+supposed to, not a visual impression of it. Indoor/flat-ground walking,
+idle and crouch foot IK, and an imported-model body with no leg pivots
+were all confirmed unaffected.
+
+`docs/ANIMATION.md` updated in place — the "Inverse Kinematics" section
+gained a third-caller account, "Known simplifications" and "Future
+extension points" both corrected to move walk-cycle foot IK from undone
+to shipped. `FootIK.js`'s own header, which originally named this exact
+gap, updated to point to the new function rather than just naming the
+limitation.
+
+## Version 4, Phase 7b — Restoring Bubble's Own Embodiment (v4.0.7b)
+
+**Goal:** an interruption of Phase 8b, at Vi's own request. Phase 7's
+"Decided with Vi" scoping — a resident-capable Being keeps its own
+player-designed visual identity, never the resident's own translucent/
+glowing treatment — was correct for a Being a *player* designs and later
+makes resident-capable, but had been wrongly applied to Bubble
+specifically too. Bubble isn't player-designed; she's the Workshop's own
+built-in core AI personality, and her shape-shifting glowing embodiment
+(configurable in Mission Control, with a genuinely editable/importable
+pixel-art face) was real, valuable, already-built identity, not a
+placeholder Phase 7 was right to drop. Restore her own model and Mission
+Control hooks specifically; every other resident-capable Being a player
+creates keeps using its own designed body, exactly as Phase 7 intended
+for that case.
+
+**A reconnection, not a rebuild.** `ResidentRenderer.js` and `AIApp.js`'s
+own Embodiment/Expression sections were confirmed, by reading the actual
+code before planning, to still be fully intact and functional — orphaned
+by nothing rendering the result, not by anything having broken. Bubble's
+own `DefaultBeings.js` definition dropped her Person-shaped
+`BUBBLE_BODY_PARTS`/colour constants for a third, reserved `bodySource`
+value, `"residentEmbodiment"` — never offered as a Being Creator UI
+choice, the same "valid, reserved" precedent `beingType: "resident"`
+already set. `BeingController._spawnRuntime()` gained one new branch: for
+exactly that `bodySource`, construct a real `ResidentRenderer` and use
+its own `root` directly as the entity's root (no wrapping group, since
+`ResidentRenderer.update()` already sets `root.position`/`rotation.y`
+itself every frame). `_updateResidentTravel()` gained the matching
+branch: `setEmbodiment()` resolved fresh every frame (a live Mission
+Control edit reaches the screen within a frame or two, no change event
+needed — the same choice Phase 7a's own trait/dial multipliers already
+made), `setAwake()` following `residentConnection.isAwake`, and a new
+`_residentExpression()` reconstructing `ResidentBehaviour
+.computeExpression()`'s own sleeping > thinking > mood > neutral
+priority for a resident whose face needs to be live every frame, open
+conversation or not — `runtime.residentThinking` fed by a new
+`resident:thinkingChanged` event `ResidentConversation.js` now emits at
+its own existing `setThinking()` call sites.
+
+**A real bug, found by connecting mood to a real face for the first
+time.** `MOOD_CANDIDATES` had drifted onto `"content"`, a pre-rename
+expression id that never existed in `ExpressionTypes.js`'s real
+`EXPRESSION_TYPES` — invisible since Phase 7's own reconstruction because
+nothing had ever rendered mood as a visible expression before now.
+Fixed to `"neutral"`.
+
+**A second real bug, found by "verify live, never trust on sight" doing
+exactly its job.** The first live check after every file passed
+`node --check` showed Bubble still rendering her old, just-deleted
+Person-shaped body. Root cause, confirmed by reading the actual loading
+code rather than assumed: `BeingLibrary.load()` only ever reseeds
+`DEFAULT_BEINGS` on a genuinely *empty* library — a save that already had
+Bubble persisted (every save that lived through Phase 7 itself,
+including this dev session's own) keeps her old `bodySource: "primitives"`
+forever, no matter what `DefaultBeings.js`'s own seed says. This wasn't
+just a dev-session quirk — it meant the fix as first written would do
+nothing for Vi's own real, already-migrated Workshop either. Two things
+fixed it properly: a new `SaveMigrations.js` v6→v7 step that patches an
+*existing* persisted Bubble definition's `bodySource`/`bodyParts`/
+animation-clip-ids in place (leaving every other field — name,
+`residentProfileId`, movement style — untouched), and a second-layer bug
+the first fix's own verification then caught in turn:
+`BeingLibrary.load()`'s own normalizer unconditionally coerced anything
+that wasn't `"primitives"` to `"model"` (a pre-Being-Creator-phase
+compatibility fallback that had never heard of a third value) —
+corrected to leave `"residentEmbodiment"` alone too, the same as
+`"primitives"`.
+
+**Two small gaps closed beyond the original plan, once live verification
+surfaced them as real rather than hypothetical:** `ResidentRenderer
+.setAwake()` — softening opacity/glow/light while Ollama is offline, part
+of Bubble's own original identity — was never wired into the new branch;
+added, one line, verified live through a real awake→offline→awake cycle.
+Mission Control's Expression Set picker resolved once at spawn only;
+switching *which* set is active now re-resolves every frame through a
+diff-guarded check (`_resolveExpressionSetId()`) so a live switch reaches
+the screen the same way embodiment already does, verified live to fire
+exactly once per real change and zero times on an idle frame.
+
+**Honestly not restored this wave, named rather than silently
+half-built:** the short-term "emotion" blip (`triggerEmotion()`'s own
+brief curious/happy flash on opening a conversation) would need its own
+cross-system event the same way thinking did. Editing the *contents* of
+Bubble's own already-active Expression Set (redrawing a pixel while she's
+currently showing that set) doesn't repaint her live — only switching
+*which* set is active does; the original's second listener on
+`ExpressionSetStore`'s own `"expressionSets:changed"` event isn't
+reconnected.
+
+**Verified live throughout**, against the real running engine, not
+assumed from `node --check` alone: her spawned scene graph is a genuine
+5-part `ResidentRenderer` shape (body, inner glow, face, sparkles, point
+light), not a Person-body silhouette; a live embodiment-type/colour edit
+via the profile store changes the rendered shape within a frame,
+confirmed by directly diffing `THREE.Geometry` types and material colour
+before and after; mood drift genuinely changes the drawn expression
+(`neutral`/`happy`/`curious` all confirmed), with the offline→`sleeping`
+and thinking→`thinking` overrides both confirmed by mocking
+`AIConnectionManager.status` and emitting `resident:thinkingChanged`
+directly rather than trusting a visual impression; Person, Cat, Dog, and
+a freshly-spawned-and-despawned ordinary Being all confirmed completely
+unaffected, still spawning through the compiled-skeleton path with
+`hasResidentRenderer: false` throughout.
+
+**A genuinely useful process finding, worth naming for its own sake:**
+diagnosing the `BeingLibrary` bug above cost real time chasing a phantom
+regression — a fix confirmed correct in one tab reappeared broken in the
+very next fresh one. Root cause wasn't the fix; it was an *earlier,
+never-closed* tab's own 20-second `PersistenceSystem` autosave, still
+running in the background (unlike `requestAnimationFrame`, `setInterval`
+isn't paused by the hidden-tab behaviour this environment already has),
+periodically re-persisting its own stale pre-fix state over the correct
+one. `.claude/DEV_NOTES.md` gained a new note: close every earlier tab,
+not just before hitting the tab cap, before trusting a fresh tab's read
+of persisted state.
+
+`docs/RESIDENT.md`, `docs/AI.md`, and `.claude/DEV_NOTES.md` all updated
+in place — every "genuinely orphaned"/"no visual consumer" note from
+Phase 7 now reads "restored, Phase 7b, for Bubble specifically," with
+every other resident-capable Being named explicitly as unaffected
+alongside it, and the two honestly-deferred gaps above recorded in
+"Known simplifications" rather than left implicit.
+
+## Version 4, Phase 8b — Hand Placement, Object Interaction (v4.0.8b)
+
+**Goal:** the second of Phase 8's ("The Rest of IK") own four pieces,
+resumed after the Phase 7b interruption — "create the beginning of world
+objects that can be picked up, only allowing one item to be picked up at
+a time, like a book or something... this give you something to reach for
+and use the hand placement," plus Vi's own added idea mid-plan: reaching
+for the light switch when turning the lights on and off, using the same
+hand-placement machinery.
+
+**A real, generic Pickupable behaviour, not a one-off for a single
+object.** `PickupableBehaviour.js` follows the exact "attach an
+`InteractableComponent`, emit one event, let a dedicated system own the
+actual behaviour" shape `aiResident` already established for Beings —
+`BuilderApp.js` reads registered behaviour types generically, so this is
+automatically a real, selectable checkbox for *any* player-authored
+Builder object, not something special-cased to the one built-in piece
+that ships with it (`book`, in the Workshop group of the Construction
+Library). Picking up emits `item:pickupRequested`; a new
+`HandInteractionSystem.js` (`src/systems/`) is the one place that
+actually despawns the world instance (`WorldObjectsSystem.removeInstance()`),
+attaches a small held mesh to the player's own right-hand pivot, and
+enforces "only one at a time" (a second pickup attempt while already
+holding something is blocked with a toast, not silently ignored).
+
+**`TwoBoneIK.applyTwoBoneChain()`, a second caller for a solver built for
+exactly this.** The identical quaternion-conversion glue `FootIK.js`'s
+own private `applyLegIK()` already established, exported as a shared
+function rather than reaching into `FootIK.js`'s private one — zero
+regression risk to the already-verified leg correction. Safe to reuse
+unmodified for an arm: `PlayerCharacter.js` and `BodyCompiler.js` were
+both read directly before writing this, confirming every limb segment
+either file builds shares the identical rest convention (`quaternion`
+identity means the child pivot points straight down, local `-Y`, from
+its parent) `applyLegIK()` already relies on. `HandIK.js` (`src/player/`)
+is the arm-specific caller — `applyHoldPose()`, resolved fresh every
+frame the identical "no separate change-event wiring" choice
+`_updateResidentTravel()`'s own embodiment push already made; and
+`applyReachPose()`, a one-shot 0.6s reach eased out and back via a sine
+envelope, blending between the full IK solve and whatever the base pose
+already had rather than snapping. **Right hand holds, left hand
+reaches** — deliberate, so a held object and a light-switch reach can
+genuinely overlap without needing to coordinate.
+
+**A new system, not a change to `PlayerAnimationSystem.js`.**
+`HandInteractionSystem` is registered after both `InteractionSystem`
+(reads its new `hasNearestInteractable` getter every frame — pressing
+interact while holding something puts it down, *unless* something else
+interactable is genuinely nearby, in which case that wins) and
+`PlayerAnimationSystem` (so `HandIK.js`'s corrections always layer on
+top of this frame's already-applied base pose) — both true simply by
+registration order, the same ordering contract every `FootIK.js` caller
+already relies on, and `PlayerAnimationSystem` itself stays completely
+untouched this phase.
+
+**The light switch's own reach.** `LightingSystem.js` now emits
+`lightSwitch:flipped` with the switch's own real world position,
+captured once from the same literal its own plate placement already
+uses so the two can never drift apart — fired *after* the light has
+already toggled, since the reach is purely cosmetic and never needs to
+actually land for the switch to work.
+
+**Persistence, honestly scoped.** A held item is "in hand," not "in the
+world" — `WorldObjectsStore` stops tracking it the moment it's picked
+up, so `HandInteractionSystem`'s own small persistence provider
+(`{definitionId, definitionSource}`) is the only place a save remembers
+one exists at all. The actual mesh can't attach until a real player rig
+exists, which hasn't been built yet at `load()` time — `update()`'s own
+lazy-attach (checked once, the first frame a rig actually exists)
+closes that gap, verified live through a real save→reset→load→first-
+frame round trip, not assumed from the shapes alone.
+
+**Verified live throughout**, against the real running engine: a spawned
+book carries exactly the right components; picking it up removes it from
+the world and attaches a real mesh to the right-hand pivot, visibly
+rotating the arm away from its idle quaternion while the *left* arm stays
+byte-for-byte untouched; a second pickup attempt while already holding
+one is genuinely blocked (toast fires, the second book stays in the
+world); putting it down spawns a fresh instance at the exact
+independently-computed "in front of the player" position, not the
+original pickup spot; pressing interact near something else while
+holding an item defers to that interaction rather than dropping (and
+correctly drops once nothing else is nearby); the light-switch reach
+plays the left arm out and back over exactly its own 0.6s duration and
+cleans up afterward; and the full save/load round trip restores the held
+item's identity and re-attaches its mesh on the first real frame a rig
+exists. `docs/ANIMATION.md`, `docs/WORLDBUILDER.md`, and
+`docs/ARCHITECTURE.md`'s own system dependency list all updated in
+place.
+
+**Honestly not attempted this wave:** a wider item system (stacking, an
+inventory, more than one held object at a time) — the single book is
+deliberately a beginning, per Vi's own framing, not a promise this phase
+tried to keep beyond its own scope. A precise hand-contact fit for the
+held object (it sits at a small, fixed offset from the wrist, not a grip
+tailored to its actual shape) is the same honest simplification.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

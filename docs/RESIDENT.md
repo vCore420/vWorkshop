@@ -17,23 +17,37 @@ Control's own configuration surfaces — is entirely unchanged in
 own visual body carries it*. Read this short section first; it's the key
 to every "Corrected, Phase 7" note further down:
 
-- **Embodiment changed completely.** "Decided with Vi: a resident-capable
+- **Embodiment changed completely, Phase 7 — then partly reversed, Phase
+  7b, for Bubble specifically.** Phase 7 applied "a resident-capable
   Being keeps its own player-designed visual identity... the resident's
   own translucent/glowing visual treatment is deliberately not offered as
   an alternative embodiment" (`docs/BEINGS.md`'s own account of the
-  Phase 6 decision this phase built). Bubble now renders as an ordinary
-  Being body (see `docs/BEINGS.md`), not the semi-transparent floating
-  bubble this document's own "Embodiment," "Resident Embodiments," and
-  "Expression System" sections describe below. That machinery
-  (`ResidentRenderer.js`, `ExpressionSetStore.js`'s own live rendering
-  path) is **real, unmodified, and genuinely orphaned** — nothing in the
-  Workshop constructs a `ResidentRenderer` anymore, for Bubble or any
-  future resident-capable Being, since a Being's own body is what renders
-  now, always. Every section below describing what the bubble's shape,
-  glow, or drawn face currently *does* should be read as "what this
-  mechanism would do, for a resident with no Being body to wear instead"
-  — see each section's own "Corrected, Phase 7" note for exactly what
-  that means today.
+  Phase 6 decision) to *every* resident, Bubble included — reducing her
+  to an ordinary, recoloured Being body and leaving `ResidentRenderer.js`
+  genuinely orphaned. **Vi's own correction:** that rule was right for a
+  Being a *player* designs and later makes resident-capable, but wrong
+  for Bubble — she isn't player-designed; she's the Workshop's own
+  built-in core AI personality, and her shape-shifting glowing
+  embodiment (with a genuinely editable/importable pixel-art face,
+  configurable in Mission Control) was real, valuable, already-built
+  identity, not a placeholder. Version 4, Phase 7b ("Restoring Bubble's
+  Own Embodiment") reconnects it: Bubble's own `BeingLibrary` definition
+  now carries a third `bodySource` value, `"residentEmbodiment"` —
+  reserved, never offered as a Being Creator UI choice — and
+  `BeingController.js` constructs a real `ResidentRenderer` for exactly
+  that one value (`_buildResidentRenderer()`/`_updateResidentTravel()`'s
+  own `residentRenderer` branch). **Every other resident-capable Being —
+  Person, Cat, Dog, or any new AI resident a player creates — is
+  completely unaffected**, still renders through its own compiled Being
+  body exactly as Phase 7 intended, since nothing but Bubble's own seeded
+  definition ever carries `bodySource: "residentEmbodiment"`. A save that
+  lived through Phase 7 (and so already had Bubble persisted on the old
+  shape) is brought forward by `SaveMigrations.js`'s own v6→v7 step —
+  see "Persistence," below. Every section further down describing the
+  bubble's shape, glow, or drawn face is, once again, literally
+  describing what's on screen for Bubble today — see each section's own
+  "Corrected, Phase 7" note for the fuller history, now followed by a
+  "Restored, Phase 7b" note where it applies.
 - **`ResidentController.js` and `ResidentEntity.js` were retired, not
   kept running in parallel** — "one implementation, several doors in"
   ruled out a second, competing per-frame resident loop. Everything
@@ -71,6 +85,21 @@ to every "Corrected, Phase 7" note further down:
   reads "Restored, Phase 7a." A sixth, a Mission Control display
   inconsistency (`docs/AI.md`'s own "Status Card" section), was fixed the
   same phase though it wasn't a Phase 7 regression.
+- **Version 4, Phase 7b — Bubble's own embodiment restored** (see the
+  bullet above). Two things worth naming directly: first, a real bug this
+  phase's own verification caught — mood drift's `MOOD_CANDIDATES` list
+  had drifted onto `"content"`, a pre-rename id that never existed in
+  `ExpressionTypes.js`'s real `EXPRESSION_TYPES`; nothing had ever
+  rendered mood as a visible face before, so the mismatch fell through a
+  silent, coincidentally-correct fallback (`"content"` and `"neutral"`
+  mean the same thing) rather than ever surfacing — fixed to `"neutral"`.
+  Second, an important consequence for anyone's real, already-migrated
+  save: `BeingLibrary.load()` never overwrites an existing persisted
+  Being definition with a fresh seed, so simply changing
+  `DefaultBeings.js`'s own Bubble seed did nothing for a save that had
+  already lived through Phase 7 — `SaveMigrations.js`'s new v6→v7 step is
+  what actually brings an existing Bubble definition's `bodySource`
+  forward; see "Persistence," below.
 
 ## Design philosophy, briefly
 
@@ -127,10 +156,14 @@ changed.
   for a future embodiment that might read it again rather than ripped out.
 - **`ResidentRenderer.js`** — the actual Three.js visual described below
   ("Embodiment," "Resident Embodiments," "Expression System"): the body,
-  its inner glow, its small drawn face, its sparkle particles. **Genuinely
-  orphaned as of Version 4, Phase 7** — nothing in the Workshop
-  constructs one anymore, for Bubble or any other resident-capable Being;
-  see the "Version 4, Phase 7" note at the top of this document.
+  its inner glow, its small drawn face, its sparkle particles. Genuinely
+  orphaned through Version 4, Phase 7 — **reconnected, Phase 7b, for
+  Bubble specifically.** `BeingController._buildResidentRenderer()`
+  constructs exactly one, when (and only when) a definition's own
+  `bodySource` is the reserved `"residentEmbodiment"` value — as of this
+  phase, that's Bubble's own seeded definition alone. Every other
+  resident-capable Being still renders through its own compiled Being
+  body; see the "Version 4, Phase 7" note at the top of this document.
 - **`ResidentConnection.js`** — a thin adapter over
   `AIConnectionManager`, translating its status into `isAwake` and
   carrying real conversation turns through Ollama's `/api/chat`.
@@ -196,15 +229,16 @@ every one of those is read from the resident-capable Being's own
 
 ## Embodiment: digital, not magical
 
-**Corrected, Version 4 Phase 7 — this entire section describes
-`ResidentRenderer.js`, which is genuinely orphaned code today** (see the
-"Version 4, Phase 7" note at the top of this document). Left intact below
-rather than deleted: it's real, working, unmodified code, still true of
-what it does when constructed — simply not constructed by anything in the
-Workshop anymore, since a resident-capable Being renders its own player-
-designed body instead. Kept as a reference for a possible future
-"unembodied resident" case (a profile with no Being attached yet) that
-doesn't exist today.
+**Corrected, Version 4 Phase 7 — orphaned; restored, Phase 7b, for
+Bubble specifically.** This entire section describes `ResidentRenderer.js`,
+left orphaned by Phase 7's own blanket embodiment change and reconnected
+by Phase 7b once Vi named the gap: Bubble isn't a player-designed Being,
+she's the Workshop's own built-in resident, and this — not a compiled
+Being body — is genuinely what's on screen for her today (see the
+"Version 4, Phase 7" note at the top of this document for the fuller
+history). Every other resident-capable Being still renders its own
+player-designed body instead, exactly as Phase 7 intended for *that*
+case; nothing below applies to them.
 
 "Semi-transparent bubble, soft internal glow, gentle sparkle effects,
 subtle internal movement, slight refraction, soft ambient lighting, tiny
@@ -476,13 +510,19 @@ Workshop. It should never disappear." `ResidentConnection.isAwake` still
 mirrors `AIConnectionManager.status` directly, and a resident-capable
 Being obviously never disappears when it's false — it's an ordinary
 placed Being, not something spawned or despawned by connection state.
-**Corrected, Version 4 Phase 7:** the *visual* half of this section —
-`ResidentRenderer.setAwake(false)` softening the bubble's own opacity/
-glow/light, `ResidentBehaviour.computeExpression()` overriding to a drawn
-`"sleeping"` face — has no consumer for a Being-embodied resident (see
-the "Version 4, Phase 7" note at the top of this document); a
-resident-capable Being's own appearance doesn't currently change when
-Ollama goes offline.
+Corrected, Version 4 Phase 7 — the *visual* half of this section had no
+consumer for any Being-embodied resident; **restored, Phase 7b, for
+Bubble specifically.** `BeingController._updateResidentTravel()` calls
+`residentRenderer.setAwake(!this.residentConnection ||
+this.residentConnection.isAwake)` every frame (softening opacity/glow/
+light exactly as before), and `_residentExpression()` overrides to
+`"sleeping"` — reconstructed as a short-overrides-medium-overrides-
+baseline priority (sleeping, then thinking, then mood) the same way
+`ResidentBehaviour.computeExpression()` always resolved it, since that
+class itself is now ephemeral, per-conversation only (see the "Version 4,
+Phase 7" note at the top of this document). Every other resident-capable
+Being's own appearance still doesn't change when Ollama goes offline —
+there's no embodiment for it to soften.
 
 Interacting with a sleeping resident still opens the conversation
 overlay as normal and still shows one calm sentence explaining it's
@@ -690,14 +730,24 @@ purpose, rather than one field trying to mean all three:
 `ResidentBehaviour.computeExpression()`'s own priority order is still
 exactly "short-term overrides medium-term overrides long-term default":
 `sleeping` (offline) > `thinking` (mid-reply) > `emotion` (if one's
-currently active) > `mood` > `"content"`. **Corrected, Version 4 Phase
-7:** this whole computation has no visual consumer today for a
-Being-embodied resident — see the "Version 4, Phase 7" note at the top of
-this document and `ResidentRenderer.js`'s own entry in "Architecture,"
-above. The mood/emotion *data* is real and genuinely live (mood drifts,
-emotion still triggers and decays); only the drawn face that used to
-display the result of this priority order doesn't exist for a Being
-today.
+currently active) > `mood` > `"content"`. Corrected, Version 4 Phase 7 —
+this whole computation had no visual consumer for a Being-embodied
+resident. **Partly restored, Phase 7b, for Bubble specifically — but not
+by reconnecting this exact method.** `ResidentBehaviour` is still
+constructed fresh only per open conversation (see "Architecture," above),
+so it can't be what drives an *ambient*, always-on face — Bubble needs an
+expression every frame, conversation open or not.
+`BeingController._residentExpression()` is a small, independent
+reconstruction of the same three-layer priority instead: `sleeping`
+(`!residentConnection.isAwake`) > `thinking`
+(`runtime.residentThinking`, set by a new `resident:thinkingChanged`
+event `ResidentConversation.js` emits at its own existing
+`setThinking()` call sites) > `mood` > `"neutral"` fallback. **The
+short-term "emotion" layer specifically is honestly not restored this
+wave** — `triggerEmotion()`'s own brief curious/happy blip on opening a
+conversation would need its own cross-system event the same way thinking
+did, named here rather than silently reconstructed halfway; see "Known
+simplifications" below.
 
 ## Preferences
 
@@ -998,10 +1048,16 @@ even at rest" standard elsewhere), "Slow Rotate" layers a genuine
 continuous turn on top of the existing gentle oscillation.
 
 `ResidentController._onProfileChanged()` used to be what pushed an
-updated embodiment to the renderer this way. **Genuinely inert as of
-Version 4 Phase 7** — see the "Version 4, Phase 7" note at the top of
-this document; there's no `ResidentRenderer` for anything to push to
-anymore.
+updated embodiment to the renderer this way. Genuinely inert through
+Version 4 Phase 7 (there was no `ResidentRenderer` for anything to push
+to); **restored, Phase 7b, for Bubble specifically** —
+`BeingController._updateResidentTravel()` calls
+`residentRenderer.setEmbodiment(profile.embodiment)` unconditionally
+every frame rather than reconstructing an event-driven push, the same
+"resolved fresh each frame" choice Phase 7a's own trait/dial multipliers
+already made — a live Mission Control edit reaches the screen within a
+frame or two, no change event required. See the "Version 4, Phase 7"
+note at the top of this document.
 
 ## Expression System (Workshop Personality phase)
 
@@ -1080,11 +1136,23 @@ required. `ResidentController._onProfileChanged()` used to resolve it
 no longer resolves to anything real — see `ExpressionSetStore.js`'s own
 comment on why a missing reference is an expected, honestly-handled
 case, not an error) and hand the result to `ResidentRenderer
-.setExpressionSet()` — genuinely inert as of Version 4 Phase 7, the same
-as the embodiment push above. A second listener on `ExpressionSetStore`'s own
-`"expressionSets:changed"` event means editing the *contents* of the
-currently-active set (drawing a new pixel expression, say) updates
-Bubble live, not just switching which set is active.
+.setExpressionSet()` — genuinely inert through Version 4 Phase 7, the
+same as the embodiment push above. **Partly restored, Phase 7b, for
+Bubble specifically:** `BeingController._updateResidentTravel()`
+resolves `expressionSetId` fresh every frame the same way it already
+does for embodiment, but only actually calls `setExpressionSet()` when
+the *id* itself changes (`_resolveExpressionSetId()` — a per-frame
+diff-guard, deliberately not unconditional the way the embodiment push
+is, since `setExpressionSet()` redraws the face canvas immediately —
+verified live: switching sets applies within a frame, an idle frame with
+no change makes zero redundant calls). **What's honestly not restored
+this wave:** the second listener on `ExpressionSetStore`'s own
+`"expressionSets:changed"` event, for editing the *contents* of the
+already-active set (drawing a new pixel expression while Bubble is
+already showing that set) — today that only reaches her the next time
+something else changes the shown expression, not the instant a pixel is
+drawn. Switching *which* set is active is fully live; live-repainting
+mid-edit is not, named here rather than silently half-built.
 
 ### Expression Assets — Workshop Assets like any other
 
@@ -1380,6 +1448,20 @@ own brief asks for.
   expression replaces it outright; there's no undo within the
   Expression Creator itself, only Clear (blank the current expression)
   and Reset to Default (remove the override entirely).
+- **Editing the *contents* of Bubble's own already-active Expression Set
+  doesn't repaint her live, Version 4 Phase 7b** — switching *which* set
+  is active does (`_resolveExpressionSetId()`'s own per-frame diff), but
+  redrawing a pixel inside the set she's currently showing only reaches
+  her the next time something else changes her shown expression;
+  `ExpressionSetStore`'s own `"expressionSets:changed"` event isn't
+  listened to here. See "Expression Sets — genuinely custom, pixel by
+  pixel" above.
+- **The short-term "emotion" blip — `triggerEmotion()`'s brief curious/
+  happy flash on opening a conversation — isn't restored, Version 4
+  Phase 7b.** `BeingController._residentExpression()` covers sleeping,
+  thinking, and mood; the fourth, most ephemeral layer would need its own
+  cross-system event the same way thinking did, honestly deferred rather
+  than half-built. See "Mood, Emotion, and Personality" above.
 - **A profile's own `expressionSetId` doesn't travel with a profile
   export** in any resolvable sense — the id itself is included
   honestly, but the actual pixel data lives in a separate Expression

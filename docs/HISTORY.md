@@ -2355,4 +2355,93 @@ overlay's own lifecycle — real future work, not attempted this phase.
 `docs/ATMOSPHERE.md`, and `docs/BEINGS.md` updated in place. See
 `docs/ROADMAP.md`'s own Phase 7a account for the full story.
 
+**Version 4, Phase 8a — Foot IK During Walking (v4.0.8a).** The first of
+Phase 8's ("The Rest of IK") own four pieces — closing the exact gap
+`FootIK.js`'s own Version 3 Phase 1 header named and left for later.
+Decided with Vi: all four pieces get built one at a time, each its own
+lettered sub-version, stopping to check in after each. The obstacle was
+never the correction math (`applyLegIK()` already generalises to either
+leg) — it was knowing which foot is currently planted, since correcting
+the swinging leg would flatten its own intentional lift. Read directly
+from `WALK_CLIP`'s own four authored frames: two hold a clear stance
+leg (mirrored), two are brief passing poses with none. A new
+`applyWalkFootIK()` reuses the exact relative-height correction the
+idle case already established, scoped to just the stance leg for
+whichever frame is playing. Verified live with an isolating numeric
+test — comparing the same walk-cycle frame under real sculpted terrain
+versus a temporarily-flattened control — confirmed the stance foot's
+own height genuinely responds to terrain while the swing foot's stays
+byte-for-byte untouched, not merely "looks right." `docs/ANIMATION.md`
+updated in place. See `docs/ROADMAP.md`'s own Phase 8a account for the
+full story.
+
+**Version 4, Phase 7b — Restoring Bubble's Own Embodiment (v4.0.7b).** An
+interruption of Phase 8b, at Vi's own request: Phase 7's "a resident-
+capable Being keeps its own player-designed visual identity" scoping had
+been wrongly applied to Bubble specifically too — she isn't player-
+designed, she's the Workshop's own built-in resident, and her
+shape-shifting glowing embodiment was real identity Phase 7 was right to
+protect for every *other* resident but wrong to take from her. A
+reconnection, not a rebuild — `ResidentRenderer.js` and `AIApp.js`'s own
+Embodiment/Expression UI were confirmed still fully intact. A new,
+reserved `bodySource: "residentEmbodiment"` value on Bubble's own seeded
+definition alone; `BeingController` gained matching branches in
+`_spawnRuntime()`/`_updateResidentTravel()` that construct and drive a
+real `ResidentRenderer` for exactly that value, embodiment resolved
+fresh every frame the same way Phase 7a's own trait/dial multipliers
+already are. Two real bugs found via this session's own "verify live,
+never trust on sight" discipline: `MOOD_CANDIDATES` had drifted onto a
+pre-rename expression id (`"content"`) that never existed in
+`ExpressionTypes.js`, invisible until mood was connected to a real face
+for the first time; and `BeingLibrary.load()` never overwrites an
+existing persisted Being definition with a fresh seed, so the fix alone
+would have done nothing for any save that already lived through Phase 7
+— closed with a new `SaveMigrations.js` v6→v7 step plus a second-layer
+fix to `BeingLibrary.load()`'s own normalizer, which that migration's
+first verification pass caught was itself unconditionally coercing the
+new reserved value back to `"model"`. `ResidentRenderer.setAwake()` and
+live Expression Set switching were both added beyond the original plan
+once live verification showed them as real, small, in-scope gaps rather
+than hypothetical ones. Honestly not restored: the short-term "emotion"
+blip on opening a conversation, and live-repainting while a pixel is
+being redrawn inside the *currently shown* Expression Set. Verified live
+throughout: her scene graph, a live embodiment edit, mood-driven
+expression, the sleeping/thinking overrides, and complete non-effect on
+Person/Cat/Dog and ordinary Beings, all confirmed numerically rather than
+visually. `docs/RESIDENT.md`, `docs/AI.md`, and `.claude/DEV_NOTES.md`
+(a new note on stale tabs' own background autosaves silently overwriting
+verified fixes) updated in place. See `docs/ROADMAP.md`'s own Phase 7b
+account for the full story.
+
+**Version 4, Phase 8b — Hand Placement, Object Interaction (v4.0.8b).**
+The second of Phase 8's ("The Rest of IK") four pieces, resumed after
+the Phase 7b interruption: "world objects that can be picked up, only
+allowing one item to be picked up at a time... this give you something
+to reach for and use the hand placement," plus Vi's own added idea — a
+light-switch reach using the same machinery. A real, generic Pickupable
+behaviour (not a one-off), automatically a real Builder checkbox for any
+player-authored object since `BuilderApp.js` reads registered behaviour
+types generically; the one built-in piece that ships with it is a new
+`book` Construction Library piece. `TwoBoneIK.applyTwoBoneChain()`, a
+shared export of `FootIK.js`'s own private quaternion-conversion glue
+(kept private and untouched to avoid any regression risk), confirmed
+safe to reuse for an arm by reading `PlayerCharacter.js`/`BodyCompiler.js`
+directly rather than assumed. `HandIK.js`'s `applyHoldPose()`/
+`applyReachPose()` — right hand holds, left hand reaches, a deliberate
+split so the two never need to coordinate — driven by a new
+`HandInteractionSystem.js`, registered after `InteractionSystem` (reads
+its new `hasNearestInteractable` getter for the put-down-defers-to-
+nearby rule) and `PlayerAnimationSystem` (itself left completely
+untouched), both true simply by registration order. `LightingSystem.js`
+now emits `lightSwitch:flipped` with the switch's own real position.
+Verified live throughout, numerically rather than visually: pickup/hold/
+putdown, the single-item block, the put-down-defers rule, the light-
+switch reach's own timing, and a full save→load round trip all confirmed
+against the real running engine. Honestly not attempted: a wider item
+system (stacking, an inventory, more than one held object) and a precise
+hand-contact fit — both deliberately left as a beginning, not a promise
+overreaching this phase's own scope. `docs/ANIMATION.md`,
+`docs/WORLDBUILDER.md`, and `docs/ARCHITECTURE.md` updated in place. See
+`docs/ROADMAP.md`'s own Phase 8b account for the full story.
+
 </details>

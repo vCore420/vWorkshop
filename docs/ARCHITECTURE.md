@@ -104,6 +104,16 @@ InteractionSystem    → reads CameraSystem's position; also listens for
                        `phone:opened`/`phone:closed` to suspend itself
                        entirely while the Phone is open (which covers
                        Build Mode too — it's a Phone app now)
+HandInteractionSystem → registered right after InteractionSystem
+                       (reads its `hasNearestInteractable` every frame for
+                       the put-down defer check) and well after
+                       PlayerAnimationSystem (its own HandIK.js
+                       corrections must layer on top of this frame's
+                       already-applied base pose, the same ordering
+                       contract every FootIK.js caller already follows)
+                       — see docs/ANIMATION.md's own "Inverse Kinematics"
+                       section and docs/WORLDBUILDER.md's "Pickupable"
+                       account
 WorldObjectsSystem   → no strict ordering requirement (only needs
                        engine.scene/engine.entities, present from
                        construction) — see docs/WORLDBUILDER.md

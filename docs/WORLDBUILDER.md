@@ -184,7 +184,7 @@ instance* with this behaviour spawns) — plus, since this pass, an optional
 `dispose(ctx)` for the rare behaviour that holds a real resource beyond
 the scene graph (see `reflective`, below). `BuilderApp` never has bespoke
 code for any specific behaviour — it renders whatever `propsSchema` says,
-for all fourteen built-ins and any future one, identically.
+for all fifteen built-ins and any future one, identically.
 
 Nearly every behaviour's `apply()` just attaches an ordinary
 `InteractableComponent` — the exact same component furniture and the
@@ -194,14 +194,31 @@ system is actually generic: a custom object with a Seat behaviour is
 handled by the interaction pipeline no differently than the workbench's
 chair.
 
-Because an `Entity` can only hold one `InteractableComponent`, eight of the
-fourteen behaviours (Interactable, Seat, Storage, Door, Computer, Trigger,
-Audio source, Music player) are mutually exclusive with each other —
-checking one in the Builder unchecks any other from that group. Light
-Source, Decoration, Reflective Surface, Ladder, Interior Volume, and
+Because an `Entity` can only hold one `InteractableComponent`, nine of the
+fifteen behaviours (Interactable, Seat, Storage, Door, Computer, Trigger,
+Audio source, Music player, Pickupable) are mutually exclusive with each
+other — checking one in the Builder unchecks any other from that group.
+Light Source, Decoration, Reflective Surface, Ladder, Interior Volume, and
 Display Surface don't touch `InteractableComponent` at all, so they
 combine freely with anything and each other — a mirror can also glow, or
 be a seat, or both.
+
+**Pickupable** (Version 4, Phase 8b — "The Rest of IK") — "world objects
+that can be picked up, only allowing one item to be picked up at a time...
+this give you something to reach for and use the hand placement." The
+interaction half only: on interact, emits `item:pickupRequested` for
+`HandInteractionSystem.js` (`src/systems/`) to actually act on — despawn
+the world instance, attach a small held mesh to the player's own right-
+hand pivot, and play `HandIK.js`'s own continuous hold pose. This behaviour
+has no opinion on where a picked-up item goes or how many a player can
+carry at once — that single-item rule lives entirely in
+`HandInteractionSystem.js`, the same "attach a component, emit one event,
+let a dedicated system own the actual behaviour" split `aiResident`
+already established for Beings (see `docs/BEINGS.md`). Genuinely generic,
+not Construction-Library-only: any player-authored Builder object can
+carry it too, the same way every other behaviour here already works — see
+"A second source of definitions: the Construction Library," below, for
+the one built-in piece (`book`) that ships with it out of the box.
 
 **Trigger** is the deliberately open-ended one: it emits
 `worldObject:trigger` with whatever event name was typed in, and nothing in
@@ -787,9 +804,12 @@ entirely on custom objects":
 - **Lighting** — Garden Light, Street Light, and other fixtures, each
   carrying the same Light Source behaviour the original ceiling Light
   does.
-- **Workshop** — Table, Bench, Shelf, Cabinet, Storage Crate. Cabinet and
-  Storage Crate both carry the Storage behaviour out of the box —
-  genuinely usable the moment they're placed, not just decoration.
+- **Workshop** — Table, Bench, Shelf, Cabinet, Storage Crate, Book
+  (Version 4, Phase 8b). Cabinet and Storage Crate both carry the Storage
+  behaviour out of the box — genuinely usable the moment they're placed,
+  not just decoration; Book carries Pickupable the same way — see
+  "Behaviours: properties, not programming," above, for the full account
+  of what picking it up actually does.
 - **Utilities** — Light (carries Light Source), Switch (carries Trigger,
   ready to be wired to anything a future system listens for — see
   docs/PLUGIN_GUIDE.md), Sign, Fence, Gate (a fence-styled Door).
@@ -958,7 +978,7 @@ in the same pass.
   imported lamp can never light up, unlike any primitive-built object
   with the identical shape. A real gap, found during Version 3, Phase
   1's own imported-object review and left alone deliberately: whether
-  imported models should gain the full 14-behaviour system, and what
+  imported models should gain the full 15-behaviour system, and what
   authoring that would even look like for a mesh hierarchy the Workshop
   didn't build, is a genuinely bigger design question than a small fix.
 

@@ -336,6 +336,18 @@ changed this phase beyond how it now composes with the new Behaviour
 dials (Energy/Calmness both feed into the same movement math Idle
 Behaviour already influences).
 
+**Version 4, Phase 7 briefly orphaned every value this panel writes —
+restored, Phase 7b, for Bubble specifically** (see docs/RESIDENT.md's own
+"Version 4, Phase 7" note). Worth naming honestly: this panel edits a
+*profile's* own `embodiment` field, and any resident profile can have
+one, but only a Being whose own `bodySource` is the reserved
+`"residentEmbodiment"` value actually renders it — as of this phase,
+that's Bubble's own seeded definition alone. A second AI resident a
+player creates still renders through its own designed Being body
+(`docs/BEINGS.md`'s own account), so editing *that* resident's profile
+here would set real data nothing currently reads — not an error, just
+not yet a meaningful control for any resident but Bubble.
+
 ## Workshop Functions (Version 3, Phase 8b — "Bubble Gains Hands")
 
 "We should be able to give the same functionality calls to any resident
