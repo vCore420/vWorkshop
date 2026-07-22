@@ -162,7 +162,10 @@ const RIGHT_PATTERNS = ["right", "_r", ".r", " r", "r_", "r.", ":r"];
 // requirement would risk breaking genuine compound Mixamo names like
 // "LeftHandIndex1", which has no clean boundary around "hand" at all —
 // exactly the real-world naming this heuristic exists to handle).
-const NON_JOINT_CONTAINER_NAMES = new Set(["armature", "skeleton", "root", "rig"]);
+// Exported (Version 4, Phase 8d) so a manual skeleton-mapping UI can
+// exclude these same organisational containers from its own bone-name
+// list, rather than duplicating this exact list a second time.
+export const NON_JOINT_CONTAINER_NAMES = new Set(["armature", "skeleton", "root", "rig"]);
 
 function detectSide(name) {
   const lower = name.toLowerCase();
