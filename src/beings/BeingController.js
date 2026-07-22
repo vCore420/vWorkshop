@@ -2,6 +2,9 @@ import * as THREE from "three";
 import { CameraSystem } from "../systems/CameraSystem.js";
 import { RoomLayoutSystem } from "../systems/RoomLayoutSystem.js";
 import { FurnitureSystem } from "../systems/FurnitureSystem.js";
+import { TerrainSystem } from "../systems/TerrainSystem.js";
+import { InteractionSystem, LOOK_AT_COS_THRESHOLD } from "../systems/InteractionSystem.js";
+import { isWithinLookCone } from "../utils/MathUtils.js";
 import { Entity } from "../core/Entity.js";
 import { MeshComponent } from "../core/components/MeshComponent.js";
 import { InteractableComponent } from "../core/components/InteractableComponent.js";
@@ -27,6 +30,15 @@ const AWARENESS_FULL_RADIUS = 1.8;
 // turn off its rig's rest-forward before the whole body has to follow;
 // ~72°, a real but not unnaturally owl-like range.
 const HEAD_LOOK_MAX_ANGLE = Math.PI * 0.4;
+// Restored — reticle-gated interaction + drag-to-reposition regression
+// fix. Tighter than the ordinary 1.8m default: "so a resident standing
+// close to furniture doesn't compete with that furniture's own
+// interaction" — Vi's own stated reason, matching the exact precedent
+// LightingSystem.js's own light switch already set ("deliberately
+// tighter than the standard small-object tier"). Combined with
+// `requiresLookAt: true` below, the reticle genuinely has to be on the
+// resident, not just generically nearby.
+const RESIDENT_INTERACT_RADIUS = 1.2;
 // Version 4, Phase 7 — the "quiet familiarity" half of the old
 // ResidentController.js, reconstructed from docs/RESIDENT.md's own
 // documented behaviour (the original file's exact source didn't survive
@@ -118,6 +130,7 @@ export class BeingController {
     projectsStore = null,
     residentConnection = null,
     expressionSetStore = null,
+    canvas = null,
   }) {
     this.beingLibrary = beingLibrary;
     this.beingInstanceStore = beingInstanceStore;
@@ -132,8 +145,16 @@ export class BeingController {
     this.projectsStore = projectsStore; // Version 4, Phase 7a — "an active project pulls toward the workbench," see _residentLocationWeights()
     this.residentConnection = residentConnection; // Version 4, Phase 7b — offline -> "sleeping" expression override, see _updateResidentTravel()
     this.expressionSetStore = expressionSetStore; // Version 4, Phase 7b — a resident-embodiment Being's own custom pixel-art face, see _spawnRuntime()
+    this.canvas = canvas; // Restored — click-and-drag reposition, see init()'s own mousedown/mouseup listeners
     this._runtime = new Map(); // instanceId -> { root, entity, wanderTarget, patrolRoute, patrolIndex, restTimer, bobPhase, awarenessBlend, syncTimer, modelMesh, skeleton: {map, rest} | null, clipPlayer, activeClipId, residentMovement: ResidentMovement | null, moodDriftTimer, patternSampleTimer }
     this._playerPos = new THREE.Vector3();
+    // Restored — click-and-drag reposition. instanceId currently being
+    // dragged, or null; see init()'s own mousedown/mouseup listeners and
+    // _updateResidentTravel()'s own drag branch.
+    this._draggingInstanceId = null;
+    this._dragRaycaster = new THREE.Raycaster();
+    this._dragCameraForward = new THREE.Vector3();
+    this._dragScratch = new THREE.Vector3();
   }
 
   init(engine) {
@@ -141,6 +162,28 @@ export class BeingController {
     this._cameraSystem = engine.getSystem(CameraSystem);
     this._roomLayoutSystem = engine.getSystem(RoomLayoutSystem);
     this._furnitureSystem = engine.getSystem(FurnitureSystem);
+    this._terrainSystem = engine.getSystem(TerrainSystem);
+    this._interactionSystem = engine.getSystem(InteractionSystem);
+
+    // Restored — click-and-drag reposition, deliberately raw mousedown/
+    // mouseup DOM listeners rather than InputManager's own "interact"
+    // action (see this file's own "Fix: Bubble's Reticle-Gated
+    // Interaction..." plan account): InteractionSystem's pipeline fires
+    // immediately on key-down, with no way to distinguish a quick tap
+    // (which should still open the conversation, via the untouched E-key
+    // path) from the start of a hold.
+    if (this.canvas) {
+      this.canvas.addEventListener("mousedown", (e) => {
+        if (e.button !== 0) return;
+        if (!this.engine.input?.pointerLocked) return;
+        if (this._interactionSystem?.active) return; // Phone/Build Mode/an overlay already has focus — never steal it
+        const candidate = this._findDraggableResidentUnderReticle();
+        if (candidate) this._draggingInstanceId = candidate;
+      });
+      this.canvas.addEventListener("mouseup", () => {
+        this._draggingInstanceId = null;
+      });
+    }
 
     for (const instance of this.beingInstanceStore.active()) this._spawnRuntime(instance);
 
@@ -160,6 +203,52 @@ export class BeingController {
       const runtime = this._runtime.get(beingInstanceId);
       if (runtime) runtime.residentThinking = thinking;
     });
+  }
+
+  /** Restored — click-and-drag reposition. The nearest resident-capable
+   *  instance within `RESIDENT_INTERACT_RADIUS` whose position passes the
+   *  identical reticle cone test `InteractionSystem` already uses for its
+   *  own "Talk" prompt (`isWithinLookCone()`, shared — "draggable" and
+   *  "shows the prompt" always agree on what "the reticle is on it"
+   *  means), or `null` if nothing qualifies. */
+  _findDraggableResidentUnderReticle() {
+    if (!this._cameraSystem || !this.engine.camera) return null;
+    const playerPos = this._cameraSystem.position;
+    this.engine.camera.getWorldDirection(this._dragCameraForward);
+
+    let nearest = null;
+    let nearestDist = Infinity;
+    for (const [id, runtime] of this._runtime) {
+      const instance = this.beingInstanceStore.get(id);
+      const definition = instance && this.beingLibrary.get(instance.definitionId);
+      if (!definition || definition.interactionBehaviour !== "aiResident") continue;
+      const dist = runtime.root.position.distanceTo(playerPos);
+      if (dist > RESIDENT_INTERACT_RADIUS || dist >= nearestDist) continue;
+      if (!isWithinLookCone(runtime.root.position, playerPos, this._dragCameraForward, LOOK_AT_COS_THRESHOLD, this._dragScratch)) continue;
+      nearest = id;
+      nearestDist = dist;
+    }
+    return nearest;
+  }
+
+  /** Restored — click-and-drag reposition. Where the reticle currently
+   *  points, projected onto a real walkable surface — the identical
+   *  "real floor, real sculpted ground" pair
+   *  `BuildModeSystem._gatherSurfaces()` already established for ghost
+   *  placement (`RoomLayoutSystem.getFloorMesh()` +
+   *  `TerrainSystem.mesh` — the actual mesh player movement's own
+   *  `getHeightAt()` walks on, not `WorldEnvironmentSystem`'s purely
+   *  visual flat ground), reused directly rather than re-invented.
+   *  `null` if the reticle isn't over either surface this frame (aimed
+   *  at the sky, say) — the caller already treats that as "leave her
+   *  exactly where she is." */
+  _raycastDragTarget() {
+    if (!this.engine.camera) return null;
+    this._dragRaycaster.setFromCamera({ x: 0, y: 0 }, this.engine.camera); // NDC screen centre — the reticle
+    const surfaces = [this._roomLayoutSystem?.getFloorMesh(), this._terrainSystem?.mesh].filter(Boolean);
+    if (surfaces.length === 0) return null;
+    const hit = this._dragRaycaster.intersectObjects(surfaces, true)[0];
+    return hit?.point ?? null;
   }
 
   /** The same "pick one new plausible spot, don't animate the journey"
@@ -272,7 +361,18 @@ export class BeingController {
       entity.addComponent(
         new InteractableComponent({
           prompt: { talk: "Talk", wave: "Say hello", inspect: "Inspect", aiResident: "Talk" }[definition.interactionBehaviour] ?? "Interact",
-          radius: 1.8,
+          radius: definition.interactionBehaviour === "aiResident" ? RESIDENT_INTERACT_RADIUS : 1.8,
+          // Restored — "the player's reticle is directly over it. Distance
+          // alone should no longer activate interaction," so a resident
+          // standing close to furniture doesn't compete with that
+          // furniture's own interaction. `InteractableComponent`'s own
+          // `requiresLookAt` flag was always general-purpose (any Being or
+          // object can opt in — see its own docstring), not a resident-
+          // specific special case; this was lost when Phase 7 folded
+          // Bubble's own singular `ResidentEntity.js` wiring into this
+          // shared, generic construction, and never re-set for the
+          // `aiResident` case that actually needs it.
+          requiresLookAt: definition.interactionBehaviour === "aiResident",
           // A real bug, found and fixed live: only `aiResident` actually
           // opens a full-screen overlay (the conversation panel) that
           // needs an explicit exit — `talk`/`wave`/`inspect` just show a
@@ -578,7 +678,24 @@ export class BeingController {
     // `sendResidentTo()` below rather than one shared field. "Return Home"
     // is a one-shot `travelTo()` handled directly in that method, not a
     // standing mode, so it isn't checked here.
-    if (runtime.residentPlayerCommand === "goto" && runtime.residentGoToTarget) {
+    // Restored — click-and-drag reposition, checked first: takes over
+    // from any standing command (Stay/Follow/Goto) or autonomous idle
+    // travel for exactly as long as the player holds her, the same
+    // "no autonomous pick while overridden" gate "stay" already gives
+    // below, just for a different reason. `setDraggedPosition()` already
+    // sets `_travelT = 1` (see `ResidentMovement.js`'s own comment), so
+    // there's nothing else to suppress — `maybePickNewLocation()` simply
+    // never gets called this frame.
+    if (instance.id === this._draggingInstanceId) {
+      const dragTarget = this._raycastDragTarget();
+      if (dragTarget) {
+        runtime.residentMovement.setDraggedPosition(dragTarget);
+        runtime.residentMovement.setDraggedLookAt(playerPos ?? dragTarget);
+      }
+      // No raycast hit this frame (reticle pointed at the sky, say) is a
+      // no-op for that one frame — she stays exactly where she last was,
+      // resuming smoothly once the reticle finds a real surface again.
+    } else if (runtime.residentPlayerCommand === "goto" && runtime.residentGoToTarget) {
       const dx = runtime.residentGoToTarget.x - runtime.residentMovement.currentPosition.x;
       const dz = runtime.residentGoToTarget.z - runtime.residentMovement.currentPosition.z;
       if (Math.hypot(dx, dz) < 0.15) {
