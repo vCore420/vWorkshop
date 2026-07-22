@@ -693,7 +693,11 @@ replacing the deleted `ResidentController.js`/`ResidentEntity.js`:
   and a set `residentProfileId` before opening the conversation overlay
   (`context: {beingInstanceId, residentProfileId}`) instead of showing
   the ordinary toast; an ordinary Being's own toast interaction is
-  entirely unaffected — confirmed live, side by side.
+  entirely unaffected — confirmed live, side by side. Two more
+  resident-specific pieces of this — reticle-gated interaction (not
+  distance-based) and click-and-drag reposition — were lost in this same
+  convergence and later restored; see `docs/RESIDENT.md`'s own
+  "Conversation" section for the fuller account.
 
 **Bubble's own migration.** A fourth seeded `DefaultBeings.js` entry
 (`BUBBLE_DEFINITION_ID`), `movementStyle: "residentTravel"`,

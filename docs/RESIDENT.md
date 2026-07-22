@@ -410,6 +410,56 @@ handler. Opening it still calls `ResidentBehaviour.startConversation()`
 no longer literally happens); closing it, by any means `OverlayManager`
 already supports, still calls `endConversation()`.
 
+**Restored, Version 4 (post-Phase 8d fix): reticle-gated interaction,
+and click-and-drag reposition.** The same Phase 7 convergence that
+folded conversation-opening into `BeingController.js`'s generic
+`InteractableComponent` construction quietly dropped two things that
+were genuinely specific to residents, because the generic construction
+that replaced `ResidentEntity.js` didn't carry them over. Both are
+documented as far back as Version 2's "Living Refinement" phase account
+(`docs/ROADMAP.md`) as deliberate, non-resident-specific design:
+
+- **`requiresLookAt: true`, radius reduced to 1.2m** (down from the
+  1.8m generic default) for any Being with `interactionBehaviour:
+  "aiResident"`. Proximity alone no longer opens the conversation
+  prompt — the player's reticle has to actually be over the resident
+  (the same ~7° forgiving cone `InteractionSystem._isLookingAt()` uses
+  for everything else, extracted to `MathUtils.isWithinLookCone()` so a
+  second caller could reuse it exactly). The original reason still
+  holds: a resident standing near furniture shouldn't out-compete that
+  furniture's own interaction just by being close. Both fields are
+  read off `InteractableComponent` generically, not hardcoded to
+  Bubble's own id — any future resident-capable Being gets the same
+  behaviour automatically.
+- **A genuine click-and-drag reposition mechanic**, restored in
+  `BeingController.js` as two raw `mousedown`/`mouseup` listeners on
+  the canvas — deliberately *not* routed through `InputManager`'s
+  "interact" action, since that pipeline fires immediately on key-down
+  with no way to tell a quick tap (open the conversation) from the
+  start of a hold. `mousedown` is gated on pointer lock being active
+  and no other interaction already being open (`interactionSystem
+  .active`), and only starts a drag on the nearest resident-capable
+  Being currently under the reticle within that same 1.2m radius.
+  While held, `_updateResidentTravel()` raycasts the reticle against
+  the real floor/terrain surfaces (`RoomLayoutSystem.getFloorMesh()` +
+  `TerrainSystem.mesh` — the same walkable-surface pair
+  `BuildModeSystem` already uses for ghost placement) and feeds the hit
+  point through `ResidentMovement.setDraggedPosition()`/
+  `setDraggedLookAt()`, the same primitives `_applyResidentContinuity()`
+  already used for on-load repositioning. Releasing the mouse simply
+  clears the drag state; idle travel and awareness resume on their own
+  from wherever she was dropped, with no new persisted field — the
+  existing `residentTravel` sync already picks up her new position the
+  same as any other move.
+
+Like the conversation-opening fix above, this was a real regression,
+not a new feature: the mechanism was fully deleted along with
+`ResidentEntity.js`/`ResidentController.js` in Phase 7, and this isn't
+a git repository, so there was no literal code to recover — the
+restoration was reconstructed from the Version 2 phase account (the
+only surviving description of the original design) and the still-intact
+`ResidentMovement` primitives it always relied on.
+
 **A real, honest simplification, Version 4 Phase 7: idle travel no
 longer pauses during a conversation.** The old `ResidentController.js`
 reached into `ResidentBehaviour`'s own mode to gate its movement update;
