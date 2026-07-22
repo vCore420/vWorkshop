@@ -17,11 +17,16 @@ import { FURNITURE_LAYOUT } from "../data/layoutDefault.js";
 import { ResidentRenderer } from "../resident/ResidentRenderer.js";
 import { defaultEmbodimentConfig } from "../ai/EmbodimentConfiguration.js";
 import { EXPRESSIONS } from "../resident/ResidentBehaviour.js";
+import { applyLookAt } from "../player/LookAtIK.js";
 
 const SAVE_SYNC_INTERVAL = 2; // seconds — how often a moving Being's live position is written back to BeingInstanceStore, not every frame (see this file's own comment)
 const MIN_CONTINUITY_SECONDS = 30; // a Being reasonably notices and moves on within this short a gap; below it, nothing visibly changes on reload, matching "nothing should feel scripted"
 const AWARENESS_RADIUS = 3.5;
 const AWARENESS_FULL_RADIUS = 1.8;
+// Version 4, Phase 8c ("The Rest of IK") — how far a Being's own head can
+// turn off its rig's rest-forward before the whole body has to follow;
+// ~72°, a real but not unnaturally owl-like range.
+const HEAD_LOOK_MAX_ANGLE = Math.PI * 0.4;
 // Version 4, Phase 7 — the "quiet familiarity" half of the old
 // ResidentController.js, reconstructed from docs/RESIDENT.md's own
 // documented behaviour (the original file's exact source didn't survive
@@ -268,6 +273,18 @@ export class BeingController {
         new InteractableComponent({
           prompt: { talk: "Talk", wave: "Say hello", inspect: "Inspect", aiResident: "Talk" }[definition.interactionBehaviour] ?? "Interact",
           radius: 1.8,
+          // A real bug, found and fixed live: only `aiResident` actually
+          // opens a full-screen overlay (the conversation panel) that
+          // needs an explicit exit — `talk`/`wave`/`inspect` just show a
+          // toast and are already done the instant they fire. Without
+          // this, `InteractionSystem._trigger()` never sets `this.active`
+          // for a resident conversation (its own gate is
+          // `opensOverlay || focusPose`, and neither was ever set here),
+          // so both Escape and the overlay's own close button — which
+          // both route through `InteractionSystem.exitActive()` — silently
+          // no-op on its own `if (!this.active) return;` guard, leaving
+          // the conversation stuck open with no way back to the game.
+          opensOverlay: definition.interactionBehaviour === "aiResident",
           onInteract: () => this.engine.events.emit("being:interact", { instanceId: instance.id, definitionId: definition.id }),
         })
       );
@@ -488,6 +505,12 @@ export class BeingController {
       } else {
         runtime.root.rotation.y += idleOffset.rotationY * dt * 0.5;
       }
+      // Version 4, Phase 8c — the head leads the already-turning body: a
+      // real head/neck turn, layered on top of (not instead of) the
+      // whole-body yaw just above, reusing the identical awarenessBlend
+      // this instance already computed. A safe no-op for any rig with no
+      // tagged "head" joint (an unrigged Being, an imported model).
+      if (runtime.skeleton?.map?.head) applyLookAt(runtime.skeleton.map.head, playerPos, runtime.awarenessBlend, HEAD_LOOK_MAX_ANGLE);
     } else {
       runtime.root.rotation.y += idleOffset.rotationY * dt * 0.5;
     }
@@ -642,6 +665,14 @@ export class BeingController {
     if (toLook.lengthSq() > 0.0001) {
       runtime.root.rotation.y = lerpAngle(runtime.root.rotation.y, Math.atan2(toLook.x, toLook.z), Math.min(1, dt * 4));
     }
+    // Version 4, Phase 8c — the same head-leads-the-body refinement the
+    // generic awareness block already gets, for the edge case of a
+    // player-made resident-capable Being that also uses residentTravel
+    // movement (Bubble herself never reaches here — no `runtime.skeleton`
+    // for a `residentEmbodiment` body, an early return above already
+    // covers her). `lookTarget` matches exactly what the body-turn just
+    // above already aims at, not raw `playerPos`.
+    if (runtime.skeleton?.map?.head) applyLookAt(runtime.skeleton.map.head, lookTarget, runtime.awarenessBlend, HEAD_LOOK_MAX_ANGLE);
 
     // ResidentMovement doesn't expose a clean "am I currently
     // translating" flag — comparing real frame-to-frame movement is an

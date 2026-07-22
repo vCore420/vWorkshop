@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { PreviewRenderer } from "../builder/PreviewRenderer.js";
 import { MOVEMENT_STYLES, IDLE_BEHAVIOURS, AWARENESS_MODES, INTERACTION_BEHAVIOURS, BEING_TYPES } from "../../../beings/BeingBehaviours.js";
 import { compileBody, mirrorSubtree, makeDefaultBodyPart, nextBodyPartId, descendantIds, BODY_PART_SHAPES, BODY_PART_MATERIALS } from "../../../beings/BodyCompiler.js";
-import { WORKSHOP_JOINTS, autoMapSkeleton, isSkeletonMapUsable } from "../../../player/WorkshopSkeleton.js";
+import { WORKSHOP_JOINTS, autoMapSkeleton, isSkeletonMapUsable, NON_JOINT_CONTAINER_NAMES } from "../../../player/WorkshopSkeleton.js";
 import { ClipPlayer } from "../../../player/AnimationPlayback.js";
 import { applyPoseToMappedSkeleton } from "../../../player/AnimationRetargeting.js";
 import { importModelFile } from "../../../beings/ModelLibrary.js";
@@ -104,6 +104,7 @@ export function createBeingCreatorApp({ beingLibrary, modelLibrary, modelAssetSt
       // previewed here is an honest preview of what actually happens in
       // the Workshop, not an approximation of it.
       let previewSkeleton = null; // {map, rest} — set by refreshPreview(), null whenever the current body has no usable rig
+      let previewModelBoneNames = []; // Version 4, Phase 8d — every real named node the current imported model has, set by refreshPreview()'s own "model" branch; the Skeleton Mapping section's own dropdown options
       let previewClipPlayer = new ClipPlayer();
       let previewPlaying = false;
       let previewClipId = null;
@@ -124,10 +125,14 @@ export function createBeingCreatorApp({ beingLibrary, modelLibrary, modelAssetSt
       async function refreshPreview() {
         highlightMaterial?.dispose(); // never the shared cached material every other part of this colour also uses — see BuilderApp.js's own identical reasoning
         highlightMaterial = null;
-        previewSkeleton = null;
 
         let object3D;
         if (draft.bodySource === "primitives") {
+          // Synchronous work only below — no async gap for a stale value
+          // to linger across, so resetting up front (then conditionally
+          // reassigning) is safe here the way it wasn't left to be for
+          // the "model" branch below — see that branch's own comment.
+          previewSkeleton = null;
           const compiled = compileBody(draft.bodyParts);
           object3D = compiled.root;
           if (Object.keys(compiled.skeletonMap).length > 0) previewSkeleton = { map: compiled.skeletonMap, rest: compiled.skeletonRest };
@@ -143,8 +148,24 @@ export function createBeingCreatorApp({ beingLibrary, modelLibrary, modelAssetSt
               if (child.isGroup && child.userData?.partId) child.add(new THREE.Mesh(JOINT_MARKER_GEOMETRY, JOINT_MARKER_MATERIAL));
             });
           }
+        } else if (!draft.modelId) {
+          previewSkeleton = null;
+          previewModelBoneNames = [];
+          object3D = modelLoader.buildPlaceholder();
         } else {
-          const model = draft.modelId ? await modelLoader.load(draft.modelId) : null;
+          const model = await modelLoader.load(draft.modelId);
+          // Version 4, Phase 8d — deliberately *not* resetting
+          // `previewSkeleton`/`previewModelBoneNames` to blank before
+          // this await resolves, unlike the primitives branch above:
+          // measured live, clearing them immediately produced a real,
+          // visible flash of "Not mapped" in every Skeleton Mapping
+          // dropdown for the ~100-300ms this load takes, every time —
+          // most jarringly right after "Reset to Auto-Detected," which
+          // otherwise looked like it had cleared the mapping entirely
+          // for a moment before snapping back. Leaving the previous
+          // values in place until the new ones are actually computed
+          // means the preview only ever *updates* to a new state, never
+          // visibly *blanks* first.
           object3D = model ?? modelLoader.buildPlaceholder();
           // "Animation compatibility... skeleton validation... ensure
           // every created being is ready to move" applies to an imported
@@ -154,8 +175,53 @@ export function createBeingCreatorApp({ beingLibrary, modelLibrary, modelAssetSt
           // honest preview of what happens in the Workshop, not an
           // optimistic guess.
           if (model) {
-            const { map, rest } = autoMapSkeleton(model);
-            if (isSkeletonMapUsable(map)) previewSkeleton = { map, rest };
+            // A manual correction made through the new Skeleton Mapping
+            // section (below) needs to actually be visible here, in the
+            // very editor used to make it. This used to always re-run
+            // the heuristic, silently ignoring any cached override — the
+            // identical cached-first, auto-detect-fallback order
+            // `BeingController._resolveSkeleton()` already established
+            // for a genuinely placed Being.
+            const cachedSkeletonMap = modelLibrary.get(draft.modelId)?.skeletonMap;
+            if (cachedSkeletonMap) {
+              const map = {};
+              const rest = {};
+              model.traverse((node) => {
+                for (const [jointId, boneName] of Object.entries(cachedSkeletonMap)) {
+                  if (node.name === boneName && !map[jointId]) {
+                    map[jointId] = node;
+                    rest[jointId] = node.quaternion.clone();
+                  }
+                }
+              });
+              previewSkeleton = isSkeletonMapUsable(map) ? { map, rest } : null;
+            } else {
+              const { map, rest } = autoMapSkeleton(model);
+              previewSkeleton = isSkeletonMapUsable(map) ? { map, rest } : null;
+            }
+
+            // Every real, named bone/node this model actually has — the
+            // Skeleton Mapping section's own dropdown options. Excludes
+            // the same organisational wrapper names `autoMapSkeleton()`
+            // already excludes from joint detection (an "Armature" root
+            // is never something a player would want to map a joint to).
+            const names = [];
+            model.traverse((node) => {
+              if (node.name && !NON_JOINT_CONTAINER_NAMES.has(node.name.toLowerCase().trim())) names.push(node.name);
+            });
+            previewModelBoneNames = names.sort((a, b) => a.localeCompare(b));
+            // The bone list above wasn't known yet when whichever caller
+            // triggered this refresh already called renderAll() itself
+            // (this function is async; that call already happened before
+            // `await modelLoader.load()` resolved) — one more render,
+            // scoped to exactly this case, so the Skeleton Mapping
+            // section's own dropdowns actually show the new state once
+            // the model finishes loading, not only on some unrelated
+            // next edit.
+            renderAll();
+          } else {
+            previewSkeleton = null;
+            previewModelBoneNames = [];
           }
         }
         object3D.scale.setScalar(draft.scale);
@@ -213,6 +279,7 @@ export function createBeingCreatorApp({ beingLibrary, modelLibrary, modelAssetSt
           formPane.appendChild(buildBodyConstructionSection(draft, renderAll, refreshPreview, uiState));
         } else {
           formPane.appendChild(buildModelSection(draft, modelLibrary, modelAssetStore, renderAll, refreshPreview));
+          formPane.appendChild(buildSkeletonMappingSection(draft, modelLibrary, previewSkeleton, previewModelBoneNames, renderAll, refreshPreview));
         }
         formPane.appendChild(buildMovementSection(draft, renderAll, residentProfileStore));
         formPane.appendChild(
@@ -957,6 +1024,92 @@ function buildModelSection(draft, modelLibrary, modelAssetStore, onChange, onPre
   section.appendChild(importInput);
 
   section.appendChild(sliderRow("Scale", draft.scale, 0.1, 5, 0.05, (v) => { draft.scale = v; onPreviewChange(); }, (v) => v.toFixed(2) + "\u00d7"));
+  return section;
+}
+
+// ---------------------------------------------------------------------
+// Skeleton Mapping \u2014 Version 4, Phase 8d ("The Rest of IK") \u2014 "allow
+// imported rigs to be mapped onto a common Workshop skeleton" already
+// had a real, working heuristic (`WorkshopSkeleton.autoMapSkeleton()`)
+// and a real place to save a correction (`ModelLibrary.setSkeletonMap()`,
+// already documented as waiting on "no editing UI exists yet"). This is
+// that UI \u2014 one dropdown per Workshop joint, the identical
+// `selectRow()` shape `buildPartEditor()`'s own "Rig Joint" row already
+// uses for a primitive part, just pointed at an imported model's own
+// bone names instead.
+// ---------------------------------------------------------------------
+function buildSkeletonMappingSection(draft, modelLibrary, previewSkeleton, previewModelBoneNames, onChange, onPreviewChange) {
+  const section = document.createElement("div");
+  section.className = "builder-section";
+  section.appendChild(sectionHeading("Skeleton Mapping"));
+
+  if (!draft.modelId) {
+    const hint = document.createElement("p");
+    hint.className = "app-subtitle";
+    hint.textContent = "Import a model above to map its own bones onto the Workshop skeleton.";
+    section.appendChild(hint);
+    return section;
+  }
+  if (previewModelBoneNames.length === 0) {
+    const hint = document.createElement("p");
+    hint.className = "app-subtitle";
+    hint.textContent = "Loading this model's own bones\u2026";
+    section.appendChild(hint);
+    return section;
+  }
+
+  const cachedMap = modelLibrary.get(draft.modelId)?.skeletonMap ?? null;
+  const hint = document.createElement("p");
+  hint.className = "app-subtitle";
+  hint.textContent = cachedMap
+    ? "Corrected by hand \u2014 each Workshop joint below is mapped to one of this model's own bones. Leave a joint unmapped if nothing here should drive it."
+    : "Auto-detected \u2014 shown below exactly as it will animate. Change any joint to correct a wrong guess; every other joint keeps its own current detection.";
+  section.appendChild(hint);
+
+  // The map this model would actually resolve to right now, one entry
+  // per joint \u2014 the cached override where one exists, the live
+  // auto-detected guess otherwise, so an untouched model shows its real
+  // current behaviour rather than a blank list (the same "an honest
+  // preview of what actually happens" standard this file's own
+  // refreshPreview() already holds itself to).
+  const effectiveNames = {};
+  for (const joint of WORKSHOP_JOINTS) {
+    effectiveNames[joint.id] = cachedMap?.[joint.id] ?? previewSkeleton?.map?.[joint.id]?.name ?? "";
+  }
+
+  const options = [["", "\u2014 Not mapped \u2014"], ...previewModelBoneNames.map((n) => [n, n])];
+  for (const joint of WORKSHOP_JOINTS) {
+    section.appendChild(
+      selectRow(joint.label, effectiveNames[joint.id], options, (v) => {
+        // Changing one joint "promotes" the *entire* current effective
+        // map \u2014 every other joint's own already-correct detection
+        // included \u2014 into a real, explicit, saved override, rather
+        // than starting the player over from a blank slate for every
+        // joint they didn't actually mean to touch.
+        const promoted = { ...effectiveNames, [joint.id]: v };
+        const cleaned = Object.fromEntries(Object.entries(promoted).filter(([, name]) => name));
+        modelLibrary.setSkeletonMap(draft.modelId, Object.keys(cleaned).length > 0 ? cleaned : null);
+        onPreviewChange();
+        onChange();
+      })
+    );
+  }
+
+  if (cachedMap) {
+    const resetBtn = document.createElement("button");
+    resetBtn.type = "button";
+    resetBtn.className = "builder-small-button";
+    resetBtn.textContent = "Reset to Auto-Detected";
+    resetBtn.addEventListener("click", () => {
+      // ModelLibrary.setSkeletonMap()'s own documented "forget this and
+      // re-detect" contract \u2014 no separate store method needed.
+      modelLibrary.setSkeletonMap(draft.modelId, null);
+      onPreviewChange();
+      onChange();
+    });
+    section.appendChild(resetBtn);
+  }
+
   return section;
 }
 
