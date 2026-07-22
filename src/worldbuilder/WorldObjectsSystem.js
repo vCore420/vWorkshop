@@ -155,6 +155,17 @@ export class WorldObjectsSystem {
     return this.liveInstances.get(instanceId)?.entity ?? null;
   }
 
+  /** Version 4, Phase 8b — a thin public door onto `_resolveDefinition()`,
+   *  for a caller (`HandInteractionSystem.js`) that needs to resolve an
+   *  instance's own definition itself, before this system's own
+   *  `removeInstance()` deletes the instance record that would otherwise
+   *  answer that question. Reaching into `_resolveDefinition()` directly
+   *  would mean one system depending on another's private method — this
+   *  is the documented, public seam instead. */
+  resolveDefinition(instance) {
+    return this._resolveDefinition(instance);
+  }
+
   /** All root Object3Ds currently placed — used by BuildModeSystem for selection raycasting. */
   getAllLiveObjects() {
     return [...this.liveInstances.values()].map((v) => v.entity.object3D);

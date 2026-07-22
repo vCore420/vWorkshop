@@ -41,6 +41,8 @@ const CONCRETE_COLOR = "#b8b4ac";
 const SOIL_COLOR = "#4a3826";
 const FLAME_COLOR = "#ff9040";
 const GLASS_COLOR = "#bfe6ff"; // matches Materials.glass()'s own default — same glass the Workshop's own windows use
+const BOOK_COVER_COLOR = "#6b2e3a";
+const BOOK_PAGE_COLOR = "#e8dcc0";
 
 function piece({ id, name, description, parts, behaviours = [] }) {
   return {
@@ -381,6 +383,22 @@ export const CONSTRUCTION_PIECES = [
       { id: "strapB", type: "box", position: [0, 0.08, 0], rotationY: 0, scale: [0.52, 0.03, 0.52], color: WOOD_COLOR },
     ],
     behaviours: [{ type: "storage", properties: { prompt: "Check the crate", capacity: 8 } }],
+  }),
+
+  // Version 4, Phase 8b ("The Rest of IK") — "something to reach for and
+  // use the hand placement." The first Pickupable piece, deliberately
+  // small and ordinary rather than anything fancier, per Vi's own framing
+  // ("we will expand this later") — this exists to give the hand-IK work
+  // something real to hold, not to be a complete item system on its own.
+  piece({
+    id: "book",
+    name: "Book",
+    description: "A closed book, small enough to carry — carries the Pickupable behaviour, so it can be picked up and held.",
+    parts: [
+      { id: "cover", type: "box", position: [0, 0.015, 0], rotationY: 0, scale: [0.16, 0.03, 0.22], color: BOOK_COVER_COLOR },
+      { id: "pages", type: "box", position: [0, 0.015, 0.006], rotationY: 0, scale: [0.148, 0.024, 0.206], color: BOOK_PAGE_COLOR },
+    ],
+    behaviours: [{ type: "pickupable", properties: { prompt: "Pick up the book" } }],
   }),
 
   // ============================================================
@@ -740,7 +758,7 @@ export const CONSTRUCTION_GROUPS = {
   beam: "Structural", stairs: "Structural", ladder: "Structural", foundation: "Structural", railing: "Structural",
   doorway: "Openings", door: "Openings", doubleDoor: "Openings", window: "Openings", windowPane: "Openings",
   largeWindow: "Openings", largeWindowPane: "Openings", archway: "Openings",
-  table: "Workshop", bench: "Workshop", shelf: "Workshop", cabinet: "Workshop", storageCrate: "Workshop",
+  table: "Workshop", bench: "Workshop", shelf: "Workshop", cabinet: "Workshop", storageCrate: "Workshop", book: "Workshop",
   light: "Utilities", switch: "Utilities", sign: "Utilities", fence: "Utilities", gate: "Utilities", ramp: "Utilities", mailbox: "Utilities",
   tree: "Nature", bush: "Nature", flower: "Nature", rock: "Nature", log: "Nature", grassPatch: "Nature", gardenBed: "Nature",
   stonePath: "Paths", gravelPath: "Paths", dirtPath: "Paths", timberPath: "Paths", concretePath: "Paths",

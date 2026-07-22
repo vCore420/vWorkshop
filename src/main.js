@@ -23,6 +23,7 @@ import { buildPhoneApps } from "./phone/apps/registry.js";
 import { EmoteWheelSystem } from "./systems/EmoteWheelSystem.js";
 import { CompassSystem } from "./systems/CompassSystem.js";
 import { InteractionSystem } from "./systems/InteractionSystem.js";
+import { HandInteractionSystem } from "./systems/HandInteractionSystem.js";
 import { PersistenceSystem } from "./systems/PersistenceSystem.js";
 import { WorldTimeService } from "./systems/WorldTimeService.js";
 import { ComputerSystem } from "./computer/ComputerSystem.js";
@@ -410,7 +411,21 @@ const beingResidentStateStore = new BeingResidentStateStore({ residentProfileSto
 // MediaApp.js already reads `musicSystem.engine`, rather than needing its
 // own dedicated engine dependency.
 const beingController = engine.addSystem(
-  new BeingController({ beingLibrary, beingInstanceStore, modelLoader, modelLibrary, animationLibraryStore, beingResidentStateStore, residentProfileStore, environmentSystem, timeOfDaySystem, musicSystem, projectsStore })
+  new BeingController({
+    beingLibrary,
+    beingInstanceStore,
+    modelLoader,
+    modelLibrary,
+    animationLibraryStore,
+    beingResidentStateStore,
+    residentProfileStore,
+    environmentSystem,
+    timeOfDaySystem,
+    musicSystem,
+    projectsStore,
+    residentConnection,
+    expressionSetStore,
+  })
 );
 const beingSpawnerSystem = engine.addSystem(new BeingSpawnerSystem({ beingLibrary, beingInstanceStore }));
 
@@ -648,6 +663,17 @@ const workbenchSystem = engine.addSystem(new WorkbenchSystem({ projectsStore, au
 
 const interactionSystem = engine.addSystem(new InteractionSystem());
 
+// Version 4, Phase 8b ("The Rest of IK") — registered after
+// InteractionSystem (needs `hasNearestInteractable` current for this
+// frame's own put-down check) and after PlayerAnimationSystem (needs
+// this frame's own base pose already applied before HandIK.js's
+// corrections layer on top of it) — both already true simply by being
+// later in this same registration list, the identical ordering
+// PlayerAnimationSystem's own FootIK.js calls already rely on.
+const handInteractionSystem = engine.addSystem(
+  new HandInteractionSystem({ worldObjectsStore, worldObjectsSystem, playerCharacterSystem, cameraSystem, interactionSystem })
+);
+
 // BuildModeSystem no longer coordinates with InteractionSystem directly at
 // all — Build Mode is a Phone app now, and PhoneSystem's own open-guard +
 // `phone:opened`/`phone:closed` events handle the mutual exclusion for
@@ -742,6 +768,7 @@ persistenceSystem.registerProvider("blueprints", blueprintStore);
 persistenceSystem.registerProvider("workshopProjects", workshopProjectStore);
 persistenceSystem.registerProvider("phone", phoneSystem);
 persistenceSystem.registerProvider("worldObjects", worldObjectsStore);
+persistenceSystem.registerProvider("handHeldItem", handInteractionSystem);
 persistenceSystem.registerProvider("musicLibrary", musicLibraryStore);
 persistenceSystem.registerProvider("playlists", playlistStore);
 persistenceSystem.registerProvider("settings", settingsStore);
