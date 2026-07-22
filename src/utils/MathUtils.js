@@ -1,3 +1,5 @@
+import * as THREE from "three";
+
 export const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 
 export const lerp = (a, b, t) => a + (b - a) * t;
@@ -66,4 +68,21 @@ export function shortestAngleLerp(a, b, t) {
  *  over a long play session (harmless numerically, but untidy). */
 export function wrapAngle(a) {
   return a - TAU * Math.round(a / TAU);
+}
+
+/** "The player's reticle is directly over it" — a forgiving angular cone
+ *  test against the camera's own actual forward direction, not a precise
+ *  raycast hit-test against the target's own geometry. Originally private
+ *  to `InteractionSystem._isLookingAt()`; extracted here (Version 4, "Fix:
+ *  Bubble's Reticle-Gated Interaction + Click-and-Drag Reposition") once a
+ *  second caller (`BeingController`'s own drag-trigger detection) needed
+ *  the identical test, rather than reaching into `InteractionSystem`'s own
+ *  private method or duplicating it. `scratch` is an optional pre-allocated
+ *  `THREE.Vector3` for a hot-path caller that scans many candidates per
+ *  frame (see `InteractionSystem.js`'s own use) — omitted, this allocates
+ *  one fresh, harmless for an infrequent caller like a single mousedown
+ *  check. */
+export function isWithinLookCone(targetWorldPos, playerPos, cameraForwardDir, cosThreshold, scratch = new THREE.Vector3()) {
+  scratch.subVectors(targetWorldPos, playerPos).normalize();
+  return scratch.dot(cameraForwardDir) >= cosThreshold;
 }

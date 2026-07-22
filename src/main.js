@@ -425,6 +425,7 @@ const beingController = engine.addSystem(
     projectsStore,
     residentConnection,
     expressionSetStore,
+    canvas,
   })
 );
 const beingSpawnerSystem = engine.addSystem(new BeingSpawnerSystem({ beingLibrary, beingInstanceStore }));
