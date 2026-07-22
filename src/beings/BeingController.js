@@ -14,6 +14,9 @@ import { ResidentMovement, getIdleLocation, randomIdleLocationId, MIN_REST_SECON
 import { getPersonalityModifiers } from "../resident/ResidentContext.js";
 import { currentTimeBucket, currentWeatherId, isRainingNow, isGoldenHourNow } from "../resident/ResidentWorldSignals.js";
 import { FURNITURE_LAYOUT } from "../data/layoutDefault.js";
+import { ResidentRenderer } from "../resident/ResidentRenderer.js";
+import { defaultEmbodimentConfig } from "../ai/EmbodimentConfiguration.js";
+import { EXPRESSIONS } from "../resident/ResidentBehaviour.js";
 
 const SAVE_SYNC_INTERVAL = 2; // seconds — how often a moving Being's live position is written back to BeingInstanceStore, not every frame (see this file's own comment)
 const MIN_CONTINUITY_SECONDS = 30; // a Being reasonably notices and moves on within this short a gap; below it, nothing visibly changes on reload, matching "nothing should feel scripted"
@@ -31,7 +34,13 @@ const MOOD_DRIFT_MIN_SECONDS = 120;
 const MOOD_DRIFT_MAX_SECONDS = 300;
 const PATTERN_SAMPLE_INTERVAL = 30;
 const RELATIONSHIP_AWARENESS_RADIUS = 3;
-const MOOD_CANDIDATES = ["content", "curious", "happy"]; // the only three docs/RESIDENT.md's own "Mood, Emotion, and Personality" section documents drift ever picking among
+// "content"/"curious"/"happy" per docs/RESIDENT.md's own "Mood, Emotion,
+// and Personality" section — but the real ExpressionTypes.js id for that
+// first one is "neutral" ("content" was its name before the Workshop
+// Personality phase's own rename; the doc's prose never caught up).
+// Found and fixed, Version 4 Phase 7b, the moment mood was first actually
+// rendered as a face rather than only ever read back as a plain string.
+const MOOD_CANDIDATES = ["neutral", "curious", "happy"];
 // Version 4, Phase 7a — the idle-location weighting half of the old
 // ResidentController._windowWatchWeights(), same reconstruction caveat as
 // above: the exact original multiplier values didn't survive the file's
@@ -102,6 +111,8 @@ export class BeingController {
     timeOfDaySystem = null,
     musicSystem = null,
     projectsStore = null,
+    residentConnection = null,
+    expressionSetStore = null,
   }) {
     this.beingLibrary = beingLibrary;
     this.beingInstanceStore = beingInstanceStore;
@@ -114,6 +125,8 @@ export class BeingController {
     this.timeOfDaySystem = timeOfDaySystem; // Version 4, Phase 7 — time-of-day signal for pattern sampling, see _updateResidentLife()
     this.musicSystem = musicSystem; // Version 4, Phase 7 — "listening to music" activity sampling, see _samplePatterns()
     this.projectsStore = projectsStore; // Version 4, Phase 7a — "an active project pulls toward the workbench," see _residentLocationWeights()
+    this.residentConnection = residentConnection; // Version 4, Phase 7b — offline -> "sleeping" expression override, see _updateResidentTravel()
+    this.expressionSetStore = expressionSetStore; // Version 4, Phase 7b — a resident-embodiment Being's own custom pixel-art face, see _spawnRuntime()
     this._runtime = new Map(); // instanceId -> { root, entity, wanderTarget, patrolRoute, patrolIndex, restTimer, bobPhase, awarenessBlend, syncTimer, modelMesh, skeleton: {map, rest} | null, clipPlayer, activeClipId, residentMovement: ResidentMovement | null, moodDriftTimer, patternSampleTimer }
     this._playerPos = new THREE.Vector3();
   }
@@ -132,6 +145,16 @@ export class BeingController {
     // This does not require advanced AI. Simple continuity is
     // sufficient." See _applyContinuity()'s own comment.
     engine.events.on("world:continuity", (continuity) => this._applyContinuity(continuity));
+    // Version 4, Phase 7b — restores ResidentController.js's own old
+    // dual use of "isThinking" (the squash/stretch pulse and the
+    // "thinking" expression override), now per-instance.
+    // ResidentConversation.js emits this at the exact same
+    // setThinking(true)/setThinking(false) call sites Phase 7a already
+    // instrumented once for the thinking-sound cue.
+    engine.events.on("resident:thinkingChanged", ({ beingInstanceId, thinking }) => {
+      const runtime = this._runtime.get(beingInstanceId);
+      if (runtime) runtime.residentThinking = thinking;
+    });
   }
 
   /** The same "pick one new plausible spot, don't animate the journey"
@@ -220,14 +243,23 @@ export class BeingController {
     const definition = this.beingLibrary.get(instance.definitionId);
     if (!definition) return; // its own definition was deleted from the library — nothing sensible to render
 
-    const root = new THREE.Group();
+    // Version 4, Phase 7b — a resident-embodiment Being (Bubble, the
+    // Workshop's own built-in resident — never a player design) uses
+    // `ResidentRenderer.js`'s own real, unmodified visual directly as
+    // its entity root, rather than a wrapping THREE.Group holding a
+    // compiled body or an imported model — `ResidentRenderer.update()`
+    // already sets its own `root.position`/`rotation.y` every frame (see
+    // `_updateResidentTravel()`), which would conflict with a second
+    // wrapper group interpreting the same values as a local transform.
+    const residentRenderer = definition.bodySource === "residentEmbodiment" ? this._buildResidentRenderer(definition) : null;
+    const root = residentRenderer ? residentRenderer.root : new THREE.Group();
     root.name = `being-${instance.id}`;
     root.position.set(instance.position[0], instance.position[1], instance.position[2]);
     root.rotation.y = instance.rotationY ?? 0;
     root.scale.setScalar(definition.scale ?? 1);
 
-    const placeholder = this.modelLoader.buildPlaceholder();
-    root.add(placeholder);
+    const placeholder = residentRenderer ? null : this.modelLoader.buildPlaceholder();
+    if (placeholder) root.add(placeholder);
 
     const entity = new Entity(`being-${instance.id}`);
     entity.addComponent(new MeshComponent(root, this.engine.scene));
@@ -259,13 +291,18 @@ export class BeingController {
       residentMovement: null, // Version 4, Phase 7 — lazily built only for movementStyle "residentTravel", see _updateResidentTravel()
       residentPlayerCommand: null, // null | "stay" | "follow" | "goto" — see setResidentCommand()/sendResidentTo()
       residentGoToTarget: null, // THREE.Vector3 | null — only meaningful while residentPlayerCommand === "goto"
+      residentRenderer, // Version 4, Phase 7b — ResidentRenderer | null, see _buildResidentRenderer()/_updateResidentTravel()
+      residentExpressionSetId: undefined, // Version 4, Phase 7b — last-applied expressionSetId (or null for "default"), see _updateResidentTravel()'s own change-guard
+      residentThinking: false, // Version 4, Phase 7b — set by the resident:thinkingChanged listener in init()
       // Version 4, Phase 7 — "quiet familiarity" timers, only ever decremented for a resident-capable instance (see _updateResidentLife()); staggered the same way syncTimer already is above.
       moodDriftTimer: MOOD_DRIFT_MIN_SECONDS + Math.random() * (MOOD_DRIFT_MAX_SECONDS - MOOD_DRIFT_MIN_SECONDS),
       patternSampleTimer: Math.random() * PATTERN_SAMPLE_INTERVAL,
     };
     this._runtime.set(instance.id, runtime);
 
-    if (definition.bodySource === "primitives" && definition.bodyParts?.length) {
+    if (residentRenderer) {
+      // Body is already fully built above — nothing more to do.
+    } else if (definition.bodySource === "primitives" && definition.bodyParts?.length) {
       // "The Workshop should treat imported beings exactly the same as
       // internally created beings" — the *result* (a real Object3D plus
       // a skeleton this same class already knows how to animate) is
@@ -288,6 +325,30 @@ export class BeingController {
         runtime.skeleton = this._resolveSkeleton(definition.modelId, model);
       });
     }
+  }
+
+  /** Version 4, Phase 7b — resolves the resident-embodiment Being's own
+   *  profile for its embodiment/expression-set config, and constructs a
+   *  real `ResidentRenderer.js` instance — the exact same class the
+   *  deleted `ResidentEntity.js` always used, genuinely unmodified. A
+   *  profile that doesn't resolve (deleted, or not yet linked) still
+   *  gets a real body via `defaultEmbodimentConfig()`, the same "never a
+   *  blank/broken visual" standard every other missing-reference case in
+   *  this codebase already holds itself to. */
+  _buildResidentRenderer(definition) {
+    const profile = this._residentProfile(definition);
+    const renderer = new ResidentRenderer(profile?.embodiment ?? defaultEmbodimentConfig());
+    const expressionSetId = this._resolveExpressionSetId(profile);
+    if (expressionSetId) renderer.setExpressionSet(this.expressionSetStore?.get(expressionSetId) ?? null);
+    return renderer;
+  }
+
+  /** `"default"` is the reserved sentinel for "no custom set, use the
+   *  built-in procedural drawing" — normalized to `null` here once so
+   *  both the initial build above and every frame's own live-change
+   *  check in `_updateResidentTravel()` compare against the same shape. */
+  _resolveExpressionSetId(profile) {
+    return profile?.expressionSetId && profile.expressionSetId !== "default" ? profile.expressionSetId : null;
   }
 
   /** Resolves (or, the first time, computes and caches) `modelId`'s own
@@ -343,6 +404,7 @@ export class BeingController {
 
   _despawnRuntime(id, runtime) {
     this.engine.entities.destroy(runtime.entity);
+    runtime.residentRenderer?.dispose(); // Version 4, Phase 7b — releases the face canvas texture/etc.; entity.destroy() only removes root from the scene, it doesn't know this class holds its own extra GPU resources
     this._runtime.delete(id);
   }
 
@@ -481,7 +543,8 @@ export class BeingController {
       if (residentState && !residentState.idleLocationId) residentState.setIdleLocation(getIdleLocation(null).id);
     }
 
-    const modifiers = getPersonalityModifiers(this._residentProfile(definition));
+    const profile = this._residentProfile(definition);
+    const modifiers = getPersonalityModifiers(profile);
     runtime.residentMovement.setRestDurationMultiplier(modifiers.restDurationMultiplier);
     runtime.residentMovement.setMovementSpeedMultiplier(modifiers.movementSpeedMultiplier);
     runtime.residentMovement.setMotionDamping(modifiers.motionDamping);
@@ -520,8 +583,10 @@ export class BeingController {
     // own gate; awareness/look-at below still applies regardless.
 
     const before = runtime.root.position.clone();
-    const motion = runtime.residentMovement.update(dt, { thinking: false, idleBehaviour: "gentleFloat" });
-    runtime.root.position.copy(motion.position);
+    const motion = runtime.residentMovement.update(dt, {
+      thinking: runtime.residentThinking,
+      idleBehaviour: profile?.embodiment?.idleBehaviour ?? "gentleFloat",
+    });
 
     // The same "blend the idle look-at toward the player when close"
     // ResidentController.js already does, reusing this class's own
@@ -532,14 +597,47 @@ export class BeingController {
     const lookTarget = motion.lookAt.clone();
     const awarenessRadius = AWARENESS_RADIUS * modifiers.awarenessRadiusMultiplier;
     const awarenessFullRadius = AWARENESS_FULL_RADIUS * modifiers.awarenessRadiusMultiplier;
+    const referencePos = runtime.residentRenderer ? motion.position : runtime.root.position;
     if (definition.awarenessMode !== "ignorePlayer" && playerPos) {
-      const dist = runtime.root.position.distanceTo(playerPos);
+      const dist = referencePos.distanceTo(playerPos);
       let target = 0;
       if (dist <= awarenessFullRadius) target = 1;
       else if (dist <= awarenessRadius) target = 1 - (dist - awarenessFullRadius) / (awarenessRadius - awarenessFullRadius);
       runtime.awarenessBlend += (target - runtime.awarenessBlend) * Math.min(1, dt * 3);
       if (runtime.awarenessBlend > 0.01) lookTarget.lerp(playerPos, runtime.awarenessBlend);
     }
+
+    // Version 4, Phase 7b — a resident-embodiment Being hands position,
+    // rotation, scale, and the look-at itself entirely to
+    // ResidentRenderer.update(), which already owns its own face-turn
+    // easing internally (see that class's own comment) — no separate
+    // whole-body yaw-toward-player the way a skeleton body needs, since
+    // the original design only ever turned Bubble's *face*, not her
+    // whole body, toward the player.
+    if (runtime.residentRenderer) {
+      runtime.residentRenderer.setEmbodiment(profile?.embodiment ?? defaultEmbodimentConfig());
+      // Resolved fresh each frame, same as embodiment above, but only
+      // actually applied on a real change — setExpressionSet() redraws the
+      // face canvas immediately when one's already showing (see that
+      // method's own comment), and doing that unconditionally 60 times a
+      // second would be exactly the wasted work "redrawn only when the
+      // expression actually changes" already rules out for ordinary
+      // expression changes.
+      const expressionSetId = this._resolveExpressionSetId(profile);
+      if (expressionSetId !== runtime.residentExpressionSetId) {
+        runtime.residentExpressionSetId = expressionSetId;
+        runtime.residentRenderer.setExpressionSet(expressionSetId ? this.expressionSetStore?.get(expressionSetId) ?? null : null);
+      }
+      runtime.residentRenderer.update(dt, { position: motion.position, idleRotationY: motion.idleRotationY, scale: motion.scale, lookTarget });
+      runtime.residentRenderer.setAwake(!this.residentConnection || this.residentConnection.isAwake);
+      runtime.residentRenderer.setExpression(this._residentExpression(residentState, runtime));
+      instance.currentState = before.distanceTo(motion.position) > 0.001 ? "moving" : "idle";
+      if (residentState) residentState.currentPosition = { x: motion.position.x, y: motion.position.y, z: motion.position.z };
+      this._syncPeriodically(instance, runtime, dt, { syncY: true });
+      return;
+    }
+
+    runtime.root.position.copy(motion.position);
     const toLook = new THREE.Vector3().subVectors(lookTarget, runtime.root.position);
     if (toLook.lengthSq() > 0.0001) {
       runtime.root.rotation.y = lerpAngle(runtime.root.rotation.y, Math.atan2(toLook.x, toLook.z), Math.min(1, dt * 4));
@@ -553,6 +651,22 @@ export class BeingController {
     if (residentState) residentState.currentPosition = { x: motion.position.x, y: motion.position.y, z: motion.position.z };
 
     this._syncPeriodically(instance, runtime, dt, { syncY: true });
+  }
+
+  /** Version 4, Phase 7b — the same short-overrides-medium-overrides-
+   *  baseline priority `ResidentBehaviour.computeExpression()` always
+   *  used (`sleeping` > `thinking` > mood), reconstructed here since that
+   *  class is now ephemeral, scoped to one open conversation, with no
+   *  standing per-instance state left for this to read. Deliberately
+   *  drops the fourth, shortest tier — the brief per-conversation
+   *  "emotion" blip `triggerEmotion()` used to layer on top — a small,
+   *  honestly-named gap, not silently reconstructed halfway; see this
+   *  file's own header comment. */
+  _residentExpression(residentState, runtime) {
+    if (this.residentConnection && !this.residentConnection.isAwake) return "sleeping";
+    if (runtime.residentThinking) return "thinking";
+    const mood = residentState?.mood;
+    return EXPRESSIONS.includes(mood) ? mood : "neutral";
   }
 
   /** Version 4, Phase 7 — "quiet familiarity," the other half of the old
@@ -583,9 +697,11 @@ export class BeingController {
     }
   }
 
-  /** A weighted pick among content/curious/happy — the only three
+  /** A weighted pick among neutral/curious/happy — the only three
    *  docs/RESIDENT.md's own "Mood, Emotion, and Personality" section
-   *  documents drift ever choosing between — biased by the resident's own
+   *  documents drift ever choosing between (that section's own prose
+   *  calls the first one "content," its pre-rename name — see
+   *  `MOOD_CANDIDATES`'s own comment above) — biased by the resident's own
    *  selected traits/dials (`ResidentContext.getPersonalityModifiers()`,
    *  the identical merged source `ResidentConversation.js` already reads
    *  for its own system-prompt line), nudged toward `happy` when the

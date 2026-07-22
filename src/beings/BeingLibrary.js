@@ -222,7 +222,11 @@ export class BeingLibrary {
     // copy of the starter set) is respected exactly as-is.
     this.beings = Object.keys(saved).length > 0 ? saved : Object.fromEntries(DEFAULT_BEINGS.map((b) => [b.id, b]));
     for (const being of Object.values(this.beings)) {
-      if (being.bodySource !== "primitives") being.bodySource = "model"; // a Being saved before this phase existed
+      // "residentEmbodiment" is a third real value (Version 4, Phase 7b —
+      // Bubble's own restored, non-compiled body; see DefaultBeings.js's
+      // own comment), left alone here same as "primitives" — only a
+      // genuinely unrecognised value falls back to "model".
+      if (being.bodySource !== "primitives" && being.bodySource !== "residentEmbodiment") being.bodySource = "model"; // a Being saved before this phase existed
       if (!Array.isArray(being.bodyParts)) being.bodyParts = [];
     }
     this.events.emit("beings:changed");

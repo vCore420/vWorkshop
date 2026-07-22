@@ -114,36 +114,6 @@ DOG_BODY_PARTS[3].rotation = [0, 0, -0.3]; // ear left, tilted outward/down
 DOG_BODY_PARTS[4].rotation = [0, 0, 0.3]; // ear right, tilted outward/down
 DOG_BODY_PARTS[5].rotation = [0.5, 0, 0]; // tail, wag-up angle
 
-// ---- Bubble (fully rigged, Version 4 Phase 7's own seeded resident) --
-
-// A simple, warm-toned variant of Person's own rig — reusing the
-// identical biped structure and mirrorSubtree() symmetry, recoloured
-// rather than redesigned. Precise character design isn't this phase's
-// own point (see docs/ROADMAP.md's own Phase 7 account); Bubble's
-// actual identity has always lived in her AI profile/personality, never
-// her geometry.
-const BUBBLE_GLOW = "#e8c07d";
-const BUBBLE_SKIN = "#e0b491";
-const BUBBLE_WRAP = "#8a5a72";
-const BUBBLE_TRIM = "#5c3d4d";
-
-const bubbleLeftAndRoot = [
-  part("bubble-torso", "Torso", null, "box", [0, 1.23, 0], [0.5, 0.7, 0.3], BUBBLE_GLOW, "torso"),
-  part("bubble-head", "Head", "bubble-torso", "box", [0, 0.52, 0], [0.32, 0.32, 0.32], BUBBLE_SKIN, "head"),
-  part("bubble-upperArmLeft", "Upper Arm (Left)", "bubble-torso", "box", [-0.31, 0.18, 0], [0.15, 0.34, 0.15], BUBBLE_GLOW, "upperArmLeft"),
-  part("bubble-lowerArmLeft", "Lower Arm (Left)", "bubble-upperArmLeft", "box", [0, -0.31, 0], [0.13, 0.29, 0.13], BUBBLE_SKIN, "lowerArmLeft"),
-  part("bubble-handLeft", "Hand (Left)", "bubble-lowerArmLeft", "box", [0, -0.22, 0], [0.13, 0.15, 0.07], BUBBLE_SKIN, "handLeft"),
-  part("bubble-upperLegLeft", "Upper Leg (Left)", "bubble-torso", "box", [-0.14, -0.55, 0], [0.19, 0.39, 0.19], BUBBLE_WRAP, "upperLegLeft"),
-  part("bubble-lowerLegLeft", "Lower Leg (Left)", "bubble-upperLegLeft", "box", [0, -0.38, 0], [0.16, 0.37, 0.16], BUBBLE_WRAP, "lowerLegLeft"),
-  part("bubble-footLeft", "Foot (Left)", "bubble-lowerLegLeft", "box", [0, -0.23, 0.02], [0.17, 0.09, 0.25], BUBBLE_TRIM, "footLeft"),
-];
-
-const BUBBLE_BODY_PARTS = [
-  ...bubbleLeftAndRoot,
-  ...mirrorSubtree(bubbleLeftAndRoot, "bubble-upperArmLeft"),
-  ...mirrorSubtree(bubbleLeftAndRoot, "bubble-upperLegLeft"),
-];
-
 function being(id, name, description, beingType, bodyParts, overrides) {
   const now = "2026-01-01T00:00:00.000Z";
   return {
@@ -204,17 +174,30 @@ export const DEFAULT_BEINGS = [
     idleAnimationClipId: "default-quadruped-idle",
     walkAnimationClipId: "default-quadruped-walk",
   }),
-  being(BUBBLE_DEFINITION_ID, "Bubble", "The Workshop's own resident — a real conversation, real memory, genuinely aware of the world around it.", "resident", BUBBLE_BODY_PARTS, {
+  being(BUBBLE_DEFINITION_ID, "Bubble", "The Workshop's own resident — a real conversation, real memory, genuinely aware of the world around it.", "resident", [], {
     movementStyle: "residentTravel",
     idleBehaviour: "stand",
     awarenessMode: "lookAtPlayer",
     interactionBehaviour: "aiResident",
+    // Version 4, Phase 7b — restored, not a compiled body at all. Bubble
+    // is the Workshop's own built-in resident, not a player design, so
+    // she keeps her own original ResidentRenderer.js embodiment (shape,
+    // colour, glow, and a genuinely editable/importable pixel-art face,
+    // all configurable in Mission Control) — a third, real
+    // `bodySource` value, deliberately never offered as a Being Creator
+    // UI choice (the same "valid, reserved" precedent `beingType:
+    // "resident"` already set), not a body-source a player would ever
+    // pick for their own design. See BeingController.js's own
+    // `_spawnRuntime()`/`_updateResidentTravel()` for how this renders.
+    bodySource: "residentEmbodiment",
     // Resolved at boot (see main.js) to whichever profile is currently
     // the Workshop's own default the first time this is ever seeded —
     // profile ids are minted at runtime, never known ahead of time the
     // way a clip id already is (see this file's own being() calls above).
     residentProfileId: null,
-    idleAnimationClipId: "default-idle",
-    walkAnimationClipId: "default-walk",
+    // No skeleton exists for a resident-embodiment body — nothing to
+    // animate a clip onto.
+    idleAnimationClipId: null,
+    walkAnimationClipId: null,
   }),
 ];
