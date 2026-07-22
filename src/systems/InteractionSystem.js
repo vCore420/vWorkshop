@@ -1,9 +1,14 @@
 import * as THREE from "three";
 import { InteractableComponent } from "../core/components/InteractableComponent.js";
 import { CameraSystem } from "./CameraSystem.js";
+import { isWithinLookCone } from "../utils/MathUtils.js";
 
 const SCAN_INTERVAL = 0.08; // ~12.5Hz — see the class comment on why this doesn't need to run every frame
-const LOOK_AT_COS_THRESHOLD = Math.cos((7 * Math.PI) / 180); // ~7° cone — "the reticle is directly over it," forgiving enough to be usable on a small, moving target without feeling like a precise raycast hit-test
+// Exported so a second caller (BeingController's own drag-trigger
+// detection) can use the identical cone tightness — "draggable" and
+// "shows the interact prompt" should always agree on what "the reticle is
+// on it" means.
+export const LOOK_AT_COS_THRESHOLD = Math.cos((7 * Math.PI) / 180); // ~7° cone — "the reticle is directly over it," forgiving enough to be usable on a small, moving target without feeling like a precise raycast hit-test
 
 /**
  * InteractionSystem
@@ -129,8 +134,7 @@ export class InteractionSystem {
    *  land exactly on; a several-degree cone reads as "looking at it"
    *  without demanding pixel precision. */
   _isLookingAt(targetWorldPos, playerPos) {
-    this._scratchDirection.subVectors(targetWorldPos, playerPos).normalize();
-    return this._scratchDirection.dot(this._scratchCameraForward) >= LOOK_AT_COS_THRESHOLD;
+    return isWithinLookCone(targetWorldPos, playerPos, this._scratchCameraForward, LOOK_AT_COS_THRESHOLD, this._scratchDirection);
   }
 
   _trigger({ entity, interactable }) {
