@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { radialGlowTexture, cloudBlobTexture, starSpriteTexture } from "../utils/ProceduralTexture.js";
+import { CONSTELLATIONS, raDecToSpherePosition } from "../utils/Astronomy.js";
 import { CameraSystem } from "./CameraSystem.js";
 import { InteriorSystem } from "./InteriorSystem.js";
 
@@ -15,9 +16,28 @@ const RAIN_HALF_RANGE = 16; // falls within this box around the camera, horizont
 const RAIN_TOP = 7;
 const RAIN_BOTTOM = -0.5;
 const RAIN_STREAK_LENGTH = 0.35;
+// Version 4, Phase 9b ("Falling Snow") — a separate box/count from
+// rain's own, not shared: fewer flakes than raindrops (SNOW_COUNT <
+// RAIN_COUNT) since each one is individually larger and more visible, not
+// aiming for rain's own density. Same TOP/BOTTOM vertical range as rain —
+// no reason for snow to fall through a different vertical volume.
+const SNOW_COUNT = 180;
+const SNOW_HALF_RANGE = 16;
+const SNOW_TOP = 7;
+const SNOW_BOTTOM = -0.5;
+// Version 4, Phase 9c ("Lightning + Thunder") — LIGHTNING_DECAY_RATE is
+// deliberately the SAME numeric rate LightingSystem's own
+// `_lightningFlash` decays at (`dt * 3.5`), duplicated here rather than
+// shared/imported: the visual bolt and the light-level pulse move at the
+// same tempo without coupling the two systems together. If
+// LightingSystem's own decay rate is ever retuned, this constant needs
+// updating to match — not a shared value by accident.
+const LIGHTNING_DECAY_RATE = 3.5;
+const LIGHTNING_BOLT_POINTS = 7; // enough to read as a jagged channel without being fussy
 
 const _scratchShootingHead = new THREE.Vector3();
 const _scratchShootingTail = new THREE.Vector3();
+const _scratchLightningPoint = new THREE.Vector3();
 
 // A tint blended into the time-of-day sky colour per weather state — see
 // _applySkyColor(). Distinct from fogDensity/cloudCoverage: those already
@@ -31,6 +51,10 @@ const WEATHER_SKY_TINT = {
   drizzle: { color: "#8b95a0", strength: 0.4 },
   lightRain: { color: "#7c8790", strength: 0.5 },
   heavyRain: { color: "#5f6a74", strength: 0.65 },
+  // Cooler/whiter than the rain tints above — a snow sky reads as flatter
+  // and colder, not the same grey-blue an ordinary rain sky does.
+  lightSnow: { color: "#c9d3da", strength: 0.55 },
+  heavySnow: { color: "#aab4bc", strength: 0.7 },
   fog: { color: "#c7c7c7", strength: 0.8 }, // flatter, greyer — fog scatters colour out of the air
   mist: { color: "#dde6ec", strength: 0.4 }, // lighter, cooler-white — a thinner haze than fog
   storm: { color: "#454b53", strength: 0.75 }, // the darkest, coldest sky of any condition
@@ -82,6 +106,7 @@ export class WorldEnvironmentSystem {
     this._baseSkyColor = new THREE.Color("#bfe6ff");
     this._weatherTint = null; // { color: THREE.Color, strength } — see _applySkyColor()
     this._precipitation = 0;
+    this._isSnowing = false; // see update()'s own rain/snow opacity-target split
     this._rainData = null; // { points, positions } — see _buildRain()
     // Atmosphere phase additions — see _updateCloudTint()/_applyCelestialVisibility()/_applyFog().
     this._cloudTintColor = new THREE.Color("#ffffff");
@@ -108,12 +133,22 @@ export class WorldEnvironmentSystem {
 
     this._buildSunMoon();
     this._buildStars();
+    this._buildConstellationStars();
+    this._buildConstellationLines();
     this._buildShootingStar();
+    this._buildLightningBolt();
     this._buildClouds();
     this._buildRain();
+    this._buildSnow();
 
     engine.events.on("timeofday:changed", (state) => this._onTimeChanged(state));
     engine.events.on("environment:changed", (state) => this._onEnvironmentChanged(state));
+    // Version 4, Phase 9c — LightingSystem owns *when* a flash happens
+    // (storm state, timer, cadence); this system only reacts visually.
+    // The event's own `distance` payload drives LightingSystem's own
+    // thunder-delay math and isn't needed here — a bolt's own shape
+    // doesn't depend on how far away the strike is.
+    engine.events.on("lightning:flash", () => this._triggerLightningBolt());
   }
 
   _buildSunMoon() {
@@ -159,6 +194,74 @@ export class WorldEnvironmentSystem {
     this.engine.scene.add(this.stars);
   }
 
+  /** Version 4, Phase 9 ("Atmosphere, Continued") — a real, modest
+   *  constellation catalogue (see `Astronomy.js`'s own `CONSTELLATIONS`).
+   *  A second, separate `THREE.Points` object rather than appending into
+   *  `_buildStars()`'s own random background buffer: it lets the
+   *  catalogued stars read as subtly brighter (real named stars mostly
+   *  are the brighter ones — `size: 2.4` vs. the background field's
+   *  `1.6`, a deliberate, modest step up, not a spotlight) without
+   *  touching that method at all, and keeps `_buildConstellationLines()`
+   *  simple — each edge just resolves its own endpoint positions directly
+   *  rather than tracking offsets into a shared buffer. */
+  _buildConstellationStars() {
+    const allStars = CONSTELLATIONS.flatMap((c) => c.stars);
+    const positions = new Float32Array(allStars.length * 3);
+    const scratch = new THREE.Vector3();
+    allStars.forEach((star, i) => {
+      raDecToSpherePosition(star.ra, star.dec, SKY_RADIUS, scratch);
+      positions[i * 3] = scratch.x;
+      positions[i * 3 + 1] = scratch.y;
+      positions[i * 3 + 2] = scratch.z;
+    });
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    const material = new THREE.PointsMaterial({
+      map: starSpriteTexture(),
+      size: 2.4,
+      sizeAttenuation: false,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      fog: false,
+    });
+    this.constellationStars = new THREE.Points(geometry, material);
+    this.engine.scene.add(this.constellationStars);
+  }
+
+  /** Version 4, Phase 9 — the asterism lines connecting each catalogued
+   *  constellation's own stars into its recognizable pattern (the Big
+   *  Dipper's chain, Cassiopeia's W...). Follows `_buildShootingStar()`'s
+   *  own precedent below: a second small, cheap `THREE.LineSegments`
+   *  object, static after creation (only its shared transform changes
+   *  frame to frame, same as `this.stars`) — no `frustumCulled = false`
+   *  needed here the way the shooting star and rain need it, since this
+   *  geometry's vertex data never moves after `init()`. */
+  _buildConstellationLines() {
+    const positions = [];
+    const scratch = new THREE.Vector3();
+    for (const constellation of CONSTELLATIONS) {
+      for (const [a, b] of constellation.edges) {
+        for (const index of [a, b]) {
+          const star = constellation.stars[index];
+          raDecToSpherePosition(star.ra, star.dec, SKY_RADIUS, scratch);
+          positions.push(scratch.x, scratch.y, scratch.z);
+        }
+      }
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(positions), 3));
+    const material = new THREE.LineBasicMaterial({
+      color: "#cfe0ff",
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      fog: false,
+    });
+    this.constellationLines = new THREE.LineSegments(geometry, material);
+    this.engine.scene.add(this.constellationLines);
+  }
+
   /** "Occasional shooting stars during clear nights... these effects
    *  should remain subtle. The goal is quiet realism rather than
    *  spectacle." One reusable streak (a two-point line, the same
@@ -176,6 +279,56 @@ export class WorldEnvironmentSystem {
     this.engine.scene.add(this.shootingStar);
     this._shootingStarState = null; // null while inactive; see _maybeTriggerShootingStar()
     this._shootingStarCooldown = this._randomShootingStarCooldown();
+  }
+
+  /** Version 4, Phase 9c ("Lightning + Thunder") — "a visible lightning
+   *  bolt... timed together" with LightingSystem's own existing flash.
+   *  A single jagged `THREE.Line` (a connected polyline, not
+   *  `LineSegments` — no need to duplicate points into segment pairs for
+   *  one continuous channel), rebuilt fresh each trigger rather than
+   *  travelling like the shooting star: a bolt's own shape is static
+   *  once it flashes, only its camera-relative anchor needs to follow
+   *  the player (see update()'s own recenter, matching the
+   *  constellation-lines pattern — build the shape once, move the whole
+   *  object — rather than rain/snow's per-vertex rewrite, which exists
+   *  because those particles genuinely move independently frame to
+   *  frame). Deliberately a single channel, no branching forks — "avoid
+   *  making the room feel smoky or busy" applies here too. */
+  _buildLightningBolt() {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(LIGHTNING_BOLT_POINTS * 3), 3));
+    const material = new THREE.LineBasicMaterial({ color: "#eaf3ff", transparent: true, opacity: 0, depthWrite: false, fog: false });
+    this.lightningBolt = new THREE.Line(geometry, material);
+    this.lightningBolt.frustumCulled = false; // positions rewritten on trigger, same reasoning as the shooting star
+    this.engine.scene.add(this.lightningBolt);
+    this._lightningBoltOpacity = 0;
+  }
+
+  /** Triggered by `LightingSystem`'s own `"lightning:flash"` event (see
+   *  init()) — a jagged path descending from high in the sky toward the
+   *  horizon, a stylised flash-then-fade rather than a strike-to-ground
+   *  animation. Built once, in local (camera-anchor) unit-direction
+   *  space — deliberately NOT rotated with time-of-day the way the star
+   *  field is; a bolt has no real celestial position to track. */
+  _triggerLightningBolt() {
+    const positions = this.lightningBolt.geometry.attributes.position.array;
+    const azimuth = Math.random() * Math.PI * 2;
+    for (let i = 0; i < LIGHTNING_BOLT_POINTS; i++) {
+      const t = i / (LIGHTNING_BOLT_POINTS - 1);
+      const y = 0.92 - t * 0.72; // descends from high overhead (~0.92) toward the horizon (~0.2)
+      const jitter = (Math.random() - 0.5) * 0.18 * (1 - t * 0.5); // wider jitter near the top, narrowing toward the base — reads as a jagged channel, not a random scribble
+      const r = Math.sqrt(Math.max(0, 1 - y * y));
+      _scratchLightningPoint
+        .set(Math.cos(azimuth) * r, y, Math.sin(azimuth) * r)
+        .normalize()
+        .multiplyScalar(SKY_RADIUS);
+      const base = i * 3;
+      positions[base] = _scratchLightningPoint.x + jitter * SKY_RADIUS;
+      positions[base + 1] = _scratchLightningPoint.y;
+      positions[base + 2] = _scratchLightningPoint.z + jitter * SKY_RADIUS;
+    }
+    this.lightningBolt.geometry.attributes.position.needsUpdate = true;
+    this._lightningBoltOpacity = 1;
   }
 
   _randomShootingStarCooldown() {
@@ -268,9 +421,16 @@ export class WorldEnvironmentSystem {
    *  the same way clouds are — cheap (one draw call), and, unlike the
    *  window's own rain-streak overlay (still the honest representation
    *  for what's happening on the glass itself — see docs/WORLD.md), this
-   *  is real geometry any camera can see, indoors or out: a solid wall or
-   *  roof correctly occludes it via ordinary depth testing, so it doesn't
-   *  need to know whether the player happens to be inside or outside. */
+   *  is real geometry any camera can see, not a 2D screen effect.
+   *  **Corrected, Version 4 Phase 9b:** this used to claim ordinary
+   *  depth testing alone was enough to keep rain out of view indoors —
+   *  not true, since raindrops spawn in a box centred on the *camera*,
+   *  so a good number of them end up genuinely co-located with an indoor
+   *  player rather than ever being behind anything to begin with; depth
+   *  testing only occludes geometry actually *between* the camera and a
+   *  particle. `update()`'s own `indoors` check (shared with the new
+   *  `_buildSnow()` below) is what actually keeps this honest — see its
+   *  own comment for the full reasoning. */
   _buildRain() {
     const positions = new Float32Array(RAIN_COUNT * 2 * 3); // 2 points (top+bottom) per streak
     const geometry = new THREE.BufferGeometry();
@@ -293,6 +453,53 @@ export class WorldEnvironmentSystem {
         y: RAIN_BOTTOM + Math.random() * (RAIN_TOP - RAIN_BOTTOM),
         z: (Math.random() - 0.5) * RAIN_HALF_RANGE * 2,
         speed: 5 + Math.random() * 3,
+      });
+    }
+  }
+
+  /** Version 4, Phase 9b ("Falling Snow") — a real dedicated snow
+   *  visual, replacing the old approximation where a snow-mapped weather
+   *  state just borrowed rain's own look by intensity (see
+   *  `WeatherProvider.js`'s own `WMO_CODE_MAP`). A `THREE.Points` field
+   *  rather than `_buildRain()`'s `LineSegments` — flakes read as soft
+   *  falling dots, not streaks — reusing `starSpriteTexture()` directly
+   *  rather than a new texture, the same reuse Wave 1's constellation
+   *  stars already established. `sizeAttenuation: true` (unlike the star
+   *  field's own `false`): snow is real, near-depth geometry that should
+   *  grow larger as it nears the camera, not effectively-at-infinity like
+   *  stars. Mutually exclusive with rain at the render level — see
+   *  `update()`'s own `_isSnowing` branch — since `lightSnow`/`heavySnow`
+   *  and every rain-family state are already mutually exclusive weather
+   *  states; both fields exist simultaneously only to make crossfading
+   *  between them (a direct rain→snow transition, say) a smooth opacity
+   *  ease rather than a hard cut. */
+  _buildSnow() {
+    const positions = new Float32Array(SNOW_COUNT * 3); // one point per flake, not a two-point streak like rain
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    const material = new THREE.PointsMaterial({
+      map: starSpriteTexture(),
+      size: 5,
+      sizeAttenuation: true,
+      color: "#ffffff",
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      fog: false, // snow reads as itself even in thick fog, same reasoning as rain
+    });
+    this.snow = new THREE.Points(geometry, material);
+    this.snow.frustumCulled = false; // positions update every frame in local space, same as rain
+    this.engine.scene.add(this.snow);
+
+    this._snowFlakes = [];
+    for (let i = 0; i < SNOW_COUNT; i++) {
+      this._snowFlakes.push({
+        x: (Math.random() - 0.5) * SNOW_HALF_RANGE * 2,
+        y: SNOW_BOTTOM + Math.random() * (SNOW_TOP - SNOW_BOTTOM),
+        z: (Math.random() - 0.5) * SNOW_HALF_RANGE * 2,
+        speed: 0.6 + Math.random() * 0.5, // roughly an order of magnitude slower than rain's own 5-8 — the single biggest lever for reading as visually distinct, not "rain but renamed"
+        drift: (Math.random() - 0.5) * 0.6, // per-flake sideways wobble magnitude — a cheap, honest touch so falling snow reads as less mechanically uniform than rain
+        driftPhase: Math.random() * Math.PI * 2,
       });
     }
   }
@@ -357,15 +564,22 @@ export class WorldEnvironmentSystem {
     this._starVisibilityBase = starVisibility;
     this._moonIllumBase = moonIllumination;
     this._applyCelestialVisibility();
-    // "Stars mapped to the real night sky where practical" — not a full
-    // constellation catalogue (a genuinely different-scale undertaking),
-    // but the star field does turn slowly with the hour, the same
-    // apparent motion the real sky has from Earth's own rotation, rather
-    // than sitting frozen in one arrangement all night regardless of
-    // time. A simplified rotation about the world's vertical axis, not a
+    // The star field turns slowly with the hour, the same apparent motion
+    // the real sky has from Earth's own rotation, rather than sitting
+    // frozen in one arrangement all night regardless of time. A
+    // simplified rotation about the world's vertical axis, not a
     // properly latitude-tilted polar one — believable, not an
-    // observatory-grade planetarium.
-    this.stars.rotation.y = (hour / 24) * Math.PI * 2;
+    // observatory-grade planetarium. Version 4, Phase 9 added a real,
+    // modest constellation catalogue (`Astronomy.js`'s own
+    // `CONSTELLATIONS`, rendered via `_buildConstellationStars()`/
+    // `_buildConstellationLines()`) layered onto this exact same
+    // rotation, unchanged — only the *position* source moved from random
+    // to real RA/Dec, per that catalogue's own docstring on what that
+    // does and doesn't correct for.
+    const starRotationY = (hour / 24) * Math.PI * 2;
+    this.stars.rotation.y = starRotationY;
+    this.constellationStars.rotation.y = starRotationY;
+    this.constellationLines.rotation.y = starRotationY;
   }
 
   /** Blends the current weather's own sky tint (see WEATHER_SKY_TINT) into
@@ -405,6 +619,13 @@ export class WorldEnvironmentSystem {
     const clearFactor = 1 - this._cloudCoverage * 0.7;
     this.moonSprite.material.opacity = (0.25 + this._moonIllumBase * 0.65) * clearFactor;
     this.stars.material.opacity = this._starVisibilityBase * 0.85 * clearFactor;
+    // The catalogued stars share the background field's own opacity
+    // ceiling (brightness differentiation already comes from `size`, not
+    // extra opacity budget); the lines connecting them sit at half that —
+    // "a subtle enhancement," per this file's own restraint principle,
+    // not a bold overlay on top of an already-restrained sky.
+    this.constellationStars.material.opacity = this._starVisibilityBase * 0.85 * clearFactor;
+    this.constellationLines.material.opacity = this._starVisibilityBase * 0.85 * clearFactor * 0.5;
     this._starVisibility = this._starVisibilityBase * clearFactor;
   }
 
@@ -414,6 +635,10 @@ export class WorldEnvironmentSystem {
     this._windSpeed = windSpeed ?? 0.1;
     this._windDirectionRad = windDirectionRad ?? 0;
     this._precipitation = precipitation ?? 0;
+    // Which of rain/snow (already mutually-exclusive weather states)
+    // should be the active precipitation visual right now — see
+    // update()'s own rain/snow opacity-target split.
+    this._isSnowing = id === "lightSnow" || id === "heavySnow";
     const tintDef = WEATHER_SKY_TINT[id];
     this._weatherTint = tintDef ? { color: new THREE.Color(tintDef.color), strength: tintDef.strength } : null;
     this._applySkyColor();
@@ -435,6 +660,8 @@ export class WorldEnvironmentSystem {
       this.sunSprite.position.copy(this._sunDirection).multiplyScalar(SKY_RADIUS).add(camPos);
       this.moonSprite.position.copy(this._moonDirection).multiplyScalar(SKY_RADIUS).add(camPos);
       this.stars.position.copy(camPos);
+      this.constellationStars.position.copy(camPos);
+      this.constellationLines.position.copy(camPos);
     }
 
     // Clouds drift with the wind — genuinely imperceptible on a still day,
@@ -462,24 +689,34 @@ export class WorldEnvironmentSystem {
       cloud.sprite.material.opacity += (targetOpacity - cloud.sprite.material.opacity) * Math.min(1, dt * 0.5);
       cloud.sprite.material.color.copy(this._cloudTintColor);
     }
-    // Rain falls continuously whenever precipitation is active and the
-    // camera isn't inside a registered interior volume (InteriorSystem —
-    // see its own comment for why this is architectural, not
-    // Workshop-specific). That check matters for a real reason, not just
-    // tidiness: raindrops spawn within a box centred on the camera, so if
-    // the camera is standing inside an enclosed room, a good number of
-    // them end up inside that same enclosed space too — genuinely
-    // co-located with the player, not behind a wall or roof from their
-    // perspective at all. Depth testing only ever occludes geometry that
-    // actually sits *between* the camera and a particle; it does nothing
-    // for a particle that was never behind anything to begin with, which
-    // is exactly what "rain falling inside enclosed buildings" turned out
-    // to be. Offsets (x/z) are relative to the camera, like clouds; y is
-    // real world height, since rain falls toward the ground, not toward
-    // wherever the player's own head happens to be.
+    // Rain (or, per Version 4 Phase 9b, snow — see below) falls
+    // continuously whenever precipitation is active and the camera isn't
+    // inside a registered interior volume (InteriorSystem — see its own
+    // comment for why this is architectural, not Workshop-specific). That
+    // check matters for a real reason, not just tidiness: drops/flakes
+    // spawn within a box centred on the camera, so if the camera is
+    // standing inside an enclosed room, a good number of them end up
+    // inside that same enclosed space too — genuinely co-located with the
+    // player, not behind a wall or roof from their perspective at all.
+    // Depth testing only ever occludes geometry that actually sits
+    // *between* the camera and a particle; it does nothing for a particle
+    // that was never behind anything to begin with, which is exactly what
+    // "precipitation falling inside enclosed buildings" turned out to be.
+    // Offsets (x/z) are relative to the camera, like clouds; y is real
+    // world height, since precipitation falls toward the ground, not
+    // toward wherever the player's own head happens to be. Rain and snow
+    // share this one `indoors`/`precipOpacity` computation — they're
+    // already mutually-exclusive weather states (see `_isSnowing`,
+    // set in `_onEnvironmentChanged`), so exactly one of the two targets
+    // below is ever non-zero at a time; both still ease independently so
+    // a direct rain→snow (or snow→rain) transition crossfades smoothly
+    // rather than cutting.
     const indoors = camPos ? (this._interiorSystem?.isInside(camPos) ?? false) : false;
-    const targetRainOpacity = indoors ? 0 : Math.min(1, this._precipitation * 1.15) * 0.55;
+    const precipOpacity = indoors ? 0 : Math.min(1, this._precipitation * 1.15) * 0.55;
+    const targetRainOpacity = this._isSnowing ? 0 : precipOpacity;
+    const targetSnowOpacity = this._isSnowing ? precipOpacity : 0;
     this.rain.material.opacity += (targetRainOpacity - this.rain.material.opacity) * Math.min(1, dt * 2);
+    this.snow.material.opacity += (targetSnowOpacity - this.snow.material.opacity) * Math.min(1, dt * 2);
     if (camPos && this.rain.material.opacity > 0.01) {
       const positions = this.rain.geometry.attributes.position.array;
       const fallSpeedMultiplier = 1 + this._windSpeed * 0.5;
@@ -512,7 +749,51 @@ export class WorldEnvironmentSystem {
       }
       this.rain.geometry.attributes.position.needsUpdate = true;
     }
+    if (camPos && this.snow.material.opacity > 0.01) {
+      const positions = this.snow.geometry.attributes.position.array;
+      // Less wind-accelerated in fall speed than rain (0.3 vs 0.5) but
+      // drifts sideways more (1.1 vs 0.7) — lighter flakes catch the wind
+      // more than they're driven straight down by it, the inverse
+      // emphasis from rain's own heavier, faster drops.
+      const fallSpeedMultiplier = 1 + this._windSpeed * 0.3;
+      const driftX = Math.cos(this._windDirectionRad) * this._windSpeed * 1.1;
+      const driftZ = Math.sin(this._windDirectionRad) * this._windSpeed * 1.1;
+      for (let i = 0; i < this._snowFlakes.length; i++) {
+        const flake = this._snowFlakes[i];
+        flake.driftPhase += dt * 0.8;
+        flake.y -= flake.speed * fallSpeedMultiplier * dt;
+        flake.x += (driftX + Math.sin(flake.driftPhase) * flake.drift) * dt;
+        flake.z += (driftZ + Math.cos(flake.driftPhase) * flake.drift) * dt;
+        if (flake.y < SNOW_BOTTOM) {
+          flake.y = SNOW_TOP;
+          flake.x = (Math.random() - 0.5) * SNOW_HALF_RANGE * 2;
+          flake.z = (Math.random() - 0.5) * SNOW_HALF_RANGE * 2;
+        }
+        if (flake.x > SNOW_HALF_RANGE) flake.x -= SNOW_HALF_RANGE * 2;
+        else if (flake.x < -SNOW_HALF_RANGE) flake.x += SNOW_HALF_RANGE * 2;
+        if (flake.z > SNOW_HALF_RANGE) flake.z -= SNOW_HALF_RANGE * 2;
+        else if (flake.z < -SNOW_HALF_RANGE) flake.z += SNOW_HALF_RANGE * 2;
+
+        const base = i * 3;
+        positions[base] = camPos.x + flake.x;
+        positions[base + 1] = flake.y;
+        positions[base + 2] = camPos.z + flake.z;
+      }
+      this.snow.geometry.attributes.position.needsUpdate = true;
+    }
 
     this._updateShootingStar(dt, camPos);
+
+    // Version 4, Phase 9c — the bolt's own shape is static once
+    // triggered (see _triggerLightningBolt()'s own comment); only its
+    // opacity (matching LightingSystem's own flash decay rate — see
+    // LIGHTNING_DECAY_RATE) and its camera-relative anchor need updating
+    // each frame, the same "build once, recentre the whole object"
+    // pattern the constellation lines already use.
+    if (this._lightningBoltOpacity > 0) {
+      this._lightningBoltOpacity = Math.max(0, this._lightningBoltOpacity - dt * LIGHTNING_DECAY_RATE);
+      this.lightningBolt.material.opacity = this._lightningBoltOpacity;
+      if (camPos) this.lightningBolt.position.copy(camPos);
+    }
   }
 }

@@ -7,6 +7,7 @@ import { RoomLayoutSystem } from "./RoomLayoutSystem.js";
 import { FurnitureSystem } from "./FurnitureSystem.js";
 import { AudioSystem } from "./AudioSystem.js";
 import { FIRST_PERSON_HIDDEN_LAYER } from "../player/PlayerCharacter.js";
+import { clamp } from "../utils/MathUtils.js";
 
 /**
  * LightingSystem
@@ -417,6 +418,17 @@ export class LightingSystem {
       if (this._lightningTimer <= 0) {
         this._lightningFlash = 1;
         this._lightningTimer = 5 + Math.random() * 14; // next flash, a good while off — storms flash occasionally, not constantly
+        // Version 4, Phase 9c ("Lightning + Thunder") — a real strike
+        // distance per flash, driving both the delay before thunder
+        // arrives (speed of sound, 343 m/s) and how loud/close it reads.
+        // Light is ~instant, so the visual event fires immediately; only
+        // the sound is scheduled to arrive later, via the AudioContext's
+        // own clock (see AudioSynth.js's playThunder()/startDelay).
+        const distance = 200 + Math.random() * 3800; // metres — near crack to far rumble
+        this.engine.events.emit("lightning:flash", { distance });
+        const delay = distance / 343;
+        const intensity = clamp(1 - distance / 4000, 0.15, 1);
+        this.engine.getSystem(AudioSystem)?.playInteractionSound("thunder", { delay, intensity });
       }
     }
     if (this._lightningFlash > 0) this._lightningFlash = Math.max(0, this._lightningFlash - dt * 3.5); // a quick, sharp decay rather than a slow fade

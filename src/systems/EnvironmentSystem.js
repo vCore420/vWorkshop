@@ -70,6 +70,19 @@ export const WEATHER_STATES = {
   drizzle: { label: "Drizzle", lightDampening: 0.4, fogDensity: 0.15, cloudCoverage: 0.7, precipitation: 0.2, ambience: "rain" },
   lightRain: { label: "Light Rain", lightDampening: 0.45, fogDensity: 0.1, cloudCoverage: 0.75, precipitation: 0.45, ambience: "rain" },
   heavyRain: { label: "Heavy Rain", lightDampening: 0.6, fogDensity: 0.15, cloudCoverage: 0.9, precipitation: 0.85, ambience: "rain" },
+  // Version 4, Phase 9b ("Falling Snow") — a real dedicated snow
+  // visual, replacing the old approximation where WeatherProvider.js
+  // mapped real snow conditions onto the closest rain-family state (see
+  // its own WMO_CODE_MAP). lightDampening/fogDensity sit slightly above
+  // the equivalent rain tier (snow-laden skies read dimmer, and falling
+  // snow scatters light like a light mist); precipitation sits slightly
+  // below the matching rain tier (flakes are bigger/slower/sparser per
+  // unit time than raindrops — the same numeric value would over-render
+  // if copied verbatim). ambience reuses "wind" rather than a new "snow"
+  // id — AudioSystem._setAmbience() only tunes rain/storm/wind today, and
+  // hushed wind is a real, honest characteristic of snowfall anyway.
+  lightSnow: { label: "Light Snow", lightDampening: 0.5, fogDensity: 0.12, cloudCoverage: 0.8, precipitation: 0.4, ambience: "wind" },
+  heavySnow: { label: "Heavy Snow", lightDampening: 0.68, fogDensity: 0.2, cloudCoverage: 0.92, precipitation: 0.75, ambience: "wind" },
   fog: { label: "Fog", lightDampening: 0.35, fogDensity: 0.65, cloudCoverage: 0.5, precipitation: 0, ambience: null },
   mist: { label: "Mist", lightDampening: 0.2, fogDensity: 0.35, cloudCoverage: 0.3, precipitation: 0, ambience: null },
   windy: { label: "Windy", lightDampening: 0.1, fogDensity: 0, cloudCoverage: 0.4, precipitation: 0, ambience: "wind" },
@@ -82,6 +95,8 @@ export const WEATHER_STATES = {
 const WIND_BASE = {
   clear: 0.12, partlyCloudy: 0.18, overcast: 0.25, drizzle: 0.2, lightRain: 0.25,
   heavyRain: 0.4, fog: 0.05, mist: 0.08, windy: 0.8, storm: 0.95,
+  // Deliberately lower than the equivalent rain tier — snow reads as calmer.
+  lightSnow: 0.15, heavySnow: 0.25,
 };
 
 // Every state's naturally-reachable next states and their relative
@@ -89,6 +104,17 @@ const WIND_BASE = {
 // is deliberately absent as a destination from anything except heavy
 // rain, and always decays straight back toward it — genuinely rare and
 // short-lived, the way the brief asked for.
+//
+// Version 4, Phase 9b — lightSnow/heavySnow are deliberately absent
+// from every entry below, as both a source and a destination. This
+// system has no season/temperature concept yet (Astronomy.getSeason()
+// exists but is still unwired to anything behavioural — see
+// docs/ATMOSPHERE.md's own "Season Foundations"), so letting Workshop
+// Dynamic mode reach snow on its own would mean it could snow in a
+// simulated summer, ungated by anything. Snow stays reachable only
+// through Manual selection and Live Weather (genuine conditions from
+// Open-Meteo) until a future seasonal-effects wave can gate this
+// honestly — a stated simplification, not an oversight.
 const TRANSITIONS = {
   clear: { clear: 3, partlyCloudy: 2, windy: 0.5, mist: 0.3 },
   partlyCloudy: { partlyCloudy: 3, clear: 1.6, overcast: 1.2, windy: 0.4 },

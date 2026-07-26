@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { playAmbientTrack, createNoiseSource, createNatureAmbience, playPaperShuffle, playChairCreak, playDoorCreak, playBuildingCreak, playDrawerSlide, playClockChime, playResidentThinking, getTrackList } from "../utils/AudioSynth.js";
+import { playAmbientTrack, createNoiseSource, createNatureAmbience, playPaperShuffle, playChairCreak, playDoorCreak, playBuildingCreak, playDrawerSlide, playClockChime, playResidentThinking, playThunder, getTrackList } from "../utils/AudioSynth.js";
 import { CameraSystem } from "./CameraSystem.js";
 import { InteriorSystem } from "./InteriorSystem.js";
 import { EnvironmentSystem } from "./EnvironmentSystem.js";
@@ -389,7 +389,15 @@ export class AudioSystem {
    *  cause, and a hand crossing an hour mark is as real a cause as a
    *  button press), and an optional `options.position` (world-space
    *  `THREE.Vector3`) every caller *can* now supply for real distance
-   *  falloff via `_computeDistanceGain()` above. */
+   *  falloff via `_computeDistanceGain()` above. Version 4, Phase 9c
+   *  ("Lightning + Thunder") added `"thunder"` — event-triggered like
+   *  `"clockChime"`, but deliberately *without* `options.position`:
+   *  `_computeDistanceGain()`'s own `NEAR`/`FAR` are tuned for room-scale
+   *  sounds (metres), not a storm-scale strike hundreds to thousands of
+   *  metres away, so thunder scales its own volume via `options
+   *  .intensity` instead (see `playThunder()`), and supports
+   *  `options.delay` (seconds) to schedule its own start in the future —
+   *  thunder arriving after the instant flash, at the speed of sound. */
   playInteractionSound(kind, options = {}) {
     if (!this.context) return;
     const gain = this.context.createGain();
@@ -402,6 +410,7 @@ export class AudioSystem {
     if (kind === "drawerSlide") playDrawerSlide(this.context, gain, options);
     if (kind === "clockChime") playClockChime(this.context, gain, options);
     if (kind === "residentThinking") playResidentThinking(this.context, gain, options);
+    if (kind === "thunder") playThunder(this.context, gain, options);
   }
 
   /** A fresh random wait until the next building creak — see
