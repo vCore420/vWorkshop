@@ -362,6 +362,26 @@ account for the honest limit this specific target hits (no slack left for
 a visibly bent knee while also holding exact height, given the standing
 leg is already at ~99.99% of its own reach).
 
+**Version 4, v4.0.9e — "fixed" needed one real correction once the hip
+stopped being fixed.** `PlayerAnimationSystem.update()` now lowers
+`pivots.torso` (the hip's own parent) during a crouch, per
+`docs/PLAYER.md`'s own account of that change — which reopened this
+function's "hip minus the full standing leg span" target formula, since
+`hipWorldPos` is no longer a constant standing height. Caught live
+during this same phase's own verification pass, not guessed: feet sank
+to roughly -0.32m (well below the floor) the first time a real crouch
+was driven through the full input path with the torso-lowering change
+active but this fix not yet applied. `applyCrouchFootIK()` now takes an
+optional `crouchDrop` parameter (`PlayerAnimationSystem.update()` passes
+`this.cameraSystem.getCrouchDrop()` — the same value driving the torso
+write itself) and adds it back into the target, cancelling out exactly
+the amount the hip already dropped so the target lands at the real floor
+again, not `crouchDrop` metres below it. Defaults to `0`, so any other
+future caller that hasn't lowered the torso still gets the original,
+correct-for-that-case formula. Re-verified live after the fix: crouched
+foot world Y matches the standing baseline to four decimal places, and
+standing back up leaves zero residual drift.
+
 **A third caller, restored (Version 4, Phase 8a — "The Rest of IK")**:
 `applyWalkFootIK()`, closing the gap this section itself used to name
 ("foot placement during a walk cycle is a genuinely different,
@@ -420,6 +440,26 @@ held object and a light-switch reach can genuinely overlap in time
 hands mean the two poses never need to coordinate or fight over the same
 arm. See `docs/WORLDBUILDER.md`'s own "Pickupable" account for the
 behaviour/event side of picking something up in the first place.
+
+**Version 4, v4.0.9e — mobile had pick-up but no put-down.** Root cause,
+not the surface symptom: `HUD.js`'s own contextual prompt button already
+IS the established mobile "interact" affordance (already wired to fire
+the same `"interact"` action `KeyE` does), but its visibility is entirely
+owned by `InteractionSystem`'s own nearby-interactable scan — which only
+ever shows the prompt when something *is* nearby, the exact opposite of
+when put-down (nothing nearby) is the valid action. Desktop never
+noticed, since `KeyE` fires regardless of the button's own visibility.
+Fixed by having `HandInteractionSystem.update()` assert the prompt's own
+visibility itself, every frame, while holding an item and nothing else
+is interactable (`!interactionSystem.hasNearestInteractable` — the same
+condition already gating the real put-down trigger): `hud:prompt` with
+`{visible: true, text: "Put Down"}`. The two conditions are mutually
+exclusive by construction, so there's no real risk of the two systems
+fighting over the same frame — the moment something nearby *does* become
+interactable, `InteractionSystem`'s own scan naturally re-asserts its own
+prompt on top, unchanged. `_putDown()` also now emits `{visible: false}`
+immediately on drop, rather than waiting for next frame's `update()` to
+notice nothing's held anymore.
 
 **Looking at targets, closed (Version 4, Phase 8c — "The Rest of IK").**
 The last of the four pieces this section's own header has named since

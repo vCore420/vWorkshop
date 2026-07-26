@@ -7075,6 +7075,178 @@ seasonal vegetation colour) shipped. Phase 10 will bump to a new minor
 version, `v4.1.0`, per the versioning convention confirmed during 9c's
 own close.
 
+## Version 4, Phase 9e — Three Interaction Fixes (v4.0.9e)
+
+**Goal:** three independent fixes Vi reported from playtesting, closed
+together as one lettered sub-phase of Phase 9 per the versioning
+convention above, rather than opening Phase 10 for what's fundamentally
+polish on already-shipped mechanics: Bubble's click-and-drag was
+floor-locked, mobile had no way to put down a held item, and the
+player's own first-person camera had no real connection to the visible
+rig's own head — no Minecraft-style head-turn-before-body, and a crouch
+that moved the camera without moving the character at all.
+
+**Fix 1 — Bubble: free full 3D drag, not floor-locked.**
+`BeingController.js`'s own drag restoration (the pass before this one)
+raycast the reticle against real floor/terrain surfaces, so dragging
+Bubble slid her along the ground like a Builder ghost — no way to lift
+her or place her mid-air. **Decided with Vi**, via an explicit either/or:
+float at a fixed distance along the reticle rather than snap to any
+surface she's aimed at. `_raycastDragTarget()` became
+`_computeDragTarget()`: `camera.position + cameraForward *
+this._dragDistance`, using the camera's own true 3D forward
+(`camera.getWorldDirection()`, pitch included — not the flattened
+horizontal-only forward `HandInteractionSystem._computeDropPosition()`
+uses for a carried item) — no surface snapping, no ground clamp. New
+state, `this._dragDistance`, initialises on drag-start to her real
+distance from the player at that moment (so picking her up never
+teleports her) and is adjustable mid-drag via a new raw `wheel` listener
+on the canvas (desktop only this pass — no pinch-to-zoom equivalent for
+touch, a named scope limit), clamped to 0.6m–8m. Verified live: her
+position tracks `camera.position + forward * dragDistance` exactly,
+including lifting her well above any real floor/terrain height and
+passing through where a wall/doorway gap would be; the wheel listener
+adjusts and clamps correctly at both ends; releasing leaves her exactly
+where dropped with idle travel resuming normally.
+
+**Fix 2 — mobile: put-down via the existing HUD prompt, not a new
+control.** Root cause, not the surface symptom: `HUD.js`'s own
+contextual prompt button already *is* the established mobile "interact"
+affordance (already wired to fire the same `"interact"` action `KeyE`
+does) — but its visibility is entirely owned by `InteractionSystem`'s
+own nearby-interactable scan, which only ever shows the prompt when
+something *is* nearby, the exact opposite of when put-down (nothing
+nearby) is the valid action. Desktop never noticed, since `KeyE` fires
+regardless of the button's own visibility. Fixed by having
+`HandInteractionSystem.update()` assert the prompt's own visibility
+itself, every frame, while holding an item and nothing else is
+interactable — `hud:prompt` with `{visible: true, text: "Put Down"}` —
+and by having `_putDown()` emit `{visible: false}` immediately on drop
+rather than waiting for next frame. The two conditions
+(`hasNearestInteractable` or not) are mutually exclusive by
+construction, so the two systems never fight over the same frame; the
+moment something nearby *does* become interactable, `InteractionSystem`'s
+own scan naturally re-asserts its own prompt on top, unchanged. Verified
+live: the prompt shows "Put Down" with nothing nearby, correctly defers
+(emits nothing) when something is, and hides immediately on drop.
+
+**Fix 3 — the player's own head, genuinely bound to both look and
+crouch.** The deepest of the three: the first-person camera has always
+been a fully rigid transform (`CameraSystem._applyCameraTransform()`) —
+position and rotation came straight from `this.position`/`yaw`/`pitch`,
+never touching the player's own real head pivot
+(`PlayerCharacter.js`'s `pivots.head`, a genuine `THREE.Group` joint
+that's existed and been posed by animation clips since Version 3, just
+never read by the camera). Crouch made the split explicit:
+`CameraSystem.js`'s own long-standing comment already admitted crouching
+moved the camera down "without moving the rig at all" — `torsoPivot`'s
+own position was a fixed build-time constant, so the visible head's
+world position never actually lowered, only the legs bent to reach a hip
+that secretly stayed put (`docs/PLAYER.md`'s own "Crouching" account,
+Version 4 Phase 4, named this exact gap as the deeper limitation a
+foot-planting fix alone couldn't close). Vi wanted a genuine
+Minecraft-style head-turn-before-body mechanic, and a crouch where the
+camera moves in real lockstep with the head — not two independently-tuned
+numbers that happen to look similar.
+
+Two related pieces, both deliberately **not** parenting the live camera
+to the head pivot's own *animated* world transform —
+`AnimationClips.js` already rotates `pivots.head` every frame for idle
+sway and walk bob, and reading that live, bobbing transform into the
+camera would inherit it as camera jitter, the opposite of a stable
+first-person view. Camera and rig are instead both driven by the same
+new, clean values; the camera never reads from the rig.
+
+*Head-yaw-turn*: `CameraSystem._updateWalk()`'s mouse-look block now
+accumulates yaw input into a new `_headYawOffset` first (signed radians,
+clamped to `±PLAYER_HEAD_YAW_MAX` — about 79°, a bit more generous than
+`LookAtIK.js`'s own NPC-awareness cone since a player's own look should
+feel snappier than an NPC noticing something) rather than writing
+straight to `this.yaw` (body facing); only once further input would
+exceed that clamp does the *excess* apply directly to `this.yaw`,
+un-eased — a fast turn past the limit drags the body along 1:1 rather
+than rubber-banding into place, matching Minecraft's own actual feel.
+Scoped to "walk" mode only; focus mode's own seated look-around keeps
+its prior direct yaw/pitch handling untouched, since body-facing has no
+meaning while seated. The rendered first-person view reads `this.yaw +
+this._headYawOffset` (folded into both the hard first-person branch and
+the third-person blend's own first-person endpoint, so the two stay
+continuous across the blend threshold); third-person's own orbit
+*position* deliberately still keys off `this.yaw` alone — verified live
+that a nonzero `_headYawOffset` produces zero difference in orbit camera
+position, only in the blended rotation, and the blend continuity itself
+verified via near-identical quaternions either side of the threshold.
+
+*Crouch binding*: `PlayerCharacter.js`'s `buildCharacter()` now records
+`torsoPivot.userData.standingY` once at construction. A new
+`CameraSystem.getCrouchDrop()` getter reports `standingEyeHeight -
+currentEyeHeight` — reusing the exact easing crouch already drives, not
+a second independently-tuned number.
+
+Both new values are applied in `PlayerAnimationSystem.update()`, layered
+on right after `applyPose()` — the identical "correction after the base
+pose" contract that file's own `FootIK.js` calls immediately below it
+already use — rather than in `PlayerCharacterSystem.update()` as
+originally planned: `PlayerCharacterSystem` is registered *before*
+`PlayerAnimationSystem` in `main.js`, so a correction written there would
+be silently overwritten the same frame the instant `applyPose()` ran.
+Caught by re-reading the live registration order rather than trusting
+the plan's own earlier (pre-verification) assumption about where it
+belonged — required threading `cameraSystem` into
+`PlayerAnimationSystem`'s own constructor (main.js already constructs
+both; passing the reference through avoids the same three-way
+circular-import problem `characterSystem`'s own injection already
+existed to avoid, since `CameraSystem.js` already imports
+`PlayerAnimationSystem.js` the other way, to call `setMovementState()`).
+`pivots.head.rotation` gets `getHeadYawOffset()`/`pitch` added on top of
+whatever the current clip's own idle sway or walk bob already authored —
+a real, visible head turn from third-person or a mirror, not a
+first-person-only illusion. `pivots.torso.position.y` gets set to
+`standingY - getCrouchDrop()`, landing before the FootIK calls in that
+same function so a crouched leg's own IK target reaches for the torso's
+real, now-lower position that same frame.
+
+**A real regression caught during this same phase's own verification
+pass, not shipped and found later:** lowering the torso reopened
+`FootIK.js`'s `applyCrouchFootIK()`, whose target formula ("straight down
+from the hip by the standing leg's own span") implicitly assumed hip
+world height was always the constant standing value — true before this
+phase, false the moment the torso genuinely started moving. Driving a
+real crouch through the full input path (not just isolated numeric
+checks) showed the feet sinking to roughly -0.32m, well below the floor.
+Fixed by giving `applyCrouchFootIK()` an optional `crouchDrop` parameter
+(default `0`, preserving the original formula for any future caller that
+hasn't lowered the torso) that `PlayerAnimationSystem.update()` now
+passes through from the same `getCrouchDrop()` call already driving the
+torso write — cancelling out exactly the amount the hip already dropped,
+so the target lands at the real floor again. Re-verified live: crouched
+foot world Y now matches the standing baseline to four decimal places,
+and standing back up leaves zero residual drift. This doesn't attempt
+the "visibly bent knee" half of `applyCrouchFootIK()`'s own
+already-documented honest limit (the standing leg's own ~99.99%-of-reach
+headroom problem) — only the "hip/torso actually translating downward"
+half, which was the specific thing blocking the camera and the visible
+rig from ever agreeing with each other.
+
+**Verified live, end to end, against the real running engine**, driven
+directly per `.claude/DEV_NOTES.md`'s own established technique (a
+temporary `window.__debugEngine`/`window.__debugStores` hook, removed
+before this close, and a genuinely fresh browser tab after the FootIK
+fix specifically, to rule out stale-module false negatives): all three
+fixes' own specifics above, plus a regression sweep — ordinary walking,
+running, jumping, and third-person toggle all confirmed unaffected
+through the real per-frame input path (`KeyboardEvent`s dispatched on
+`window`, driven through `CameraSystem`/`PlayerCharacterSystem`/
+`PlayerAnimationSystem.update()` in registration order each simulated
+frame), and zero console errors across the entire verification pass.
+`docs/RESIDENT.md`'s own drag account corrected to describe the free-float
+mechanic in place of the floor/terrain raycast it used to describe;
+`docs/PLAYER.md`'s "Crouching" section gained a correction addendum
+documenting the torso/head vertical-translation limitation it had
+explicitly named as still-open now being closed, plus the head-yaw
+mechanic; `docs/ANIMATION.md` gained the mobile put-down account and the
+`applyCrouchFootIK()` regression-and-fix account.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

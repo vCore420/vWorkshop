@@ -440,17 +440,28 @@ documented as far back as Version 2's "Living Refinement" phase account
   and no other interaction already being open (`interactionSystem
   .active`), and only starts a drag on the nearest resident-capable
   Being currently under the reticle within that same 1.2m radius.
-  While held, `_updateResidentTravel()` raycasts the reticle against
-  the real floor/terrain surfaces (`RoomLayoutSystem.getFloorMesh()` +
-  `TerrainSystem.mesh` — the same walkable-surface pair
-  `BuildModeSystem` already uses for ghost placement) and feeds the hit
-  point through `ResidentMovement.setDraggedPosition()`/
+  **v4.0.9e — genuine free 3D float, not floor-locked.** The first
+  restoration (above) raycast the reticle against the real floor/terrain
+  surfaces, so a dragged resident slid along the ground like a Builder
+  ghost. Playtesting found that too restrictive for a resident who
+  should be liftable and placeable anywhere; `_computeDragTarget()`
+  (renamed from `_raycastDragTarget()`) now holds her at
+  `camera.position + cameraForward * this._dragDistance`, a fixed
+  distance along the reticle's own true 3D forward direction (pitch
+  included, via `camera.getWorldDirection()`), with no surface snapping
+  at all, so she can float mid-air and pass through doorways/open space
+  freely. `this._dragDistance` initialises to her real distance from the
+  player at grab time (so picking her up never teleports her) and is
+  adjustable mid-drag via the canvas's own new `wheel` listener
+  (desktop only this pass, no pinch-to-zoom equivalent for touch),
+  clamped to a comfortable 0.6m-8m range. The resulting point still
+  feeds through `ResidentMovement.setDraggedPosition()`/
   `setDraggedLookAt()`, the same primitives `_applyResidentContinuity()`
   already used for on-load repositioning. Releasing the mouse simply
-  clears the drag state; idle travel and awareness resume on their own
-  from wherever she was dropped, with no new persisted field — the
-  existing `residentTravel` sync already picks up her new position the
-  same as any other move.
+  clears the drag state (and the remembered distance); idle travel and
+  awareness resume on their own from wherever she was dropped, with no
+  new persisted field; the existing `residentTravel` sync already picks
+  up her new position the same as any other move.
 
 Like the conversation-opening fix above, this was a real regression,
 not a new feature: the mechanism was fully deleted along with

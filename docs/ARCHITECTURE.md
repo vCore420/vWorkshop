@@ -133,6 +133,21 @@ PlayerCharacterSystem → same flexibility as WorldObjectsSystem/MusicSystem
                        runs after engine.init() resolves, same reasoning
                        as WorkbenchSystem's/MusicSystem's — see
                        docs/PLAYER.md
+PlayerAnimationSystem → registered right after PlayerCharacterSystem —
+                       **this specific ordering matters, confirmed the
+                       hard way, Version 4 Phase 9e:** a per-frame
+                       correction that needs to land *after*
+                       `applyPose()` (e.g. the head-yaw/crouch-drop
+                       values `CameraSystem` exposes) has to live in
+                       *this* system's own `update()`, not
+                       PlayerCharacterSystem's — PlayerCharacterSystem
+                       runs first, so anything written there for the rig
+                       gets silently overwritten the same frame the
+                       moment `applyPose()` runs here. The identical
+                       "correction after the base pose, same system,
+                       same update() call" contract this system's own
+                       `FootIK.js` calls already follow — see
+                       docs/ANIMATION.md and docs/PLAYER.md
 BuildModeSystem      → caches CameraSystem/FurnitureSystem/WorldObjectsSystem
                        at init() (same reasoning as everything else on
                        this list); still looks up RoomLayoutSystem/

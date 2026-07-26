@@ -2621,4 +2621,41 @@ gained a new "Seasonal Vegetation Colour" section and a day-length note
 Continued") is now fully complete** — all four waves shipped. See
 `docs/ROADMAP.md`'s own Phase 9d account for the full story.
 
+**Version 4, Phase 9e — Three Interaction Fixes (v4.0.9e).** Three
+playtesting reports, closed together: Bubble's click-and-drag was
+floor-locked; mobile had no way to put down a held item; the player's
+own first-person camera had no real connection to the visible rig's own
+head. Bubble now floats free along the reticle's true 3D forward at an
+adjustable distance (mouse wheel, 0.6m–8m), rather than raycasting a
+floor/terrain surface — `_computeDragTarget()` replaces
+`_raycastDragTarget()`. Mobile's put-down gap traced to a root cause,
+not a missing button: `HUD.js`'s own contextual prompt is already the
+mobile interact affordance, but its visibility was owned entirely by
+`InteractionSystem`'s nearby-scan, which only shows it when something
+*is* nearby — the opposite of put-down. `HandInteractionSystem` now
+asserts the prompt itself while holding something with nothing nearby.
+The camera fix is the deepest: a new Minecraft-style
+`CameraSystem._headYawOffset` lets the head turn up to ~79° before the
+body catches up (un-eased past the clamp), and a new `getCrouchDrop()`
+getter — reused from the existing eye-height easing — genuinely lowers
+`pivots.torso`/`pivots.head` in `PlayerAnimationSystem.update()` during
+crouch, closing a gap `docs/PLAYER.md` had explicitly named as still-open
+since Version 4 Phase 4 ("the rig has no vertical translation at all").
+Deliberately not implemented in `PlayerCharacterSystem` as first planned
+— that system runs *before* `PlayerAnimationSystem` in `main.js`'s own
+registration order, so a correction written there would be silently
+overwritten by `applyPose()` the same frame; moved to
+`PlayerAnimationSystem.update()`, layered right after `applyPose()`,
+the same "correction after the base pose" contract its own `FootIK.js`
+calls already use. A real regression caught during this same phase's
+own live verification, not shipped and found later: lowering the torso
+reopened `applyCrouchFootIK()`'s own target formula, which implicitly
+assumed a constant standing hip height — feet sank ~0.32m below the
+floor until a new optional `crouchDrop` parameter compensated. Verified
+live end to end against the real running engine, including a full
+walk/run/jump/third-person-toggle regression sweep and zero console
+errors throughout. `docs/RESIDENT.md`, `docs/PLAYER.md`, and
+`docs/ANIMATION.md` all corrected. See `docs/ROADMAP.md`'s own Phase 9e
+account for the full story.
+
 </details>

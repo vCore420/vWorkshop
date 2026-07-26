@@ -28,12 +28,16 @@ Its purpose is to become somewhere worth returning to.
    project's deployment story. Three.js loads from a CDN via the import
    map in `index.html`.
 2. **Read the file before trusting your memory of it.** The codebase is
-   ~50,000 hand-written lines across ~260 files under `src/` alone (a
-   Version 3 close-out audit measured this directly rather than trusting
-   the previous figure, which had already drifted). Every previous
-   version's closing retrospective (in `docs/HISTORY.md`) names this as
-   the single most important habit, and all of them were right —
-   including about this exact number quietly going stale.
+   ~53,000 hand-written lines across ~265 files under `src/` alone (a
+   Version 3 close-out audit first measured this directly rather than
+   trusting the previous figure, which had already drifted; re-checked
+   and refreshed at the Version 4 Phase 9e handoff point — up from
+   ~50,000/~260 by then). Every previous version's closing retrospective
+   (in `docs/HISTORY.md`) names this as the single most important habit,
+   and all of them were right — including about this exact number
+   quietly going stale. It will drift again; re-run `find src -name
+   "*.js" | wc -l` and a line count before trusting it as fact in a
+   future session.
 3. **One implementation, several doors in.** Before building a second
    version of anything — a second form renderer, a second settings
    surface, a second way to browse a list — check whether an existing
@@ -138,8 +142,14 @@ same opportunity.
 Development proceeds in **phases**: a brief, an implementation pass, and
 a release. Every phase ends with all of:
 
-1. A version bump in `package.json` (`2.X.Y` with letter suffixes for
-   sub-phases, e.g. `2.2.3d`).
+1. A version bump in `package.json` — the current version's own
+   `major.minor.patch`, with letter suffixes for sub-phases/waves of the
+   *same* phase (e.g. Version 2's `2.2.3d`; Version 4's `4.0.9e`, five
+   lettered waves of Phase 9). A lettered wave stays under the same
+   patch number; a genuinely new, unlettered phase advances the patch (or
+   bumps the minor version at a version boundary — confirmed convention
+   as of Version 4 Phase 9c: Phase 10 bumps to `4.1.0`, not another
+   `4.0.x`).
 2. A phase account appended to `docs/ROADMAP.md` and a changelog entry
    in `docs/HISTORY.md`'s collapsed changelog.
 3. Updates to every doc the change touches — including this one, if a
@@ -148,7 +158,15 @@ a release. Every phase ends with all of:
    why* (deferrals always carry a named reason), and an honest
    reflection on impact — including anything reviewed and found already
    fine.
-5. A versioned zip release of the repository.
+
+**Do not create a versioned release copy/zip of the repository, and
+never write or copy anything outside this working directory
+(`E:\projects\vWorkshop\The Workshop\`)** — an earlier Version 4 phase
+did this automatically (mirroring the `v1.0/`–`v3.0/` sibling folders
+found from earlier versions) until Vi asked directly for it to stop:
+"I'll pack it up into the version folder outside of the workshop folder
+myself." Every other phase-close step above still applies; this one is
+Vi's own job now, not an automatic step.
 
 **Testing philosophy**: there is no test runner, deliberately — the
 project predates one and a harness would compromise zero-build
@@ -157,12 +175,16 @@ verification bar instead is: `node --check` every touched file, a
 scripted sweep when a claim is checkable (dead exports, token
 references, import resolution — see `docs/REFINEMENT.md`'s audits for
 the precedents), and a real playtest of the touched workflow in a
-browser (`python3 -m http.server 8000`). If Version 3 introduces logic
-complex enough to want real unit tests (the formula evaluator and save
-migrations are the standing candidates), that decision should be its own
-phase, not a side effect. **Read `.claude/DEV_NOTES.md` before a browser
-playtest, not after one goes sideways** — it names real dev-environment
-gotchas (Service Worker/ES-module staleness, screenshot reliability, how
+browser (`python3 -m http.server 8000`). Whether to introduce real unit
+tests (the formula evaluator and save migrations remain the standing
+candidates, unaddressed since Version 3) is still an open, undecided
+question, not a settled no — if a future phase's own logic seems
+complex enough to warrant it, raise it as its own phase rather than a
+side effect, and don't assume a past version's silence on it means the
+question was already resolved either way. **Read `.claude/DEV_NOTES.md`
+before a browser playtest, not after one goes sideways** — it names real
+dev-environment gotchas (Service Worker/ES-module staleness, screenshot
+reliability, how
 to drive the live engine and mount app UI directly for verification) that
 have already cost real time to diagnose once; it is kept up to date for
 exactly this reason.

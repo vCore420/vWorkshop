@@ -624,6 +624,66 @@ both correctly *did* show the debug colour, ruling out a broken test
 producing a false "invisible" reading. See "Known limitations" below —
 this specific claim is now visually confirmed, not just analysis-backed.
 
+**Version 4, v4.0.9e — the deeper limitation this section opened with is
+now closed: the torso genuinely translates.** "This rig has no vertical
+translation at all... `torsoPivot`'s own position is fixed once at build
+time," above, was true when written and stayed true through three later
+phases' worth of eye-height and foot-IK work — a real bent-knee crouch
+was explicitly named as still needing "the hip/torso actually
+translating downward in world space... a future 'Rest of IK' phase, not
+something a foot-planting fix can honestly claim to solve." Vi's own
+follow-up request ("when the player crouches the camera will move
+perfectly with the head") is exactly that phase, scoped narrowly:
+`PlayerCharacter.js`'s `buildCharacter()` now records
+`torsoPivot.userData.standingY` once at construction; a new
+`CameraSystem.getCrouchDrop()` getter (`standingEyeHeight -
+currentEyeHeight`, reusing the exact same easing crouch already drives —
+not a second, independently-tuned number) reports how far the camera has
+already eased down; `PlayerAnimationSystem.update()` applies that
+identical amount to `pivots.torso.position.y`, layered on *after*
+`applyPose()` (the same "correction after the base pose" contract
+`FootIK.js`'s own calls in that method already use), and *before* the
+FootIK calls immediately below it in that same function, so a crouched
+leg's own IK target reaches for the torso's real, now-lower position that
+same frame rather than a torso that secretly never moved. Verified live:
+`getCrouchDrop()` and the torso's own resulting Y drop match to floating-
+point precision, and returning to standing leaves zero residual drift.
+This doesn't attempt the "visibly bent knee" half of the original
+limitation — `FootIK.js`'s own ~99.99%-of-max-reach headroom problem is
+untouched — only the "hip/torso actually translating downward" half,
+which was the specific thing blocking the camera and the visible rig
+from ever agreeing with each other.
+
+**The same pass also bound the head pivot to camera look, Minecraft-
+style — not merely reusing the crouch fix's plumbing, a second, related
+mechanic riding the same "camera and rig driven by one shared value"
+approach.** `CameraSystem._updateWalk()`'s own mouse-look block now
+accumulates yaw input into a new `_headYawOffset` first (clamped to
+`±PLAYER_HEAD_YAW_MAX`, about 79°) rather than writing straight to
+`this.yaw` (body facing); only once further input would exceed that
+clamp does the *excess* apply directly to `this.yaw`, un-eased, so a fast
+turn past the limit drags the body along 1:1 rather than rubber-banding
+into place — deliberately scoped to "walk" mode only, since focus mode's
+own seated look-around keeps its prior direct yaw/pitch handling
+untouched, and body-facing has no meaning while seated anyway. The
+rendered first-person view reads `this.yaw + this._headYawOffset`; third-
+person's own orbit *position* deliberately still keys off `this.yaw`
+alone (an orbit that swung independently of body-facing would read as
+broken, not as a head-turn) — verified live that a nonzero
+`_headYawOffset` produces zero difference in orbit camera position.
+`PlayerAnimationSystem.update()` applies the identical
+`getHeadYawOffset()`/`pitch` values to `pivots.head.rotation`, additively
+on top of whatever the current clip's own idle sway or walk bob already
+authored — a real, visible head turn from third-person or a mirror, not
+a first-person-only illusion. **Deliberately does not parent the live
+camera to the head pivot's own animated world transform** — `pivots.head`
+is already rotated every frame by ordinary idle/walk clips (confirmed
+directly: `head: [x,y,z]` frame entries in `AnimationClips.js`), and
+reading that live, bobbing transform into the camera would inherit it as
+camera jitter, the opposite of a stable first-person view. Camera and rig
+are both driven by the same clean values instead; the camera never reads
+from the rig.
+
 ### Body models: the same rig, different starting proportions
 
 `BodyModels.js` defines the available procedural body models (Masculine,
