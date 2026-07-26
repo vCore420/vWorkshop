@@ -185,8 +185,11 @@ Solar/lunar position, real moonrise/moonset, and star rotation are all
 unchanged from `docs/WORLD.md`'s own "Astronomy" section — this phase's
 contribution is "cloud cover influence" (see "Sky" above): a real
 astronomical fact (an overcast night hides the sky) reaching a system
-that already existed, rather than a new one. Constellations remain
-explicitly future work — see below.
+that already existed, rather than a new one. A real, modest constellation
+catalogue was added afterward, in Version 4 Phase 9 — see
+`docs/WORLD.md`'s own "Astronomy" section for the full account; it reuses
+this phase's `_starVisibility`/`clearFactor` cloud-cover pipeline exactly
+as-is, nothing about that mechanism needed to change for it.
 
 ## Season Foundations
 
@@ -199,12 +202,26 @@ latitudes rather than a second calculation. It's surfaced in exactly two
 places this phase — `WorldAwareness.snapshot().season` (for any future
 system that wants to ask "what does the world look like right now" the
 same way it already asks about weather and time) and a read-only row in
-the Atmosphere tab (with an honest note that vegetation, resident
-behaviour, and deeper environmental change are still ahead) — plus a
-quiet mention folded into the window's own summary line
-(`WindowOverlay.js`: "Clear, Summer — 14:30"). Nothing currently
-*changes* because of the season; that's deliberately next phase's
-problem, not this one's.
+the Atmosphere tab — plus a quiet mention folded into the window's own
+summary line (`WindowOverlay.js`: "Clear, Summer — 14:30"). Nothing
+currently *changes* because of the season; that's deliberately next
+phase's problem, not this one's.
+
+**Version 4, Phase 9d ("Seasonal Vegetation Colour") is that next
+phase**, for vegetation specifically. `ConstructionLibrary.js`'s Nature
+pieces (tree, bush, flower's stem, grassPatch) carry a new
+`seasonalFoliage: true` flag alongside their existing `swaysInWind` one
+— `ObjectCompiler.js` clones each tagged part's own material (the shared
+`Materials.matte()` cache is keyed by hex string alone; mutating it in
+place would retint every other object in the world sharing that exact
+colour by coincidence) and records its authored base colour.
+`WorldObjectsSystem._applySeasonalTint()` blends that base colour toward
+a small fixed per-season table (`SEASON_FOLIAGE_TINT` — spring/summer
+untinted, autumn a warm amber, winter dulled and greyed) via
+`lerpColorHex()`, applied the instant a part spawns and on an occasional
+90-second throttle thereafter (a season boundary is a once-per-~3-months
+event, not something worth a per-frame cost). Resident behaviour and
+deeper environmental change remain future work.
 
 ## Atmosphere Profiles
 
@@ -287,20 +304,19 @@ verification of the storm/Quiet-Corner pull specifically.
   "over-electronic cricket sound") was root-caused and fixed in an
   earlier phase; this phase added new phases around it rather than
   risking that fix by changing its own timing.
-- **No real falling-particle snow, wet surfaces, or puddles** — all three
-  remain named future work (see `docs/WORLD.md`'s own "Future extension
-  points"); rain sounding different indoors/outdoors and the roof/ground
-  distinction are audio-only this phase, not a new visual.
-- **No constellations** — star rotation stays the same simplified
-  vertical-axis spin `docs/WORLD.md`'s "Astronomy" section already
-  documents; a genuine constellation catalogue is a different-scale
-  undertaking.
+- **No wet surfaces or puddles** — both remain named future work (see
+  `docs/WORLD.md`'s own "Future extension points"); rain sounding
+  different indoors/outdoors and the roof/ground distinction are
+  audio-only this phase, not a new visual. (A real falling-particle snow
+  visual, also once named here, shipped in Version 4 Phase 9b — see
+  `docs/WORLD.md`'s own "Falling Snow" section.)
 - **Morning mist uses a fixed local-hour window, not sun-altitude** — the
   same honest simplification `sunColor`'s own dawn/dusk blend already
   uses, for the same reason: a small atmospheric flourish, not something
   that needs to be exact to the minute or correct at every latitude.
-- **Season Foundations changes nothing visually or behaviourally** — by
-  design; see "Season Foundations" above.
+- **Season Foundations changes vegetation colour only** (Phase 9d) —
+  resident behaviour and deeper environmental change remain by-design
+  future work; see "Season Foundations" above.
 - **Atmosphere Profiles don't capture Moon Phase** — `time` only ever
   carries `hour`; a profile's moon looks like whatever the real calendar
   date currently gives it (or whatever manual Moon Phase override was
@@ -317,17 +333,21 @@ verification of the storm/Quiet-Corner pull specifically.
   already reacts through `_windowWatchWeights()`; a Being doing the same
   is the natural next step, following `docs/RESIDENT.md`'s own
   "Beings reading `WorldAwareness` too" extension point.
-- **Seasonal effects that actually change something** — vegetation
-  colour, resident behaviour, day-length drift — now has a real
-  `getSeason()` to build on (see "Season Foundations" above) rather than
-  needing to invent the calculation from scratch.
+- **Resident behaviour reacting to season** — vegetation colour shipped
+  in Phase 9d (see "Season Foundations" above); day length already
+  varies realistically for free, inherent in the existing
+  `solarPosition()` formula (see `docs/WORLD.md`'s own "Astronomy"
+  section). A resident's own idle-location weighting or mood reacting to
+  season is the one candidate from the original three-item list still
+  genuinely open.
 - **Per-property Atmosphere Profile editing** — profiles currently
   capture-and-apply as a whole; adjusting one saved profile's own wind
   without re-saving the entire thing would be a natural Builder-style
   "Update" action, the same one Blueprints already have.
-- **A visible lightning bolt and thunder**, and **real falling snow** —
-  both already named in `docs/WORLD.md`'s own Future extension points;
-  unchanged by this phase.
+- (A visible lightning bolt and thunder, and real falling snow, were
+  both once named here as future work — both have since shipped, in
+  Version 4 Phase 9b and 9c respectively; see `docs/WORLD.md`'s own
+  "Falling Snow" and "Lightning + Thunder" sections.)
 - **Moon-phase-aware Atmosphere Profiles** — see "Known simplifications"
   above; the seam (`time.moonPhaseOverride`) would be a small, additive
   field.

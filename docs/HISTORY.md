@@ -2505,4 +2505,120 @@ its own next spawn. `docs/ANIMATION.md` updated in place; all four
 original Phase 8 pieces now shipped. See `docs/ROADMAP.md`'s own Phase
 8d account for the full story.
 
+**Version 4, Phase 9a — Constellations (v4.0.9a).** Also fixed this
+session, first, at Vi's own request: Bubble had quietly lost
+reticle-gated interaction and click-and-drag reposition when Phase 7
+folded her wiring into `BeingController`'s generic construction —
+reconstructed from `docs/ROADMAP.md`'s own Version 2 account (the only
+surviving record) and verified live, scoped to any resident-capable
+Being. Then Phase 9's first wave (`docs/ROADMAP_V4.md`'s own four
+independently-shippable options — Vi picked constellations): a new
+`CONSTELLATIONS` catalogue in `Astronomy.js` (six named constellations,
+real approximate right ascension/declination, 36 stars, 30 asterism
+lines) and a new `raDecToSpherePosition()`, rendered by two new
+`WorldEnvironmentSystem` objects layered onto the exact same rotation,
+opacity, and recenter pipeline the existing 320-star background field
+already used, unchanged. An honest, stated-up-front simplification:
+because the rotation only changes azimuth, never altitude, Scorpius and
+Crux's real southern declinations put them permanently below the horizon
+at this project's default latitude — verified as a checked fact, not an
+assumption. Surfaced in the Computer's existing Settings Atmosphere-tab
+Stars section, no new UI. Verified live end to end: exact point/segment
+counts, rotation lock-step across hours, opacity tracking both
+time-of-day and weather with the line/star ratio holding exactly, camera
+recenter, the real mounted Settings app showing all six names, and a
+pixel-readback of a real rendered frame confirming a visible line
+pattern where the math predicted. `docs/WORLD.md` and
+`docs/ATMOSPHERE.md` corrected. See `docs/ROADMAP.md`'s own Phase 9a
+account for the full story.
+
+**Version 4, Phase 9b — Falling Snow (v4.0.9b).** The second of
+Phase 9's four waves — Vi picked falling snow after constellations. Two
+new weather states (`lightSnow`/`heavySnow`, mirroring the existing
+`lightRain`/`heavyRain` split, tuned deliberately rather than copied from
+rain) replace the old approximation where `WeatherProvider.js` mapped
+real snow WMO codes onto the closest rain-family state; `ambience: "wind"`
+reuses existing audio tuning rather than adding new synthesis scope. A
+real `THREE.Points` falling-particle field (`WorldEnvironmentSystem`'s
+new `_buildSnow()`) mirrors rain's own architecture — falls roughly an
+order of magnitude slower, drifts more with wind, adds a per-flake
+wobble — sharing rain's own `indoors`/`precipOpacity` computation so a
+direct rain↔snow transition crossfades smoothly rather than cutting. A
+real, small bug corrected along the way: `_buildRain()`'s own docstring
+had claimed depth testing alone kept rain out of view indoors, which was
+never true — the actual `indoors` check (now shared with snow) is what
+does that. **Decided with Vi:** snow stays reachable only through Manual
+selection and Live Weather, deliberately excluded from Workshop Dynamic
+mode's random cycle — no season/temperature concept exists yet to gate
+it honestly, named as a stated simplification for a future seasonal-
+effects wave to resolve. Verified live end to end: manual selection,
+direct-transition crossfade, indoor exclusion, flake motion (~7.9× slower
+than rain, confirmed numerically), the WMO remapping and Dynamic-mode
+absence checked against live source, the real mounted Settings app
+showing both new options with zero code changes, a differential
+pixel-readback isolating 1,371 snow-attributable pixels, and rain's own
+behaviour confirmed unchanged. `docs/WORLD.md` gained a new "Falling
+Snow" section; `docs/ATMOSPHERE.md`'s matching stale mentions corrected.
+See `docs/ROADMAP.md`'s own Phase 9b account for the full story.
+
+**Version 4, Phase 9c — Lightning + Thunder (v4.0.9c).** The third of
+Phase 9's four waves: a visible bolt and a real thunder sound, timed
+together with a delay proportional to distance, added to
+`LightingSystem`'s own existing storm-flash trigger without changing its
+cadence. One real strike distance per flash drives a thunder delay
+(distance/343, the speed of sound) and volume, scheduled via a new
+`startDelay` parameter on `AudioSynth.js`'s shared noise-burst primitive
+(the AudioContext's own native clock, not a JS timer — confirmed live to
+schedule reliably 8+ seconds out) rather than new low-level synthesis;
+thunder itself layers a sharp crack with a longer rolling rumble.
+`WorldEnvironmentSystem` draws a single jagged bolt, built once per flash
+and recentred on the camera each frame (the constellation-lines pattern,
+not rain/snow's per-vertex rewrite, since a bolt's shape is static once
+triggered), its fade rate deliberately matching `LightingSystem`'s own
+light-level decay number — confirmed live in exact lockstep across ten
+frames. No indoor exclusion needed for the bolt (same far-sky-dome
+depth-testing every other celestial object already relies on) —
+confirmed via a differential pixel-readback (0 pixels aimed at it from
+indoors, 390 from the identical aim outdoors). Real Web Audio scheduling
+verified with a spy on `AudioBufferSourceNode.start()`, confirming actual
+scheduled times matched the hand-computed math exactly; the existing
+light-boost math and flash cadence confirmed byte-for-byte unchanged.
+Also corrected this session: Phase 9's first two waves had shipped as
+plain patch bumps (`v4.0.9`, `v4.0.10`) rather than lettered sub-phases —
+retroactively relabeled `v4.0.9a`/`v4.0.9b` across every file that named
+them, a full-repository sweep, not just the two files that started it.
+`docs/WORLD.md` gained a new "Lightning + Thunder" section;
+`docs/ATMOSPHERE.md`'s matching stale mention corrected. See
+`docs/ROADMAP.md`'s own Phase 9c account for the full story.
+
+**Version 4, Phase 9d — Seasonal Vegetation Colour (v4.0.9d).** The
+last of Phase 9's four waves — vegetation colour, per Vi's own scope
+decision (resident behaviour deferred; day length already real for
+free). Eight Nature-piece parts (tree canopies, bush spheres, the
+flower's own stem, grassPatch cones) gained a new `seasonalFoliage: true`
+flag mirroring the existing `swaysInWind` wiring exactly.
+`ObjectCompiler.js` clones each tagged part's own material before
+tinting it — the one real, non-obvious risk of this wave, caught during
+design: `PlaceholderFactory.js`'s `Materials.matte()` cache is shared by
+exact hex string across the whole world, so mutating it in place
+would've retinted every other object sharing that colour by coincidence.
+`WorldObjectsSystem._applySeasonalTint()` blends each part's authored
+colour toward a small per-season table via `lerpColorHex()` — untinted
+spring/summer, warm amber autumn, dulled winter — applied on spawn and
+a 90-second throttle. A real bug caught along the way: the existing
+wind-sway `update()`'s single early return would have silently skipped
+seasonal tinting the moment a future part used one flag without the
+other; split into two independent guards. Verified live end to end:
+real spawn-time tinting, material isolation from the shared cache
+confirmed by object identity, all four seasons' math checked against
+hand-computed values, the throttle's own before/after behavior, cleanup
+at both call sites, the flower's bloom confirmed to never tint, indoor/
+outdoor parity, the existing sway animation confirmed unaffected, and
+the real mounted Settings app showing the corrected hint text.
+`docs/ATMOSPHERE.md` and `docs/WORLD.md` corrected; `docs/WORLD.md`
+gained a new "Seasonal Vegetation Colour" section and a day-length note
+(already true for free, no code needed). **Phase 9 ("Atmosphere,
+Continued") is now fully complete** — all four waves shipped. See
+`docs/ROADMAP.md`'s own Phase 9d account for the full story.
+
 </details>

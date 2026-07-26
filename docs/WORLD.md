@@ -172,13 +172,16 @@ per-frame dice roll.
   at all, the other being the fetch itself). Its current-conditions
   response reports a WMO weather-interpretation code, an international
   standard, not something Open-Meteo invented, which `WeatherProvider.js`
-  maps onto this project's own ten states. "Windy" and the Fog/Mist split
-  have no direct WMO equivalent (wind is its own separate variable; the
-  WMO table doesn't really distinguish fog severity) — both are
+  maps onto this project's own weather states. "Windy" and the Fog/Mist
+  split have no direct WMO equivalent (wind is its own separate variable;
+  the WMO table doesn't really distinguish fog severity) — both are
   deliberate, documented reinterpretations of the raw data, not gaps.
   Refetches automatically every 20 minutes while active.
 - **Workshop Dynamic** (the default) — the Markov process above, running
-  on its own. "Conditions should persist between visits" is handled by
+  on its own. **Version 4, Phase 9b ("Falling Snow"):**
+  `lightSnow`/`heavySnow` are deliberately absent from this mode's own
+  transition graph — see "Falling Snow" below for why. "Conditions should
+  persist between visits" is handled by
   persisting *when* the current state was entered, not just what it is:
   once per session, listening for the shared `"world:continuity"` event
   (`WorldTimeService.js`), `_catchUpDynamic()` replays that elapsed time
@@ -303,6 +306,19 @@ place that becomes a world-space vector, using one fixed convention
 Workshop — the sun, the moon, and the Compass's own heading — shares,
 rather than each computing its own.
 
+**Day length already varies realistically across the year, for free.**
+`solarPosition()`'s own `declination` term (`23.45 * sin(...)`, driven
+directly by `dayOfYearValue`) feeds straight into the sun's altitude
+calculation, and `sunriseSunset()` scans that same calculation across a
+full day to find where it crosses the horizon — so summer days
+genuinely run longer than winter ones, and by how much genuinely depends
+on latitude, exactly as real day length does. This was already true the
+moment the solar-position formula shipped; it's just never been named
+as a seasonal effect in its own right until now, alongside Phase 9d's
+own vegetation-colour work (see "Seasonal Vegetation Colour" below) —
+no code change needed here, only stating plainly what the existing
+formula already does.
+
 **Geolocation** (`requestGeolocation()`) mirrors `WeatherProvider.js`'s
 own shape deliberately: ask once, and on any failure — denied,
 unsupported, offline — fall back to a fixed, reasonable default (45°N)
@@ -327,11 +343,29 @@ time" means astronomically.
 `stars.rotation.y`) — a simplified rotation about the world's vertical
 axis (not a properly latitude-tilted polar one), approximating the real
 sky's own apparent motion from Earth's rotation, rather than a field
-frozen in one arrangement regardless of what time it is. "Stars mapped to
-the real night sky where practical" stopped short of a full constellation
-catalogue — a genuinely different-scale undertaking, real star positions
-for hundreds of named stars — in favour of this one, much simpler
-astronomical property that was practical to get right.
+frozen in one arrangement regardless of what time it is.
+
+**A real, modest constellation catalogue (Version 4, Phase 9, "Atmosphere,
+Continued")** — `Astronomy.js`'s own `CONSTELLATIONS`: six named
+constellations (Ursa Major, Cassiopeia, Cygnus, Orion, Scorpius, Crux),
+real approximate right ascension/declination for their brightest stars,
+and an asterism edge list for the recognizable line pattern connecting
+them. `WorldEnvironmentSystem`'s `_buildConstellationStars()`/
+`_buildConstellationLines()` resolve these through a new shared
+`raDecToSpherePosition()` (also in `Astronomy.js`) and layer them onto
+the exact same rotation mechanism above, unchanged — only the *position
+source* moved from random to real, per the extension point this replaces
+below. Because that rotation only ever changes azimuth, never altitude, a
+star's height is fixed forever by `sin(declination)`: Scorpius and Crux's
+real, far-southern declinations put every one of their stars permanently
+below the horizon (world-space Y=0) at this project's default 45°N
+observer latitude, at every hour — the honest, expected consequence of
+real coordinates without also adding real observer-latitude correction,
+not a bug. Orion's belt sits almost exactly on the horizon plane, visibly
+straddling it. Hundreds of named stars for a genuinely comprehensive,
+observatory-grade catalogue remains a different-scale undertaking than
+this modest set — "not a full constellation catalogue" only in that
+narrower sense now, not "none at all."
 
 **Occasional shooting stars** — one reusable streak (a two-point line,
 the same cheap-geometry approach the rain particles already use),
@@ -534,18 +568,27 @@ what's still current everywhere.)
 - **One ground plane, one sky.** Multiple buildings later would still
   share this exact system — nothing here assumes a single building, only
   a single *world* (which remains true).
-- **Snow has no dedicated visual.** Open-Meteo can report real snow
-  conditions; `WeatherProvider.js` maps them onto the closest rain-family
-  state by intensity (see its own `WMO_CODE_MAP` comment) rather than
-  inventing a snow visual this pass didn't ask for.
+- **Snow is reachable only through Manual selection and Live Weather, not
+  Workshop Dynamic mode.** See "Falling Snow" below for the full account
+  — a stated simplification (no season/temperature concept exists yet to
+  gate it honestly), not an oversight.
 - **Clouds and stars are sprites, not volumetric or physically placed.**
   A `THREE.Points` field and a handful of `THREE.Sprite` blobs, chosen
   specifically to stay cheap and to avoid "visually overwhelming" — real
-  cloud shapes, shadows cast by clouds, or constellation-accurate star
-  positions were never the goal.
-- **Lightning is a light-only flash.** `LightingSystem`'s storm flash
-  brightens the hemisphere/ambient fill briefly; there's no visible bolt,
-  no thunder-clap sound tied to it, no view-dependent flash timing.
+  cloud shapes and shadows cast by clouds were never the goal. Version 4,
+  Phase 9 gave a modest, named subset of stars real right-ascension/
+  declination positions (see "Astronomy" above); the much larger 320-star
+  background field behind them is still random.
+- **A lightning flash has no view-dependent timing.** Version 4, Phase 9c
+  ("Lightning + Thunder") added a real visible bolt and a real thunder
+  sound, timed together via a randomly-chosen strike distance — see
+  "Lightning + Thunder" below — but the bolt's own azimuth is chosen
+  independently of where the camera happens to be looking (it can flash
+  behind the player, off to one side, anywhere), and the existing
+  hemisphere/ambient-fill light boost stays sky-wide/omnidirectional as
+  before, not tied to the bolt's own direction. A genuinely
+  view-dependent flash (only counting as "seen" when actually in frame)
+  remains unbuilt.
 - **Solar position is a standard approximate formula, not
   minute-precise.** Local clock time is treated as solar time directly
   (see `Astronomy.js`'s own comment) — a common simplification that
@@ -557,37 +600,150 @@ what's still current everywhere.)
   of a building; a Builder-created interior repositioned after being
   placed would leave its registered volume behind at the old location.
 - **Star rotation is a simplified vertical-axis spin, not a properly
-  latitude-tilted polar one** — see "Astronomy" above.
+  latitude-tilted polar one** — see "Astronomy" above. Version 4, Phase 9
+  added a real, modest constellation catalogue on top of it, using real
+  right-ascension/declination for the position source; the rotation
+  mechanism itself is unchanged.
+
+## Falling Snow (Version 4, Phase 9b)
+
+A real, dedicated snow visual, replacing the old approximation where a
+snow-mapped weather state just borrowed rain's own look by intensity.
+Two new `WEATHER_STATES` entries in `EnvironmentSystem.js` —
+`lightSnow`/`heavySnow`, mirroring the existing `lightRain`/`heavyRain`
+two-tier split — each tuned deliberately rather than copied from rain:
+`lightDampening`/`fogDensity` sit slightly above the equivalent rain tier
+(a snow-laden sky reads dimmer, and falling snow scatters light like a
+light mist); `precipitation` sits slightly below the matching rain tier
+(flakes are bigger/slower/sparser per unit time than raindrops, so
+copying the rain value verbatim would over-render). `ambience: "wind"` —
+reuses the existing tuned ambience id rather than adding new audio
+synthesis work `AudioSystem._setAmbience()` (which only recognizes
+rain/storm/wind) would need; a real, honest characteristic of snowfall
+regardless.
+
+`WorldEnvironmentSystem.js`'s new `_buildSnow()`/snow-update block
+mirrors `_buildRain()`'s own structure closely — same camera-relative
+box, same per-frame wrap-and-respawn — but as a `THREE.Points` field
+(reusing `starSpriteTexture()` directly, the same reuse Wave 1's
+constellation stars already established) rather than `LineSegments`:
+flakes read as soft falling dots, not streaks. Falls roughly an order of
+magnitude slower than rain (the single biggest lever for reading as
+visually distinct, not "rain but renamed"), drifts more with wind, and
+adds a small per-flake sideways wobble rain doesn't have. Rain and snow
+share one `indoors`/`precipOpacity` computation in `update()` — they're
+already mutually-exclusive weather states — so a direct rain↔snow
+transition (no intermediate clear state) crossfades the two opacities
+smoothly rather than cutting. **Corrected alongside this work:**
+`_buildRain()`'s own docstring used to claim ordinary depth testing alone
+kept rain out of view indoors — not true; raindrops spawn in a box
+centred on the *camera*, so a good number end up genuinely co-located
+with an indoor player rather than ever being behind anything to begin
+with. `update()`'s own `indoors` check (now shared with snow) is what
+actually handles this.
+
+**A real, honest simplification:** `lightSnow`/`heavySnow` are
+deliberately absent from Workshop Dynamic mode's own `TRANSITIONS` graph
+— reachable only through Manual selection and Live Weather (a genuine
+completion of the WMO-code mapping gap: codes 71/73/77/85/86 now resolve
+to a real snow tier instead of the closest rain-family approximation).
+No season/temperature concept exists anywhere in this system yet
+(`Astronomy.getSeason()` exists but is still unwired to anything
+behavioural), so letting Dynamic mode reach snow on its own would mean it
+could snow in a simulated summer, ungated by anything. Revisit once a
+future seasonal-effects wave can gate this honestly.
+
+## Lightning + Thunder (Version 4, Phase 9c)
+
+A real visible bolt and a real thunder sound, timed together with a
+delay proportional to distance — the existing storm flash mechanism
+(`LightingSystem`'s own occasional, 5-19-seconds-apart hemisphere/
+ambient-fill boost) is unchanged; this phase enriches what happens *at*
+each existing trigger, not how often triggers happen. At the exact
+moment a flash fires, `LightingSystem` picks a real strike distance
+(200-4000m) and emits `lightning:flash` — light is ~instant, so the
+visual fires immediately — while the distance also drives a real delay
+(`distance / 343`, the speed of sound) and volume (closer = louder)
+for a genuine `AudioSynth.playThunder()` call, scheduled via the
+AudioContext's own native clock (`startDelay`, a new parameter on the
+shared `playFilteredNoiseBurst()` every creak-family sound already
+reuses) rather than a JS timer — confirmed live to schedule reliably
+several seconds out, unlike `setTimeout`. Thunder itself is two layered
+noise bursts: a sharp, brief "crack" immediately followed by a longer,
+lower "rumble," the way a real thunderclap's boom trails its own initial
+snap.
+
+`WorldEnvironmentSystem` listens for `lightning:flash` and draws a
+single jagged bolt (a `THREE.Line`, reusing the shooting star's own
+"second small object" precedent) at a random azimuth, descending from
+high overhead toward the horizon — built once per flash and, since a
+bolt's own shape is static once triggered, recentred on the camera each
+frame the same way the constellation lines already are, not rewritten
+per-vertex like rain/snow. Its own fade rate is deliberately the same
+number `LightingSystem`'s own light-level pulse already decays at,
+duplicated rather than shared, so the two stay visually in sync without
+coupling the systems together. No indoor exclusion needed for the bolt
+itself — it sits on the same far sky dome as the stars, already
+correctly occluded by real room/roof geometry via ordinary depth
+testing, confirmed live via a differential pixel-readback (0
+bolt-attributable pixels aimed at it from indoors, 390 from the
+identical aim outdoors).
+
+## Seasonal Vegetation Colour (Version 4, Phase 9d)
+
+The last of Phase 9's four waves — vegetation colour, the one
+`docs/ROADMAP_V4.md`'s own brief named explicitly as the right *kind* of
+seasonal change ("change what already exists... rather than adding
+wholesale new geometry"). Scoped to the Construction Library's Nature
+pieces (tree, bush, flower, grassPatch) — real, player-placed Builder
+objects, so tinting them reacts to what a player already built rather
+than inventing new scenery.
+
+Eight parts (tree's two canopy spheres, bush's three, the flower's own
+stem — not its bloom — and grassPatch's three) carry a new
+`seasonalFoliage: true` flag alongside their existing `swaysInWind` one.
+`ObjectCompiler.js` clones each tagged part's own material before
+tinting it — `PlaceholderFactory.js`'s `Materials.matte()` cache is
+keyed by hex string alone and shared across every mesh in the world
+using that exact colour, so mutating it in place would have retinted
+any other object sharing that hex by coincidence, including a
+hypothetical player-authored one. `WorldObjectsSystem
+._applySeasonalTint()` computes the real current season
+(`Astronomy.getSeason()`, the same call `SettingsApp.js`'s own Season
+row already makes) and blends each part's authored base colour toward a
+small fixed table (`SEASON_FOLIAGE_TINT`) via `lerpColorHex()` — spring
+and summer untinted (the authored green already reads as growing-season
+colour), autumn a warm amber, winter dulled and greyed. Applied
+immediately when a part spawns, and rechecked on an occasional 90-second
+throttle (a season boundary is a once-per-~3-months event, not
+something worth a per-frame cost).
+
+**A real bug caught and fixed along the way:** the existing wind-sway
+`update()` had a single early return keyed on `_swayParts.length === 0`
+— harmless while `swaysInWind` and `seasonalFoliage` happened to overlap
+100% on every part authored so far, but it would have silently skipped
+seasonal tinting entirely the moment a future part opted into one flag
+without the other. Split into two independent guards.
+
+No indoor/outdoor distinction — confirmed by design, not omission.
+Unlike rain/snow (physically falling particles a roof genuinely
+occludes), seasonal colour is a static material property with no
+physical mechanism a roof would block; a player-placed indoor plant
+tints exactly like an outdoor one, the same way a real houseplant
+doesn't stay eternally spring-green indoors.
 
 ## Future extension points
-
-- **A real falling-particle snow visual** — rain now genuinely falls (see
-  "Atmosphere" above), but snow-mapped weather still borrows the same
-  rain-family visuals by intensity (see `WeatherProvider.js`'s own
-  comment) rather than having a distinct look of its own.
-- **A visible lightning bolt and a thunder sound**, timed together (with
-  a slight delay proportional to distance, for a nice touch) — the
-  current flash-only implementation was judged enough for "subtle
-  atmosphere rather than spectacle," but a full version is a natural
-  next step from the same seam.
-- **Seasonal variation, built on real foundations now** — the Atmosphere
-  phase added `Astronomy.getSeason()` (a real day-of-year/hemisphere
-  calculation, surfaced in `WorldAwareness.snapshot().season` and the
-  Atmosphere tab) specifically so this bullet has something solid to
-  stand on; actually *changing* anything because of the season — foliage
-  colour, day-length drift across a real year, particularly cold/hot
-  spells — is still future work, and would be another independent
-  listener on `timeofday:changed`/`environment:changed`, the same way
-  every current consumer is, not a change to either emitter. See
+- **Resident behaviour reacting to season** — Version 4, Phase 9d gave
+  vegetation colour a real seasonal reaction (see "Seasonal Vegetation
+  Colour" below); a resident's own idle-location weighting or mood is
+  the one candidate from the original three-item list ("vegetation
+  colour, day-length drift, particularly cold/hot spells") still
+  genuinely open. Day-length drift was already real for free, inherent
+  in the existing `solarPosition()` formula — see this file's own
+  "Astronomy" section. Would be another independent listener on
+  `timeofday:changed`/`environment:changed`, the same way every current
+  consumer is, not a change to either emitter. See
   `docs/ATMOSPHERE.md`'s own "Season Foundations" section.
-- **Snow's own visual and ambience**, once genuinely wanted — the
-  `WeatherProvider.js` mapping already isolates exactly where this would
-  plug in.
-- **A real constellation catalogue**, if the simplified vertical-axis
-  star rotation ever needs to become genuinely accurate — real star
-  positions (right ascension/declination) for a modest named set would
-  slot into the same `_buildStars()` that currently scatters them
-  randomly, without needing to change how the rotation itself is applied.
 - **The equation of time and longitude-within-timezone offset**
   (`Astronomy.js`'s own known simplification) — real observatories
   correct for both; the Workshop treats local clock time as solar time
