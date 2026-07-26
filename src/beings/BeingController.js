@@ -2,9 +2,8 @@ import * as THREE from "three";
 import { CameraSystem } from "../systems/CameraSystem.js";
 import { RoomLayoutSystem } from "../systems/RoomLayoutSystem.js";
 import { FurnitureSystem } from "../systems/FurnitureSystem.js";
-import { TerrainSystem } from "../systems/TerrainSystem.js";
 import { InteractionSystem, LOOK_AT_COS_THRESHOLD } from "../systems/InteractionSystem.js";
-import { isWithinLookCone } from "../utils/MathUtils.js";
+import { isWithinLookCone, clamp } from "../utils/MathUtils.js";
 import { Entity } from "../core/Entity.js";
 import { MeshComponent } from "../core/components/MeshComponent.js";
 import { InteractableComponent } from "../core/components/InteractableComponent.js";
@@ -39,6 +38,19 @@ const HEAD_LOOK_MAX_ANGLE = Math.PI * 0.4;
 // `requiresLookAt: true` below, the reticle genuinely has to be on the
 // resident, not just generically nearby.
 const RESIDENT_INTERACT_RADIUS = 1.2;
+// v4.0.9e — "free full 3D click and drag movements," not floor-locked.
+// Held at a distance along the reticle's own true 3D direction (pitch
+// included, not just yaw), the same "held at arm's length" shape
+// HandInteractionSystem's own carried-item drop position already uses,
+// just with a genuine 3D forward instead of a flattened horizontal one
+// — she can float in open air, not just slide across a walkable surface.
+// Distance is adjustable mid-drag via the scroll wheel (see init()'s own
+// new "wheel" listener); these two bounds keep it from ever collapsing
+// to zero (inside the player) or drifting absurdly far into the
+// distance where the drag would stop feeling deliberate.
+const DRAG_DISTANCE_MIN = 0.6;
+const DRAG_DISTANCE_MAX = 8;
+const DRAG_WHEEL_STEP = 0.35; // metres per wheel "notch" — one comfortable scroll click's worth of push/pull
 // Version 4, Phase 7 — the "quiet familiarity" half of the old
 // ResidentController.js, reconstructed from docs/RESIDENT.md's own
 // documented behaviour (the original file's exact source didn't survive
@@ -152,9 +164,14 @@ export class BeingController {
     // dragged, or null; see init()'s own mousedown/mouseup listeners and
     // _updateResidentTravel()'s own drag branch.
     this._draggingInstanceId = null;
-    this._dragRaycaster = new THREE.Raycaster();
     this._dragCameraForward = new THREE.Vector3();
     this._dragScratch = new THREE.Vector3();
+    // v4.0.9e — how far along the reticle's own forward ray she's
+    // currently held; set fresh on every drag-start (see init()'s own
+    // mousedown handler) to her real distance at that moment, so picking
+    // her up never teleports her — only moving the mouse/scrolling after
+    // that does. null while not dragging.
+    this._dragDistance = null;
   }
 
   init(engine) {
@@ -162,7 +179,6 @@ export class BeingController {
     this._cameraSystem = engine.getSystem(CameraSystem);
     this._roomLayoutSystem = engine.getSystem(RoomLayoutSystem);
     this._furnitureSystem = engine.getSystem(FurnitureSystem);
-    this._terrainSystem = engine.getSystem(TerrainSystem);
     this._interactionSystem = engine.getSystem(InteractionSystem);
 
     // Restored — click-and-drag reposition, deliberately raw mousedown/
@@ -178,11 +194,33 @@ export class BeingController {
         if (!this.engine.input?.pointerLocked) return;
         if (this._interactionSystem?.active) return; // Phone/Build Mode/an overlay already has focus — never steal it
         const candidate = this._findDraggableResidentUnderReticle();
-        if (candidate) this._draggingInstanceId = candidate;
+        if (candidate) {
+          this._draggingInstanceId = candidate;
+          // v4.0.9e — start the free-float hold at her CURRENT distance
+          // from the player, so the initial grab never teleports her.
+          const runtime = this._runtime.get(candidate);
+          this._dragDistance = runtime
+            ? clamp(runtime.root.position.distanceTo(this._cameraSystem.position), DRAG_DISTANCE_MIN, DRAG_DISTANCE_MAX)
+            : DRAG_DISTANCE_MIN;
+        }
       });
       this.canvas.addEventListener("mouseup", () => {
         this._draggingInstanceId = null;
+        this._dragDistance = null;
       });
+      // v4.0.9e — desktop-only push/pull while dragging (see the mobile
+      // scope note on DRAG_WHEEL_STEP above); a no-op whenever nothing's
+      // currently being dragged.
+      this.canvas.addEventListener(
+        "wheel",
+        (e) => {
+          if (!this._draggingInstanceId || this._dragDistance == null) return;
+          e.preventDefault();
+          const delta = Math.sign(e.deltaY) * DRAG_WHEEL_STEP;
+          this._dragDistance = clamp(this._dragDistance + delta, DRAG_DISTANCE_MIN, DRAG_DISTANCE_MAX);
+        },
+        { passive: false }
+      );
     }
 
     for (const instance of this.beingInstanceStore.active()) this._spawnRuntime(instance);
@@ -231,24 +269,21 @@ export class BeingController {
     return nearest;
   }
 
-  /** Restored — click-and-drag reposition. Where the reticle currently
-   *  points, projected onto a real walkable surface — the identical
-   *  "real floor, real sculpted ground" pair
-   *  `BuildModeSystem._gatherSurfaces()` already established for ghost
-   *  placement (`RoomLayoutSystem.getFloorMesh()` +
-   *  `TerrainSystem.mesh` — the actual mesh player movement's own
-   *  `getHeightAt()` walks on, not `WorldEnvironmentSystem`'s purely
-   *  visual flat ground), reused directly rather than re-invented.
-   *  `null` if the reticle isn't over either surface this frame (aimed
-   *  at the sky, say) — the caller already treats that as "leave her
-   *  exactly where she is." */
-  _raycastDragTarget() {
-    if (!this.engine.camera) return null;
-    this._dragRaycaster.setFromCamera({ x: 0, y: 0 }, this.engine.camera); // NDC screen centre — the reticle
-    const surfaces = [this._roomLayoutSystem?.getFloorMesh(), this._terrainSystem?.mesh].filter(Boolean);
-    if (surfaces.length === 0) return null;
-    const hit = this._dragRaycaster.intersectObjects(surfaces, true)[0];
-    return hit?.point ?? null;
+  /** v4.0.9e — "free full 3D click and drag movements," not floor-locked.
+   *  Held at `this._dragDistance` metres along the reticle's own true 3D
+   *  forward direction (pitch included, via `camera.getWorldDirection()`
+   *  — the same "held at arm's length" shape
+   *  `HandInteractionSystem._computeDropPosition()` already uses, just
+   *  with a genuine 3D forward instead of a flattened horizontal one).
+   *  No surface snapping, no ground clamp — she can float mid-air, pass
+   *  through open space and doorways freely. Always returns a point
+   *  (never null): unlike the old floor/terrain raycast this replaces,
+   *  a forward ray from the camera always has a point at any given
+   *  distance, whichever way the reticle is aimed. */
+  _computeDragTarget() {
+    if (!this.engine.camera || this._dragDistance == null) return null;
+    this.engine.camera.getWorldDirection(this._dragCameraForward);
+    return this._dragScratch.copy(this.engine.camera.position).addScaledVector(this._dragCameraForward, this._dragDistance);
   }
 
   /** The same "pick one new plausible spot, don't animate the journey"
@@ -686,15 +721,16 @@ export class BeingController {
     // sets `_travelT = 1` (see `ResidentMovement.js`'s own comment), so
     // there's nothing else to suppress — `maybePickNewLocation()` simply
     // never gets called this frame.
+    // v4.0.9e — free 3D float, not a floor/terrain raycast: see
+    // `_computeDragTarget()`'s own comment. It always returns a point
+    // while a drag is active, so there's no "no hit this frame" branch
+    // to handle anymore.
     if (instance.id === this._draggingInstanceId) {
-      const dragTarget = this._raycastDragTarget();
+      const dragTarget = this._computeDragTarget();
       if (dragTarget) {
         runtime.residentMovement.setDraggedPosition(dragTarget);
         runtime.residentMovement.setDraggedLookAt(playerPos ?? dragTarget);
       }
-      // No raycast hit this frame (reticle pointed at the sky, say) is a
-      // no-op for that one frame — she stays exactly where she last was,
-      // resuming smoothly once the reticle finds a real surface again.
     } else if (runtime.residentPlayerCommand === "goto" && runtime.residentGoToTarget) {
       const dx = runtime.residentGoToTarget.x - runtime.residentMovement.currentPosition.x;
       const dz = runtime.residentGoToTarget.z - runtime.residentMovement.currentPosition.z;
