@@ -62,7 +62,16 @@ export class HandInteractionSystem {
 
     if (this._heldDefinitionId) {
       applyHoldPose(pivots);
-      if (!this.interactionSystem?.hasNearestInteractable && this.engine.input?.wasJustPressed("interact")) {
+      // v4.0.9e — mobile has no keybind for "interact," only the HUD's own
+      // contextual prompt button (already wired to trigger it, see
+      // HUD.js). InteractionSystem's own scan only ever shows that prompt
+      // when something's nearby — the opposite of when put-down is valid
+      // — so assert it ourselves every frame while holding something and
+      // nothing else is in front of us. Desktop is unaffected: KeyE
+      // already worked regardless of the button's own visibility.
+      const canPutDown = !this.interactionSystem?.hasNearestInteractable;
+      if (canPutDown) this.engine.events.emit("hud:prompt", { visible: true, text: "Put Down" });
+      if (canPutDown && this.engine.input?.wasJustPressed("interact")) {
         this._putDown();
       }
     }
@@ -122,6 +131,10 @@ export class HandInteractionSystem {
 
   _putDown() {
     if (!this._heldDefinitionId) return;
+    // Hide the "Put Down" prompt immediately rather than waiting for next
+    // frame's update() to notice nothing's held anymore — a one-frame stale
+    // prompt reads as a bug on a tap-to-drop mobile interaction.
+    this.engine.events.emit("hud:prompt", { visible: false });
     if (this._heldMesh) {
       this._heldMesh.parent?.remove(this._heldMesh);
       this._heldMesh = null;

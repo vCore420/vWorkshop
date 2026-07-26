@@ -142,10 +142,23 @@ function applyLegIK(hipPivot, kneePivot, anklePivot, targetWorld, poleWorld) {
  *  bend — the resulting crouch reads as the torso's own already-authored
  *  forward lean over straightened legs, not a deep knee-bent squat.
  *  Making the hip/torso genuinely drop in world space — the real fix for
- *  a proper bent-knee crouch — is the deeper, already-named "foot IK's
+ *  a proper bent-knee crouch — was the deeper, already-named "foot IK's
  *  own job, a later milestone" limitation (`docs/PLAYER.md`), squarely
- *  `docs/ROADMAP_V4.md`'s own future "Rest of IK" phase, not this one's. */
-export function applyCrouchFootIK(pivots) {
+ *  `docs/ROADMAP_V4.md`'s own future "Rest of IK" phase, not this one's
+ *  — until v4.0.9e closed exactly that (`PlayerAnimationSystem.update()`
+ *  now lowers `pivots.torso.position.y` by the camera's own
+ *  `getCrouchDrop()` before calling this function). That reopened this
+ *  formula specifically: `hipWorldPos` is no longer a constant standing
+ *  height, so "hip minus the full standing leg span" now overshoots
+ *  *past* the real floor by however far the torso has already dropped —
+ *  confirmed live, feet sinking to y≈-0.32 mid-crouch before the
+ *  `crouchDrop` parameter below was added to compensate. `crouchDrop` is
+ *  optional (defaults to `0`, the pre-v4.0.9e behaviour) specifically so
+ *  a caller that hasn't lowered the torso at all still gets the original,
+ *  correct-for-that-case formula — this function has no way to tell the
+ *  difference between "torso genuinely didn't move" and "moved by
+ *  exactly zero this frame" on its own. */
+export function applyCrouchFootIK(pivots, crouchDrop = 0) {
   if (!pivots?.torso) return;
   const torsoWorldQuat = pivots.torso.getWorldQuaternion(new THREE.Quaternion());
 
@@ -158,7 +171,11 @@ export function applyCrouchFootIK(pivots) {
     const hipWorldPos = hip.getWorldPosition(new THREE.Vector3());
     const standingSpan = knee.position.length() + ankle.position.length();
     const target = hipWorldPos.clone();
-    target.y -= standingSpan;
+    // `hipWorldPos.y` already reflects however far the torso has been
+    // lowered this frame (see this function's own header) — adding
+    // `crouchDrop` back here targets the real floor instead of a point
+    // `crouchDrop` metres below it.
+    target.y += crouchDrop - standingSpan;
 
     const poleOffset = POLE_HINT_LOCAL[side].clone().applyQuaternion(torsoWorldQuat);
     const poleWorld = hipWorldPos.clone().add(poleOffset);

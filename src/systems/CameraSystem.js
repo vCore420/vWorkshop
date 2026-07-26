@@ -65,6 +65,12 @@ const MAX_PITCH = Math.PI / 2 - 0.05;
 const THIRD_PERSON_DISTANCE = 3.2; // metres behind the player
 const THIRD_PERSON_HEIGHT = 0.85; // additional height above the standing eye height — comfortably under the workshop's 3m ceiling (see ROOM_DIMENSIONS in layoutDefault.js) even for a noticeably taller character
 const THIRD_PERSON_LOOK_DROP = 0.35; // looks slightly down at the player rather than dead-level
+// v4.0.9e — Minecraft-style head turn: the reticle/camera can swivel this
+// far past the body's own facing (this.yaw) before the body is dragged
+// along with it. A bit more generous than LookAtIK.js's own NPC-awareness
+// cone (0.4 rad) — matching Minecraft's own snappier feel for a player's
+// own look, not an NPC noticing something.
+const PLAYER_HEAD_YAW_MAX = Math.PI * 0.44;
 
 /**
  * CameraSystem
@@ -155,6 +161,15 @@ export class CameraSystem {
     this._landTimer = 0;
     this._onLadder = false;
     this._characterSystem = null; // set via setCharacterSystem() from main.js — see "Player Height" in this class's own doc comment for why not a direct import
+    // v4.0.9e — signed radians, camera-look-yaw minus body-yaw (this.yaw).
+    // Accumulated by _updateWalk()'s own mouse-look block, clamped to
+    // ±PLAYER_HEAD_YAW_MAX; read by _applyCameraTransform() (added onto
+    // this.yaw for the rendered first-person view) and by
+    // PlayerAnimationSystem (via getHeadYawOffset(), layered on right
+    // after applyPose() each frame — see that file's own comment on why
+    // it's read there and not by PlayerCharacterSystem) to turn the
+    // visible rig's own head pivot the same amount.
+    this._headYawOffset = 0;
   }
 
   init(engine) {
@@ -294,6 +309,29 @@ export class CameraSystem {
     return this._currentEyeHeight;
   }
 
+  /** v4.0.9e — signed radians the camera's own look-yaw currently leads
+   *  the body's facing (this.yaw) by; see `_updateWalk()`'s own
+   *  accumulate-then-overflow-to-body block. Read by
+   *  `PlayerAnimationSystem` to turn the visible rig's own head pivot the
+   *  same amount the rendered first-person view already turns by. */
+  getHeadYawOffset() {
+    return this._headYawOffset;
+  }
+
+  /** v4.0.9e — how far the camera has already eased down for a crouch
+   *  right now (0 standing, positive while crouched/easing), reusing the
+   *  exact same `_currentEyeHeight` easing crouch already drives — not a
+   *  second, independently-tuned number. `PlayerAnimationSystem` applies
+   *  this identical amount to the visible torso/head pivot's own world Y
+   *  (and, since `FootIK.js`'s own `applyCrouchFootIK()` reads the
+   *  torso's live world position too, feeds through to the legs' own
+   *  target that same frame), so the rig genuinely lowers with the camera
+   *  instead of only the legs bending to reach a torso that secretly
+   *  never moved. */
+  getCrouchDrop() {
+    return this._getStandingEyeHeight() - this._currentEyeHeight;
+  }
+
   toggleViewMode() {
     if (this.mode === "focus") return;
     this.viewMode = this.viewMode === "first" ? "third" : "first";
@@ -400,11 +438,18 @@ export class CameraSystem {
     const camera = this.engine.camera;
     if (this._viewBlend < 0.001) {
       camera.position.copy(this.position);
-      camera.rotation.set(this.pitch, this.yaw, 0, "YXZ");
+      // v4.0.9e — the head-turn-before-body offset (see _updateWalk())
+      // reaches the actual rendered view here.
+      camera.rotation.set(this.pitch, this.yaw + this._headYawOffset, 0, "YXZ");
       return;
     }
 
-    this._scratchFPQuat.setFromEuler(this._scratchEuler.set(this.pitch, this.yaw, 0, "YXZ"));
+    // Same offset folded in here too, so the rotation is continuous across
+    // the `_viewBlend < 0.001` threshold above rather than popping the
+    // instant a third-person transition begins — this is still the
+    // "first-person" endpoint of the slerp below, not the orbit itself
+    // (which deliberately stays keyed to body yaw alone, see `desired`).
+    this._scratchFPQuat.setFromEuler(this._scratchEuler.set(this.pitch, this.yaw + this._headYawOffset, 0, "YXZ"));
 
     // "Introduce vertical camera orbit... look upwards, look downwards,
     // orbit around the player smoothly." Reuses the exact same `pitch`
@@ -461,10 +506,21 @@ export class CameraSystem {
     if (!input) return;
 
     if (input.lookActive && !this._lookPaused) {
-      this.yaw -= input.lookDelta.x * LOOK_SENSITIVITY;
+      // v4.0.9e — Minecraft-style: yaw look accumulates into the head
+      // offset first, body facing (this.yaw) only follows once the
+      // offset would exceed PLAYER_HEAD_YAW_MAX, and then only by the
+      // excess — no easing/lag, so a fast turn past the clamp drags the
+      // body 1:1 rather than rubber-banding it into place.
+      this._headYawOffset -= input.lookDelta.x * LOOK_SENSITIVITY;
+      if (this._headYawOffset > PLAYER_HEAD_YAW_MAX) {
+        this.yaw = wrapAngle(this.yaw + (this._headYawOffset - PLAYER_HEAD_YAW_MAX));
+        this._headYawOffset = PLAYER_HEAD_YAW_MAX;
+      } else if (this._headYawOffset < -PLAYER_HEAD_YAW_MAX) {
+        this.yaw = wrapAngle(this.yaw + (this._headYawOffset + PLAYER_HEAD_YAW_MAX));
+        this._headYawOffset = -PLAYER_HEAD_YAW_MAX;
+      }
       this.pitch -= input.lookDelta.y * LOOK_SENSITIVITY;
       this.pitch = clamp(this.pitch, -MAX_PITCH, MAX_PITCH);
-      this.yaw = wrapAngle(this.yaw);
     }
 
     const move = input.moveVector; // x = strafe, y = forward
@@ -794,6 +850,6 @@ export class CameraSystem {
 
   _applyImmediate() {
     this.engine.camera.position.copy(this.position);
-    this.engine.camera.rotation.set(this.pitch, this.yaw, 0, "YXZ");
+    this.engine.camera.rotation.set(this.pitch, this.yaw + this._headYawOffset, 0, "YXZ");
   }
 }

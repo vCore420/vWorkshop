@@ -128,6 +128,11 @@ export function buildCharacter(appearance, bodyModelId, textureImages = {}) {
   const standingHeight = footSize.height + lowerLegSize.height + legSize.height;
   const torsoPivot = new THREE.Group();
   torsoPivot.position.set(0, standingHeight, 0);
+  // v4.0.9e — the runtime crouch-drop PlayerCharacterSystem applies every
+  // frame is subtracted from this remembered original, never accumulated
+  // onto the live value (which would drift/compound over repeated
+  // crouch/stand cycles).
+  torsoPivot.userData.standingY = standingHeight;
   root.add(torsoPivot);
   pivots.torso = torsoPivot;
 

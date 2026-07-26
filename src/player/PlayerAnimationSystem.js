@@ -50,7 +50,7 @@ import { TerrainSystem } from "../systems/TerrainSystem.js";
  * nothing here has ever seen `BodyModels.js` and doesn't need to.
  */
 export class PlayerAnimationSystem {
-  constructor({ characterSystem, libraryStore }) {
+  constructor({ characterSystem, cameraSystem, libraryStore }) {
     // Constructor-injected, not resolved via engine.getSystem() in init()
     // like most cross-system references in this project — CameraSystem
     // already needs to look *this* system up (to hand it a movement
@@ -60,6 +60,14 @@ export class PlayerAnimationSystem {
     // constructs and wires all three together directly; passing the
     // reference straight through avoids the cycle entirely.
     this.characterSystem = characterSystem;
+    // v4.0.9e — same circular-import reason as characterSystem above:
+    // CameraSystem.js already imports this file (to call
+    // setMovementState()), so this file importing CameraSystem.js back
+    // for an engine.getSystem() lookup would be the exact cycle that
+    // comment already describes avoiding. Read here for
+    // getHeadYawOffset()/pitch/getCrouchDrop() — see update()'s own
+    // "head/torso, layered after applyPose()" block.
+    this.cameraSystem = cameraSystem;
     this.libraryStore = libraryStore;
     this._movementState = "idle";
     this._activeClip = null;
@@ -183,6 +191,24 @@ export class PlayerAnimationSystem {
       pose = mergePoses(pose, overlayPose, this._overlayJointNames);
     }
     applyPose(pivots, pose);
+    // v4.0.9e — Minecraft-style head turn + honest crouch, layered on top
+    // of applyPose()'s own idle/walk sway right here, the identical
+    // "correction after the base pose" contract the FootIK calls just
+    // below already use — deliberately NOT read by the camera (see
+    // CameraSystem.js's own `_headYawOffset`/`getCrouchDrop()`
+    // comments): this rig is driven BY the camera's clean values, the
+    // camera never reads FROM this animated pivot. The torso write must
+    // land before the FootIK calls below — they read the torso's live
+    // world position/quaternion (see FootIK.js) to place the feet, so
+    // crouched legs correctly reach for the now-genuinely-lower torso
+    // this same frame.
+    if (this.cameraSystem) {
+      if (pivots.head) {
+        pivots.head.rotation.y += this.cameraSystem.getHeadYawOffset();
+        pivots.head.rotation.x += this.cameraSystem.pitch;
+      }
+      if (pivots.torso) pivots.torso.position.y = pivots.torso.userData.standingY - this.cameraSystem.getCrouchDrop();
+    }
     // Version 3, Phase 1 ("Completing Promises") — "foot placement on
     // terrain." Runs after applyPose() so it corrects the base pose
     // already applied above, not instead of it.
@@ -192,8 +218,13 @@ export class PlayerAnimationSystem {
     // correcting it (see `applyCrouchFootIK()`'s own header in
     // FootIK.js for the full root-cause account and honest limit).
     // Mutually exclusive with the idle branch above by construction —
-    // `_movementState` is a single string, never both at once.
-    else if (this._movementState === "crouch") applyCrouchFootIK(pivots);
+    // `_movementState` is a single string, never both at once. v4.0.9e
+    // passes the torso's own live crouch drop through — the torso write
+    // just above already lowered `pivots.torso` by this exact amount, so
+    // `applyCrouchFootIK()`'s own target math needs it too, or it
+    // overshoots the real floor by however far the torso just moved
+    // (confirmed live: without this, feet sank ~0.32m underground).
+    else if (this._movementState === "crouch") applyCrouchFootIK(pivots, this.cameraSystem?.getCrouchDrop() ?? 0);
     // Version 4, Phase 8a ("The Rest of IK") — the walk-cycle
     // counterpart FootIK.js's own header used to name as "not attempted
     // here." `this._frameIndex` is already current for this frame (see
