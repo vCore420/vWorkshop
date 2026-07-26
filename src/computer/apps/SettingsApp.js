@@ -17,7 +17,7 @@
  * Atmosphere phase, Atmosphere Profiles (see renderAtmosphereProfiles()).
  */
 import { WEATHER_STATES } from "../../systems/EnvironmentSystem.js";
-import { getObserverLocation, solarPosition, moonPhaseFraction, moonIllumination, sunriseSunset, moonriseMoonset, dayOfYear, getSeason } from "../../utils/Astronomy.js";
+import { getObserverLocation, solarPosition, moonPhaseFraction, moonIllumination, sunriseSunset, moonriseMoonset, dayOfYear, getSeason, CONSTELLATIONS } from "../../utils/Astronomy.js";
 import { formatClockTime } from "../../utils/TimeFormat.js";
 import { StorageUtils } from "../../utils/StorageUtils.js";
 import { nextDomId } from "../../utils/domIds.js";
@@ -305,7 +305,7 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         el.appendChild(infoRow("Season", capitalize(getSeason(doy, location.latitude))));
         const seasonHint = document.createElement("p");
         seasonHint.className = "app-subtitle";
-        seasonHint.textContent = "Season Foundations \u2014 the Workshop now knows what season it is, from your real date and hemisphere. Seasonal vegetation, resident behaviour, and deeper environmental change are future work; this is the architecture they'll build on.";
+        seasonHint.textContent = "Season Foundations \u2014 the Workshop now knows what season it is, from your real date and hemisphere. Nature pieces you've placed \u2014 trees, bushes, flowers, grass \u2014 tint to match: unchanged through spring and summer, warm amber in autumn, dulled and greyed in winter. Resident behaviour and deeper environmental change are still future work.";
         el.appendChild(seasonHint);
         // Version 3, Phase 13 ("The Phone Becomes a Device") \u2014 one
         // preference, read by every clock display on this tab (and by the
@@ -382,10 +382,15 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
 
         el.appendChild(sectionHeading("Stars"));
         el.appendChild(infoRow("Visibility", starsVisible ? "Visible \u2014 the sky is dark enough" : "Not visible \u2014 too much daylight"));
+        el.appendChild(infoRow("Constellations", CONSTELLATIONS.map((c) => c.name).join(", ")));
         const starsHint = document.createElement("p");
         starsHint.className = "app-subtitle";
         starsHint.textContent = "Star visibility already follows Set Time above (how dark the sky currently is) \u2014 nothing separate to override here either.";
         el.appendChild(starsHint);
+        const constellationsHint = document.createElement("p");
+        constellationsHint.className = "app-subtitle";
+        constellationsHint.textContent = "A modest, real catalogue (right ascension/declination) \u2014 not every constellation, and a far-southern one like Crux won't appear at all under this simplified sky model.";
+        el.appendChild(constellationsHint);
 
         return null;
       }
