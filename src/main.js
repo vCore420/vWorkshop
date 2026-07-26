@@ -367,7 +367,7 @@ const animationLibraryStore = new AnimationLibraryStore();
 // sibling clip library; registered as an Asset kind, and with
 // PersistenceSystem, in this file's own later wiring blocks.
 const poseLibraryStore = new PoseLibraryStore();
-const playerAnimationSystem = new PlayerAnimationSystem({ characterSystem: playerCharacterSystem, libraryStore: animationLibraryStore });
+const playerAnimationSystem = new PlayerAnimationSystem({ characterSystem: playerCharacterSystem, cameraSystem, libraryStore: animationLibraryStore });
 engine.addSystem(playerAnimationSystem);
 const ladderSystem = engine.addSystem(new LadderSystem());
 void ladderSystem;
