@@ -18,7 +18,7 @@
  * reports a WMO weather interpretation code (`weather_code`) — a
  * standardised international code table, not something Open-Meteo
  * invented — which `mapWmoCodeToState` translates into one of this
- * project's own ten weather states.
+ * project's own weather states.
  */
 
 const FORECAST_URL = "https://api.open-meteo.com/v1/forecast";
@@ -51,15 +51,15 @@ const WMO_CODE_MAP = {
   65: "heavyRain",
   66: "lightRain",
   67: "heavyRain",
-  71: "lightRain", // snow has no dedicated visual in this project yet — approximated by precipitation intensity, see docs/WORLD.md
-  73: "lightRain",
-  75: "heavyRain",
-  77: "drizzle",
-  80: "lightRain",
-  81: "lightRain",
-  82: "heavyRain",
-  85: "lightRain",
-  86: "heavyRain",
+  71: "lightSnow", // light snow
+  73: "lightSnow", // moderate snow
+  75: "heavySnow", // heavy snow
+  77: "lightSnow", // snow grains
+  80: "lightRain", // rain showers, slight
+  81: "lightRain", // rain showers, moderate
+  82: "heavyRain", // rain showers, violent
+  85: "lightSnow", // snow showers, slight
+  86: "heavySnow", // snow showers, heavy
   95: "storm",
   96: "storm",
   99: "storm",

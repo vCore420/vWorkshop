@@ -125,6 +125,28 @@ export function directionToAzimuth(direction) {
   return (azimuth + 360) % 360;
 }
 
+/** Real right-ascension (hours)/declination (degrees) to a position on a
+ *  sphere of the given radius — the spherical-to-Cartesian conversion
+ *  every catalogued star and constellation-line endpoint goes through
+ *  (see `CONSTELLATIONS` below), so nothing duplicates this math. Mirrors
+ *  `azimuthAltitudeToDirection()`'s own role one level up: that one turns
+ *  a sky *direction* into world space; this one turns a catalogued star's
+ *  real coordinates into a point on the star sphere
+ *  `WorldEnvironmentSystem` already builds. Deliberately not reconciled
+ *  with `azimuthAltitudeToDirection()`'s own north/east convention — RA=0
+ *  has no fixed real-world bearing here, since nothing in this simplified
+ *  model tracks sidereal time or the observer's longitude; the whole
+ *  sphere still rotates by hour-of-day regardless (see
+ *  `WorldEnvironmentSystem`'s own `rotation.y`), the same as the random
+ *  background star field it sits alongside. */
+export function raDecToSpherePosition(raHours, decDeg, radius, target = new THREE.Vector3()) {
+  const decRad = toRad(decDeg);
+  const raRad = toRad(raHours * 15); // 15°/hour — 360°/24h
+  const y = Math.sin(decRad) * radius;
+  const r = Math.cos(decRad) * radius;
+  return target.set(Math.cos(raRad) * r, y, Math.sin(raRad) * r);
+}
+
 /** 0 (new moon) - 1 (just before the next new moon) fraction through the
  *  synodic month, from the real calendar date — ~29.53 days per cycle;
  *  the reference new-moon date is arbitrary (any known new moon works as
@@ -210,5 +232,106 @@ export function getSeason(dayOfYearValue, latitude = 45) {
   if (dayOfYearValue < SEASON_BOUNDARIES[3]) return names[2];
   return names[3];
 }
+
+/**
+ * A real, modest constellation catalogue — Version 4, Phase 9
+ * ("Atmosphere, Continued"). Six named constellations, real approximate
+ * right ascension (hours)/declination (degrees) for their brightest
+ * stars, and an "asterism" edge list (index pairs into that
+ * constellation's own `stars` array) describing which stars connect to
+ * which for the recognizable line pattern. `WorldEnvironmentSystem`'s
+ * `_buildConstellationStars()`/`_buildConstellationLines()` resolve
+ * these through `raDecToSpherePosition()` above — this file owns the
+ * real-astronomy data and math, same as everywhere else in it; the
+ * renderer never invents a position of its own.
+ *
+ * Spans a deliberate range of declinations: circumpolar-for-mid-latitudes
+ * (Ursa Major, Cassiopeia, Cygnus) through near-equatorial (Orion, which
+ * visibly straddles the horizon — its belt sits at dec ≈ -0.3° to -1.9°,
+ * its shoulders above, its feet below) to well south (Scorpius, Crux).
+ * Because the rotation this catalogue feeds is still the simplified
+ * vertical-axis spin (see `WorldEnvironmentSystem._onTimeChanged()`) —
+ * it changes a star's azimuth, never its altitude — Scorpius's and
+ * Crux's real negative declinations put every one of their stars
+ * permanently below the horizon (world-space Y=0) at this project's
+ * `DEFAULT_LATITUDE = 45` config, at every hour. That's the honest,
+ * expected result of using real coordinates without also adding real
+ * observer-latitude correction (out of scope for this pass — see
+ * `docs/WORLD.md`'s own "Known simplifications"), not a bug to chase.
+ */
+export const CONSTELLATIONS = [
+  {
+    name: "Ursa Major",
+    stars: [
+      { ra: 11.062, dec: 61.75 }, // Dubhe
+      { ra: 11.031, dec: 56.38 }, // Merak
+      { ra: 11.897, dec: 53.69 }, // Phecda
+      { ra: 12.257, dec: 57.03 }, // Megrez
+      { ra: 12.9, dec: 55.96 }, // Alioth
+      { ra: 13.399, dec: 54.93 }, // Mizar
+      { ra: 13.792, dec: 49.31 }, // Alkaid
+    ],
+    edges: [[0, 1], [1, 2], [2, 3], [3, 0], [3, 4], [4, 5], [5, 6]], // bowl + handle
+  },
+  {
+    name: "Cassiopeia",
+    stars: [
+      { ra: 0.153, dec: 59.15 }, // Caph
+      { ra: 0.675, dec: 56.54 }, // Schedar
+      { ra: 0.945, dec: 60.72 }, // Gamma Cas
+      { ra: 1.43, dec: 60.24 }, // Ruchbah
+      { ra: 1.907, dec: 63.67 }, // Segin
+    ],
+    edges: [[0, 1], [1, 2], [2, 3], [3, 4]], // the "W"
+  },
+  {
+    name: "Cygnus",
+    stars: [
+      { ra: 20.69, dec: 45.28 }, // Deneb
+      { ra: 20.37, dec: 40.26 }, // Sadr
+      { ra: 19.512, dec: 27.96 }, // Albireo
+      { ra: 19.75, dec: 45.13 }, // Delta Cyg
+      { ra: 20.77, dec: 33.97 }, // Gienah
+    ],
+    edges: [[0, 1], [1, 2], [3, 1], [1, 4]], // Northern Cross
+  },
+  {
+    name: "Orion",
+    stars: [
+      { ra: 5.919, dec: 7.41 }, // Betelgeuse
+      { ra: 5.419, dec: 6.35 }, // Bellatrix
+      { ra: 5.533, dec: -0.3 }, // Mintaka
+      { ra: 5.604, dec: -1.2 }, // Alnilam
+      { ra: 5.679, dec: -1.94 }, // Alnitak
+      { ra: 5.796, dec: -9.67 }, // Saiph
+      { ra: 5.242, dec: -8.2 }, // Rigel
+    ],
+    edges: [[0, 1], [2, 3], [3, 4], [6, 5], [1, 2], [4, 5]], // shoulders / belt / feet
+  },
+  {
+    name: "Scorpius",
+    stars: [
+      { ra: 16.091, dec: -19.8 }, // Graffias
+      { ra: 16.006, dec: -22.62 }, // Dschubba
+      { ra: 16.49, dec: -26.43 }, // Antares
+      { ra: 16.598, dec: -28.22 }, // Tau Sco
+      { ra: 16.836, dec: -34.29 }, // Epsilon Sco
+      { ra: 16.865, dec: -38.04 }, // Mu Sco
+      { ra: 17.56, dec: -37.1 }, // Shaula
+      { ra: 17.513, dec: -37.29 }, // Lesath
+    ],
+    edges: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7]], // head to stinger
+  },
+  {
+    name: "Crux",
+    stars: [
+      { ra: 12.443, dec: -63.09 }, // Acrux
+      { ra: 12.519, dec: -57.11 }, // Gacrux
+      { ra: 12.795, dec: -59.69 }, // Mimosa
+      { ra: 12.252, dec: -58.75 }, // Delta Cru
+    ],
+    edges: [[1, 0], [2, 3]], // long axis, cross-arm
+  },
+];
 
 export { dayOfYear };

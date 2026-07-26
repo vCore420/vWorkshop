@@ -171,13 +171,18 @@ export function playPaperShuffle(audioContext, destinationNode, { pitch = 1 } = 
  * quietly changing something nobody asked to change.
  */
 function playFilteredNoiseBurst(audioContext, destinationNode, {
-  startFreq, endFreq, sweepDuration, q, peakGain, attackTime, decayDuration, stopBuffer, pitch = 1,
+  startFreq, endFreq, sweepDuration, q, peakGain, attackTime, decayDuration, stopBuffer, pitch = 1, startDelay = 0,
 }) {
   const source = createNoiseSource(audioContext);
   const filter = audioContext.createBiquadFilter();
   filter.type = "bandpass";
   filter.Q.value = q;
-  const now = audioContext.currentTime;
+  // Version 4, Phase 9c ("Lightning + Thunder") — startDelay lets a
+  // caller schedule this burst to begin some real seconds in the future
+  // (thunder arriving after its own flash, at the speed of sound)
+  // entirely via the AudioContext's own clock, not a JS timer. Every
+  // existing caller omits it and keeps starting at `now`, unchanged.
+  const now = audioContext.currentTime + startDelay;
   filter.frequency.setValueAtTime(startFreq * pitch, now);
   filter.frequency.linearRampToValueAtTime(endFreq * pitch, now + sweepDuration);
   const gain = audioContext.createGain();
@@ -260,6 +265,37 @@ export function playDrawerSlide(audioContext, destinationNode, { pitch = 1 } = {
   playFilteredNoiseBurst(audioContext, destinationNode, {
     startFreq: 900, endFreq: 650, sweepDuration: 0.22, q: 5,
     peakGain: 0.22, attackTime: 0.03, decayDuration: 0.26, stopBuffer: 0.02, pitch,
+  });
+}
+
+/**
+ * Version 4, Phase 9c ("Lightning + Thunder") — "a thunder sound, timed
+ * together [with the visible bolt] (with a slight delay proportional to
+ * distance)." Two layered `playFilteredNoiseBurst()` calls, the same
+ * primitive the whole creak family already reuses, rather than new
+ * low-level synthesis: a sharp, brief, higher-frequency "crack" (the
+ * initial snap) immediately followed by a longer, lower, rolling
+ * "rumble" (the trailing boom) — real thunder is well-modelled as
+ * exactly those two layers, not one flat noise burst. `delay` (seconds)
+ * is `LightingSystem`'s own distance/343 (speed of sound) calculation,
+ * passed straight through to both bursts' own `startDelay` via the
+ * AudioContext's native clock — the rumble starts a beat after the crack
+ * (`delay + 0.12`), the way a real thunderclap's boom trails its own
+ * initial snap. `intensity` (0-1, closer = louder) scales both layers'
+ * `peakGain` — deliberately louder at its peak than the creak family
+ * (0.18-0.32 there): thunder is meant to occasionally really register,
+ * not stay as subtle as a door creak, though it's still governed by the
+ * same `_effectsMultiplier`/`masterGain`/settings-volume chain as every
+ * other one-shot in this file.
+ */
+export function playThunder(audioContext, destinationNode, { delay = 0, intensity = 1 } = {}) {
+  playFilteredNoiseBurst(audioContext, destinationNode, {
+    startFreq: 2600, endFreq: 900, sweepDuration: 0.18, q: 1.8,
+    peakGain: 0.55 * intensity, attackTime: 0.01, decayDuration: 0.35, stopBuffer: 0.05, startDelay: delay,
+  });
+  playFilteredNoiseBurst(audioContext, destinationNode, {
+    startFreq: 260, endFreq: 60, sweepDuration: 1.6, q: 1.2,
+    peakGain: 0.4 * intensity, attackTime: 0.08, decayDuration: 2.2, stopBuffer: 0.1, startDelay: delay + 0.12,
   });
 }
 

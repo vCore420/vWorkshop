@@ -61,6 +61,24 @@ export function compileDefinition(definition, { colorOverride = null } = {}) {
       mesh.userData.restRotation = { x: mesh.rotation.x, y: mesh.rotation.y, z: mesh.rotation.z };
       mesh.userData.swayPhase = Math.random() * Math.PI * 2; // desynchronised — a whole tree line swaying in perfect unison reads as artificial
     }
+    // Version 4, Phase 9d ("Seasonal Vegetation Colour") — the same
+    // "future Atmosphere systems" seam as swaysInWind above, now used
+    // for the season reacting to a foliage part's own colour instead of
+    // its rotation. See WorldObjectsSystem.js's own
+    // _applySeasonalTint(), the one place that reads this flag.
+    if (part.seasonalFoliage) {
+      // Own private material instance — Materials.matte() (see
+      // PlaceholderFactory.js) caches by exact hex string, shared across
+      // every mesh in the world using that colour. Mutating
+      // mesh.material.color in place here would retint every other
+      // object that happens to share this exact hex, including a
+      // hypothetical player-authored object picked via the Builder's own
+      // colour swatch — the identical reasoning restRotation/swayPhase
+      // above already apply per-mesh rather than globally.
+      mesh.material = mesh.material.clone();
+      mesh.userData.seasonalFoliage = true;
+      mesh.userData.baseFoliageColor = `#${mesh.material.color.getHexString()}`; // hex string — lerpColorHex() (MathUtils.js) takes hex strings directly
+    }
     group.add(mesh);
   }
   return group;

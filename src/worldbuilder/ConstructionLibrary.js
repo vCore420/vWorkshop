@@ -581,8 +581,8 @@ export const CONSTRUCTION_PIECES = [
     description: "A simple tree — a trunk and a rounded canopy. Scale it up for something towering, or down for a sapling.",
     parts: [
       { id: "trunk", type: "cylinder", position: [0, 0.9, 0], rotationY: 0, scale: [0.16, 1.8, 0.16], color: BARK_COLOR, segments: 7 },
-      { id: "canopyLow", type: "sphere", position: [0, 1.9, 0], rotationY: 0, scale: [1.1, 0.9, 1.1], color: FOLIAGE_COLOR, segments: 8, swaysInWind: true },
-      { id: "canopyHigh", type: "sphere", position: [0, 2.5, 0], rotationY: 0, scale: [0.75, 0.7, 0.75], color: FOLIAGE_COLOR_LIGHT, segments: 8, swaysInWind: true },
+      { id: "canopyLow", type: "sphere", position: [0, 1.9, 0], rotationY: 0, scale: [1.1, 0.9, 1.1], color: FOLIAGE_COLOR, segments: 8, swaysInWind: true, seasonalFoliage: true },
+      { id: "canopyHigh", type: "sphere", position: [0, 2.5, 0], rotationY: 0, scale: [0.75, 0.7, 0.75], color: FOLIAGE_COLOR_LIGHT, segments: 8, swaysInWind: true, seasonalFoliage: true },
     ],
   }),
 
@@ -591,9 +591,9 @@ export const CONSTRUCTION_PIECES = [
     name: "Bush",
     description: "A low, rounded cluster of foliage — a hedge, a shrub, or scattered as undergrowth.",
     parts: [
-      { id: "a", type: "sphere", position: [-0.18, 0.28, 0.05], rotationY: 0, scale: [0.55, 0.5, 0.55], color: FOLIAGE_COLOR, segments: 7, swaysInWind: true },
-      { id: "b", type: "sphere", position: [0.2, 0.32, -0.1], rotationY: 0, scale: [0.5, 0.45, 0.5], color: FOLIAGE_COLOR_LIGHT, segments: 7, swaysInWind: true },
-      { id: "c", type: "sphere", position: [0, 0.24, -0.15], rotationY: 0, scale: [0.45, 0.4, 0.45], color: FOLIAGE_COLOR, segments: 7, swaysInWind: true },
+      { id: "a", type: "sphere", position: [-0.18, 0.28, 0.05], rotationY: 0, scale: [0.55, 0.5, 0.55], color: FOLIAGE_COLOR, segments: 7, swaysInWind: true, seasonalFoliage: true },
+      { id: "b", type: "sphere", position: [0.2, 0.32, -0.1], rotationY: 0, scale: [0.5, 0.45, 0.5], color: FOLIAGE_COLOR_LIGHT, segments: 7, swaysInWind: true, seasonalFoliage: true },
+      { id: "c", type: "sphere", position: [0, 0.24, -0.15], rotationY: 0, scale: [0.45, 0.4, 0.45], color: FOLIAGE_COLOR, segments: 7, swaysInWind: true, seasonalFoliage: true },
     ],
   }),
 
@@ -602,7 +602,7 @@ export const CONSTRUCTION_PIECES = [
     name: "Flower",
     description: "A single flowering stem — placed a handful at a time, a real garden starts to take shape.",
     parts: [
-      { id: "stem", type: "cylinder", position: [0, 0.18, 0], rotationY: 0, scale: [0.015, 0.36, 0.015], color: FOLIAGE_COLOR, segments: 5, swaysInWind: true },
+      { id: "stem", type: "cylinder", position: [0, 0.18, 0], rotationY: 0, scale: [0.015, 0.36, 0.015], color: FOLIAGE_COLOR, segments: 5, swaysInWind: true, seasonalFoliage: true },
       { id: "bloom", type: "sphere", position: [0, 0.38, 0], rotationY: 0, scale: [0.09, 0.08, 0.09], color: "#e8829c", segments: 6, swaysInWind: true },
     ],
   }),
@@ -629,9 +629,9 @@ export const CONSTRUCTION_PIECES = [
     name: "Grass Patch",
     description: "A low, flat tuft of longer grass — scattered across a lawn or a meadow for texture the terrain's own paint job alone can't give it.",
     parts: [
-      { id: "a", type: "cone", position: [-0.08, 0.12, 0], rotationY: 0.3, rotationX: 0, scale: [0.03, 0.24, 0.03], color: FOLIAGE_COLOR_LIGHT, segments: 4, swaysInWind: true },
-      { id: "b", type: "cone", position: [0.06, 0.1, 0.05], rotationY: 1.4, rotationX: 0, scale: [0.03, 0.2, 0.03], color: FOLIAGE_COLOR, segments: 4, swaysInWind: true },
-      { id: "c", type: "cone", position: [0, 0.09, -0.07], rotationY: 2.2, rotationX: 0, scale: [0.03, 0.18, 0.03], color: FOLIAGE_COLOR_LIGHT, segments: 4, swaysInWind: true },
+      { id: "a", type: "cone", position: [-0.08, 0.12, 0], rotationY: 0.3, rotationX: 0, scale: [0.03, 0.24, 0.03], color: FOLIAGE_COLOR_LIGHT, segments: 4, swaysInWind: true, seasonalFoliage: true },
+      { id: "b", type: "cone", position: [0.06, 0.1, 0.05], rotationY: 1.4, rotationX: 0, scale: [0.03, 0.2, 0.03], color: FOLIAGE_COLOR, segments: 4, swaysInWind: true, seasonalFoliage: true },
+      { id: "c", type: "cone", position: [0, 0.09, -0.07], rotationY: 2.2, rotationX: 0, scale: [0.03, 0.18, 0.03], color: FOLIAGE_COLOR_LIGHT, segments: 4, swaysInWind: true, seasonalFoliage: true },
     ],
   }),
 

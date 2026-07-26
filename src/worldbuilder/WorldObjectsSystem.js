@@ -8,6 +8,8 @@ import { CURRENT_ROOM_ID } from "./WorldObjectsStore.js";
 import { getConstructionPiece } from "./ConstructionLibrary.js";
 import { COLLISION_HEIGHT_LIMIT } from "../entities/room/WorkshopRoom.js";
 import { EnvironmentSystem } from "../systems/EnvironmentSystem.js";
+import { getSeason, dayOfYear, getObserverLocation } from "../utils/Astronomy.js";
+import { lerpColorHex } from "../utils/MathUtils.js";
 
 /**
  * WorldObjectsSystem
@@ -58,6 +60,25 @@ import { EnvironmentSystem } from "../systems/EnvironmentSystem.js";
  * Neither `CameraSystem` nor `BuildingDetectionSystem` needed to change at
  * all — both already just consume whatever `getFootprints()` returns.
  */
+// Version 4, Phase 9d ("Seasonal Vegetation Colour") — "seasonal effects
+// that actually change something... vegetation colour," leveraging the
+// Season Foundations phase's own Astronomy.getSeason(). spring/summer:
+// no tint (null) — the authored FOLIAGE_COLOR/FOLIAGE_COLOR_LIGHT
+// (ConstructionLibrary.js) already read as healthy growing-season green,
+// no separate shade invented. autumn: warm amber/rust, moderate
+// strength — a real seasonal change without the whole world turning into
+// a Thanksgiving parade float ("avoid making the room feel smoky or
+// busy" applies here too). winter: dulled, greyed-brown — dormant, not
+// dead. {color, strength} mirrors WEATHER_SKY_TINT's own shape
+// (WorldEnvironmentSystem.js).
+const SEASON_FOLIAGE_TINT = {
+  spring: null,
+  summer: null,
+  autumn: { color: "#b3652c", strength: 0.6 },
+  winter: { color: "#7d7362", strength: 0.6 },
+};
+const FOLIAGE_TINT_INTERVAL_SECONDS = 90; // a season boundary is a once-per-~3-months event; generous, not tight
+
 export class WorldObjectsSystem {
   constructor({ objectLibraryStore, worldObjectsStore, modelLibrary, modelLoader }) {
     this.objectLibraryStore = objectLibraryStore;
@@ -73,6 +94,9 @@ export class WorldObjectsSystem {
     /** @type {Array<{instanceId:number, mesh:THREE.Object3D}>} every currently-live mesh tagged `swaysInWind` — see `_registerSwayParts()`/`update()`. */
     this._swayParts = [];
     this._swayTime = 0;
+    /** @type {Array<{instanceId:number, mesh:THREE.Object3D}>} every currently-live mesh tagged `seasonalFoliage` — see `_registerFoliageParts()`/`_applySeasonalTint()`. */
+    this._foliageParts = [];
+    this._foliageTintTimer = 0;
   }
 
   init(engine) {
@@ -101,6 +125,7 @@ export class WorldObjectsSystem {
     this.footprints.delete(instanceId);
     this.collisionBoxes.delete(instanceId);
     this._swayParts = this._swayParts.filter((p) => p.instanceId !== instanceId);
+    this._foliageParts = this._foliageParts.filter((p) => p.instanceId !== instanceId);
     this.worldObjectsStore.remove(instanceId);
   }
 
@@ -280,6 +305,7 @@ export class WorldObjectsSystem {
       this.engine.entities.destroy(live.entity);
       this.liveInstances.delete(instance.id);
       this._swayParts = this._swayParts.filter((p) => p.instanceId !== instance.id); // otherwise _spawn()'s own _registerSwayParts() below would append fresh entries on top of stale references to the just-destroyed mesh
+      this._foliageParts = this._foliageParts.filter((p) => p.instanceId !== instance.id); // same reasoning, for _registerFoliageParts()
     }
     this._spawn(instance);
   }
@@ -378,6 +404,7 @@ export class WorldObjectsSystem {
     this.liveInstances.set(instance.id, { entity });
     this._updateFootprint(instance.id, object3D, definition);
     this._registerSwayParts(instance.id, object3D);
+    this._registerFoliageParts(instance.id, object3D);
     return entity;
   }
 
@@ -392,6 +419,43 @@ export class WorldObjectsSystem {
     });
   }
 
+  /** Version 4, Phase 9d ("Seasonal Vegetation Colour") — collected once
+   *  per spawn, the identical shape `_registerSwayParts()` above already
+   *  established for "a flat, already-known list of the meshes that
+   *  actually asked for this." Newly-registered parts are tinted
+   *  immediately, not left unblended-green until some future throttle
+   *  tick — a tree placed right now should show the current season the
+   *  instant it appears. */
+  _registerFoliageParts(instanceId, object3D) {
+    const newlyRegistered = [];
+    object3D.traverse((child) => {
+      if (child.userData?.seasonalFoliage) {
+        this._foliageParts.push({ instanceId, mesh: child });
+        newlyRegistered.push(child);
+      }
+    });
+    if (newlyRegistered.length > 0) this._applySeasonalTint(newlyRegistered);
+  }
+
+  /** Computes the current season once (real day-of-year/hemisphere, via
+   *  `Astronomy.getSeason()` — the exact same call shape
+   *  `SettingsApp.js`'s own Season row already uses) and tints every
+   *  mesh given, blending each one's own authored base colour toward
+   *  `SEASON_FOLIAGE_TINT`'s target via `lerpColorHex()` (`MathUtils.js`
+   *  — the same blend primitive `WEATHER_SKY_TINT` already uses
+   *  elsewhere). Season is a coarse, day-of-year value that essentially
+   *  never changes mid-session — no per-frame cost here, see `update()`'s
+   *  own throttle below. */
+  _applySeasonalTint(meshes) {
+    const season = getSeason(dayOfYear(new Date()), getObserverLocation().latitude);
+    const tintDef = SEASON_FOLIAGE_TINT[season];
+    for (const mesh of meshes) {
+      const base = mesh.userData.baseFoliageColor;
+      if (!base) continue;
+      mesh.material.color.set(tintDef ? lerpColorHex(base, tintDef.color, tintDef.strength) : base);
+    }
+  }
+
   /** "Wind influencing vegetation" — a small, cheap sinusoidal rotation
    *  offset applied on top of each swaying part's own authored rest
    *  rotation (captured once, in `ObjectCompiler.js`), not a real cloth/
@@ -404,18 +468,38 @@ export class WorldObjectsSystem {
    *  "fades in proportion to the condition driving it" instinct
    *  `WorldEnvironmentSystem.js`'s own clouds already follow. */
   update(dt) {
-    if (this._swayParts.length === 0) return;
-    this._swayTime += dt;
-    const windSpeed = this._environmentSystem?.windSpeed ?? 0;
-    const windDirectionRad = this._environmentSystem?.windDirectionRad ?? 0;
-    const amplitude = 0.03 + windSpeed * 0.12; // radians — subtle even in a strong wind, never a violent thrash
-    const speed = 1.2 + windSpeed * 2.2;
-    for (const { mesh } of this._swayParts) {
-      const rest = mesh.userData.restRotation;
-      if (!rest) continue;
-      const sway = Math.sin(this._swayTime * speed + mesh.userData.swayPhase) * amplitude;
-      mesh.rotation.x = rest.x + sway * Math.sin(windDirectionRad);
-      mesh.rotation.z = rest.z + sway * Math.cos(windDirectionRad);
+    // Version 4, Phase 9d — split into two independent guards rather
+    // than one shared early return: `seasonalFoliage`/`swaysInWind`
+    // happen to overlap 100% on every part authored today, but nothing
+    // guarantees that stays true, and a shared `_swayParts.length === 0`
+    // return would have silently skipped seasonal tinting entirely on
+    // any future part that opts into one flag without the other.
+    if (this._swayParts.length > 0) {
+      this._swayTime += dt;
+      const windSpeed = this._environmentSystem?.windSpeed ?? 0;
+      const windDirectionRad = this._environmentSystem?.windDirectionRad ?? 0;
+      const amplitude = 0.03 + windSpeed * 0.12; // radians — subtle even in a strong wind, never a violent thrash
+      const speed = 1.2 + windSpeed * 2.2;
+      for (const { mesh } of this._swayParts) {
+        const rest = mesh.userData.restRotation;
+        if (!rest) continue;
+        const sway = Math.sin(this._swayTime * speed + mesh.userData.swayPhase) * amplitude;
+        mesh.rotation.x = rest.x + sway * Math.sin(windDirectionRad);
+        mesh.rotation.z = rest.z + sway * Math.cos(windDirectionRad);
+      }
+    }
+
+    // A slow, throttled recheck rather than a per-frame one: season
+    // doesn't change moment to moment, only a real season boundary
+    // crossed mid-session (or a manually-changed simulated date) would
+    // ever need this to fire again after the spawn-time tint already
+    // applied.
+    if (this._foliageParts.length > 0) {
+      this._foliageTintTimer += dt;
+      if (this._foliageTintTimer >= FOLIAGE_TINT_INTERVAL_SECONDS) {
+        this._foliageTintTimer = 0;
+        this._applySeasonalTint(this._foliageParts.map((p) => p.mesh));
+      }
     }
   }
 }
