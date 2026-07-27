@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { box, cylinder, group, Materials } from "../../utils/PlaceholderFactory.js";
-import { woodGrainTexture } from "../../utils/ProceduralTexture.js";
+import { box, bevelBox, cylinder, group, Materials } from "../../utils/PlaceholderFactory.js";
+import { woodGrainTexture, surfaceSetFrom } from "../../utils/ProceduralTexture.js";
 
 /**
  * ComputerDesk
@@ -53,11 +53,24 @@ let _deskTopMaterial = null;
  *  .wood()` look everywhere else in the Workshop) let this one surface
  *  ask for a genuinely richer grain without affecting any other wood
  *  object. Built once and cached at module scope, the same discipline
- *  every material factory in this project already holds itself to. */
+ *  every material factory in this project already holds itself to.
+ *
+ *  Version 4, Phase 10b — that self-building is exactly what needed
+ *  attention this wave, and it's the identical gap `benchTopMaterial()`
+ *  had for the identical reason. Because this constructs its own
+ *  material rather than going through `Materials.wood()`, Phase 10a's
+ *  derived surface maps — added *inside* that factory — never reached
+ *  the desk's own top. Between them, the desk and the bench are the two
+ *  wood surfaces a player looks at longest and closest in the entire
+ *  Workshop, and they had quietly become the only grained wood left in
+ *  it without any relief. Fixed with the same `surfaceSetFrom()` helper
+ *  the factory itself uses, so this stays one implementation rather than
+ *  a second one — see `Workbench.js`'s own note on why the strength sits
+ *  above `Materials.wood()`'s. */
 function deskTopMaterial() {
   if (!_deskTopMaterial) {
     _deskTopMaterial = new THREE.MeshStandardMaterial({
-      map: woodGrainTexture("#4a3120", "#2e1d10", { size: 512, grainLines: 60, step: 8 }),
+      ...surfaceSetFrom(woodGrainTexture("#4a3120", "#2e1d10", { size: 512, grainLines: 60, step: 8 }), { normalStrength: 7, roughnessRange: { min: 0.76, max: 1 } }),
       roughness: 0.75,
       metalness: 0.05,
     });
@@ -74,7 +87,7 @@ export const ComputerDeskDefinition = {
     const g = group();
     const topY = 0.75;
 
-    const top = box(1.3, 0.06, 0.65, deskTopMaterial());
+    const top = bevelBox(1.3, 0.06, 0.65, deskTopMaterial(), { bevel: 0.008 });
     top.position.set(0, topY, 0);
     g.add(top);
     // box()/cylinder() geometry is centred at its own local origin — topY
@@ -130,7 +143,7 @@ export const ComputerDeskDefinition = {
     // local position — `ComputerSystem._screenCorners` hardcodes that
     // rectangle, and nothing about adding a frame *behind* it needed to
     // touch the mesh that rectangle actually describes.
-    const bezel = box(0.66, 0.42, 0.02, Materials.plastic("#242424"));
+    const bezel = bevelBox(0.66, 0.42, 0.02, Materials.plastic("#242424"), { bevel: 0.006 });
     bezel.position.set(0, surfaceY + 0.32, -0.135);
     g.add(bezel);
     const screen = box(0.6, 0.36, 0.03, Materials.emissive("#7fd8c4", 0.05));
@@ -147,7 +160,7 @@ export const ComputerDeskDefinition = {
     // Phase 14 ("Further Environmental Polish") — this sat centred at
     // x=0 (spanning -0.18..0.18), overlapping the mousepad's own left
     // edge at x=0.12 by 6cm. Shifted left, clear of it with a real gap.
-    const keyboard = box(0.36, 0.02, 0.13, Materials.plastic("#2c2c2c"));
+    const keyboard = bevelBox(0.36, 0.02, 0.13, Materials.plastic("#2c2c2c"), { bevel: 0.004 });
     keyboard.position.set(-0.08, surfaceY + 0.01, 0.15);
     g.add(keyboard);
     // A thin rubber mousepad — "comfort... small practical details."
@@ -157,7 +170,7 @@ export const ComputerDeskDefinition = {
     const mousepad = box(0.2, 0.004, 0.26, Materials.rubber("#1a1a1a"));
     mousepad.position.set(0.22, surfaceY + 0.002, 0.15);
     g.add(mousepad);
-    const mouse = box(0.05, 0.025, 0.09, Materials.plastic("#2c2c2c"));
+    const mouse = bevelBox(0.05, 0.025, 0.09, Materials.plastic("#2c2c2c"), { bevel: 0.008 });
     mouse.position.set(0.22, surfaceY + 0.0165, 0.15);
     g.add(mouse);
 
@@ -241,7 +254,7 @@ export const ComputerDeskDefinition = {
     // flat disc, plus armrests. Every part still sits directly above
     // the same footprint the old base occupied; only the base itself
     // changed shape.
-    const mechPlate = box(0.28, 0.03, 0.28, Materials.plastic("#202020"));
+    const mechPlate = bevelBox(0.28, 0.03, 0.28, Materials.plastic("#202020"), { bevel: 0.005 });
     mechPlate.position.set(0, 0.435, 0.55);
     g.add(mechPlate);
     const post = cylinder(0.03, 0.03, 0.42, Materials.metal());
@@ -293,7 +306,7 @@ export const ComputerDeskDefinition = {
       g.add(castor);
     }
 
-    const seat = box(0.42, 0.07, 0.42, Materials.fabric("#3c5a53"));
+    const seat = bevelBox(0.42, 0.07, 0.42, Materials.fabric("#3c5a53"), { bevel: 0.02 });
     seat.position.set(0, 0.485, 0.55);
     g.add(seat);
     // A slight recline — the top of the backrest tilts a few degrees
@@ -301,7 +314,7 @@ export const ComputerDeskDefinition = {
     // single, unambiguous rotation the Workbench phase's own pencil
     // comment favoured over a compound one risking an unpredictable
     // result.
-    const back = box(0.42, 0.44, 0.06, Materials.fabric("#3c5a53"));
+    const back = bevelBox(0.42, 0.44, 0.06, Materials.fabric("#3c5a53"), { bevel: 0.02 });
     back.position.set(0, 0.74, 0.75);
     back.rotation.x = 0.07;
     g.add(back);
@@ -313,7 +326,7 @@ export const ComputerDeskDefinition = {
       const armPost = box(0.03, 0.11, 0.03, Materials.plastic("#2c2c2c"));
       armPost.position.set(side * 0.235, 0.575, 0.55);
       g.add(armPost);
-      const armPad = box(0.05, 0.02, 0.3, Materials.plastic("#2c2c2c"));
+      const armPad = bevelBox(0.05, 0.02, 0.3, Materials.plastic("#2c2c2c"), { bevel: 0.006 });
       armPad.position.set(side * 0.235, 0.64, 0.55);
       g.add(armPad);
     }

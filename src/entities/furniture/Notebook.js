@@ -1,4 +1,4 @@
-import { box, group, Materials } from "../../utils/PlaceholderFactory.js";
+import { box, bevelBox, group, Materials } from "../../utils/PlaceholderFactory.js";
 
 /**
  * Notebook
@@ -39,7 +39,7 @@ export const NotebookDefinition = {
     // A cloth-bound cover and an elastic closure band are both real,
     // specific materials — `fabric()`/`rubber()` — not the same generic
     // `matte()` a metal switch plate would also use.
-    const cover = box(0.18, 0.02, 0.24, Materials.fabric("#3c5a53"));
+    const cover = bevelBox(0.18, 0.02, 0.24, Materials.fabric("#3c5a53"), { bevel: 0.004 });
     cover.position.set(0, 0, 0);
     g.add(cover);
     const pages = box(0.17, 0.015, 0.23, Materials.paper());

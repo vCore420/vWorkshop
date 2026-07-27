@@ -1,4 +1,4 @@
-import { box, group, Materials, brassTag, cylinder, sphere } from "../../utils/PlaceholderFactory.js";
+import { box, bevelBox, group, Materials, brassTag, cylinder, sphere } from "../../utils/PlaceholderFactory.js";
 
 /**
  * Shelving
@@ -48,10 +48,10 @@ export const ShelvingDefinition = {
     const height = topShelfY + boardThickness / 2 + (shelfSpacing - boardThickness);
 
     const frameMat = Materials.wood("#4a3120");
-    const sideL = box(0.04, height, depth, frameMat);
+    const sideL = bevelBox(0.04, height, depth, frameMat, { bevel: 0.004 });
     sideL.position.set(-width / 2, height / 2, 0);
     g.add(sideL);
-    const sideR = box(0.04, height, depth, frameMat);
+    const sideR = bevelBox(0.04, height, depth, frameMat, { bevel: 0.004 });
     sideR.position.set(width / 2, height / 2, 0);
     g.add(sideR);
     const back = box(width, height, 0.02, Materials.wood("#3d2a1c"));
@@ -63,7 +63,7 @@ export const ShelvingDefinition = {
     // actually built, not just stacked boards" cue the Interior phase's
     // baseboards already established for the room itself, applied to the
     // one piece of fixed furniture still missing it.
-    const cap = box(width + 0.06, 0.03, depth + 0.04, Materials.wood("#3d2a1c"));
+    const cap = bevelBox(width + 0.06, 0.03, depth + 0.04, Materials.wood("#3d2a1c"), { bevel: 0.005 });
     cap.position.set(0, height + 0.015, 0);
     g.add(cap);
 
@@ -81,7 +81,7 @@ export const ShelvingDefinition = {
       // Each board a subtly different wood tone rather than one uniform
       // Materials.wood() call — a shelf assembled over time from whatever
       // timber was on hand rarely matches board-for-board.
-      const shelf = box(width, 0.03, depth, Materials.wood(shelfColors[i % shelfColors.length]));
+      const shelf = bevelBox(width, 0.03, depth, Materials.wood(shelfColors[i % shelfColors.length]), { bevel: 0.005 });
       shelf.position.set(0, y, 0);
       g.add(shelf);
 
@@ -96,7 +96,7 @@ export const ShelvingDefinition = {
         const totalWidth = binCount * binWidth + (binCount - 1) * 0.02;
         let binCursor = -totalWidth / 2;
         for (let b = 0; b < binCount; b++) {
-          const bin = box(binWidth, binHeight, binDepth, Materials.plastic(binColors[b % binColors.length]));
+          const bin = bevelBox(binWidth, binHeight, binDepth, Materials.plastic(binColors[b % binColors.length]), { bevel: 0.008 });
           bin.position.set(binCursor + binWidth / 2, y + 0.015 + binHeight / 2, 0);
           g.add(bin);
           const tag = brassTag(0.09, 0.03);

@@ -1,4 +1,4 @@
-import { box, cylinder, group, Materials, brassTag } from "../../utils/PlaceholderFactory.js";
+import { box, bevelBox, cylinder, group, Materials, brassTag } from "../../utils/PlaceholderFactory.js";
 
 /**
  * ToolStorage
@@ -27,7 +27,7 @@ export const ToolStorageDefinition = {
   build() {
     const g = group();
 
-    const board = box(0.85, 1.1, 0.03, Materials.wood("#7a5c3e"));
+    const board = bevelBox(0.85, 1.1, 0.03, Materials.wood("#7a5c3e"), { bevel: 0.006 });
     board.position.set(0, 1.5, 0);
     g.add(board);
 
@@ -69,7 +69,7 @@ export const ToolStorageDefinition = {
     g.add(screwdriver);
 
     // Cabinet beneath the pegboard
-    const cabinet = box(0.7, 0.85, 0.4, Materials.metal("#5f6259"));
+    const cabinet = bevelBox(0.7, 0.85, 0.4, Materials.metal("#5f6259"), { bevel: 0.008 });
     cabinet.position.set(0, 0.43, 0);
     g.add(cabinet);
     const drawerGap = 0.02;
@@ -83,7 +83,7 @@ export const ToolStorageDefinition = {
     for (let i = 0; i < 3; i++) {
       const isAjar = i === ajarDrawerIndex;
       const drawerZ = 0.2 + (isAjar ? ajarDepth : 0);
-      const drawer = box(0.62, 0.24 - drawerGap, 0.02, Materials.metal("#4d5049"));
+      const drawer = bevelBox(0.62, 0.24 - drawerGap, 0.02, Materials.metal("#4d5049"), { bevel: 0.005 });
       drawer.position.set(0, 0.15 + i * 0.27, drawerZ);
       g.add(drawer);
       const handle = box(0.14, 0.02, 0.02, Materials.brass());

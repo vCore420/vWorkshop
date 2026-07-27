@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { box, cylinder, group, Materials } from "../../utils/PlaceholderFactory.js";
-import { woodGrainTexture } from "../../utils/ProceduralTexture.js";
+import { box, bevelBox, cylinder, group, Materials } from "../../utils/PlaceholderFactory.js";
+import { woodGrainTexture, surfaceSetFrom } from "../../utils/ProceduralTexture.js";
 
 /**
  * Workbench
@@ -56,11 +56,24 @@ let _benchTopMaterial = null;
  *  discipline `Materials`' own cache already holds itself to — a
  *  second Workbench instance (there isn't one today, but nothing here
  *  should assume that) would reuse it rather than generating a second,
- *  identical canvas. */
+ *  identical canvas.
+ *
+ *  Version 4, Phase 10b — that self-building is precisely why this needed
+ *  attention this wave. Phase 10a added derived normal/roughness maps
+ *  *inside* the shared `Materials` factory, so the bench top — the single
+ *  wood surface a player spends the most time looking straight down at —
+ *  ended up the only grained wood in the Workshop with no relief at all.
+ *  Fixed with `surfaceSetFrom()`, the same helper the factory itself
+ *  uses, so this stays one implementation rather than a second one.
+ *  Strength sits deliberately above `Materials.wood()`'s: this grain is
+ *  drawn at 512px with 70 lines rather than the shared 256/40, so its
+ *  gradients are finer and need more scaling to read at the same depth —
+ *  the "strength is not comparable between two different drawings"
+ *  lesson Phase 10a recorded, applied rather than rediscovered. */
 function benchTopMaterial() {
   if (!_benchTopMaterial) {
     _benchTopMaterial = new THREE.MeshStandardMaterial({
-      map: woodGrainTexture("#5a3d29", "#3a2416", { size: 512, grainLines: 70, step: 8 }),
+      ...surfaceSetFrom(woodGrainTexture("#5a3d29", "#3a2416", { size: 512, grainLines: 70, step: 8 }), { normalStrength: 7, roughnessRange: { min: 0.76, max: 1 } }),
       roughness: 0.75,
       metalness: 0.05,
     });
@@ -78,7 +91,7 @@ export const WorkbenchDefinition = {
     const topY = 0.85;
     const surfaceY = topY + 0.04;
 
-    const top = box(1.8, 0.08, 0.8, benchTopMaterial());
+    const top = bevelBox(1.8, 0.08, 0.8, benchTopMaterial(), { bevel: 0.01 });
     top.position.set(0, topY, 0);
     g.add(top);
 
@@ -86,7 +99,7 @@ export const WorkbenchDefinition = {
       [-0.82, 0, -0.32], [0.82, 0, -0.32], [-0.82, 0, 0.32], [0.82, 0, 0.32],
     ];
     for (const [x, , z] of legGeoPositions) {
-      const leg = box(0.08, topY, 0.08, Materials.wood("#3d2a1c"));
+      const leg = bevelBox(0.08, topY, 0.08, Materials.wood("#3d2a1c"), { bevel: 0.006 });
       leg.position.set(x, topY / 2, z);
       g.add(leg);
     }
@@ -101,16 +114,16 @@ export const WorkbenchDefinition = {
     // built to hold real force." Two rails, spanning the long axis on
     // each side, sitting well clear of anything on the surface above.
     for (const z of [-0.32, 0.32]) {
-      const stretcher = box(1.68, 0.06, 0.06, Materials.wood("#3d2a1c"));
+      const stretcher = bevelBox(1.68, 0.06, 0.06, Materials.wood("#3d2a1c"), { bevel: 0.005 });
       stretcher.position.set(0, 0.16, z);
       g.add(stretcher);
     }
 
     // A small vice at one end — signals "this is a place work happens".
-    const viceBase = box(0.18, 0.08, 0.22, Materials.metal());
+    const viceBase = bevelBox(0.18, 0.08, 0.22, Materials.metal(), { bevel: 0.006 });
     viceBase.position.set(0.68, topY + 0.06, -0.2);
     g.add(viceBase);
-    const viceJaw = box(0.18, 0.1, 0.05, Materials.metal("#6f6c64"));
+    const viceJaw = bevelBox(0.18, 0.1, 0.05, Materials.metal("#6f6c64"), { bevel: 0.005 });
     viceJaw.position.set(0.68, topY + 0.14, -0.05);
     g.add(viceJaw);
     // Workbench phase — "looks intentional... supports the Workshop's
@@ -146,7 +159,7 @@ export const WorkbenchDefinition = {
     // not removed: shorter handles that clear each other, moved back
     // (lower z) to clear the notebook by a genuine margin instead of
     // reaching underneath it.
-    const tray = box(0.5, 0.03, 0.28, Materials.matte("#2f2a24"));
+    const tray = bevelBox(0.5, 0.03, 0.28, Materials.matte("#2f2a24"), { bevel: 0.005 });
     tray.position.set(-0.55, topY + 0.03, 0.05);
     g.add(tray);
     for (let i = 0; i < 3; i++) {
@@ -181,7 +194,7 @@ export const WorkbenchDefinition = {
     // position — needed no changes at all) to sit fully on the surface.
     // Board is genuinely plastic, not an unnamed "matte" surface; see
     // Materials.plastic()'s own comment.
-    const clipboardBoard = box(0.2, 0.015, 0.26, Materials.plastic("#3a3a3a"));
+    const clipboardBoard = bevelBox(0.2, 0.015, 0.26, Materials.plastic("#3a3a3a"), { bevel: 0.004 });
     clipboardBoard.position.set(0.05, surfaceY + 0.008, 0.27);
     g.add(clipboardBoard);
     const clip = box(0.1, 0.02, 0.03, Materials.metal("#8d8577"));

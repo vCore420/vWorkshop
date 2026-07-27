@@ -1,6 +1,5 @@
 import * as THREE from "three";
-import { box, cylinder, sphere, multiFaceBox, group, Materials } from "../../utils/PlaceholderFactory.js";
-import { concreteTexture } from "../../utils/ProceduralTexture.js";
+import { box, bevelBox, cylinder, sphere, multiFaceBox, group, Materials } from "../../utils/PlaceholderFactory.js";
 
 // Above this height, a wall segment can't physically intersect the player
 // (see CameraSystem's 2D, Y-agnostic collision) — a door/window header is
@@ -166,17 +165,35 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
   const { width, depth, height } = dimensions;
   const root = group();
 
-  const floorMat = new THREE.MeshStandardMaterial({ map: concreteTexture("#7d766a"), roughness: 0.95 });
-  const floor = box(width, 0.1, depth, floorMat);
+  // Version 4, Phase 10b ("The Visual Upgrade — Furniture and Room") —
+  // the floor used to build its own `new THREE.MeshStandardMaterial({
+  // map: concreteTexture(...) })` inline here, bypassing the shared
+  // `Materials` factory entirely. That was harmless until Phase 10a gave
+  // every textured material derived normal/roughness maps *inside* that
+  // factory — at which point this one surface, among the three largest a
+  // player ever looks at, was silently the only concrete in the Workshop
+  // without any relief. `Materials.concrete()` is that same texture at
+  // the same colour and roughness, routed through the one place surface
+  // maps are applied. One implementation, not two.
+  const floor = box(width, 0.1, depth, Materials.concrete("#7d766a"));
   floor.position.set(0, -0.05, 0);
   root.add(floor);
 
-  const ceilingMat = Materials.matte("#e7e2d6");
+  // Same story, one step further: the ceiling and the interior walls were
+  // `Materials.matte()` — a completely flat colour, no texture at all, on
+  // the largest surfaces in the Workshop by area. Every carefully grained
+  // wooden object in this room was being seen against a backdrop carrying
+  // no surface information whatsoever. `Materials.plaster()` keeps both
+  // colours exactly as they were and gives them a real (deliberately very
+  // subtle — see `plasterTexture()`'s own comment) painted-plaster
+  // surface. The ceiling is the same material at its own lighter tone
+  // rather than a second, near-identical one.
+  const ceilingMat = Materials.plaster("#e7e2d6");
   const ceiling = box(width, 0.1, depth, ceilingMat);
   ceiling.position.set(0, height + 0.05, 0);
   root.add(ceiling);
 
-  const interiorWallMat = Materials.matte("#cfc4ad");
+  const interiorWallMat = Materials.plaster("#cfc4ad");
   const exteriorWallMat = Materials.siding("#5a4a3d");
 
   // Wall centrelines, shifted outward by WALL_GROWTH so each wall's interior
@@ -540,11 +557,11 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
   southBaseboard.position.set(0, 0, southInteriorZ - BASEBOARD_DEPTH / 2);
   root.add(southBaseboard);
 
-  const eastBaseboard = box(BASEBOARD_DEPTH, BASEBOARD_HEIGHT, sideWallDepth, baseboardMat);
+  const eastBaseboard = bevelBox(BASEBOARD_DEPTH, BASEBOARD_HEIGHT, sideWallDepth, baseboardMat, { bevel: 0.005 });
   eastBaseboard.position.set(eastCenterX - WALL_THICKNESS / 2 - BASEBOARD_DEPTH / 2, BASEBOARD_HEIGHT / 2, 0);
   root.add(eastBaseboard);
 
-  const westBaseboard = box(BASEBOARD_DEPTH, BASEBOARD_HEIGHT, sideWallDepth, baseboardMat);
+  const westBaseboard = bevelBox(BASEBOARD_DEPTH, BASEBOARD_HEIGHT, sideWallDepth, baseboardMat, { bevel: 0.005 });
   westBaseboard.position.set(westCenterX + WALL_THICKNESS / 2 + BASEBOARD_DEPTH / 2, BASEBOARD_HEIGHT / 2, 0);
   root.add(westBaseboard);
 

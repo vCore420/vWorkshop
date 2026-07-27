@@ -1,4 +1,4 @@
-import { box, cylinder, group, Materials } from "../../utils/PlaceholderFactory.js";
+import { box, bevelBox, cylinder, group, Materials } from "../../utils/PlaceholderFactory.js";
 
 /**
  * Wardrobe
@@ -48,7 +48,7 @@ export const WardrobeDefinition = {
     const cabinetDepth = 0.5;
     const cabinetHeight = 1.95;
 
-    const body = box(cabinetWidth, cabinetHeight, cabinetDepth, wood);
+    const body = bevelBox(cabinetWidth, cabinetHeight, cabinetDepth, wood, { bevel: 0.01 });
     body.position.set(cabinetX, cabinetHeight / 2, 0);
     g.add(body);
 
@@ -57,7 +57,7 @@ export const WardrobeDefinition = {
     // crown trim this phase — a plain box top never quite reads as a
     // finished piece of case furniture the way a slightly overhanging
     // cap does.
-    const cornice = box(cabinetWidth + 0.06, 0.05, cabinetDepth + 0.05, woodTrim);
+    const cornice = bevelBox(cabinetWidth + 0.06, 0.05, cabinetDepth + 0.05, woodTrim, { bevel: 0.006 });
     cornice.position.set(cabinetX, cabinetHeight + 0.025, 0);
     g.add(cornice);
 
@@ -69,7 +69,7 @@ export const WardrobeDefinition = {
     // the room's own lighting from a normal walking distance.
     const panelMat = woodTrim;
     for (const side of [-1, 1]) {
-      const panel = box(cabinetWidth / 2 - 0.12, cabinetHeight * 0.75, 0.015, panelMat, { castShadow: false });
+      const panel = bevelBox(cabinetWidth / 2 - 0.12, cabinetHeight * 0.75, 0.015, panelMat, { bevel: 0.005, castShadow: false });
       panel.position.set(cabinetX + side * (cabinetWidth / 4), cabinetHeight / 2, cabinetDepth / 2 + 0.008);
       g.add(panel);
     }
@@ -87,7 +87,7 @@ export const WardrobeDefinition = {
       g.add(handle);
     }
 
-    const plinth = box(cabinetWidth + 0.04, 0.06, cabinetDepth + 0.04, woodTrim);
+    const plinth = bevelBox(cabinetWidth + 0.04, 0.06, cabinetDepth + 0.04, woodTrim, { bevel: 0.006 });
     plinth.position.set(cabinetX, 0.03, 0);
     g.add(plinth);
 
@@ -106,11 +106,11 @@ export const WardrobeDefinition = {
     // wall as the cabinet's own back face does.
     const mirrorZ = -0.25;
 
-    const stand = box(mirrorWidth + frameThickness * 2, 0.05, 0.22, woodTrim);
+    const stand = bevelBox(mirrorWidth + frameThickness * 2, 0.05, 0.22, woodTrim, { bevel: 0.006 });
     stand.position.set(mirrorX, 0.025, mirrorZ);
     g.add(stand);
 
-    const frame = box(mirrorWidth + frameThickness * 2, mirrorHeight + frameThickness * 2, 0.04, woodTrim);
+    const frame = bevelBox(mirrorWidth + frameThickness * 2, mirrorHeight + frameThickness * 2, 0.04, woodTrim, { bevel: 0.008 });
     frame.position.set(mirrorX, mirrorHeight / 2 + 0.05, mirrorZ);
     g.add(frame);
 

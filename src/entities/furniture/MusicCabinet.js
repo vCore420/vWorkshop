@@ -1,4 +1,4 @@
-import { box, cylinder, sphere, group, Materials } from "../../utils/PlaceholderFactory.js";
+import { box, bevelBox, cylinder, sphere, group, Materials } from "../../utils/PlaceholderFactory.js";
 
 /**
  * MusicCabinet
@@ -59,19 +59,19 @@ export const MusicCabinetDefinition = {
       leg.position.set(x, legHeight / 2, z);
       g.add(leg);
     }
-    const bottom = box(cabinetWidth, 0.025, cabinetDepth, woodMain);
+    const bottom = bevelBox(cabinetWidth, 0.025, cabinetDepth, woodMain, { bevel: 0.004 });
     bottom.position.set(0, bottomY, 0);
     g.add(bottom);
-    const midShelf = box(cabinetWidth, 0.025, cabinetDepth, woodMain);
+    const midShelf = bevelBox(cabinetWidth, 0.025, cabinetDepth, woodMain, { bevel: 0.004 });
     midShelf.position.set(0, shelfY, 0);
     g.add(midShelf);
-    const top = box(cabinetWidth, 0.03, cabinetDepth, woodTrim);
+    const top = bevelBox(cabinetWidth, 0.03, cabinetDepth, woodTrim, { bevel: 0.005 });
     top.position.set(0, topY, 0);
     g.add(top);
     const back = box(cabinetWidth, topY - bottomY, 0.02, Materials.wood("#3d2a1c"));
     back.position.set(0, (topY + bottomY) / 2, -cabinetDepth / 2 + 0.01);
     g.add(back);
-    const sideL = box(0.025, topY - bottomY, cabinetDepth, woodMain);
+    const sideL = bevelBox(0.025, topY - bottomY, cabinetDepth, woodMain, { bevel: 0.004 });
     sideL.position.set(-cabinetWidth / 2, (topY + bottomY) / 2, 0);
     g.add(sideL);
     const sideR = sideL.clone();
@@ -106,7 +106,7 @@ export const MusicCabinetDefinition = {
 
     // --- Turntable, offset to one side of the cabinet top ---
     const turntableX = -0.19;
-    const plinth = box(0.34, 0.035, 0.27, Materials.wood("#2c2015"));
+    const plinth = bevelBox(0.34, 0.035, 0.27, Materials.wood("#2c2015"), { bevel: 0.005 });
     plinth.position.set(turntableX, topY + 0.0175, 0.01);
     g.add(plinth);
     const platter = cylinder(0.105, 0.105, 0.012, Materials.matte("#1c1a17"), 28);
@@ -135,7 +135,7 @@ export const MusicCabinetDefinition = {
 
     // --- Amplifier, beside the turntable ---
     const ampX = 0.2;
-    const amp = box(0.24, 0.09, 0.2, Materials.wood("#3d2a1c"));
+    const amp = bevelBox(0.24, 0.09, 0.2, Materials.wood("#3d2a1c"), { bevel: 0.006 });
     amp.position.set(ampX, topY + 0.045, 0);
     g.add(amp);
     const ampFace = box(0.22, 0.03, 0.01, Materials.matte("#1c1a17"));
@@ -155,10 +155,10 @@ export const MusicCabinetDefinition = {
       // Phase 14 ("Further Environmental Polish") — both read noticeably
       // darker than the project's other wood surfaces; lightened so the
       // grain itself (already good) actually pops against the room.
-      const stand = box(0.09, standHeight, 0.09, Materials.wood("#5a3d29"));
+      const stand = bevelBox(0.09, standHeight, 0.09, Materials.wood("#5a3d29"), { bevel: 0.005 });
       stand.position.set(sx, standHeight / 2, 0);
       g.add(stand);
-      const speaker = box(0.19, 0.28, 0.17, Materials.wood("#6b4830"));
+      const speaker = bevelBox(0.19, 0.28, 0.17, Materials.wood("#6b4830"), { bevel: 0.007 });
       speaker.position.set(sx, standHeight + 0.14, 0);
       g.add(speaker);
       const cone = cylinder(0.055, 0.055, 0.015, Materials.rubber("#232323"), 20);

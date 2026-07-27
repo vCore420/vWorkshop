@@ -1,4 +1,4 @@
-import { box, cylinder, group, Materials } from "../../utils/PlaceholderFactory.js";
+import { box, bevelBox, cylinder, group, Materials } from "../../utils/PlaceholderFactory.js";
 
 /**
  * Pinboard
@@ -19,7 +19,7 @@ export const PinboardDefinition = {
 
   build() {
     const g = group();
-    const frame = box(1.0, 0.7, 0.04, Materials.wood("#5a3d29"));
+    const frame = bevelBox(1.0, 0.7, 0.04, Materials.wood("#5a3d29"), { bevel: 0.007 });
     g.add(frame);
     const cork = box(0.92, 0.62, 0.02, Materials.cork(), { castShadow: false });
     cork.position.set(0, 0, 0.025);

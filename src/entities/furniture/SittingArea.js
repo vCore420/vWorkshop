@@ -1,4 +1,4 @@
-import { box, cylinder, group, Materials } from "../../utils/PlaceholderFactory.js";
+import { box, bevelBox, cylinder, group, Materials } from "../../utils/PlaceholderFactory.js";
 
 /**
  * SittingArea
@@ -40,7 +40,7 @@ export const SittingAreaDefinition = {
     rug.position.set(0.1, 0.005, 0.1);
     g.add(rug);
 
-    const seat = box(0.62, 0.14, 0.6, Materials.fabric("#3c5a53"));
+    const seat = bevelBox(0.62, 0.14, 0.6, Materials.fabric("#3c5a53"), { bevel: 0.035 });
     seat.position.set(0, 0.38, 0);
     g.add(seat);
     // Furniture & Storage phase — "chairs... comfort." A separate,
@@ -48,16 +48,16 @@ export const SittingAreaDefinition = {
     // than one flat slab standing in for both — the same "an upholstered
     // base plus a real cushion reads as padded" idea the Desk phase's own
     // office chair seat already established.
-    const cushion = box(0.56, 0.08, 0.54, Materials.fabric("#436b62"));
+    const cushion = bevelBox(0.56, 0.08, 0.54, Materials.fabric("#436b62"), { bevel: 0.026 });
     cushion.position.set(0, 0.49, 0);
     g.add(cushion);
-    const back = box(0.62, 0.55, 0.14, Materials.fabric("#33504a"));
+    const back = bevelBox(0.62, 0.55, 0.14, Materials.fabric("#33504a"), { bevel: 0.035 });
     back.position.set(0, 0.66, -0.3);
     g.add(back);
-    const armL = box(0.12, 0.32, 0.6, Materials.fabric("#33504a"));
+    const armL = bevelBox(0.12, 0.32, 0.6, Materials.fabric("#33504a"), { bevel: 0.03 });
     armL.position.set(-0.32, 0.46, 0);
     g.add(armL);
-    const armR = box(0.12, 0.32, 0.6, Materials.fabric("#33504a"));
+    const armR = bevelBox(0.12, 0.32, 0.6, Materials.fabric("#33504a"), { bevel: 0.03 });
     armR.position.set(0.32, 0.46, 0);
     g.add(armR);
     for (const [x, z] of [[-0.25, -0.25], [0.25, -0.25], [-0.25, 0.25], [0.25, 0.25]]) {
@@ -84,7 +84,7 @@ export const SittingAreaDefinition = {
     // the table, near its own edge rather than dead centre — the single,
     // deliberately restrained addition here, the same standard the
     // Workbench's pencil and the Desk's pen holder already set.
-    const book = box(0.14, 0.03, 0.1, Materials.fabric("#7a3b3b"));
+    const book = bevelBox(0.14, 0.03, 0.1, Materials.fabric("#7a3b3b"), { bevel: 0.004 });
     book.position.set(0.75, 0.48, -0.55);
     book.rotation.y = 0.15;
     g.add(book);

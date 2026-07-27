@@ -83,11 +83,35 @@ function unitCylinderGeometry() {
 }
 /** A real capsule — a cylinder with two hemispherical caps
  *  (`THREE.CapsuleGeometry`, available since Three.js r142; this Workshop
- *  runs r164 — see `index.html`'s own import map). Radius/length chosen
- *  so the whole shape roughly fills the same unit bounding box every
- *  other primitive here does, so `part.scale` behaves consistently no
- *  matter which shape is picked, the same convention
- *  `ObjectCompiler.js`'s own unit geometries already establish. */
+ *  runs r164 — see `index.html`'s own import map).
+ *
+ *  **Correction, Version 4 Phase 10d — this comment used to claim the
+ *  radius/length were "chosen so the whole shape roughly fills the same
+ *  unit bounding box every other primitive here does, so `part.scale`
+ *  behaves consistently no matter which shape is picked." It does not,
+ *  and measuring it is what caught this.** `CapsuleGeometry(0.3, 0.4)`
+ *  measures **0.6 × 1.0 × 0.6**, where box, sphere and cylinder all
+ *  measure exactly 1 × 1 × 1 (verified directly, all four). So swapping a
+ *  part from any other shape to `capsule` at the same `scale` silently
+ *  makes it **40% thinner** in X and Z while keeping its length — the
+ *  opposite of the consistency the comment promised. Anyone converting a
+ *  part to a capsule and wanting to preserve its thickness needs to
+ *  divide X and Z by 0.6; `DefaultBeings.js`'s own Person does exactly
+ *  that, with the arithmetic shown inline.
+ *
+ *  The geometry itself is deliberately left as it is rather than
+ *  "fixed" to fill the unit box: every capsule a player has already
+ *  authored in the Being Creator is sized against these numbers, and
+ *  changing them would resize all of them at once. The honest fix is the
+ *  accurate comment.
+ *
+ *  **A capsule's length always runs along Y.** There is no way to lie one
+ *  on its side through `scale` alone — scaling Z only widens the round
+ *  section, it never lengthens the capsule — and `compileBody()` applies
+ *  `rotation` to the *pivot*, which for a rigged part would rotate the
+ *  joint and every child with it. A part that needs to be long along Z
+ *  (an animal's barrel, a snout) is therefore genuinely better as a box
+ *  unless it is unrigged and free to be rotated. */
 function unitCapsuleGeometry() {
   return cachedGeometry("capsule", () => new THREE.CapsuleGeometry(0.3, 0.4, 4, 12));
 }
