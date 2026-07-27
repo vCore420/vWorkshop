@@ -764,6 +764,28 @@ updates) rather than each placement being an independent snapshot — the
 brief's "version safely" is satisfied by this being simple and
 predictable, not by tracking per-instance schema versions.
 
+**This cuts both ways, and Version 4 Phase 10c is the case that proved
+it.** Because a placed instance stores only a `definitionId` and a
+transform, editing a *Construction Library* piece retroactively reshapes
+every copy already standing in every save — which is a virtue when the
+change is a better material or a softer edge, and a hazard when it
+changes dimensions. Absolute positions were frozen at placement time and
+never re-snap on load, so a wall segment that became 1.96m wide would
+open a 4cm gap at every joint in a finished run; a floor slab that
+changed thickness would leave everything stacked on it floating or sunk.
+
+**The rule for anyone editing `ConstructionLibrary.js` is therefore:
+preserve the outer envelope and the origin unless you have explicit
+agreement that existing builds may break.** Materials, colours, bevels
+cut *inward* from existing faces, and detail added inside the existing
+envelope are all safe. Phase 10c's own stair and window-sill changes went
+further than that — Vi held the only save, the project was still in
+development, and explicitly chose to allow it and start fresh afterward.
+That was a decision, not a default. A migration is not a general escape
+hatch here either: it can rewrite stored numbers but cannot recover
+intent, and has no way to tell a deliberate 4cm gap from one it just
+created.
+
 ## A second source of definitions: the Construction Library
 
 A later pass added `src/worldbuilder/ConstructionLibrary.js` — a small,
@@ -941,6 +963,24 @@ in the same pass.
 
 ## Known simplifications (by design, for this phase)
 
+- **A bevelled construction part cannot share geometry with a
+  differently-sized one** (Version 4, Phase 10c). Every other part type
+  is a unit primitive sized through `mesh.scale`, so all copies of every
+  size share one geometry instance. A rounded box can't be: it takes a
+  single corner radius, and scaling a unit one non-uniformly stretches
+  that radius per-axis into an obviously wrong sweep. Bevelled parts bake
+  their dimensions into geometry instead, keyed on those dimensions — so
+  a hundred placed Tables still share one geometry, but a Table and a
+  Bench no longer share theirs. Inherent to the shape rather than a
+  regression, and the reason bevels are opt-in per part rather than
+  automatic on every box.
+- **21 construction parts are still flat `matte`** (Version 4, Phase
+  10c) — all foliage, the light fixtures, the campfire flame, and
+  soil/dirt. Each is a missing *texture* rather than a missed
+  assignment: no leaf, bark or earth texture exists in
+  `ProceduralTexture.js`, and the wood grain that does exist would read
+  worse on a tree canopy than a clean flat colour does. Surface relief
+  also actively fights the read of something meant to be emitting light.
 - **The camera fully freezes in Build Mode** — no look-around, no
   movement. See "Why Build Mode looks like this" above.
 - **Placed objects can still overlap each other.** Collision now stops

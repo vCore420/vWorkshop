@@ -102,6 +102,77 @@ rendering complexity was introduced anywhere in this phase; both fixes
 are each a single corrected line plus documentation, which is as
 close to "avoid unnecessary rendering complexity" as a bug fix can get.
 
+## Surface materials — Version 4, Phase 10a ("The Visual Upgrade")
+
+This document's original phase was about making the Workshop's *lighting*
+consistent. Phase 10a is the equivalent pass for its *surfaces*, and the
+finding that motivated it belongs here: until that wave, there was not one
+`normalMap`, `roughnessMap`, `aoMap` or `bumpMap` anywhere in `src/` —
+confirmed by grep across all 266 files, zero hits. Every material in the
+Workshop was albedo-only. A `MeshStandardMaterial` with only a colour map
+cannot express surface micro-relief at all, which is why carefully-drawn
+wood grain still read as wood-*coloured paper*: the drawing was right, and
+there was no mechanism for it to catch light.
+
+**The house rule this establishes: relief is derived from the albedo, not
+drawn twice.** `ProceduralTexture.js`'s `surfaceSetFrom()` reads a
+generated texture's own canvas and infers normal and roughness maps from
+its luminance. That is not an approximation standing in for "real"
+authored maps — it is the correct reading of *these* textures, because
+every generator in that file already draws its detail as relief: grain
+lines are darker because they are grooves, siding's board seams are
+shadow lines, cork's blotches are pits. Luminance already is the height
+field. A future hand-authored texture should keep that property, so this
+stays true.
+
+**Two tuning lessons, measured rather than guessed** — worth reading
+before changing any strength value:
+
+- *Judge a normal map by its typical (mean) tilt, never its peak.* Peak
+  is one pixel in 65,000. The initial guessed strengths produced ~1°
+  typical tilt on wood and cork — a normal map costing a texture fetch to
+  do nothing — while looking perfectly reasonable by peak.
+- *Strength is not comparable between generators.* Brushed metal at a
+  **lower** strength than wood produced nearly four times the tilt,
+  because its hard-edged 1px alternating streaks are far higher-contrast
+  and higher-frequency than wood's soft 35%-alpha grain. Source contrast
+  and spatial frequency dominate the result; retune by measuring, not by
+  reasoning from another material's number.
+
+Current typical tilts, for reference: siding 5.2°, wood 4.1°, cork 2.4°,
+paper 0.8°, metal 15.2°. Roughness bands are declared per material and,
+since the normalisation fix in the same wave, are delivered to within
+0.001 of what they declare.
+
+**Flat-colour materials remain deliberately untouched.** `fabric`,
+`matte`, `plastic`, `rubber`, `ceramic`, `brass` and `emissive` carry no
+`map`, so there is no luminance to derive relief from — a generated
+normal map there would be a flat sheet of `(0.5, 0.5, 1)`. Giving those
+surfaces real character means authoring detail they don't currently have.
+
+**The surface hierarchy (Version 4, Phase 10b) — a rule, not a
+coincidence.** When Phase 10b gave the room's own walls, ceiling and
+floor real surfaces for the first time, the first attempt set plaster's
+normal strength to a value that measured **~4.7° typical tilt —
+*stronger* than the wood furniture standing in front of it.** That is
+exactly backwards, and it is an easy mistake to make because each
+material looks fine judged alone. The room is the backdrop; the objects
+in it are the subject. Surfaces are now tuned as a *set*, and the
+ordering is deliberate and verified:
+
+| surface | typical tilt | role |
+|---|---|---|
+| brushed metal | 15.2° | small, deliberately eye-catching |
+| siding (exterior) | 5.2° | seen at a distance, needs to survive it |
+| wood (furniture) | 3.8° | the subject |
+| plaster (walls, ceiling) | 2.4° | backdrop |
+| concrete (floor) | 2.0° | backdrop |
+| paper | 0.8° | a whisper |
+
+Before changing any one of these, check it against the others. A value
+that reads well in isolation can still be wrong for its place in this
+list.
+
 ## Known limitations / future opportunities
 
 - **Shadow bias, re-verified (Version 3, Phase 2 — "Living Spaces").**

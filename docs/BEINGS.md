@@ -723,10 +723,39 @@ from `residentProfileStore.all()`, plus a "New Profile…" affordance.
 Deliberately just a reference, not inline CRUD — renaming, duplicating,
 and configuring a profile in depth stay Mission Control's own job.
 
+## Primitive shapes: two things worth knowing before you use them
+
+Both found by measurement in Version 4, Phase 10d, and both had been
+quietly wrong or unstated in the code before that.
+
+**A capsule is not a unit primitive.** `BodyCompiler.js`'s unit shapes
+measure box 1 × 1 × 1, sphere 1 × 1 × 1, cylinder 1 × 1 × 1 — and capsule
+**0.6 × 1.0 × 0.6**. That file's own comment used to claim all four
+matched, which meant swapping a part's shape to `capsule` at the same
+`scale` silently made it 40% thinner in X and Z while keeping its length.
+**To convert a part to a capsule and preserve its thickness, divide X and
+Z by 0.6** — `DefaultBeings.js`'s Person does exactly this, with the
+arithmetic shown inline. The geometry was deliberately left as-is rather
+than resized to fill the unit box, because every capsule a player has
+already authored in the Being Creator is sized against these numbers.
+
+**A capsule's length always runs along Y, and there is no way around
+it.** `scale` can't lie one on its side — scaling Z widens the round
+section rather than lengthening the capsule — and `compileBody()` applies
+`rotation` to the part's *pivot*, so rotating a rigged part rotates the
+joint and every child with it. A part whose long axis runs along Z (an
+animal's barrel, a snout) is genuinely better as a box unless it is
+unrigged and free to be rotated. Cat and Dog's bodies are boxes for
+exactly this reason, having been tried as capsules and reverted.
+
 ## Known simplifications (by design, for this phase)
 
 - **Interaction is a toast message, not a conversation** — Beings aren't
   connected to Ollama the way the Workshop's own resident is.
+- **No mesh-only rotation** (Version 4, Phase 10d) — a part's `rotation`
+  always moves its pivot, so a rigged part cannot have its visible shape
+  turned independently of its joint. See "Primitive shapes" above for the
+  case that surfaced this.
 - **No true pathfinding** — obstacle avoidance is a steering nudge, per
   the brief's own explicit instruction not to overcomplicate this yet.
 - **One room's worth of colliders** — `BeingController._colliders()`

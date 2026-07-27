@@ -1104,6 +1104,42 @@ condition ever changes `this._grounded` except the jump check itself,
 so the two values are identical on every frame that isn't a jump's own
 first one.
 
+## The box vocabulary, and why it stayed (Version 4, Phase 10d)
+
+Phase 10's visual-upgrade plan called for replacing the rig's boxes with
+"shaped, tapered, capsule-based silhouettes." That plan was reversed
+after reading `PlayerCharacter.js`, for two reasons that are worth
+recording so it isn't proposed again without them:
+
+1. **The boxiness is the brief, not an unfinished state.** That file's
+   own opening comment quotes it: "think along the lines of Minecraft...
+   simple geometry is preferred because it allows complete
+   customisation." The simplicity is what makes per-part colour, material
+   and texture customisation legible.
+2. **The texture pipeline structurally depends on it.** A part's painted
+   texture is a single 64×64 canvas applied as `map` (see "Appearance,
+   materials, textures" above). `BoxGeometry` gives every face its own
+   0..1 UV island, so that one image reads correctly on each face. A
+   capsule's UV is a cylindrical wrap — every existing painted skin and
+   outfit texture would smear around the limb instead.
+
+What the rig did get is craftsmanship inside that vocabulary: `boxMesh()`
+now builds through the shared `bevelBox()` helper, with a radius
+proportional to each part's own smallest dimension so a hand and a torso
+get visibly different softness. A bevelled box is still unmistakably a
+box; it just catches a highlight along every edge the way a real object
+does. This was only safe because Wave 10b had already measured that
+`RoundedBoxGeometry` lays out per-face UV islands spanning 0..1 exactly
+as `BoxGeometry` does — **any future change to the rig's geometry has to
+clear that same bar**, or it silently breaks every texture a player has
+painted.
+
+Note also that a player rig genuinely does build unique geometry per
+proportion (`boxMesh()` bakes real dimensions in), unlike
+`ObjectCompiler.js`'s shared unit primitives. That's affordable precisely
+because a rig is rebuilt only when someone moves a Wardrobe slider —
+never per frame, never in hundreds of copies.
+
 ## Known limitations
 
 - **"Never see themselves" in first person is mostly physics, with one

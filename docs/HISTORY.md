@@ -2658,4 +2658,170 @@ errors throughout. `docs/RESIDENT.md`, `docs/PLAYER.md`, and
 `docs/ANIMATION.md` all corrected. See `docs/ROADMAP.md`'s own Phase 9e
 account for the full story.
 
+**Version 4, Phase 10a — The Visual Upgrade, Foundation (v4.1.0a).** The
+first of five waves moving the Workshop's 3D content from "a really good
+prototype" to a professional finish, and the first phase to bump the
+minor version (the two previously-drafted phases renumbered to make room:
+Plugin SDK → Phase 11, Dormant Seams → Phase 12). This wave redesigns
+nothing — it upgrades the shared layer every object already comes
+through. An opening investigation traced the prototype feeling to two
+shared causes rather than to any object's design: there was not one
+`normalMap`, `roughnessMap`, `aoMap` or `bumpMap` anywhere in `src/`
+(grep across all 266 files, zero hits), and every edge was a razor-sharp
+90° because `PlaceholderFactory.box()` is raw `BoxGeometry`. Asset
+generation was reconsidered explicitly and the decision was to stay
+code-generated rather than ship GLTF binaries — imported models are
+already supported for Beings, but shipping our own would change a
+`CLAUDE.md`-level convention, add a licensing obligation per model, and
+still not fix two problems that are material and edge problems rather
+than shape-complexity ones. `ProceduralTexture.js` gained
+`normalMapFromTexture()`/`roughnessMapFromTexture()`/`surfaceSetFrom()`,
+deriving relief from each albedo canvas's own luminance — the correct
+reading of these textures, since every generator already draws its detail
+*as* relief — so no generator changed and no signature moved. Two real
+defects were caught by verification rather than review: the roughness
+maps initially mapped *absolute* luminance and so collapsed a declared
+`[0.85, 1.0]` band to an actual 0.886–0.906 (fixed by normalising to each
+texture's own observed range), and most normal strengths were guessed far
+too weak — wood and cork at ~1° typical tilt, invisible — while brushed
+metal at a *lower* guessed value was already at 15°, because source
+contrast and spatial frequency dominate. `bevelBox()` was built and
+verified envelope-preserving to a delta of exactly 0, but deliberately
+not adopted anywhere this wave (different UVs than `BoxGeometry`, and
+silently rounding every box would have changed all 56 construction pieces
+unverified); its measured 9×/25×/49× triangle cost is recorded so Wave
+10c bevels selectively. A new `TextureQuality.js` picks a detail tier at
+boot, reusing `detectRecommendedPreset()` — lifted out of `SettingsStore`
+as a shared pure function — because materials are built long before a
+save loads; the honest limitation that a manual preset override does not
+apply until the next load is documented rather than hidden. Verified live
+by pixel readback through the real renderer: the same siding material
+under the same raking light showed 2.02× the vertical surface contrast
+with its maps attached, at unchanged mean brightness. Two stale
+docstrings fixed along the way (`PartTypes.js`'s claim that
+`THREE.CapsuleGeometry` doesn't exist — it landed in r142 and three files
+already use it; `PlaceholderFactory.js`'s promise of a `mesh()` API that
+never existed), and `docs/PRESENCE.md` added to the docs index it had
+always been missing from. See `docs/ROADMAP.md`'s own Phase 10a account
+for the full story.
+
+**Version 4, Phase 10b — The Visual Upgrade, Furniture and Room
+(v4.1.0b).** The nine furniture pieces and the room shell, built on Wave
+10a's foundation. The wave's own plan named architectural trim as its
+biggest win; reading the room showed it was **already built** — skirting
+on all four walls, hollow window frames with real sills, a proper door
+casing — all from the earlier "Workshop Interior" phase, and all still
+correct. Reported plainly rather than quietly re-scoped. Three larger
+gaps surfaced instead. First, the interior walls and ceiling were
+`Materials.matte()`, a completely flat colour on the largest surfaces in
+the Workshop: measured through the real renderer, a matte wall's surface
+detail reads 0.011 — mathematically featureless, so every grained wooden
+object in the room was being seen against a void. New `plasterTexture()`
+/`Materials.plaster()` bring that to 1.798 at unchanged colour and
+brightness. Second, `deskTopMaterial()`, `benchTopMaterial()` and the
+floor each hand-rolled their own material rather than going through the
+`Materials` factory — harmless for years, and harmless no longer once
+Wave 10a added surface maps *inside* that factory, which had quietly
+left the desk and bench tops (the two wood surfaces a player looks at
+longest and closest) as the only grained wood in the Workshop without
+relief; all three now route through the shared helper, with the floor
+moving onto a new `Materials.concrete()`. Third, 64 meshes adopted
+`bevelBox()`, chosen per object rather than globally — hero surfaces,
+moulded plastic, case furniture, and most of all upholstery, where a
+cushion having no sharp edges in reality is the strongest case in the
+room. Wave 10a's own claim that `RoundedBoxGeometry` UVs "do not match
+`BoxGeometry`'s" was measured and found false (both lay out per-face
+islands spanning 0–1; the rounded version insets by exactly the bevel
+proportion) and corrected in place. A real tuning error was caught by
+measurement rather than review: plaster was first set to a normal
+strength measuring ~4.7° typical tilt — *stronger* than the furniture
+standing in front of it, exactly backwards for a backdrop — retuned to
+~2.4°, with concrete raised from a near-invisible 0.75° to ~2.0°, giving
+a deliberate, verified hierarchy of wood 3.81° > plaster 2.41° >
+concrete 2.02°. Verified live with zero console errors, 64 bevelled
+meshes present in the real scene, textured materials up from 260 to 270,
+and every declared `footprint` and `focusPoseLocal` confirmed unchanged.
+See `docs/ROADMAP.md`'s own Phase 10b account for the full story.
+
+**Version 4, Phase 10c — The Visual Upgrade, Construction Library
+(v4.1.0c).** All 56 Construction Library pieces and the blueprints built
+from them. Shaped by a decision of Vi's, recorded because it changed what
+was permissible: a placed builder object stores no geometry, only a
+`definitionId` and a transform, so editing a piece reshapes every
+already-placed copy and changing dimensions opens gaps in finished
+structures — Vi holds the only save, chose to allow dimension changes,
+and will start fresh after this pass. Every piece had been flat
+untextured colour because `ObjectCompiler.js` understood exactly one
+`materialType` (`"glass"`) and defaulted the rest to `matte`; that
+existing seam was widened to resolve any key on the shared `Materials`
+factory — the same shape `BodyCompiler.js` already used for Being parts —
+taking the library from 0 textured parts to 110. Bevels came with one
+real subtlety: a rounded box cannot be a unit primitive, because a single
+corner radius scaled per-axis stretches into a two-metre sweep along one
+edge and nothing along another, so bevelled parts bake their dimensions
+into geometry and keep identity scale, with the cache keyed on those
+dimensions — geometry sharing verified still intact. Three genuine bugs
+surfaced from reading: the **Lantern** had been broken since Phase 5,
+with its glass entirely sealed inside the opaque body (invisible from
+every angle, and never marked as glass either), rebuilt as base, cap,
+real glazing and four corner posts; **`doorLeafLeft`/`doorLeafRight` were
+missing from the group map** since Version 4 Phase 2, quietly filed under
+"Other" away from every other Opening; and **`CONSTRUCTION_GROUP_ORDER`
+listed a `"Structures"` group** no piece has ever mapped to. Two
+proportion fixes the fresh-save decision unlocked: the **Stairs** were
+five floating slabs with daylight beneath each one, now solid from the
+ground to each tread; and **neither window had an actual sill** — the
+part named `sill` is really the apron below the opening — so a real
+projecting ledge was added to both. 21 parts remain `matte` and each is a
+missing texture rather than a missed assignment (foliage, light fixtures,
+flame, soil), recorded in the file rather than left looking like an
+oversight. Player-authored Builder objects confirmed completely
+unaffected. The library's piece count was also corrected from 55 to a
+directly-measured **56** — the earlier figure came from a grep that
+missed one differently-indented declaration, and was repeated in both
+previous waves. Verified live: every bevelled part matches its declared
+scale within 1e-6, nothing double-scaled, every piece grouped, blueprints
+intact, zero console errors. See `docs/ROADMAP.md`'s own Phase 10c
+account for the full story.
+
+**Version 4, Phase 10d — The Visual Upgrade, Player and Beings
+(v4.1.0d).** The player rig and the three starter Beings — and the wave
+where the plan turned out to be wrong. Phase 10's outline called for
+capsule-based limbs on *both*; that is right for Beings and actively
+wrong for the player, for two independent reasons found by reading
+`PlayerCharacter.js` rather than by anything failing: the boxiness is the
+brief (that file quotes it — "think along the lines of Minecraft...
+simple geometry is preferred because it allows complete customisation"),
+and the texture pipeline depends on it (a part's painted texture is one
+64×64 canvas, and `BoxGeometry`'s per-face 0..1 UV islands are what make
+it read correctly; a capsule's cylindrical wrap would smear every
+existing painted skin). The player got craftsmanship within its
+vocabulary instead — bevelled edges via the shared `bevelBox()` helper,
+radius proportional to each part's smallest dimension — which Wave 10b's
+UV measurement had already proven safe for textures. The Beings are where
+real shape work belonged: the Being Creator has offered capsules since
+Version 3 Phase 10c, yet not one starter Being had ever used anything but
+a box and the default `matte`, so the shipped examples demonstrated less
+than the tool can do. A wrong docstring was caught by measuring, with
+real consequences: `BodyCompiler.js` claimed its unit capsule "roughly
+fills the same unit bounding box every other primitive here does" — it
+measures 0.6 × 1.0 × 0.6 against a uniform 1 × 1 × 1 for box, sphere and
+cylinder, so swapping a part to a capsule at the same scale silently
+makes it 40% thinner. Person's capsule limbs divide X and Z by 0.6 to
+compensate, verified restoring the exact original widths; the geometry
+was deliberately not "fixed" to fill the unit box, since every capsule a
+player has already authored is sized against those numbers. Cat and Dog's
+bodies were switched to capsules and reverted — their long axis runs
+along Z, a capsule's length only runs along Y, and rotating would move
+the rigged `torso` pivot the quadruped clips are authored against. Two
+further stale docstrings fixed in `PlayerCharacter.js` (a false claim
+about unit-sized geometry, and two stacked JSDoc blocks on `applyPose()`).
+Bubble was left completely untouched — a `residentEmbodiment`, restored
+deliberately in Phase 7b. Verified against the real animation stack: all
+14 built-in clips driven through the real playback path across 420 pose
+applications with zero errors, FootIK and both retargeting paths
+exercised, every joint world position and all 14 player pivots confirmed
+unchanged. See `docs/ROADMAP.md`'s own Phase 10d account for the full
+story.
+
 </details>

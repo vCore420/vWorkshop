@@ -283,6 +283,52 @@ optional `soundOnInteract` field, so the system that already owns this
 behaviour is what plays the sound, not the furniture file. See
 `docs/AUDIO.md` for the full account.
 
+## Surfaces and edges (Version 4, Phase 10b — "The Visual Upgrade")
+
+Every piece here kept its design, dimensions, footprint and focus pose in
+this wave — what changed is how its surfaces meet the light.
+
+**Bevelled edges, chosen per object rather than globally.** 62 meshes
+across the nine pieces now use `PlaceholderFactory.bevelBox()` instead of
+`box()`. The helper preserves the box's outer extent exactly (it rounds
+*inward* from the faces), so nothing moved and no collision changed. What
+got bevelled, and why:
+
+- **Hero surfaces** — the workbench and desk tops, the two surfaces a
+  player spends the most time looking directly at.
+- **Moulded plastic** — monitor bezel, keyboard, mouse, armrest pads,
+  storage bins, the chair's mechanism plate. Injection-moulded parts
+  never have sharp arrises.
+- **Case furniture** — wardrobe body, cornice, plinth and door panels;
+  the music cabinet's carcass; shelf boards, sides and crown.
+- **Upholstery, most emphatically** — the reading chair's seat, cushion,
+  back and arms, and the desk chair's seat and back, at noticeably larger
+  radii (0.026–0.035 against 0.004–0.01 elsewhere). A cushion has no
+  sharp edges *at all* in reality, which makes this the strongest case
+  for bevelling anywhere in the Workshop.
+
+Deliberately **not** bevelled: small cylindrical details (already round),
+thin decorative props, and anything where the chamfer would fall below
+the threshold of visibility while still costing triangles. The measured
+cost is 9×/25×/49× a plain box's 12 triangles across the three texture
+tiers — see `bevelBox()`'s own docstring — which totals 11,992/23,896/
+41,752 triangles for all nine pieces together. Comfortable here;
+explicitly *not* assumed comfortable for `ConstructionLibrary` pieces,
+which a player can place hundreds of copies of.
+
+**Two hero materials that had quietly fallen behind.**
+`Workbench.js`'s `benchTopMaterial()` and `ComputerDesk.js`'s
+`deskTopMaterial()` each build their own `MeshStandardMaterial` rather
+than going through `Materials.wood()` — deliberately, so they can carry a
+richer 512px grain than the shared cached default. That was harmless
+until Version 4 Phase 10a added derived normal/roughness maps *inside*
+the `Materials` factory, at which point these two — the wood surfaces
+seen longest and closest in the whole Workshop — became the only grained
+wood in it with no relief at all. Both now call `surfaceSetFrom()`
+directly, the same helper the factory itself uses. If you add a third
+self-building material here, it needs the same call; that is the standing
+cost of opting out of the factory.
+
 ## Known simplifications (by design, for this phase)
 
 - **Tool shadows are flat painted patches**, not real cut-foam geometry
@@ -298,6 +344,16 @@ behaviour is what plays the sound, not the furniture file. See
   own file comment), consistent with `docs/HOST.md`'s and
   `docs/WORLDBUILDER.md`'s own honest-placeholder standard elsewhere in
   the project.
+- **Flat-colour materials still carry no surface relief** (Version 4,
+  Phase 10b) — `fabric()`, `matte()`, `plastic()`, `rubber()`,
+  `ceramic()` and `brass()` have no texture map, so there is nothing for
+  a normal map to be derived *from*. Upholstery is the most visible case:
+  the reading chair's cushions now have correctly soft *silhouettes*
+  courtesy of bevelling, but their surfaces are still perfectly smooth
+  colour. Giving them real woven character means authoring a fabric
+  texture that doesn't currently exist — a genuine art pass, not
+  something the derive-from-albedo approach can fake, and the natural
+  first candidate if a later wave revisits this.
 
 ## Future extension points
 

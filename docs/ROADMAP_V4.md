@@ -428,7 +428,88 @@ much to snow and lightning. Seasonal effects should change what already
 exists (vegetation colour, day length, resident behaviour) rather than
 adding wholesale new geometry.
 
-## Phase 10 V4.10 — Plugin SDK, a Real Decision
+## Phase 10 V4.10 — The Visual Upgrade
+
+**Purpose:** move the Workshop's own 3D content from "a really good
+prototype" to a professional finish — the room and its furniture, all 56
+`ConstructionLibrary` builder pieces, and the player and Being models —
+without abandoning the code-generated, zero-binary-asset approach the
+project is built on.
+
+**Status:** this phase is not from the original review that produced this
+document. It was added mid-Version-4, at Vi's direct request, and the
+two phases below it were renumbered to make room (what was Phase 10 is
+now Phase 11, and what was Phase 11 is now Phase 12).
+
+**Why it matters:** the request was "the basic 3d geometry is cool but it
+feels like a really good prototype." An opening investigation traced that
+feeling to two specific, shared causes rather than to any individual
+object's design:
+
+1. **There was not one `normalMap`, `roughnessMap`, `aoMap`, or
+   `bumpMap` anywhere in `src/`** — confirmed by grep across all 266
+   files, zero hits. Every material was albedo-only, and a
+   `MeshStandardMaterial` with only a colour map cannot express surface
+   micro-relief at all.
+2. **Every edge in the Workshop was a razor-sharp 90°**, because
+   `PlaceholderFactory.box()` is raw `BoxGeometry` and it is the
+   workhorse behind nearly every object. Real manufactured objects
+   essentially always carry a chamfer that catches a highlight along its
+   length; the absence of that highlight is the strongest "untextured
+   prototype" tell available.
+
+Neither is a geometry-budget problem, which is what made a shared
+foundation wave worth doing first: both are fixable in one place, for
+every object at once.
+
+**On asset generation — the question was asked explicitly and answered
+deliberately:** stay code-generated, and raise the generator's ceiling,
+rather than shipping real GLTF assets. Imported models are already fully
+supported *for Beings* (`ModelLoader.js`, `ModelAssetStore.js`,
+IndexedDB), so the capability exists; the question was only whether the
+Workshop itself should ship binaries. It shouldn't, for this phase:
+doing so would change a `CLAUDE.md`-level convention, grow the repo by
+tens of megabytes, add a licensing/provenance obligation to every model,
+and — decisively — still not fix the two causes above, which are
+material and edge problems rather than shape-complexity ones. If shipped
+assets are ever wanted, that deserves its own phase with its own
+licensing decision, not a side effect of this one.
+
+**Waves:**
+
+- **10a — Foundation: materials and edges.** The shared layer only; no
+  individual object redesigned. Generated normal and roughness maps
+  derived from the albedo canvases already being drawn, a bevelled-box
+  helper, and a boot-time texture-detail tier so the "performance"
+  preset stays honest.
+- **10b — The Workshop's own furniture.** The nine furniture pieces plus
+  the room shell, including architectural trim (skirting, window
+  reveals, door casing). Footprints and `focusPose` values held fixed.
+- **10c — The Construction Library and default blueprints.** All 55
+  pieces: real material assignment, selective bevelling, focused detail
+  on the pieces that read worst.
+- **10d — Player and Being models.** Shaped, tapered, capsule-based
+  silhouettes replacing plain boxes, under a byte-identical joint
+  hierarchy so the entire animation library, retargeting and IK stack
+  keeps working by construction.
+- **10e — Art direction, verification and close-out.** A written
+  material and palette charter, verification across times of day and all
+  three graphics presets, and the full docs sweep.
+
+**Risks / considerations:** the largest is save compatibility on builder
+pieces, and it is worth being precise about why. A placed object stores
+only `{definitionId, position, rotation, scale, ...}` — no geometry at
+all; the shape is resolved from `ConstructionLibrary.js` at load time.
+So editing a piece retroactively changes every already-placed copy in
+every save, and changing a piece's *dimensions* silently opens gaps or
+overlaps in finished player structures whose absolute positions were
+frozen at placement time. **Vi's own decision, recorded here because it
+shapes 10c directly: the Workshop is still in development and Vi holds
+the only save, so dimension changes are permitted and a fresh save will
+be started after the 10c pass.** Without that, the rule would have been
+strict envelope preservation.
+
+## Phase 11 V4.11 — Plugin SDK, a Real Decision
 
 **Purpose:** resolve a tension `src/host/PluginService.js`'s own comment
 already names outright — "the Workshop has three ways a plugin can
@@ -459,7 +540,7 @@ that still needs `main.js` edits for some capabilities is the same
 honesty problem in a different shape — decide one way or the other, then
 follow all the way through.
 
-## Phase 11 V4.11 — Dormant Seams: Use or Retire
+## Phase 12 V4.12 — Dormant Seams: Use or Retire
 
 **Purpose:** a deliberate, one-by-one pass through the "architecture
 built, content or wiring deferred" pattern this roadmap's own research

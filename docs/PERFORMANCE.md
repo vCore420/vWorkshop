@@ -308,11 +308,58 @@ defaults field-by-field (`deepMerge`, not a blind overwrite), so a save
 from an earlier version missing a field a later version added just quietly
 gets that field's default rather than breaking.
 
+## Surface detail (the texture tier) — Version 4, Phase 10a
+
+`src/utils/TextureQuality.js` is a *second* graphics decision, separate
+from everything above and made differently, for a reason worth
+understanding before changing either.
+
+It decides how much surface detail the Workshop generates: whether the
+textured materials in `PlaceholderFactory.js` get their derived
+normal/roughness maps at all, what canvas resolution generators that
+accept one should use, and how many corner segments `bevelBox()` builds.
+Three tiers map one-to-one onto the graphics presets — `performance` →
+`low` (no surface maps), `balanced` → `medium`, `quality` → `high`.
+
+**Why it can't be an ordinary setting.** Materials are built during
+system `init()` — `FurnitureSystem` has constructed the entire room
+before `engine.init()` resolves — while a save, and therefore any real
+`SettingsStore` data, doesn't load until the `engine:ready` event at the
+*end* of that same call. There is genuinely no persisted setting to read
+at the moment the decision has to be made. Rather than open a second,
+earlier `localStorage` read purely to beat that ordering (a new door into
+storage that `StorageUtils`/`PersistenceSystem` are deliberately the only
+owners of), it reuses `detectRecommendedPreset()` — the same pure
+`navigator` heuristic the first-session auto-tune above already uses,
+lifted out of `SettingsStore` into a shared standalone function so there
+is one implementation rather than two copies.
+
+**The honest limitation:** a player who manually overrides their graphics
+preset does *not* change their texture tier until the next load. Surface
+detail is treated as a device-capability decision made once at boot, not
+a live preference. A live rebuild was considered and rejected rather than
+overlooked: `ObjectCompiler.js` deliberately *clones* its materials per
+instance, so those clones would not pick up a mid-session regeneration,
+leaving the Workshop visibly inconsistent with itself — a half-applied
+rebuild is a worse outcome than an honest boot-time decision.
+
+**Cost, measured rather than assumed.** A normal map is the one part with
+a real per-frame cost (genuine per-fragment shading work on every lit
+surface carrying one), which is exactly what the `low` tier exists to
+avoid. `bevelBox()`'s triangle cost was measured at 108/300/588 across
+the three tiers against a plain `box()`'s 12 — comfortable for the
+Workshop's own furniture, emphatically not free for a construction piece
+a player can place hundreds of copies of. See `bevelBox()`'s own
+docstring.
+
 ## Known limitations
 
 - **"Optimise For This Device" is a heuristic, not a benchmark** — see
   above. It won't be right for every device, only a reasonable guess for
   most.
+- **The texture tier follows detected hardware, not the chosen preset**
+  — and only re-evaluates on load. See the section above for why, and
+  for the live-rebuild option that was deliberately rejected.
 - **UI Scale depends on CSS `zoom`** — unsupported in a handful of older
   or non-Chromium-family browsers, in which case the setting simply has no
   visible effect rather than causing any layout problem.
