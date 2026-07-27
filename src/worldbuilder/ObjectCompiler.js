@@ -1,5 +1,7 @@
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { Materials } from "../utils/PlaceholderFactory.js";
+import { textureQuality } from "../utils/TextureQuality.js";
 
 /**
  * ObjectCompiler
@@ -46,7 +48,13 @@ export function compileDefinition(definition, { colorOverride = null } = {}) {
     if (!mesh) continue;
     mesh.position.set(...part.position);
     mesh.rotation.set(part.rotationX ?? 0, part.rotationY ?? 0, part.rotationZ ?? 0);
-    mesh.scale.set(...part.scale);
+    // Version 4, Phase 10c — a bevelled box has its real dimensions baked
+    // into its geometry rather than expressed through scale (see
+    // `bevelledBoxGeometry()` for why a rounded box cannot be a unit
+    // primitive). Applying `part.scale` on top of that would size it
+    // twice over; it stays at the identity instead. Every other part
+    // type is unaffected and still sizes exactly the way it always has.
+    if (!mesh.userData.dimensionsBakedIntoGeometry) mesh.scale.set(...part.scale);
     mesh.userData.partId = part.id;
     // "Begin preparing the World Builder for future Atmosphere
     // systems... wind influencing vegetation." A genuinely real, cheap
@@ -241,20 +249,84 @@ function unitArchGeometry(segments) {
   });
 }
 
+/**
+ * Version 4, Phase 10c ("The Visual Upgrade — Construction Library") —
+ * `materialType` used to be a one-value escape hatch (`"glass"`, or the
+ * matte default). It now resolves **any** key on the shared `Materials`
+ * factory, which is what let all 56 Construction Library pieces stop
+ * being flat untinted colour without inventing a second mechanism to do
+ * it. This is deliberately the same shape `BodyCompiler.js` already
+ * established for Being parts (`part.material`, validated against the
+ * same factory) — one idea, two compilers.
+ *
+ * **The field names genuinely differ between the two compilers**
+ * (`materialType` here, `material` there) and that is left alone rather
+ * than unified: both are persisted in saved user data — a Builder object
+ * and a Being definition respectively — so renaming either would mean a
+ * migration for cosmetic consistency and no functional gain. Noted here
+ * so the next reader knows it's a considered decision rather than an
+ * oversight.
+ *
+ * Unknown or missing values fall back to `matte`, exactly what every
+ * part has always used, so nothing previously authored changes.
+ */
+function resolveMaterial(part, color) {
+  const factory = Materials[part.materialType];
+  return typeof factory === "function" ? factory(color) : Materials.matte(color);
+}
+
+/**
+ * Version 4, Phase 10c — bevelled boxes for construction pieces, and the
+ * one real subtlety in this whole wave.
+ *
+ * Every other geometry in this file is built at **unit size** and sized
+ * entirely through `mesh.scale`, which is what lets a hundred placed Wall
+ * pieces share a single geometry instance (see this file's own top
+ * comment). A rounded box cannot work that way: `RoundedBoxGeometry`
+ * takes a single corner radius, so scaling a unit one by, say,
+ * `[2, 2.5, 0.2]` stretches that radius per-axis into `[2r, 2.5r, 0.2r]`
+ * — a wall with a 2-metre-wide sweep along its top edge and a barely-
+ * visible one along its side. Non-uniform, and obviously wrong.
+ *
+ * So bevelled parts bake their real dimensions into the geometry and
+ * leave `mesh.scale` at 1. **Sharing is preserved rather than
+ * sacrificed** — the cache key is the dimensions themselves, and a
+ * construction piece's dimensions are fixed by its definition, so every
+ * copy of a given piece still resolves to one shared geometry. What
+ * changes is only that two *differently-sized* bevelled boxes no longer
+ * share, which is inherent to the shape rather than a regression.
+ *
+ * A player scaling a whole placed instance still works normally: that
+ * multiplies the group uniformly, so the bevel scales with it and stays
+ * even.
+ */
+function bevelledBoxGeometry(scale, bevel, segments) {
+  const [w, h, d] = scale;
+  const radius = Math.min(bevel, Math.min(Math.abs(w), Math.abs(h), Math.abs(d)) / 3);
+  return cachedGeometry(`bevelBox:${w},${h},${d},${radius},${segments}`, () => new RoundedBoxGeometry(w, h, d, segments, radius));
+}
+
 function buildPart(part, colorOverride) {
   const color = colorOverride ?? part.color ?? "#8d8577";
-  // `materialType` is the same kind of escape hatch `rotationX`/
-  // `rotationZ` already are above — data the hardcoded Construction
-  // Library can set (see `windowPane`/`largeWindowPane` in
-  // `ConstructionLibrary.js`), not a field the Builder's own form
-  // exposes. Defaults to the matte every other part has always used, so
-  // nothing already authored changes.
-  const material = part.materialType === "glass" ? Materials.glass(color) : Materials.matte(color);
+  const material = resolveMaterial(part, color);
   const segments = part.segments ?? 16;
 
   switch (part.type) {
-    case "box":
+    case "box": {
+      // `bevel` is data-only, exactly like `rotationX`/`materialType` —
+      // the Construction Library sets it on the pieces a player sees up
+      // close; the Builder's own form doesn't expose it. Opt-in rather
+      // than automatic because of cost: `bevelBox()`'s own docstring
+      // measures a bevelled box at 9-49× a plain box's 12 triangles
+      // depending on tier, and a construction piece is exactly the thing
+      // a player can place hundreds of copies of.
+      if (part.bevel) {
+        const mesh = unitMesh(bevelledBoxGeometry(part.scale, part.bevel, textureQuality().bevelSegments), material);
+        mesh.userData.dimensionsBakedIntoGeometry = true; // read by compileDefinition — see bevelledBoxGeometry()
+        return mesh;
+      }
       return unitMesh(unitBoxGeometry(), material);
+    }
     case "cylinder":
       return unitMesh(unitCylinderGeometry(segments), material);
     case "cone":

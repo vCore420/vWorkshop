@@ -12,12 +12,26 @@
  * about `ObjectCompiler.js` cares which category a type is in.
  *
  * A few shapes suggested alongside these were deliberately left out:
- * - **Capsule** — `THREE.CapsuleGeometry` doesn't exist in the Three.js
- *   version this project loads (added in a later release than this
- *   project targets); approximating one well needs a compound shape
- *   (a cylinder plus two hemisphere caps), which breaks the "one part is
- *   one mesh" assumption everything else here relies on. A capsule-like
- *   silhouette can still be built from a Cylinder + two Half Spheres.
+ * - **Capsule** — *this entry's original reasoning is no longer true, and
+ *   is corrected here rather than quietly left standing (Version 4, Phase
+ *   10a).* It used to read: "`THREE.CapsuleGeometry` doesn't exist in the
+ *   Three.js version this project loads (added in a later release than
+ *   this project targets)." It does exist, and has for the entire life of
+ *   this file's current claim — `CapsuleGeometry` landed in r142, this
+ *   project pins r164 (see `index.html`'s import map), and three separate
+ *   files already use it today: `BodyCompiler.js` offers it as one of the
+ *   four Being body-part shapes, and both `ModelLoader.js` and
+ *   `BeingSpawnerSystem.js` build fallback meshes from it. The comment
+ *   predates a Three.js upgrade and was never revisited.
+ *
+ *   Capsule is still absent from the Builder's own set, but for a real
+ *   reason rather than a stale one: nothing has actually needed it here.
+ *   A capsule-like silhouette can be built from a Cylinder + two Half
+ *   Spheres, and — unlike a Being's own limbs, where a capsule is the
+ *   natural single primitive — Builder parts are overwhelmingly
+ *   architectural. Adding it is one entry in `PART_CATEGORIES` plus one
+ *   `unitCapsuleGeometry()` in `ObjectCompiler.js` if a future phase
+ *   wants it; it is genuinely available, simply not chosen.
  * - **Rounded Cylinder** — a cylinder is already a fully round shape;
  *   there's no additional edge left to round without it becoming a
  *   different shape (a Pipe/Tube, or a Rounded Cube) entirely.

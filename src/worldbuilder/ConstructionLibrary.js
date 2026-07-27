@@ -15,15 +15,31 @@
  * collide with a user-authored object's id even if some future code
  * forgets to check `definitionSource` (see WorldObjectsStore.js).
  *
- * Grown from an original 16 pieces to a curated set organised into four
- * practical groups — Structural, Openings, Workshop, Utilities — "enough
- * to begin constructing meaningful spaces without relying entirely on
- * custom objects." Still intentionally plain: a neutral, unpainted grey
- * for anything structural, warm wood tones for anything furniture-like,
- * and colour reserved for the handful of pieces where it actually means
- * something (the door, the light). Nothing here is decoration for its own
- * sake; each piece exists to be assembled into something else, or to be
+ * Grown from an original 16 pieces to a curated set organised into seven
+ * practical groups — Structural, Openings, Nature, Paths, Lighting,
+ * Utilities, Workshop (see `CONSTRUCTION_GROUP_ORDER` at the foot of this
+ * file, which is the authority) — "enough to begin constructing
+ * meaningful spaces without relying entirely on custom objects." The
+ * count of groups in this paragraph had drifted (it said four, naming a
+ * set that predates Nature, Paths and Lighting entirely) and was
+ * corrected in Version 4 Phase 10c.
+ *
+ * Still intentionally restrained: a neutral unpainted grey for anything
+ * structural, warm wood tones for anything furniture-like, and colour
+ * reserved for the handful of pieces where it actually means something
+ * (the door, the light). Nothing here is decoration for its own sake;
+ * each piece exists to be assembled into something else, or to be
  * genuinely useful the moment it's placed.
+ *
+ * **Every part now declares what it is made of** (Version 4, Phase 10c).
+ * Until that wave, all 56 pieces rendered as flat untextured colour,
+ * because `ObjectCompiler.js` only understood `materialType: "glass"` and
+ * defaulted everything else to `matte` — so a timber table and a concrete
+ * wall were the same surface in two different tints. `materialType` now
+ * resolves any key on the shared `Materials` factory, and the pieces here
+ * name the material their colour was always standing in for. A part with
+ * no `materialType` still falls back to `matte`, so a player-authored
+ * Builder object is completely unaffected.
  */
 
 const RAW_MATERIAL_COLOR = "#a8a095";
@@ -60,15 +76,34 @@ function piece({ id, name, description, parts, behaviours = [] }) {
   };
 }
 
+/**
+ * Version 4, Phase 10c ("The Visual Upgrade — Construction Library") —
+ * each step used to be a slab exactly `riseEach` tall, floating at its
+ * own tread height with **nothing underneath it**. Walk beside a placed
+ * staircase and you saw five separate boards hanging in mid-air with
+ * daylight between them, which is the single least finished thing in the
+ * library. A real flight is solid: you see risers, not gaps.
+ *
+ * Each step is now a box running from the ground up to its own tread —
+ * the "wedding cake" construction an ordinary concrete or timber stair
+ * actually has. **The outer envelope is unchanged**: the top tread still
+ * lands at exactly `count * riseEach`, and the run still spans the same
+ * depth, so anything already built on or against a placed staircase
+ * still meets it exactly where it did. Only the void underneath is
+ * filled in.
+ */
 function stairSteps(count, riseEach, runEach) {
-  return Array.from({ length: count }, (_, i) => ({
-    id: `step${i}`,
-    type: "box",
-    position: [0, riseEach / 2 + i * riseEach, i * runEach],
-    rotationY: 0,
-    scale: [1.0, riseEach, runEach],
-    color: RAW_MATERIAL_COLOR,
-  }));
+  return Array.from({ length: count }, (_, i) => {
+    const heightToTread = (i + 1) * riseEach;
+    return {
+      id: `step${i}`,
+      type: "box",
+      position: [0, heightToTread / 2, i * runEach],
+      rotationY: 0,
+      scale: [1.0, heightToTread, runEach],
+      color: RAW_MATERIAL_COLOR, materialType: "concrete",
+    };
+  });
 }
 
 export const CONSTRUCTION_PIECES = [
@@ -79,28 +114,28 @@ export const CONSTRUCTION_PIECES = [
     id: "cube",
     name: "Cube",
     description: "A plain 1x1x1 block.",
-    parts: [{ id: "a", type: "box", position: [0, 0.5, 0], rotationY: 0, scale: [1, 1, 1], color: RAW_MATERIAL_COLOR }],
+    parts: [{ id: "a", type: "box", position: [0, 0.5, 0], rotationY: 0, scale: [1, 1, 1], color: RAW_MATERIAL_COLOR, materialType: "concrete" }],
   }),
 
   piece({
     id: "plane",
     name: "Plane",
     description: "A flat, generic panel — a sign, a floor tile, whatever it's rotated to be.",
-    parts: [{ id: "a", type: "plane", position: [0, 0.5, 0], rotationY: 0, scale: [1, 1, 1], color: RAW_MATERIAL_COLOR }],
+    parts: [{ id: "a", type: "plane", position: [0, 0.5, 0], rotationY: 0, scale: [1, 1, 1], color: RAW_MATERIAL_COLOR, materialType: "concrete" }],
   }),
 
   piece({
     id: "wall",
     name: "Wall",
     description: "A standard wall segment, 2m wide.",
-    parts: [{ id: "a", type: "box", position: [0, 1.25, 0], rotationY: 0, scale: [2, 2.5, 0.2], color: RAW_MATERIAL_COLOR }],
+    parts: [{ id: "a", type: "box", position: [0, 1.25, 0], rotationY: 0, scale: [2, 2.5, 0.2], color: RAW_MATERIAL_COLOR, materialType: "concrete" }],
   }),
 
   piece({
     id: "halfWall",
     name: "Half Wall",
     description: "A knee-high wall segment, 2m wide — a low divider or a railing base.",
-    parts: [{ id: "a", type: "box", position: [0, 0.625, 0], rotationY: 0, scale: [2, 1.25, 0.2], color: RAW_MATERIAL_COLOR }],
+    parts: [{ id: "a", type: "box", position: [0, 0.625, 0], rotationY: 0, scale: [2, 1.25, 0.2], color: RAW_MATERIAL_COLOR, materialType: "concrete" }],
   }),
 
   piece({
@@ -108,8 +143,8 @@ export const CONSTRUCTION_PIECES = [
     name: "Corner Wall",
     description: "Two wall segments meeting at a right angle, inside corner at the origin.",
     parts: [
-      { id: "a", type: "box", position: [1, 1.25, 0], rotationY: 0, scale: [2, 2.5, 0.2], color: RAW_MATERIAL_COLOR },
-      { id: "b", type: "box", position: [0, 1.25, 1], rotationY: 0, scale: [0.2, 2.5, 2], color: RAW_MATERIAL_COLOR },
+      { id: "a", type: "box", position: [1, 1.25, 0], rotationY: 0, scale: [2, 2.5, 0.2], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
+      { id: "b", type: "box", position: [0, 1.25, 1], rotationY: 0, scale: [0.2, 2.5, 2], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
     ],
   }),
 
@@ -117,42 +152,42 @@ export const CONSTRUCTION_PIECES = [
     id: "floor",
     name: "Floor",
     description: "A 2x2m floor slab.",
-    parts: [{ id: "a", type: "box", position: [0, 0.075, 0], rotationY: 0, scale: [2, 0.15, 2], color: RAW_MATERIAL_COLOR }],
+    parts: [{ id: "a", type: "box", position: [0, 0.075, 0], rotationY: 0, scale: [2, 0.15, 2], color: RAW_MATERIAL_COLOR, materialType: "concrete" }],
   }),
 
   piece({
     id: "ceiling",
     name: "Ceiling",
     description: "A 2x2m ceiling slab.",
-    parts: [{ id: "a", type: "box", position: [0, 0.075, 0], rotationY: 0, scale: [2, 0.15, 2], color: RAW_MATERIAL_COLOR }],
+    parts: [{ id: "a", type: "box", position: [0, 0.075, 0], rotationY: 0, scale: [2, 0.15, 2], color: RAW_MATERIAL_COLOR, materialType: "concrete" }],
   }),
 
   piece({
     id: "roof",
     name: "Roof",
     description: "A single pitched roof panel.",
-    parts: [{ id: "a", type: "box", position: [0, 0.75, -0.55], rotationX: 0.35, rotationY: 0, rotationZ: 0, scale: [2.2, 0.1, 1.5], color: RAW_MATERIAL_COLOR }],
+    parts: [{ id: "a", type: "box", position: [0, 0.75, -0.55], rotationX: 0.35, rotationY: 0, rotationZ: 0, scale: [2.2, 0.1, 1.5], color: RAW_MATERIAL_COLOR, materialType: "concrete" }],
   }),
 
   piece({
     id: "roofCorner",
     name: "Roof Corner",
     description: "A smaller angled roof panel for hips and corners — a simplified approximation, not a precise mitre.",
-    parts: [{ id: "a", type: "box", position: [0, 0.6, -0.45], rotationX: 0.35, rotationY: Math.PI / 4, rotationZ: 0, scale: [1.4, 0.1, 1.4], color: RAW_MATERIAL_COLOR }],
+    parts: [{ id: "a", type: "box", position: [0, 0.6, -0.45], rotationX: 0.35, rotationY: Math.PI / 4, rotationZ: 0, scale: [1.4, 0.1, 1.4], color: RAW_MATERIAL_COLOR, materialType: "concrete" }],
   }),
 
   piece({
     id: "pillar",
     name: "Pillar",
     description: "A vertical support column, 2.5m tall.",
-    parts: [{ id: "a", type: "cylinder", position: [0, 1.25, 0], rotationY: 0, scale: [0.3, 2.5, 0.3], color: RAW_MATERIAL_COLOR }],
+    parts: [{ id: "a", type: "cylinder", position: [0, 1.25, 0], rotationY: 0, scale: [0.3, 2.5, 0.3], color: RAW_MATERIAL_COLOR, materialType: "concrete" }],
   }),
 
   piece({
     id: "beam",
     name: "Beam",
     description: "A long horizontal support beam, 3m.",
-    parts: [{ id: "a", type: "box", position: [0, 0.075, 0], rotationY: 0, scale: [3.0, 0.15, 0.15], color: RAW_MATERIAL_COLOR }],
+    parts: [{ id: "a", type: "box", position: [0, 0.075, 0], rotationY: 0, scale: [3.0, 0.15, 0.15], color: RAW_MATERIAL_COLOR, materialType: "concrete" }],
   }),
 
   piece({
@@ -167,8 +202,8 @@ export const CONSTRUCTION_PIECES = [
     name: "Ladder",
     description: "Two rails and six rungs, 2.4m tall \u2014 genuinely climbable, through the same Climbable (Ladder) behaviour a Builder-designed object would carry.",
     parts: [
-      { id: "railL", type: "box", position: [-0.28, 1.2, 0], rotationY: 0, scale: [0.06, 2.4, 0.06], color: WOOD_COLOR },
-      { id: "railR", type: "box", position: [0.28, 1.2, 0], rotationY: 0, scale: [0.06, 2.4, 0.06], color: WOOD_COLOR },
+      { id: "railL", type: "box", position: [-0.28, 1.2, 0], rotationY: 0, scale: [0.06, 2.4, 0.06], color: WOOD_COLOR, materialType: "wood" },
+      { id: "railR", type: "box", position: [0.28, 1.2, 0], rotationY: 0, scale: [0.06, 2.4, 0.06], color: WOOD_COLOR, materialType: "wood" },
       ...Array.from({ length: 6 }, (_, i) => ({
         id: `rung${i}`,
         type: "cylinder",
@@ -176,7 +211,7 @@ export const CONSTRUCTION_PIECES = [
         rotationY: 0,
         rotationZ: Math.PI / 2,
         scale: [0.04, 0.62, 0.04],
-        color: WOOD_COLOR,
+        color: WOOD_COLOR, materialType: "wood",
       })),
     ],
     // Workshop Reliability phase — "ladders still do not function
@@ -199,9 +234,9 @@ export const CONSTRUCTION_PIECES = [
     name: "Doorway",
     description: "A wall segment with an open doorway already cut into it — pair it with a Door piece.",
     parts: [
-      { id: "left", type: "box", position: [-0.75, 1.25, 0], rotationY: 0, scale: [0.5, 2.5, 0.2], color: RAW_MATERIAL_COLOR },
-      { id: "right", type: "box", position: [0.75, 1.25, 0], rotationY: 0, scale: [0.5, 2.5, 0.2], color: RAW_MATERIAL_COLOR },
-      { id: "header", type: "box", position: [0, 2.3, 0], rotationY: 0, scale: [1.0, 0.4, 0.2], color: RAW_MATERIAL_COLOR },
+      { id: "left", type: "box", position: [-0.75, 1.25, 0], rotationY: 0, scale: [0.5, 2.5, 0.2], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
+      { id: "right", type: "box", position: [0.75, 1.25, 0], rotationY: 0, scale: [0.5, 2.5, 0.2], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
+      { id: "header", type: "box", position: [0, 2.3, 0], rotationY: 0, scale: [1.0, 0.4, 0.2], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
     ],
   }),
 
@@ -209,7 +244,7 @@ export const CONSTRUCTION_PIECES = [
     id: "door",
     name: "Door",
     description: "A swinging door, ready to use — carries the same Door behaviour any custom object can.",
-    parts: [{ id: "a", type: "box", position: [0, 1.05, 0], rotationY: 0, scale: [0.9, 2.1, 0.05], color: DOOR_COLOR }],
+    parts: [{ id: "a", type: "box", position: [0, 1.05, 0], rotationY: 0, scale: [0.9, 2.1, 0.05], color: DOOR_COLOR, materialType: "wood", bevel: 0.008 }],
     // Phase 14 ("Further Environmental Polish") — DoorBehaviour.js's own
     // `hingeOffset` property existed since Phase 10 but nothing here ever
     // set it, so every placed Door still swung around its own centre by
@@ -225,8 +260,8 @@ export const CONSTRUCTION_PIECES = [
     name: "Double Door",
     description: "A wider double-leaf door. Swings open as one panel, the same honest simplification the single Door already makes — see docs/WORLDBUILDER.md.",
     parts: [
-      { id: "left", type: "box", position: [-0.46, 1.05, 0], rotationY: 0, scale: [0.88, 2.1, 0.05], color: DOOR_COLOR },
-      { id: "right", type: "box", position: [0.46, 1.05, 0], rotationY: 0, scale: [0.88, 2.1, 0.05], color: DOOR_COLOR },
+      { id: "left", type: "box", position: [-0.46, 1.05, 0], rotationY: 0, scale: [0.88, 2.1, 0.05], color: DOOR_COLOR, materialType: "wood" },
+      { id: "right", type: "box", position: [0.46, 1.05, 0], rotationY: 0, scale: [0.88, 2.1, 0.05], color: DOOR_COLOR, materialType: "wood" },
     ],
     // Phase 14 ("Further Environmental Polish") — both leaves still
     // swing together as one rigid unit (DoorBehaviour has no concept of
@@ -263,7 +298,7 @@ export const CONSTRUCTION_PIECES = [
     id: "doorLeafLeft",
     name: "Door Leaf (Left)",
     description: "One independent leaf of a double door, hinged on its own left edge. Place two side by side — one Left, one Right — for genuine French-door behaviour, each leaf swinging on its own; see the Double Door piece for the simpler one-click combined alternative.",
-    parts: [{ id: "a", type: "box", position: [0, 1.05, 0], rotationY: 0, scale: [0.88, 2.1, 0.05], color: DOOR_COLOR }],
+    parts: [{ id: "a", type: "box", position: [0, 1.05, 0], rotationY: 0, scale: [0.88, 2.1, 0.05], color: DOOR_COLOR, materialType: "wood", bevel: 0.008 }],
     behaviours: [{ type: "door", properties: { openOffset: 90, hingeOffset: -0.44 } }],
   }),
 
@@ -271,7 +306,7 @@ export const CONSTRUCTION_PIECES = [
     id: "doorLeafRight",
     name: "Door Leaf (Right)",
     description: "One independent leaf of a double door, hinged on its own right edge. Place two side by side — one Left, one Right — for genuine French-door behaviour, each leaf swinging on its own; see the Double Door piece for the simpler one-click combined alternative.",
-    parts: [{ id: "a", type: "box", position: [0, 1.05, 0], rotationY: 0, scale: [0.88, 2.1, 0.05], color: DOOR_COLOR }],
+    parts: [{ id: "a", type: "box", position: [0, 1.05, 0], rotationY: 0, scale: [0.88, 2.1, 0.05], color: DOOR_COLOR, materialType: "wood", bevel: 0.008 }],
     behaviours: [{ type: "door", properties: { openOffset: 90, hingeOffset: 0.44 } }],
   }),
 
@@ -280,10 +315,19 @@ export const CONSTRUCTION_PIECES = [
     name: "Window",
     description: "A wall segment with an open (unglazed) window cut into it.",
     parts: [
-      { id: "left", type: "box", position: [-0.75, 1.25, 0], rotationY: 0, scale: [0.5, 2.5, 0.2], color: RAW_MATERIAL_COLOR },
-      { id: "right", type: "box", position: [0.75, 1.25, 0], rotationY: 0, scale: [0.5, 2.5, 0.2], color: RAW_MATERIAL_COLOR },
-      { id: "sill", type: "box", position: [0, 0.5, 0], rotationY: 0, scale: [1.0, 1.0, 0.2], color: RAW_MATERIAL_COLOR },
-      { id: "header", type: "box", position: [0, 2.25, 0], rotationY: 0, scale: [1.0, 0.5, 0.2], color: RAW_MATERIAL_COLOR },
+      { id: "left", type: "box", position: [-0.75, 1.25, 0], rotationY: 0, scale: [0.5, 2.5, 0.2], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
+      { id: "right", type: "box", position: [0.75, 1.25, 0], rotationY: 0, scale: [0.5, 2.5, 0.2], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
+      { id: "sill", type: "box", position: [0, 0.5, 0], rotationY: 0, scale: [1.0, 1.0, 0.2], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
+      // Version 4, Phase 10c — the part named "sill" above is really the
+      // apron: the block of wall *below* the opening. There was no actual
+      // sill anywhere on either window piece — no projecting ledge at the
+      // opening's base, which is the single most recognisable detail a
+      // window has and the thing that makes one read as built into a wall
+      // rather than cut out of it with a knife. Added on both windows,
+      // proud of the wall's own 0.2 thickness on each face and slightly
+      // wider than the opening, exactly as a real sill oversails.
+      { id: "sillLedge", type: "box", position: [0, 1.03, 0], rotationY: 0, scale: [1.24, 0.06, 0.32], color: RAW_MATERIAL_COLOR, materialType: "concrete", bevel: 0.012 },
+      { id: "header", type: "box", position: [0, 2.25, 0], rotationY: 0, scale: [1.0, 0.5, 0.2], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
     ],
   }),
 
@@ -292,10 +336,12 @@ export const CONSTRUCTION_PIECES = [
     name: "Large Window",
     description: "A wider, taller unglazed window opening — a picture window or a shopfront.",
     parts: [
-      { id: "left", type: "box", position: [-1.15, 1.4, 0], rotationY: 0, scale: [0.5, 2.8, 0.2], color: RAW_MATERIAL_COLOR },
-      { id: "right", type: "box", position: [1.15, 1.4, 0], rotationY: 0, scale: [0.5, 2.8, 0.2], color: RAW_MATERIAL_COLOR },
-      { id: "sill", type: "box", position: [0, 0.3, 0], rotationY: 0, scale: [2.3, 0.6, 0.2], color: RAW_MATERIAL_COLOR },
-      { id: "header", type: "box", position: [0, 2.65, 0], rotationY: 0, scale: [2.3, 0.5, 0.2], color: RAW_MATERIAL_COLOR },
+      { id: "left", type: "box", position: [-1.15, 1.4, 0], rotationY: 0, scale: [0.5, 2.8, 0.2], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
+      { id: "right", type: "box", position: [1.15, 1.4, 0], rotationY: 0, scale: [0.5, 2.8, 0.2], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
+      { id: "sill", type: "box", position: [0, 0.3, 0], rotationY: 0, scale: [2.3, 0.6, 0.2], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
+      // The same added sill as the standard Window above — see its comment.
+      { id: "sillLedge", type: "box", position: [0, 0.63, 0], rotationY: 0, scale: [2.04, 0.06, 0.32], color: RAW_MATERIAL_COLOR, materialType: "concrete", bevel: 0.012 },
+      { id: "header", type: "box", position: [0, 2.65, 0], rotationY: 0, scale: [2.3, 0.5, 0.2], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
     ],
   }),
 
@@ -318,9 +364,9 @@ export const CONSTRUCTION_PIECES = [
     name: "Archway",
     description: "A doorway-width opening with a curved top instead of a flat header, built from the Arch primitive.",
     parts: [
-      { id: "left", type: "box", position: [-0.75, 1.0, 0], rotationY: 0, scale: [0.5, 2.0, 0.2], color: RAW_MATERIAL_COLOR },
-      { id: "right", type: "box", position: [0.75, 1.0, 0], rotationY: 0, scale: [0.5, 2.0, 0.2], color: RAW_MATERIAL_COLOR },
-      { id: "arch", type: "arch", position: [0, 2.0, 0], rotationX: 0, rotationY: 0, rotationZ: 0, scale: [1.9, 1.9, 0.2], color: RAW_MATERIAL_COLOR, segments: 16 },
+      { id: "left", type: "box", position: [-0.75, 1.0, 0], rotationY: 0, scale: [0.5, 2.0, 0.2], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
+      { id: "right", type: "box", position: [0.75, 1.0, 0], rotationY: 0, scale: [0.5, 2.0, 0.2], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
+      { id: "arch", type: "arch", position: [0, 2.0, 0], rotationX: 0, rotationY: 0, rotationZ: 0, scale: [1.9, 1.9, 0.2], color: RAW_MATERIAL_COLOR, materialType: "concrete", segments: 16 },
     ],
   }),
 
@@ -332,11 +378,11 @@ export const CONSTRUCTION_PIECES = [
     name: "Table",
     description: "A tabletop on four legs, 1.2m x 0.7m, 0.75m tall.",
     parts: [
-      { id: "top", type: "box", position: [0, 0.72, 0], rotationY: 0, scale: [1.2, 0.06, 0.7], color: WOOD_COLOR },
-      { id: "legFL", type: "box", position: [-0.53, 0.36, 0.29], rotationY: 0, scale: [0.06, 0.72, 0.06], color: WOOD_COLOR },
-      { id: "legFR", type: "box", position: [0.53, 0.36, 0.29], rotationY: 0, scale: [0.06, 0.72, 0.06], color: WOOD_COLOR },
-      { id: "legBL", type: "box", position: [-0.53, 0.36, -0.29], rotationY: 0, scale: [0.06, 0.72, 0.06], color: WOOD_COLOR },
-      { id: "legBR", type: "box", position: [0.53, 0.36, -0.29], rotationY: 0, scale: [0.06, 0.72, 0.06], color: WOOD_COLOR },
+      { id: "top", type: "box", position: [0, 0.72, 0], rotationY: 0, scale: [1.2, 0.06, 0.7], color: WOOD_COLOR, materialType: "wood", bevel: 0.008 },
+      { id: "legFL", type: "box", position: [-0.53, 0.36, 0.29], rotationY: 0, scale: [0.06, 0.72, 0.06], color: WOOD_COLOR, materialType: "wood" },
+      { id: "legFR", type: "box", position: [0.53, 0.36, 0.29], rotationY: 0, scale: [0.06, 0.72, 0.06], color: WOOD_COLOR, materialType: "wood" },
+      { id: "legBL", type: "box", position: [-0.53, 0.36, -0.29], rotationY: 0, scale: [0.06, 0.72, 0.06], color: WOOD_COLOR, materialType: "wood" },
+      { id: "legBR", type: "box", position: [0.53, 0.36, -0.29], rotationY: 0, scale: [0.06, 0.72, 0.06], color: WOOD_COLOR, materialType: "wood" },
     ],
   }),
 
@@ -345,9 +391,9 @@ export const CONSTRUCTION_PIECES = [
     name: "Bench",
     description: "A simple bench seat on four legs, 1.2m x 0.35m, 0.45m tall.",
     parts: [
-      { id: "top", type: "box", position: [0, 0.44, 0], rotationY: 0, scale: [1.2, 0.05, 0.35], color: WOOD_COLOR },
-      { id: "legL", type: "box", position: [-0.5, 0.21, 0], rotationY: 0, scale: [0.06, 0.42, 0.3], color: WOOD_COLOR },
-      { id: "legR", type: "box", position: [0.5, 0.21, 0], rotationY: 0, scale: [0.06, 0.42, 0.3], color: WOOD_COLOR },
+      { id: "top", type: "box", position: [0, 0.44, 0], rotationY: 0, scale: [1.2, 0.05, 0.35], color: WOOD_COLOR, materialType: "wood", bevel: 0.008 },
+      { id: "legL", type: "box", position: [-0.5, 0.21, 0], rotationY: 0, scale: [0.06, 0.42, 0.3], color: WOOD_COLOR, materialType: "wood" },
+      { id: "legR", type: "box", position: [0.5, 0.21, 0], rotationY: 0, scale: [0.06, 0.42, 0.3], color: WOOD_COLOR, materialType: "wood" },
     ],
   }),
 
@@ -356,12 +402,12 @@ export const CONSTRUCTION_PIECES = [
     name: "Shelf",
     description: "An open shelving unit — a back panel, two sides, three boards.",
     parts: [
-      { id: "back", type: "box", position: [0, 0.9, -0.14], rotationY: 0, scale: [0.9, 1.8, 0.03], color: WOOD_COLOR },
-      { id: "sideL", type: "box", position: [-0.44, 0.9, 0], rotationY: 0, scale: [0.03, 1.8, 0.3], color: WOOD_COLOR },
-      { id: "sideR", type: "box", position: [0.44, 0.9, 0], rotationY: 0, scale: [0.03, 1.8, 0.3], color: WOOD_COLOR },
-      { id: "boardLow", type: "box", position: [0, 0.3, 0], rotationY: 0, scale: [0.88, 0.03, 0.3], color: WOOD_COLOR },
-      { id: "boardMid", type: "box", position: [0, 0.9, 0], rotationY: 0, scale: [0.88, 0.03, 0.3], color: WOOD_COLOR },
-      { id: "boardHigh", type: "box", position: [0, 1.5, 0], rotationY: 0, scale: [0.88, 0.03, 0.3], color: WOOD_COLOR },
+      { id: "back", type: "box", position: [0, 0.9, -0.14], rotationY: 0, scale: [0.9, 1.8, 0.03], color: WOOD_COLOR, materialType: "wood" },
+      { id: "sideL", type: "box", position: [-0.44, 0.9, 0], rotationY: 0, scale: [0.03, 1.8, 0.3], color: WOOD_COLOR, materialType: "wood" },
+      { id: "sideR", type: "box", position: [0.44, 0.9, 0], rotationY: 0, scale: [0.03, 1.8, 0.3], color: WOOD_COLOR, materialType: "wood" },
+      { id: "boardLow", type: "box", position: [0, 0.3, 0], rotationY: 0, scale: [0.88, 0.03, 0.3], color: WOOD_COLOR, materialType: "wood" },
+      { id: "boardMid", type: "box", position: [0, 0.9, 0], rotationY: 0, scale: [0.88, 0.03, 0.3], color: WOOD_COLOR, materialType: "wood" },
+      { id: "boardHigh", type: "box", position: [0, 1.5, 0], rotationY: 0, scale: [0.88, 0.03, 0.3], color: WOOD_COLOR, materialType: "wood" },
     ],
   }),
 
@@ -369,7 +415,7 @@ export const CONSTRUCTION_PIECES = [
     id: "cabinet",
     name: "Cabinet",
     description: "An enclosed storage cabinet, ready to use — carries the Storage behaviour any custom object can.",
-    parts: [{ id: "body", type: "box", position: [0, 0.55, 0], rotationY: 0, scale: [0.8, 1.1, 0.4], color: WOOD_COLOR }],
+    parts: [{ id: "body", type: "box", position: [0, 0.55, 0], rotationY: 0, scale: [0.8, 1.1, 0.4], color: WOOD_COLOR, materialType: "wood", bevel: 0.01 }],
     behaviours: [{ type: "storage", properties: { prompt: "Check the cabinet", capacity: 20 } }],
   }),
 
@@ -378,9 +424,9 @@ export const CONSTRUCTION_PIECES = [
     name: "Storage Crate",
     description: "A small portable crate, ready to use — carries the Storage behaviour any custom object can.",
     parts: [
-      { id: "body", type: "box", position: [0, 0.25, 0], rotationY: 0, scale: [0.5, 0.5, 0.5], color: CRATE_COLOR },
-      { id: "strapA", type: "box", position: [0, 0.42, 0], rotationY: 0, scale: [0.52, 0.03, 0.52], color: WOOD_COLOR },
-      { id: "strapB", type: "box", position: [0, 0.08, 0], rotationY: 0, scale: [0.52, 0.03, 0.52], color: WOOD_COLOR },
+      { id: "body", type: "box", position: [0, 0.25, 0], rotationY: 0, scale: [0.5, 0.5, 0.5], color: CRATE_COLOR, materialType: "wood", bevel: 0.012 },
+      { id: "strapA", type: "box", position: [0, 0.42, 0], rotationY: 0, scale: [0.52, 0.03, 0.52], color: WOOD_COLOR, materialType: "wood" },
+      { id: "strapB", type: "box", position: [0, 0.08, 0], rotationY: 0, scale: [0.52, 0.03, 0.52], color: WOOD_COLOR, materialType: "wood" },
     ],
     behaviours: [{ type: "storage", properties: { prompt: "Check the crate", capacity: 8 } }],
   }),
@@ -395,8 +441,8 @@ export const CONSTRUCTION_PIECES = [
     name: "Book",
     description: "A closed book, small enough to carry — carries the Pickupable behaviour, so it can be picked up and held.",
     parts: [
-      { id: "cover", type: "box", position: [0, 0.015, 0], rotationY: 0, scale: [0.16, 0.03, 0.22], color: BOOK_COVER_COLOR },
-      { id: "pages", type: "box", position: [0, 0.015, 0.006], rotationY: 0, scale: [0.148, 0.024, 0.206], color: BOOK_PAGE_COLOR },
+      { id: "cover", type: "box", position: [0, 0.015, 0], rotationY: 0, scale: [0.16, 0.03, 0.22], color: BOOK_COVER_COLOR, bevel: 0.004 },
+      { id: "pages", type: "box", position: [0, 0.015, 0.006], rotationY: 0, scale: [0.148, 0.024, 0.206], color: BOOK_PAGE_COLOR, materialType: "paper" },
     ],
     behaviours: [{ type: "pickupable", properties: { prompt: "Pick up the book" } }],
   }),
@@ -418,7 +464,7 @@ export const CONSTRUCTION_PIECES = [
     id: "switch",
     name: "Switch",
     description: "A small wall-mounted switch plate — carries the Trigger behaviour, so it can be wired to fire any named event a plugin or future system listens for (see docs/PLUGIN_GUIDE.md).",
-    parts: [{ id: "plate", type: "box", position: [0, 0, 0], rotationY: 0, scale: [0.1, 0.15, 0.02], color: RAW_MATERIAL_COLOR }],
+    parts: [{ id: "plate", type: "box", position: [0, 0, 0], rotationY: 0, scale: [0.1, 0.15, 0.02], color: RAW_MATERIAL_COLOR, materialType: "plastic", bevel: 0.006 }],
     behaviours: [{ type: "trigger", properties: { eventName: "switchFlipped" } }],
   }),
 
@@ -427,8 +473,8 @@ export const CONSTRUCTION_PIECES = [
     name: "Sign",
     description: "A post with a flat board on top — a nameplate, a direction marker, whatever it's painted to be.",
     parts: [
-      { id: "post", type: "cylinder", position: [0, 0.5, 0], rotationY: 0, scale: [0.05, 1.0, 0.05], color: WOOD_COLOR },
-      { id: "board", type: "box", position: [0, 1.05, 0], rotationY: 0, scale: [0.6, 0.35, 0.03], color: WOOD_COLOR },
+      { id: "post", type: "cylinder", position: [0, 0.5, 0], rotationY: 0, scale: [0.05, 1.0, 0.05], color: WOOD_COLOR, materialType: "wood" },
+      { id: "board", type: "box", position: [0, 1.05, 0], rotationY: 0, scale: [0.6, 0.35, 0.03], color: WOOD_COLOR, materialType: "wood", bevel: 0.006 },
     ],
   }),
 
@@ -437,10 +483,10 @@ export const CONSTRUCTION_PIECES = [
     name: "Fence",
     description: "Two posts and two rails, 2m wide.",
     parts: [
-      { id: "postA", type: "box", position: [-1, 0.5, 0], rotationY: 0, scale: [0.08, 1.0, 0.08], color: RAW_MATERIAL_COLOR },
-      { id: "postB", type: "box", position: [1, 0.5, 0], rotationY: 0, scale: [0.08, 1.0, 0.08], color: RAW_MATERIAL_COLOR },
-      { id: "railLow", type: "box", position: [0, 0.35, 0], rotationY: 0, scale: [2.0, 0.06, 0.06], color: RAW_MATERIAL_COLOR },
-      { id: "railHigh", type: "box", position: [0, 0.75, 0], rotationY: 0, scale: [2.0, 0.06, 0.06], color: RAW_MATERIAL_COLOR },
+      { id: "postA", type: "box", position: [-1, 0.5, 0], rotationY: 0, scale: [0.08, 1.0, 0.08], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
+      { id: "postB", type: "box", position: [1, 0.5, 0], rotationY: 0, scale: [0.08, 1.0, 0.08], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
+      { id: "railLow", type: "box", position: [0, 0.35, 0], rotationY: 0, scale: [2.0, 0.06, 0.06], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
+      { id: "railHigh", type: "box", position: [0, 0.75, 0], rotationY: 0, scale: [2.0, 0.06, 0.06], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
     ],
   }),
 
@@ -449,10 +495,10 @@ export const CONSTRUCTION_PIECES = [
     name: "Gate",
     description: "A fence-styled swinging gate, 1.2m wide — carries the same Door behaviour the Door piece does.",
     parts: [
-      { id: "postA", type: "box", position: [-0.6, 0.5, 0], rotationY: 0, scale: [0.08, 1.0, 0.08], color: RAW_MATERIAL_COLOR },
-      { id: "postB", type: "box", position: [0.6, 0.5, 0], rotationY: 0, scale: [0.08, 1.0, 0.08], color: RAW_MATERIAL_COLOR },
-      { id: "railLow", type: "box", position: [0, 0.35, 0], rotationY: 0, scale: [1.2, 0.06, 0.06], color: RAW_MATERIAL_COLOR },
-      { id: "railHigh", type: "box", position: [0, 0.75, 0], rotationY: 0, scale: [1.2, 0.06, 0.06], color: RAW_MATERIAL_COLOR },
+      { id: "postA", type: "box", position: [-0.6, 0.5, 0], rotationY: 0, scale: [0.08, 1.0, 0.08], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
+      { id: "postB", type: "box", position: [0.6, 0.5, 0], rotationY: 0, scale: [0.08, 1.0, 0.08], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
+      { id: "railLow", type: "box", position: [0, 0.35, 0], rotationY: 0, scale: [1.2, 0.06, 0.06], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
+      { id: "railHigh", type: "box", position: [0, 0.75, 0], rotationY: 0, scale: [1.2, 0.06, 0.06], color: RAW_MATERIAL_COLOR, materialType: "concrete" },
     ],
     // Phase 14 ("Further Environmental Polish") — same fix as the Door
     // piece above, same reason: -0.6 is postA's own position, hinging
@@ -465,7 +511,7 @@ export const CONSTRUCTION_PIECES = [
     id: "ramp",
     name: "Ramp",
     description: "A single inclined panel.",
-    parts: [{ id: "a", type: "box", position: [0, 0.35, 0], rotationX: -0.35, rotationY: 0, rotationZ: 0, scale: [1.2, 0.15, 2.4], color: RAW_MATERIAL_COLOR }],
+    parts: [{ id: "a", type: "box", position: [0, 0.35, 0], rotationX: -0.35, rotationY: 0, rotationZ: 0, scale: [1.2, 0.15, 2.4], color: RAW_MATERIAL_COLOR, materialType: "concrete" }],
   }),
 
   // ============================================================
@@ -476,18 +522,18 @@ export const CONSTRUCTION_PIECES = [
     id: "foundation",
     name: "Foundation",
     description: "A sturdy stone base to build a floor on top of — raises a building slightly off the ground.",
-    parts: [{ id: "a", type: "box", position: [0, 0.25, 0], rotationY: 0, scale: [2.2, 0.5, 2.2], color: STONE_COLOR }],
+    parts: [{ id: "a", type: "box", position: [0, 0.25, 0], rotationY: 0, scale: [2.2, 0.5, 2.2], color: STONE_COLOR, materialType: "concrete" }],
   }),
   piece({
     id: "railing",
     name: "Railing",
     description: "A run of balusters and a top rail, 2m wide — for a balcony edge or beside a stair run.",
     parts: [
-      { id: "postA", type: "box", position: [-0.95, 0.45, 0], rotationY: 0, scale: [0.06, 0.9, 0.06], color: WOOD_COLOR },
-      { id: "postB", type: "box", position: [-0.32, 0.45, 0], rotationY: 0, scale: [0.06, 0.9, 0.06], color: WOOD_COLOR },
-      { id: "postC", type: "box", position: [0.32, 0.45, 0], rotationY: 0, scale: [0.06, 0.9, 0.06], color: WOOD_COLOR },
-      { id: "postD", type: "box", position: [0.95, 0.45, 0], rotationY: 0, scale: [0.06, 0.9, 0.06], color: WOOD_COLOR },
-      { id: "rail", type: "box", position: [0, 0.87, 0], rotationY: 0, scale: [2.0, 0.06, 0.06], color: WOOD_COLOR },
+      { id: "postA", type: "box", position: [-0.95, 0.45, 0], rotationY: 0, scale: [0.06, 0.9, 0.06], color: WOOD_COLOR, materialType: "wood" },
+      { id: "postB", type: "box", position: [-0.32, 0.45, 0], rotationY: 0, scale: [0.06, 0.9, 0.06], color: WOOD_COLOR, materialType: "wood" },
+      { id: "postC", type: "box", position: [0.32, 0.45, 0], rotationY: 0, scale: [0.06, 0.9, 0.06], color: WOOD_COLOR, materialType: "wood" },
+      { id: "postD", type: "box", position: [0.95, 0.45, 0], rotationY: 0, scale: [0.06, 0.9, 0.06], color: WOOD_COLOR, materialType: "wood" },
+      { id: "rail", type: "box", position: [0, 0.87, 0], rotationY: 0, scale: [2.0, 0.06, 0.06], color: WOOD_COLOR, materialType: "wood" },
     ],
   }),
 
@@ -500,7 +546,7 @@ export const CONSTRUCTION_PIECES = [
     name: "Garden Light",
     description: "A short bollard light for a path or bed.",
     parts: [
-      { id: "post", type: "cylinder", position: [0, 0.3, 0], rotationY: 0, scale: [0.05, 0.6, 0.05], color: RAW_MATERIAL_COLOR, segments: 8 },
+      { id: "post", type: "cylinder", position: [0, 0.3, 0], rotationY: 0, scale: [0.05, 0.6, 0.05], color: RAW_MATERIAL_COLOR, materialType: "concrete", segments: 8 },
       { id: "head", type: "sphere", position: [0, 0.62, 0], rotationY: 0, scale: [0.09, 0.09, 0.09], color: LIGHT_FIXTURE_COLOR, segments: 8 },
     ],
     behaviours: [{ type: "lightSource", properties: { color: "#ffdca8", intensity: 0.5, distance: 3 } }],
@@ -510,19 +556,45 @@ export const CONSTRUCTION_PIECES = [
     name: "Street Light",
     description: "A tall lamp post for paths and courtyards.",
     parts: [
-      { id: "post", type: "cylinder", position: [0, 1.6, 0], rotationY: 0, scale: [0.06, 3.2, 0.06], color: "#2c2c2c", segments: 8 },
-      { id: "arm", type: "box", position: [0.25, 3.15, 0], rotationY: 0, scale: [0.5, 0.05, 0.05], color: "#2c2c2c" },
+      { id: "post", type: "cylinder", position: [0, 1.6, 0], rotationY: 0, scale: [0.06, 3.2, 0.06], color: "#2c2c2c", materialType: "metal", segments: 8 },
+      { id: "arm", type: "box", position: [0.25, 3.15, 0], rotationY: 0, scale: [0.5, 0.05, 0.05], color: "#2c2c2c", materialType: "metal" },
       { id: "head", type: "sphere", position: [0.45, 3.1, 0], rotationY: 0, scale: [0.16, 0.14, 0.16], color: LIGHT_FIXTURE_COLOR, segments: 10 },
     ],
     behaviours: [{ type: "lightSource", properties: { color: "#ffe0b0", intensity: 0.9, distance: 6 } }],
   }),
+  // Version 4, Phase 10c ("The Visual Upgrade — Construction Library") —
+  // this piece was genuinely broken, not merely plain, and it had been
+  // since it was added in Phase 5. Both parts sat at the identical
+  // position `[0, 0, 0]`, with the "glass" (0.12 × 0.16 × 0.12) entirely
+  // *inside* the opaque "body" (0.16 × 0.22 × 0.16) — so the glass was
+  // completely invisible from every angle, and the piece rendered as a
+  // plain dark box that happened to emit light from nowhere. The glass
+  // part also never carried `materialType: "glass"`, so even if it had
+  // been visible it would have rendered as opaque matte.
+  //
+  // Rebuilt as a lantern actually is: a base and a cap with real glazing
+  // between them, held by four corner posts. Same overall envelope
+  // (0.16 wide, 0.22 tall), same light behaviour, same id — an existing
+  // placed copy simply starts looking like a lantern.
   piece({
     id: "lantern",
     name: "Lantern",
-    description: "A small hanging lantern.",
+    description: "A small hanging lantern — a glazed body between a base and a cap.",
     parts: [
-      { id: "body", type: "box", position: [0, 0, 0], rotationY: 0, scale: [0.16, 0.22, 0.16], color: "#2c2c2c" },
-      { id: "glass", type: "box", position: [0, 0, 0], rotationY: 0, scale: [0.12, 0.16, 0.12], color: LIGHT_FIXTURE_COLOR },
+      { id: "base", type: "box", position: [0, -0.09, 0], rotationY: 0, scale: [0.16, 0.04, 0.16], color: "#2c2c2c", materialType: "metal", bevel: 0.006 },
+      { id: "cap", type: "box", position: [0, 0.09, 0], rotationY: 0, scale: [0.17, 0.04, 0.17], color: "#2c2c2c", materialType: "metal", bevel: 0.006 },
+      // The glazing itself — genuinely transparent now, and genuinely
+      // visible, sitting in the open span between base and cap.
+      { id: "glass", type: "box", position: [0, 0, 0], rotationY: 0, scale: [0.13, 0.14, 0.13], color: LIGHT_FIXTURE_COLOR, materialType: "glass" },
+      ...[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sz], i) => ({
+        id: `post${i}`,
+        type: "box",
+        position: [sx * 0.07, 0, sz * 0.07],
+        rotationY: 0,
+        scale: [0.018, 0.14, 0.018],
+        color: "#2c2c2c",
+        materialType: "metal",
+      })),
     ],
     behaviours: [{ type: "lightSource", properties: { color: "#ffcc80", intensity: 0.55, distance: 3.5 } }],
   }),
@@ -531,8 +603,8 @@ export const CONSTRUCTION_PIECES = [
     name: "Floodlight",
     description: "An angled fixture on a short stand, aimed outward.",
     parts: [
-      { id: "stand", type: "cylinder", position: [0, 0.25, 0], rotationY: 0, scale: [0.05, 0.5, 0.05], color: "#2c2c2c", segments: 8 },
-      { id: "head", type: "box", position: [0, 0.55, 0.08], rotationX: -0.5, rotationY: 0, rotationZ: 0, scale: [0.3, 0.18, 0.1], color: "#2c2c2c" },
+      { id: "stand", type: "cylinder", position: [0, 0.25, 0], rotationY: 0, scale: [0.05, 0.5, 0.05], color: "#2c2c2c", materialType: "metal", segments: 8 },
+      { id: "head", type: "box", position: [0, 0.55, 0.08], rotationX: -0.5, rotationY: 0, rotationZ: 0, scale: [0.3, 0.18, 0.1], color: "#2c2c2c", materialType: "metal", bevel: 0.012 },
     ],
     behaviours: [{ type: "lightSource", properties: { color: "#f0f4ff", intensity: 1.1, distance: 7 } }],
   }),
@@ -541,9 +613,9 @@ export const CONSTRUCTION_PIECES = [
     name: "Campfire",
     description: "A ring of logs around a low flame.",
     parts: [
-      { id: "logA", type: "cylinder", position: [0.22, 0.08, 0], rotationX: Math.PI / 2, rotationY: 0.3, rotationZ: 0, scale: [0.08, 0.5, 0.08], color: BARK_COLOR, segments: 8 },
-      { id: "logB", type: "cylinder", position: [-0.22, 0.08, 0], rotationX: Math.PI / 2, rotationY: -0.3, rotationZ: 0, scale: [0.08, 0.5, 0.08], color: BARK_COLOR, segments: 8 },
-      { id: "logC", type: "cylinder", position: [0, 0.08, 0.22], rotationX: Math.PI / 2, rotationY: 1.2, rotationZ: 0, scale: [0.08, 0.5, 0.08], color: BARK_COLOR, segments: 8 },
+      { id: "logA", type: "cylinder", position: [0.22, 0.08, 0], rotationX: Math.PI / 2, rotationY: 0.3, rotationZ: 0, scale: [0.08, 0.5, 0.08], color: BARK_COLOR, materialType: "wood", segments: 8 },
+      { id: "logB", type: "cylinder", position: [-0.22, 0.08, 0], rotationX: Math.PI / 2, rotationY: -0.3, rotationZ: 0, scale: [0.08, 0.5, 0.08], color: BARK_COLOR, materialType: "wood", segments: 8 },
+      { id: "logC", type: "cylinder", position: [0, 0.08, 0.22], rotationX: Math.PI / 2, rotationY: 1.2, rotationZ: 0, scale: [0.08, 0.5, 0.08], color: BARK_COLOR, materialType: "wood", segments: 8 },
       { id: "flame", type: "cone", position: [0, 0.18, 0], rotationY: 0, scale: [0.16, 0.3, 0.16], color: FLAME_COLOR, segments: 8 },
     ],
     behaviours: [{ type: "lightSource", properties: { color: "#ff9040", intensity: 0.7, distance: 4 } }],
@@ -558,8 +630,8 @@ export const CONSTRUCTION_PIECES = [
     name: "Mailbox",
     description: "A small box on a post, beside a path or gate.",
     parts: [
-      { id: "post", type: "cylinder", position: [0, 0.5, 0], rotationY: 0, scale: [0.04, 1.0, 0.04], color: WOOD_COLOR, segments: 6 },
-      { id: "box", type: "box", position: [0, 1.05, 0], rotationY: 0, scale: [0.3, 0.2, 0.18], color: "#4a5a6a" },
+      { id: "post", type: "cylinder", position: [0, 0.5, 0], rotationY: 0, scale: [0.04, 1.0, 0.04], color: WOOD_COLOR, materialType: "wood", segments: 6 },
+      { id: "box", type: "box", position: [0, 1.05, 0], rotationY: 0, scale: [0.3, 0.2, 0.18], color: "#4a5a6a", materialType: "metal", bevel: 0.018 },
     ],
   }),
 
@@ -569,6 +641,17 @@ export const CONSTRUCTION_PIECES = [
   // every other object." Ordinary construction pieces, built from the
   // exact same primitive-part vocabulary as everything above — nothing
   // about a tree needs a different kind of definition than a wall does.
+  // **Every foliage part here deliberately stays `matte`** (Version 4,
+  // Phase 10c, when every other piece in this library gained a real
+  // material). Two reasons, both real: there is no leaf or bark texture
+  // in `ProceduralTexture.js` to derive relief from, and the wood/plaster
+  // grain that does exist would be actively wrong on a canopy — a leaf
+  // cluster with timber grain reads worse than a clean flat one. The
+  // other parts left matte are the light fixtures and the campfire flame
+  // (both read as emitting light, where surface relief fights the
+  // effect), and soil/dirt (no earth texture exists either). Each is a
+  // missing *texture*, not a missed assignment.
+  //
   // Every piece here also gets a real, cheap wind-sway (see
   // WorldEnvironmentSystem.js's own comment on `windSpeed`/
   // `windDirectionRad` and ObjectCompiler.js's `swaysInWind` flag) —
@@ -580,7 +663,7 @@ export const CONSTRUCTION_PIECES = [
     name: "Tree",
     description: "A simple tree — a trunk and a rounded canopy. Scale it up for something towering, or down for a sapling.",
     parts: [
-      { id: "trunk", type: "cylinder", position: [0, 0.9, 0], rotationY: 0, scale: [0.16, 1.8, 0.16], color: BARK_COLOR, segments: 7 },
+      { id: "trunk", type: "cylinder", position: [0, 0.9, 0], rotationY: 0, scale: [0.16, 1.8, 0.16], color: BARK_COLOR, materialType: "wood", segments: 7 },
       { id: "canopyLow", type: "sphere", position: [0, 1.9, 0], rotationY: 0, scale: [1.1, 0.9, 1.1], color: FOLIAGE_COLOR, segments: 8, swaysInWind: true, seasonalFoliage: true },
       { id: "canopyHigh", type: "sphere", position: [0, 2.5, 0], rotationY: 0, scale: [0.75, 0.7, 0.75], color: FOLIAGE_COLOR_LIGHT, segments: 8, swaysInWind: true, seasonalFoliage: true },
     ],
@@ -612,8 +695,8 @@ export const CONSTRUCTION_PIECES = [
     name: "Rock",
     description: "An irregular boulder — scattered singly or clustered, along a path edge or a garden border.",
     parts: [
-      { id: "a", type: "roundedBox", position: [0, 0.22, 0], rotationY: 0.4, rotationX: 0.15, scale: [0.5, 0.42, 0.4], color: STONE_COLOR },
-      { id: "b", type: "roundedBox", position: [0.12, 0.12, 0.1], rotationY: 1.1, rotationX: 0, scale: [0.22, 0.22, 0.22], color: STONE_COLOR },
+      { id: "a", type: "roundedBox", position: [0, 0.22, 0], rotationY: 0.4, rotationX: 0.15, scale: [0.5, 0.42, 0.4], color: STONE_COLOR, materialType: "concrete" },
+      { id: "b", type: "roundedBox", position: [0.12, 0.12, 0.1], rotationY: 1.1, rotationX: 0, scale: [0.22, 0.22, 0.22], color: STONE_COLOR, materialType: "concrete" },
     ],
   }),
 
@@ -621,7 +704,7 @@ export const CONSTRUCTION_PIECES = [
     id: "log",
     name: "Log",
     description: "A fallen log, lying on its side — a rustic border, a bit of forest-floor detail, or a low seat.",
-    parts: [{ id: "a", type: "cylinder", position: [0, 0.18, 0], rotationY: 0, rotationZ: Math.PI / 2, scale: [0.18, 1.4, 0.18], color: BARK_COLOR, segments: 8 }],
+    parts: [{ id: "a", type: "cylinder", position: [0, 0.18, 0], rotationY: 0, rotationZ: Math.PI / 2, scale: [0.18, 1.4, 0.18], color: BARK_COLOR, materialType: "wood", segments: 8 }],
   }),
 
   piece({
@@ -641,10 +724,10 @@ export const CONSTRUCTION_PIECES = [
     description: "A raised rectangular bed of soil, framed in timber — the natural home for a row of Flowers.",
     parts: [
       { id: "soil", type: "box", position: [0, 0.14, 0], rotationY: 0, scale: [1.2, 0.22, 0.7], color: SOIL_COLOR },
-      { id: "frameA", type: "box", position: [0, 0.13, 0.36], rotationY: 0, scale: [1.24, 0.24, 0.05], color: WOOD_COLOR },
-      { id: "frameB", type: "box", position: [0, 0.13, -0.36], rotationY: 0, scale: [1.24, 0.24, 0.05], color: WOOD_COLOR },
-      { id: "frameC", type: "box", position: [0.6, 0.13, 0], rotationY: 0, scale: [0.05, 0.24, 0.7], color: WOOD_COLOR },
-      { id: "frameD", type: "box", position: [-0.6, 0.13, 0], rotationY: 0, scale: [0.05, 0.24, 0.7], color: WOOD_COLOR },
+      { id: "frameA", type: "box", position: [0, 0.13, 0.36], rotationY: 0, scale: [1.24, 0.24, 0.05], color: WOOD_COLOR, materialType: "wood" },
+      { id: "frameB", type: "box", position: [0, 0.13, -0.36], rotationY: 0, scale: [1.24, 0.24, 0.05], color: WOOD_COLOR, materialType: "wood" },
+      { id: "frameC", type: "box", position: [0.6, 0.13, 0], rotationY: 0, scale: [0.05, 0.24, 0.7], color: WOOD_COLOR, materialType: "wood" },
+      { id: "frameD", type: "box", position: [-0.6, 0.13, 0], rotationY: 0, scale: [0.05, 0.24, 0.7], color: WOOD_COLOR, materialType: "wood" },
     ],
   }),
 
@@ -662,14 +745,14 @@ export const CONSTRUCTION_PIECES = [
     id: "stonePath",
     name: "Stone Path",
     description: "A 1m flagstone paving tile.",
-    parts: [{ id: "a", type: "box", position: [0, 0.025, 0], rotationY: 0, scale: [1, 0.05, 1], color: STONE_COLOR }],
+    parts: [{ id: "a", type: "box", position: [0, 0.025, 0], rotationY: 0, scale: [1, 0.05, 1], color: STONE_COLOR, materialType: "concrete" }],
   }),
 
   piece({
     id: "gravelPath",
     name: "Gravel Path",
     description: "A 1m gravel paving tile.",
-    parts: [{ id: "a", type: "box", position: [0, 0.02, 0], rotationY: 0, scale: [1, 0.04, 1], color: GRAVEL_COLOR }],
+    parts: [{ id: "a", type: "box", position: [0, 0.02, 0], rotationY: 0, scale: [1, 0.04, 1], color: GRAVEL_COLOR, materialType: "concrete" }],
   }),
 
   piece({
@@ -683,14 +766,14 @@ export const CONSTRUCTION_PIECES = [
     id: "timberPath",
     name: "Timber Path",
     description: "A 1m timber boardwalk tile.",
-    parts: [{ id: "a", type: "box", position: [0, 0.04, 0], rotationY: 0, scale: [1, 0.08, 1], color: WOOD_COLOR }],
+    parts: [{ id: "a", type: "box", position: [0, 0.04, 0], rotationY: 0, scale: [1, 0.08, 1], color: WOOD_COLOR, materialType: "wood" }],
   }),
 
   piece({
     id: "concretePath",
     name: "Concrete Path",
     description: "A 1m concrete paving tile.",
-    parts: [{ id: "a", type: "box", position: [0, 0.025, 0], rotationY: 0, scale: [1, 0.05, 1], color: CONCRETE_COLOR }],
+    parts: [{ id: "a", type: "box", position: [0, 0.025, 0], rotationY: 0, scale: [1, 0.05, 1], color: CONCRETE_COLOR, materialType: "concrete" }],
   }),
 ];
 
@@ -758,6 +841,16 @@ export const CONSTRUCTION_GROUPS = {
   beam: "Structural", stairs: "Structural", ladder: "Structural", foundation: "Structural", railing: "Structural",
   doorway: "Openings", door: "Openings", doubleDoor: "Openings", window: "Openings", windowPane: "Openings",
   largeWindow: "Openings", largeWindowPane: "Openings", archway: "Openings",
+  // Version 4, Phase 10c — these two were genuinely missing from this
+  // map, and had been since Version 4 Phase 2 added them. This file's own
+  // comment above anticipates exactly that ("a future addition that
+  // forgets to update this") and the fallback did its job — but the
+  // result was that the two most realistic door pieces in the library
+  // were quietly filed under "Other", away from every other Opening,
+  // which is the last place someone looking for a French door would
+  // check. Found by reading the map against the piece list rather than
+  // by anything breaking.
+  doorLeafLeft: "Openings", doorLeafRight: "Openings",
   table: "Workshop", bench: "Workshop", shelf: "Workshop", cabinet: "Workshop", storageCrate: "Workshop", book: "Workshop",
   light: "Utilities", switch: "Utilities", sign: "Utilities", fence: "Utilities", gate: "Utilities", ramp: "Utilities", mailbox: "Utilities",
   tree: "Nature", bush: "Nature", flower: "Nature", rock: "Nature", log: "Nature", grassPatch: "Nature", gardenBed: "Nature",
@@ -765,7 +858,15 @@ export const CONSTRUCTION_GROUPS = {
   gardenLight: "Lighting", streetLight: "Lighting", lantern: "Lighting", floodlight: "Lighting", campfire: "Lighting",
 };
 
-export const CONSTRUCTION_GROUP_ORDER = ["Structural", "Openings", "Structures", "Nature", "Paths", "Lighting", "Utilities", "Workshop", "Other"];
+// Version 4, Phase 10c — `"Structures"` used to sit between "Openings"
+// and "Nature" here and **no piece has ever mapped to it**: the section
+// comment further up that reads "Structures — completing the Buildings
+// list" files its own two pieces (`foundation`, `railing`) under
+// "Structural", where they belong. A group with no members renders as
+// nothing, so this was invisible rather than broken — removed now that
+// it's been noticed, rather than left as a heading waiting for content
+// that was never coming.
+export const CONSTRUCTION_GROUP_ORDER = ["Structural", "Openings", "Nature", "Paths", "Lighting", "Utilities", "Workshop", "Other"];
 
 export function getConstructionGroup(id) {
   return CONSTRUCTION_GROUPS[id] ?? "Other";

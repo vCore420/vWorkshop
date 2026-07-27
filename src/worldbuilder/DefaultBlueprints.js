@@ -19,9 +19,14 @@
  * clean 2m grid with zero gaps or overlaps by construction. Every
  * piece's own placement origin is at its own base-centre (again, the
  * Construction Library's own established convention — confirmed, not
- * assumed), except `lantern`, whose two parts are both centred on its
- * own local origin, so it's positioned directly at the height it should
- * hang from rather than a base.
+ * assumed), except `lantern`, whose parts are centred on its own local
+ * origin, so it's positioned directly at the height it should hang from
+ * rather than a base. (That exception still holds after Version 4 Phase
+ * 10c rebuilt the lantern — it went from two parts to seven, base and
+ * cap and real glazing between four corner posts, but the assembly is
+ * still symmetric about its own origin, which is the only property this
+ * paragraph actually depends on. The "two parts" wording it used to
+ * carry was corrected at the same time.)
  *
  * Every exterior opening here is sealed, and each in the same shape:
  * a `doorway`/`window` frame paired with a second piece that actually
