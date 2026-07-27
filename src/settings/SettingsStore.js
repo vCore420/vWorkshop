@@ -103,6 +103,32 @@ export const PERFORMANCE_PRESETS = {
   },
 };
 
+/**
+ * A simple, honestly-labelled heuristic, not a real benchmark: touch-
+ * primary devices and low core counts point at "performance"; generous
+ * core counts point at "quality"; everything else stays "balanced". See
+ * docs/PERFORMANCE.md for why a real benchmark wasn't worth building for
+ * this pass.
+ *
+ * Version 4, Phase 10a ("The Visual Upgrade") — lifted out of
+ * `SettingsStore` as a standalone pure function (the method below still
+ * exists and simply delegates, so every existing caller is untouched).
+ * The reason is a genuine second caller with no store to ask:
+ * `src/utils/TextureQuality.js` has to pick a texture tier *before*
+ * `engine.init()` runs — furniture materials are built during system
+ * `init()`, well before a save has loaded and any real settings exist —
+ * and duplicating this heuristic there would have been exactly the kind
+ * of drift `CLAUDE.md`'s "a docstring is a promise" rule exists to
+ * prevent. One implementation, two doors in.
+ */
+export function detectRecommendedPreset() {
+  const cores = navigator.hardwareConcurrency ?? 4;
+  const isTouchPrimary = window.matchMedia?.("(pointer: coarse)").matches ?? false;
+  if (isTouchPrimary || cores <= 4) return "performance";
+  if (cores >= 8) return "quality";
+  return "balanced";
+}
+
 function deepClone(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
@@ -140,19 +166,14 @@ export class SettingsStore {
     this._emitChanged();
   }
 
-  /**
-   * A simple, honestly-labelled heuristic, not a real benchmark: touch-
-   * primary devices and low core counts point at "performance"; generous
-   * core counts point at "quality"; everything else stays "balanced". See
-   * docs/PERFORMANCE.md for why a real benchmark wasn't worth building for
-   * this pass.
-   */
+  /** Delegates to this module's own `detectRecommendedPreset()` — see its
+   *  comment for the heuristic itself and for why it lives at module
+   *  scope rather than only here. Kept as a method because every existing
+   *  caller (`SettingsSystem.js`'s first-session auto-tune, Settings'
+   *  own "Optimise For This Device" button) already reaches it through
+   *  the store. */
   detectRecommendedPreset() {
-    const cores = navigator.hardwareConcurrency ?? 4;
-    const isTouchPrimary = window.matchMedia?.("(pointer: coarse)").matches ?? false;
-    if (isTouchPrimary || cores <= 4) return "performance";
-    if (cores >= 8) return "quality";
-    return "balanced";
+    return detectRecommendedPreset();
   }
 
   resetToDefaults() {

@@ -1,16 +1,29 @@
 import * as THREE from "three";
 import { getBodyModel } from "./BodyModels.js";
 import { configureFlatTexture } from "../utils/TextureUtils.js";
+import { bevelBox } from "../utils/PlaceholderFactory.js";
 
 /**
  * PlayerCharacter
  * -----------------
  * "Think along the lines of Minecraft... simple geometry is preferred
  * because it allows complete customisation." Every body section is a
- * unit-sized box (same "unit primitive, scaled per-instance" idea
- * `ObjectCompiler.js` already uses for Builder objects), scaled by that
- * section's own width/height/depth multipliers — never hand-modelled,
- * never unique geometry per proportion.
+ * box, sized by that section's own width/height/depth multipliers —
+ * never hand-modelled.
+ *
+ * *Correction, Version 4 Phase 10d:* this paragraph used to describe the
+ * geometry as "a unit-sized box (same 'unit primitive, scaled
+ * per-instance' idea `ObjectCompiler.js` already uses for Builder
+ * objects)... never unique geometry per proportion." That was never how
+ * this file worked — `boxMesh()` below has always built geometry at the
+ * part's real dimensions, so a rig genuinely does have its own geometry
+ * per proportion, and always has. The comparison to `ObjectCompiler.js`
+ * was describing a different file's approach as though it were this
+ * one's. It matters here because that difference is exactly why a
+ * player rig can afford bevelled edges without the geometry-sharing
+ * concern Wave 10c had to solve for construction pieces: a rig is
+ * rebuilt only when someone moves a Wardrobe slider, never per frame and
+ * never in hundreds of copies.
  *
  * The rig is a genuine parent-child joint hierarchy — a shoulder pivot
  * holds the upper arm, which holds an elbow pivot, which holds the lower
@@ -93,11 +106,48 @@ function buildMaterial(partId, appearance, textureImage) {
   return new THREE.MeshStandardMaterial(options);
 }
 
+/**
+ * Version 4, Phase 10d ("The Visual Upgrade — Player and Beings") —
+ * every body section is still a box, and that is a deliberate decision
+ * rather than an unfinished one.
+ *
+ * **This wave's own plan called for capsule-based, tapered limbs, and
+ * that plan was wrong.** Two independent reasons, both found by reading
+ * this file rather than by anything failing:
+ *
+ *  1. **The boxiness is the brief.** This file's own opening comment
+ *     quotes it directly — "think along the lines of Minecraft... simple
+ *     geometry is preferred because it allows complete customisation."
+ *     Rounding the player into organic capsules would have quietly
+ *     overturned a documented design decision in the name of polish,
+ *     which is exactly the trade `docs/HANDBOOK.md` warns against: more
+ *     impressive, less true to what this place is.
+ *  2. **The texture pipeline depends on it.** A part's painted texture is
+ *     a single 64×64 canvas applied as `map` (see `buildMaterial()`
+ *     above and docs/PLAYER.md). `BoxGeometry` gives every face its own
+ *     0..1 UV island, so that one image reads correctly on each face. A
+ *     capsule's UV is a cylindrical wrap — every existing painted skin
+ *     and outfit texture would smear around the limb instead.
+ *
+ * So the upgrade here is craftsmanship *within* the vocabulary, the same
+ * thing Waves 10b/10c did for furniture: the edges are no longer razor
+ * sharp. A bevelled box is still unmistakably a box — it just catches a
+ * highlight along every edge the way a real object does. Verified in
+ * Wave 10b that `RoundedBoxGeometry` lays out per-face UV islands
+ * spanning 0..1 exactly as `BoxGeometry` does (inset only by the bevel's
+ * own proportion, well under 1%), so **every existing painted texture
+ * still maps correctly** — that check is what made this safe to do at
+ * all, and it is the reason capsules were rejected rather than merely
+ * deferred.
+ *
+ * The radius is proportional to the part's own smallest dimension rather
+ * than a fixed size: a hand and a torso want visibly different softness,
+ * and a fixed radius would either vanish on the torso or swallow the
+ * hand. `bevelBox()` clamps to a third of the smallest dimension itself,
+ * so an extreme Wardrobe slider can't collapse a part into a lozenge.
+ */
 function boxMesh(width, height, depth, material) {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  return mesh;
+  return bevelBox(width, height, depth, material, { bevel: Math.min(width, height, depth) * 0.1 });
 }
 
 /**
@@ -243,24 +293,21 @@ export function buildCharacter(appearance, bodyModelId, textureImages = {}) {
 /**
  * Applies a pose — `{ pivotName: [x, y, z] }`, Euler angles in radians —
  * to a live rig's pivots. Used every frame by `PlayerAnimationSystem`.
+ * This is the entire "playback" mechanism — an animation clip is just a
+ * sequence of poses to interpolate between and apply this way, one frame
+ * at a time.
+ *
  * Every pivot is explicitly set, not just the ones the pose mentions —
  * anything left out is reset to its rest rotation ([0,0,0]) rather than
  * left at whatever it happened to be. That's deliberate: without it, a
  * rotation from whichever clip played *previously* (bent knees from
  * Crouch, say) could silently persist into a new clip that never
  * mentions that pivot at all, since nothing would ever reset it back.
- * This is the entire "playback" mechanism — an animation clip is just a
- * sequence of poses to interpolate between and apply this way, one frame
- * at a time.
- */
-/**
- * Applies a pose — `{ pivotName: [x, y, z] }`, Euler angles in radians —
- * to a live rig's pivots. Every pivot is explicitly set, not just the
- * ones the pose mentions — anything left out is reset to its rest
- * rotation ([0,0,0]) rather than left at whatever it happened to be (see
- * this function's own history: without that, a rotation from whichever
- * clip played previously could silently persist into a new clip that
- * never mentions that pivot at all).
+ *
+ * *(Version 4, Phase 10d — this function carried two stacked JSDoc
+ * blocks saying largely the same thing in two different ways, the
+ * result of an earlier edit adding a second rather than extending the
+ * first. Merged into one.)*
  *
  * **X and Z are negated; Y is not.** This compensates for
  * `PlayerCharacterSystem`'s own 180° root-orientation fix (see that
