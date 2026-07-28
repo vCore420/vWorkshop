@@ -139,10 +139,21 @@ before changing any strength value:
   and spatial frequency dominate the result; retune by measuring, not by
   reasoning from another material's number.
 
-Current typical tilts, for reference: siding 5.2°, wood 4.1°, cork 2.4°,
-paper 0.8°, metal 15.2°. Roughness bands are declared per material and,
-since the normalisation fix in the same wave, are delivered to within
-0.001 of what they declare.
+The full current set is in "The surface hierarchy" below, which is the
+authority — this paragraph used to carry its own partial copy of those
+numbers (missing plaster and concrete entirely) and has been reduced to
+this pointer rather than left to drift out of step with it. Roughness
+bands are declared per material and, since the normalisation fix in the
+same wave, are delivered to within 0.001 of what they declare.
+
+**One caveat on all of these figures: every generator in
+`ProceduralTexture.js` uses `Math.random()`, so a texture is not
+byte-identical between two runs and a measured tilt moves by a tenth of a
+degree or so each time.** Wood has been measured at both 4.1° and 3.8° in
+different sessions, and neither reading is wrong. Treat every number here
+as accurate to roughly ±0.3°, and don't go hunting for a regression when
+a re-measurement disagrees in the last digit. What matters is the
+*ordering* in the table below, which is robust — not the exact value.
 
 **Flat-colour materials remain deliberately untouched.** `fabric`,
 `matte`, `plastic`, `rubber`, `ceramic`, `brass` and `emissive` carry no
@@ -150,28 +161,92 @@ since the normalisation fix in the same wave, are delivered to within
 normal map there would be a flat sheet of `(0.5, 0.5, 1)`. Giving those
 surfaces real character means authoring detail they don't currently have.
 
-**The surface hierarchy (Version 4, Phase 10b) — a rule, not a
-coincidence.** When Phase 10b gave the room's own walls, ceiling and
-floor real surfaces for the first time, the first attempt set plaster's
-normal strength to a value that measured **~4.7° typical tilt —
-*stronger* than the wood furniture standing in front of it.** That is
-exactly backwards, and it is an easy mistake to make because each
-material looks fine judged alone. The room is the backdrop; the objects
-in it are the subject. Surfaces are now tuned as a *set*, and the
-ordering is deliberate and verified:
+**The surface hierarchy — a rule, not a coincidence.** When Phase 10b
+gave the room's own walls, ceiling and floor real surfaces for the first
+time, the first attempt set plaster's normal strength to a value that
+measured **~4.7° typical tilt — *stronger* than the wood furniture
+standing in front of it.** That is exactly backwards, and it is an easy
+mistake to make because each material looks fine judged alone. The room
+is the backdrop; the objects in it are the subject. Surfaces are tuned as
+a *set*, and the ordering is deliberate and verified:
 
 | surface | typical tilt | role |
 |---|---|---|
 | brushed metal | 15.2° | small, deliberately eye-catching |
 | siding (exterior) | 5.2° | seen at a distance, needs to survive it |
-| wood (furniture) | 3.8° | the subject |
-| plaster (walls, ceiling) | 2.4° | backdrop |
+| wood (furniture) | 3.8° | **the subject** |
 | concrete (floor) | 2.0° | backdrop |
 | paper | 0.8° | a whisper |
+| plaster (walls, ceiling) | 0.57° | backdrop that must disappear |
 
 Before changing any one of these, check it against the others. A value
 that reads well in isolation can still be wrong for its place in this
 list.
+
+**And measurement alone will not tell you when you have aimed at the
+wrong target.** Plaster sits at the bottom of that table because of Phase
+10e, not Phase 10b. After the measured retune to ~2.4°, Vi played the
+room and said the walls were "a bit much and not the greatest looking,
+we want a warm cozy room feel." Every number in the file was internally
+consistent; the goal they were consistent *with* was wrong. `plaster`
+went from an accurate rendering of plaster's real aggregate tooth to
+something that recedes: contrast cut from 0.129 to 0.041 across the
+1st–99th percentile, and relief to ~0.57°. **Being measurably right
+about the wrong thing is still wrong** — this is the standing example.
+
+## The material charter (Version 4, Phase 10)
+
+The rules Phase 10 arrived at, gathered in one place so a later change
+doesn't have to re-derive them.
+
+**Warmth comes from colour and light, not from surface detail.** The
+Workshop is meant to be somewhere you want to be. Every darkening tone in
+a generated texture should be a warm brown, every lightening one a warm
+cream — never pure black, never pure white. Neutral speckle over a warm
+base desaturates toward grey, which is exactly how a surface reads as
+grubby rather than cosy. `plasterTexture()` is the worked example.
+
+**Relief is derived from the albedo, never drawn twice.**
+`surfaceSetFrom()` reads a texture's own canvas and infers normal and
+roughness from its luminance. This is correct rather than approximate for
+these textures, because every generator already draws its detail *as*
+relief — grain lines are darker because they are grooves. A future
+hand-authored texture should preserve that property.
+
+**Judge a normal map by typical (mean) tilt, never peak.** Peak is one
+pixel in 65,000. Guessed strengths produced ~1° typical on wood and cork
+— invisible, and costing a texture fetch to achieve nothing.
+
+**Strength is not comparable between generators.** Brushed metal at a
+*lower* strength than wood produces nearly four times the tilt, because
+its hard-edged 1px streaks are far higher-contrast and higher-frequency
+than wood's soft 35%-alpha grain. Retune by measuring, never by
+reasoning from another material's number.
+
+**A declared roughness band must be normalised to be real.** Mapping
+absolute luminance into `[min, max]` collapsed a declared `[0.85, 1.0]`
+to an actual 0.886–0.906, because none of these generators use the full
+dynamic range. Normalise to each texture's own observed range first.
+
+**Bevel by proximity, not by importance.** A chamfer catches a highlight
+along its length and is the strongest "this is a real object" cue
+available — but it costs 9-49× a plain box's triangles depending on tier.
+Bevel what a player stands next to and handles: hero surfaces, moulded
+plastic, case furniture, and above all upholstery, which has no sharp
+edges at all in reality. Do not bevel what is placed in the hundreds.
+
+**Envelope preservation is the default for anything a player can place.**
+`bevelBox()` rounds *inward* from the box's own faces, so a 2m wall stays
+exactly 2m at its widest point. See `docs/WORLDBUILDER.md` for why this
+matters for construction pieces specifically, and for the one time it was
+deliberately overridden.
+
+**Flat-colour materials are honestly flat.** `fabric`, `matte`,
+`plastic`, `rubber`, `ceramic` and `brass` carry no texture map, so
+nothing can be derived for them. That is a missing texture, not a missed
+assignment — and upholstery is the most visible case, with correctly soft
+silhouettes but perfectly smooth surfaces. Giving them real character
+means authoring textures that do not exist yet.
 
 ## Known limitations / future opportunities
 

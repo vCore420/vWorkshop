@@ -7707,6 +7707,458 @@ joint's world position confirmed unchanged on all three Beings, and all
 14 player pivots plus `totalHeight` (1.93) and `eyeHeight` (1.879)
 unchanged. Clean boot, zero console errors.
 
+## Version 4, Phase 10e — The Visual Upgrade, Charter and Close-Out (v4.1.0e)
+
+**Goal:** the last of Phase 10's five waves — a written art-direction
+charter so the phase's decisions hold, verification across every graphics
+tier and time of day, and the phase's own close-out.
+
+**The wave's most important change came from playing it, not measuring
+it.** Vi, on the walls and ceiling Wave 10b had introduced: *"its a bit
+much and not the greatest looking, we want a warm cozy room feel."*
+
+That is the single most useful piece of feedback in the whole phase,
+because it identifies a failure the verification approach used throughout
+Phase 10 structurally could not catch. Every number in
+`plasterTexture()` was internally consistent, and Wave 10b's own comment
+had explicitly defended the contrast — "a real, visible tooth rather than
+a whisper — correct for plaster." It *was* correct for plaster. It was
+wrong for this room. A workshop someone wants to spend time in has walls
+that recede; aggregate tooth reads as bare render coat, which is cold and
+busy. **Being measurably right about the wrong target is still wrong**,
+and that is now written into `docs/VISUAL_IDENTITY.md` as the standing
+example rather than left as a one-off.
+
+`plasterTexture()` was rewritten around three changes, all pushing the
+same direction:
+
+1. **Shadows are warm, never black.** The single biggest cause of the old
+   version reading cold — neutral speckle over a warm base desaturates
+   toward grey, which is exactly how a wall reads as grubby rather than
+   cosy. Every darkening tone is now a warm brown, every lightening one a
+   warm cream; nothing neutral, nothing pure.
+2. **Broad tonal drift does the work, fine grain barely appears.** The
+   old version's ~16,800 hard speckles at 512px are gone, replaced by
+   large soft gradients plus a trace of very faint grain present only to
+   stop the gradients banding.
+3. **Far lower contrast, and lower relief.** 0.129 → **0.041** across the
+   1st–99th percentile; typical normal tilt 2.4° → **0.57°**. Wall and
+   ceiling colours were also warmed (`#cfc4ad` → `#d9cbb0`, `#e7e2d6` →
+   `#efe6d4`).
+
+Verified through the real renderer at three lighting moods, since a wall
+that reads warm at noon can read grey at dusk: the new plaster is warmer
+than the old flat matte at **every** one (red-minus-blue of 41/62/37 at
+noon/dusk/night against 36/57/34), with gentle surface detail (0.53 at
+noon) against the previous version's 1.80.
+
+**The material charter** (`docs/VISUAL_IDENTITY.md`) now gathers every
+rule the phase arrived at in one place, so a later change doesn't
+re-derive them: warmth comes from colour and light rather than surface
+detail; relief is derived from the albedo and never drawn twice; judge a
+normal map by typical tilt and never peak; strength is not comparable
+between generators; a declared roughness band must be normalised to be
+real; bevel by proximity rather than importance; envelope preservation is
+the default for anything a player can place; and flat-colour materials
+are honestly flat rather than secretly unfinished. The surface hierarchy
+table is the authority for tuning values.
+
+**A documentation inconsistency worth its own note:** wood's typical tilt
+appears in this repository as both 4.1° and 3.8°, and neither is wrong —
+every generator in `ProceduralTexture.js` uses `Math.random()`, so a
+texture is not byte-identical between runs and a measured tilt moves by a
+tenth of a degree or so each time. Recorded in the charter with a ±0.3°
+caveat so nobody hunts a regression that isn't there. A second, real
+inconsistency was also fixed: the Phase 10a section carried its own
+partial copy of the tilt table (missing plaster and concrete entirely),
+now reduced to a pointer at the one authoritative table.
+
+**Verified across every graphics tier**, which is what this wave existed
+to do: the entire Workshop — all nine furniture pieces, all 56
+construction pieces, all three compiled Beings, and the player rig —
+builds cleanly at `low`, `medium` and `high` with zero errors, and
+surface maps correctly follow the tier at each (absent at `low`, present
+at `medium`/`high`; `metal` and `plaster` taking the tier's canvas size,
+every other generator keeping its own). Flat materials confirmed never to
+gain a map at any tier. Total geometry for all Workshop content:
+
+| tier | triangles | bevel segments | surface maps |
+|---|---|---|---|
+| low | 24,236 | 1 | no |
+| medium | 41,900 | 2 | yes |
+| high | 68,396 | 3 | yes |
+
+403 meshes and 35 distinct textures across the whole set — comfortable at
+every tier for any GPU this project targets.
+
+---
+
+## Phase 10 close-out — what the Visual Upgrade actually was
+
+Five waves, `v4.1.0a` through `v4.1.0e`. The brief was "the basic 3d
+geometry is cool but it feels like a really good prototype... move it
+into a more professional finish."
+
+**The diagnosis held up.** Two shared causes, found before any code
+changed and confirmed by everything after: there was not one `normalMap`,
+`roughnessMap`, `aoMap` or `bumpMap` anywhere in `src/` (grep across all
+266 files, zero hits), and every edge was a razor-sharp 90° because
+`PlaceholderFactory.box()` is raw `BoxGeometry`. Neither was a
+geometry-budget problem, which is why a shared foundation wave could fix
+both for everything at once rather than object by object.
+
+**The asset-generation question was answered deliberately, not by
+default.** Staying code-generated rather than shipping GLTF binaries kept
+the zero-build deployment story intact, avoided a licensing obligation
+per model, and — decisively — addressed the actual causes, which were
+material and edge problems rather than shape-complexity ones. Player
+imports remain fully supported for Beings, unchanged.
+
+**Nine genuine bugs and stale claims were found by reading, none of them
+cosmetic:** a `mesh()` API promised but never built; a claim that
+`CapsuleGeometry` doesn't exist (it landed in r142, and three files
+already use it); the Lantern's glass sealed invisibly inside its opaque
+body since Phase 5; two door-leaf pieces missing from the group map since
+Phase 2; a dead `"Structures"` group; stairs built as five floating
+slabs; two windows with no actual sill; `BodyCompiler`'s claim that its
+unit capsule matches the other primitives (it is 0.6 × 1.0 × 0.6 against
+their 1 × 1 × 1, so a shape swap silently thins a part 40%); and
+`PlayerCharacter`'s claim of unit-sized geometry it has never used. A
+piece count repeated across two waves was also corrected from 55 to a
+measured 56.
+
+**Three times the work was wrong and got corrected before shipping:**
+roughness maps that mapped absolute luminance and so delivered a 2%
+variation against a declared 15% band; normal strengths guessed so weak
+that wood and cork sat at ~1° typical tilt while brushed metal at a
+*lower* guessed value was already at 15°; and plaster tuned *stronger*
+than the furniture standing in front of it. Each was caught by measuring
+rather than by review.
+
+**Two planned changes were reversed on investigation.** Architectural
+trim — named as Wave 10b's biggest win — turned out to already exist and
+be correct. And capsule limbs for the *player* were dropped once reading
+showed the boxiness is the original brief and the 64×64-canvas texture
+pipeline structurally depends on `BoxGeometry`'s per-face UV islands.
+Both are reported as reversals rather than quietly re-scoped.
+
+**What Phase 10 deliberately did not do:** author new textures for the
+flat-colour materials. `fabric`, `matte`, `plastic`, `rubber`, `ceramic`
+and `brass` still carry no map, so nothing can be derived for them.
+Upholstery is the most visible case — the reading chair's cushions now
+have correctly soft silhouettes from bevelling, but perfectly smooth
+surfaces. That is a real art pass rather than something the
+derive-from-albedo approach can fake, and it is the natural first
+candidate if a later phase revisits this.
+
+## Version 4, Phase 11 — The Player's Own Body (v4.1.1)
+
+**Goal:** close the gap between where the camera is looking and where the
+player's body actually is. Six of Vi's post-`v4.1.0e` playtesting notes,
+all the same system — and all of it the mechanism Phase 9e introduced
+when it first bound the camera to the rig's head. Phase 10 bumped the
+minor version, so an unlettered Phase 11 advances the patch.
+
+**Three of the six turned out to be sign errors or no-ops with specific
+addresses, found by reading and then confirmed by measurement before
+anything was changed.** That sequencing mattered: two of them look
+identical to "needs retuning" from the symptom alone.
+
+**Fix 1 — the rig's head pitch was inverted** ("looking down with the
+camera shows the player's head as up"). `PlayerAnimationSystem.update()`
+applied the camera's pitch to the rig as `pivots.head.rotation.x +=
+cameraSystem.pitch`, added raw. But `PlayerCharacter.applyPose()`
+deliberately **negates X and Z** on every rotation it applies, to
+compensate for `PlayerCharacterSystem`'s 180° root-orientation fix. These
+corrections are layered on *after* `applyPose()` and so write into that
+same rotated frame — without ever getting the same compensation. One
+character: `+=` became `-=`. The corroborating detail that made this a
+confident fix rather than a plausible one is that `applyPose()` negates X
+and Z but **not Y**, the yaw line above it is likewise un-negated, and
+yaw is the one axis Vi did *not* report as wrong. Verified live: the
+rig's head forward vector now reads `y = -0.565` when the camera looks
+down and `+0.565` when it looks up.
+
+**Fix 2 — first and third person were genuinely inverted from each
+other.** The third-person orbit computed `THIRD_PERSON_HEIGHT +
+THIRD_PERSON_DISTANCE * sin(pitch)`, and its comment asserted "positive
+pitch (looking down, in this project's own convention)". **That
+convention claim was simply wrong**, and measuring settled it: with the
+`"YXZ"` Euler order the same function uses, a camera at `rotation.x =
++0.5` has forward `(0, +0.479, -0.878)` — positive pitch looks **up**.
+Meanwhile `+ sin(pitch)` *raised* the orbit camera for positive pitch,
+framing the player from above, i.e. looking down. The same mouse movement
+really did move the view in opposite vertical directions in the two
+modes. First person is the reference (it is what `invertLook` is tuned
+against), so the orbit term was negated. Verified: orbit camera Y is now
+1.195 at `+pitch` against 4.263 at `-pitch`, agreeing with first person.
+
+**Fix 3 — the player's shadow had no head, and the previous fix never
+worked at all.** Version 3 Phase 3b added `sun.shadow.camera.layers.
+enable(FIRST_PERSON_HIDDEN_LAYER)` in `LightingSystem.js` for exactly
+this symptom, reasoning about the shadow camera as "a third camera"
+alongside the third-person and mirror ones. Reading Three.js r164's own
+source rather than trusting the property name settled it:
+
+```js
+function renderObject( object, camera, shadowCamera, light, type ) {
+  if ( object.visible === false ) return;
+  const visible = object.layers.test( camera.layers );
+```
+
+`camera` there is the **scene** camera rendering the frame;
+`shadowCamera` is passed separately and used for projection, not
+visibility. So while `CameraSystem` disables that layer on the main
+camera to hide the head in first person, the same disable removes the
+head from the shadow map — and no property on `sun.shadow.camera` could
+ever have changed that. The line was a no-op for two versions.
+
+Replaced with a **shadow-only proxy**: a second mesh sharing the real
+head's geometry, parented to the same pivot so it inherits every
+animation and head-turn for free, which stays on the default layer (so
+the main camera's layer test passes and the shadow pass includes it) and
+draws nothing in any ordinary pass (`colorWrite: false`, `depthWrite:
+false`). Shadow rendering substitutes its own depth material, which is
+exactly what makes an invisible caster possible. The real head's
+`castShadow` is turned off so the two can never fight over the same
+shadow depth. Verified against the precise condition Three.js itself
+tests: in first person the head fails the camera layer test while the
+proxy passes it; in third person both pass; the mirror still shows the
+real head and the proxy draws nothing there.
+
+**Fix 4 — the body follows the head from 35°.** This is a *different
+mechanism* rather than a smaller constant, which is the distinction the
+note was really making. Before, the body was completely still until the
+head hit `PLAYER_HEAD_YAW_MAX` (~79°) and was then dragged 1:1 by the
+excess — so ordinary looking around never turned the body, and going past
+the limit turned it abruptly. Now the body eases toward the head
+continuously once the offset passes `BODY_FOLLOW_THRESHOLD` (exactly
+35°), and the old clamp remains as the hard backstop for a fast flick
+that outruns the ease. **Every body-follow path moves `this.yaw` and
+reduces `_headYawOffset` by the identical amount**, so the rendered view
+direction (`yaw + _headYawOffset`) never changes — the body catches up
+without the player's aim moving. Verified: at 20° the body stays exactly
+still; from 70° it eases until precisely 35° of head-turn remains; view
+direction unchanged to 1e-6 throughout both.
+
+**Fix 5 — walking forward brings the body round.** A brisker rate than
+the ambient follow, since it answers a movement input rather than idle
+catch-up. Deliberately *only* forward: strafing and walking backward
+preserve the head-turn, because looking where you're going while moving
+sideways is a real thing people do and force-turning the body would fight
+it. Verified: from a 60° offset, walking forward brings it to 0° with the
+body at 60°; strafing and walking backward hold 25° unchanged.
+
+**Fix 6 — third person follows the head, not just the body.** This
+deliberately reverses a Phase 9e decision, which kept the orbit keyed to
+body yaw alone and said so explicitly. In practice that meant looking
+around in third person moved nothing until the body followed, reading as
+an unresponsive camera rather than a stable one — and the HUD compass
+already tracked the full look direction, which is why Vi's note names it
+as the reference. The orbit was the outlier. Verified: the camera moves
+1.891m when only the head turns.
+
+**One error of my own, caught by driving real input rather than reading.**
+The forward-snap first tested `move.y < -0.01`, reasoning from the
+`multiplyScalar(-1)` on the forward basis vector that forward must be
+negative on that axis. Dispatching a genuine `KeyW` event and reading
+`InputManager.moveVector.y` showed it is `+1` — the *basis vector* is
+negated, not the input axis. The sign was inverted before shipping. This
+is the second time this phase that a plausible inference from surrounding
+code was wrong and a measurement was right.
+
+**Verified live, end to end**, per `.claude/DEV_NOTES.md`'s technique
+(temporary `window.__debugEngine`, removed before this close; genuine
+`KeyboardEvent`s through the real per-frame path; shadows forced on with
+`setShadowQuality("high")` since this sandbox auto-selects the
+performance preset). Full regression sweep: walking, running, jumping,
+landing, crouching (0.409m drop, returning cleanly to zero) and the
+third-person blend in both directions all unaffected, with zero console
+errors throughout.
+
+**Reviewed and found already fine:** `invertLook` itself needed no
+change. It is applied once, in `InputManager`, to `lookDelta.y` — so both
+view modes were always receiving the same input; the divergence was
+entirely downstream, in the orbit's own vertical term. Fixing that made
+the setting behave consistently in both modes without touching it.
+
+## Version 4, Phase 12 — Animation Orientation, End to End (v4.1.2)
+
+**Goal:** root-cause Vi's note — *"something somewhere to do with the
+player models, being models, player imported models and animations, a lot
+of imported models play animations backwards or flipped, some player
+animations are recorded backwards, some spawned imported model beings move
+backwards, something just seems wired up wrong between all these
+systems."* Four symptoms across four subsystems built separately, with one
+suspected shared cause.
+
+**This phase's own roadmap entry set the rule it was run under:** find the
+*convention* first, write it down, then make every path conform — rather
+than negating axes until each symptom individually stops. The stated risk
+was a "fix" that corrects one path by adding a second compensation on top
+of an existing one, leaving two cancelling wrongs and a third path still
+broken. That rule turned out to matter, because **the leading hypothesis
+was wrong.**
+
+**The hypothesis, and why it was plausible.** `applyPose()` and
+`applyPoseToMappedSkeleton()` both negate a pose's X and Z components —
+exactly conjugation by a 180° Y rotation — and that negation exists to
+reconcile clips with the `+π` the *player's* root carries
+(`PlayerCharacterSystem` sets `root.rotation.y = cam.yaw + Math.PI`). A
+Being's root carries no such `+π` (`root.rotation.y = instance.rotationY
+?? 0`). A player-specific compensation baked into the shared retargeting
+function, applied to rigs that don't need it, would produce precisely
+"animations play backwards."
+
+**Measurement refuted it.** Apply each clip to both the player rig and a
+primitive Being, orient each exactly as its own system does, and compare
+where each limb sits relative to *its own* forward direction. Across
+**144 comparisons** — every biped clip, three frames each, four limbs —
+**zero** sign disagreements. The two flips cancel: the player's root
+carries `+π` and its forward is `−Z`; a Being's root carries `0` and its
+forward is `+Z`. Both rigs face `+Z` at zero rotation underneath. The
+player path, the primitive-Being path, and the Animation Editor and Being
+Creator previews are all mutually consistent, **and none of them were
+changed.** Had the fix been applied on the strength of the hypothesis, it
+would have broken three working paths to fix none.
+
+**What was actually broken: imported models had no orientation correction
+of any kind.** `ModelLoader` parses and clones with no normalisation;
+`BeingController` did `root.add(model)` with the model's own orientation
+untouched. Which way a `.glb` faces is entirely up to whoever exported it,
+and a great many character models face `−Z`. Such a model walked backwards
+and played every animation mirrored front-to-back — **not because any sign
+in the Workshop was wrong, but because the Workshop never asked which way
+the model faced.** A missing capability, not a defect.
+
+**The fix — a per-model `yawOffset`:**
+
+- Stored on the **model** (`ModelLibrary`, beside the existing cached
+  `skeletonMap`), not on the Being, because it is a fact about the model.
+  Correct it once and every Being using it is fixed.
+- Applied as a **child transform** at all three attach points —
+  `BeingController` (placed Beings), `PlayerCharacterSystem` (an imported
+  player rig, which had the identical problem), and the Being Creator's
+  preview. Applied to the model rather than to `root`, because `root` owns
+  facing and is rewritten every frame by movement and awareness code; as a
+  child it composes with facing automatically and sits above every bone,
+  so retargeting is untouched.
+- Set by the player in the Being Creator — four quarter-turns ("Model
+  faces: Forward / Right / Backward / Left") rather than a free number,
+  since an exported model is square to an axis and clicking until it looks
+  right beats guessing a value. The Creator preview applies it live, so
+  the choice isn't made blind.
+- **Deliberately not auto-detected.** There is no reliable way to infer
+  which way a mesh faces — a nose is not something a bounding box can see
+  — and a wrong guess would silently break models that were previously
+  correct.
+- Defaults to `0`, so every model imported before this existed behaves
+  exactly as it did. **No migration required**, verified against a
+  synthetic pre-field save.
+
+**The convention is now written down** in `docs/ANIMATION.md` ("The
+orientation convention"), which was the phase's actual deliverable per its
+own roadmap entry: every Workshop rig faces `+Z` at zero rotation;
+everything downstream assumes it; clip data is stored pre-negated.
+
+**One thing named honestly rather than fixed.** Clip data being stored
+pre-negated means **a clip's numbers are not the rotations you see**, on
+two of three axes — which is the most likely explanation for "some player
+animations are recorded backwards": the data really is backwards, even
+though the playback is not. Removing the negation would mean re-authoring
+all 14 built-in clips and migrating every player-made clip, to change
+something currently working correctly end to end — a real regression risk
+across the emote wheel, IK and every Being, taken on for readability
+rather than behaviour. Recorded in `docs/ANIMATION.md`'s "Known
+simplifications" as deserving its own deliberate phase rather than being
+done quietly as a side effect of a bug fix.
+
+**Verified live:** the field defaults, sets, rejects non-finite input, and
+survives a save/load round trip; a pre-field save loads with correct
+defaults; an offset genuinely reverses a model's facing and composes
+correctly with a Being's own rotation (checked with the Being turned to
+face `+X`, not only at zero); the 144-comparison consistency sweep above;
+clean boot with zero console errors.
+
+## Version 4, Phase 13 — Constellation Lines, Off By Default (v4.1.3)
+
+**Goal:** the small, self-contained quick win this project has always
+paced between bigger phases. From Vi's notes: *"by default the star
+constellations should only be the stars with the lines toggleable from
+the pc settings, these stars should be a touch brighter than normal stars
+and the lines when on."*
+
+**Investigated and planned before any code changed**, at Vi's request.
+Two findings from that investigation shaped the phase:
+
+1. **The "brighter stars" ask was already half-built.** A separate
+   `constellationStars` Points object has existed since Phase 9 at
+   `size: 2.4` against the background field's `1.6` — but at *identical
+   opacity*, with a comment stating outright that differentiation "already
+   comes from `size`, not extra opacity budget." Only the sprite differed.
+2. **Turning the lines off changes what those stars have to do.** While
+   the lines were always on, they showed where each shape was. Off, the
+   catalogued stars carry the constellations alone out of a field of 320
+   others — and a 50%-larger sprite at identical opacity is not enough to
+   pick a shape out by eye.
+
+Vi chose "a clear step up" for brightness, and placed the toggle in the
+Atmosphere tab's existing Stars section — which already listed the
+catalogue read-only.
+
+**A measurement changed the design mid-phase.** The first implementation
+gave the catalogued stars a `×1.35` opacity multiplier, capped at 1. Live
+measurement showed the background field already sits at **0.82** opacity
+on a clear night, so that multiply clips against the ceiling and delivers
+**1.22×** — the difference compresses precisely when the sky is darkest
+and the shapes most want to be findable. The comment written alongside it
+claimed the cap *prevented* that erasure; it didn't. **Opacity has almost
+no headroom up there, and sprite size has no ceiling at all**, so the step
+up was moved mostly into size (2.4 → 2.9), with the multiplier adding
+whatever opacity headroom genuinely exists on hazier or moonlit nights.
+Measured effective prominence is now about **4×** the background field
+(3.3× area × 1.2× opacity). Deliberately *not* solved by dimming the
+background to make room — nobody asked for a darker sky, and buying
+contrast from 320 ordinary stars is a worse trade than taking it from an
+unused ceiling.
+
+**The lines themselves were raised from `0.5×` to `0.75×` star opacity.**
+That restraint was correct for something shown unasked; switching them on
+is now a deliberate act, and being timid about it just makes the feature
+look broken. They still sit below the stars they join.
+
+**A new `atmosphere` settings category**, rather than folding into
+`graphics` — `update("graphics", …)` flips `performance.preset` to
+`"custom"` as a deliberate side effect, and preferring the lines off says
+nothing about a device's rendering budget, so filing it there would make
+the preset indicator lie. Applied via `SettingsSystem._applyAtmosphere()`
+→ `WorldEnvironmentSystem.setConstellationLinesVisible()`, reusing the
+`getSystem()` lookup that already drives render distance — **no new
+wiring in `main.js`**. Defaults to `false`; `deepMerge` gives an older
+save the default automatically, so **no migration**, verified against a
+synthetic pre-category save.
+
+`.visible` is used rather than opacity-zero, so a player who leaves them
+off pays nothing at all. The lines are also hidden from the moment they
+are *built*, not merely once settings load — a save doesn't load until
+`engine:ready` at the end of `engine.init()`, so defaulting to visible
+would flash them on every boot for a player who has them off.
+
+**Stale UI copy caught and fixed in the same change:** the Stars section
+ended with "Star visibility already follows Set Time above — nothing
+separate to override here either." The checkbox made that untrue the
+moment it existed. Rewritten to describe what is actually there now.
+
+**Verified live:** default off, toggles on and off through the real
+store → `SettingsSystem` → `WorldEnvironmentSystem` path, survives a
+save/load round trip, survives applying a graphics preset, resets to off
+with the rest of the defaults, and a pre-category save loads with the
+default while preserving its other settings. The **real Settings app was
+mounted and its Atmosphere tab clicked through**: the checkbox renders,
+starts unchecked, and clicking it turns the lines on in the live world;
+the stale hint is gone and the new one present. Clean boot, zero console
+errors.
+
 ## Non-goals (revisit only if the philosophy changes)
 
 - Turning this into a multiplayer or social space

@@ -667,10 +667,9 @@ into place — deliberately scoped to "walk" mode only, since focus mode's
 own seated look-around keeps its prior direct yaw/pitch handling
 untouched, and body-facing has no meaning while seated anyway. The
 rendered first-person view reads `this.yaw + this._headYawOffset`; third-
-person's own orbit *position* deliberately still keys off `this.yaw`
-alone (an orbit that swung independently of body-facing would read as
-broken, not as a head-turn) — verified live that a nonzero
-`_headYawOffset` produces zero difference in orbit camera position.
+person's own orbit *position* keys off `this.yaw + this._headYawOffset`
+too, as of Version 4 Phase 11 — see the revision note below, which
+replaces this section's earlier claim that it deliberately did not.
 `PlayerAnimationSystem.update()` applies the identical
 `getHeadYawOffset()`/`pitch` values to `pivots.head.rotation`, additively
 on top of whatever the current clip's own idle sway or walk bob already
@@ -683,6 +682,73 @@ reading that live, bobbing transform into the camera would inherit it as
 camera jitter, the opposite of a stable first-person view. Camera and rig
 are both driven by the same clean values instead; the camera never reads
 from the rig.
+
+### Revisions from Version 4, Phase 11 ("The Player's Own Body")
+
+Vi played the Phase 9e mechanics above and reported six related problems.
+Three were defects with specific addresses; three were design judgements
+that turned out to be wrong in practice. Both kinds are worth reading
+before changing this area again.
+
+**The third-person orbit now follows the head.** This section used to
+state that the orbit "deliberately still keys off `this.yaw` alone (an
+orbit that swung independently of body-facing would read as broken, not
+as a head-turn)", with a live verification that a nonzero
+`_headYawOffset` produced zero difference in orbit position. The
+verification was correct; the design judgement was not. Looking around in
+third person moved nothing at all until the body followed, which reads as
+an unresponsive camera rather than a stable one — and the HUD compass
+already tracked the full look direction, so the orbit was the outlier.
+
+**The head pitch was going on backwards.** `pivots.head.rotation.x` was
+incremented by the camera's raw `pitch`, but `applyPose()` deliberately
+negates X and Z to compensate for the 180° root-orientation fix, and
+these corrections layer on *after* it — writing into that same rotated
+frame, so they needed the same negation. The symptom was exactly what
+that predicts, and exactly what was reported: looking down showed the
+rig's head tilted up in the mirror. `applyPose()` does **not** negate Y,
+and the yaw line is likewise un-negated, which is why yaw was always
+right. **If you add a third per-frame correction here, check its axis
+against `applyPose()`'s negation before trusting it.**
+
+**First and third person responded to the same input in opposite
+vertical directions.** The orbit computed its height as `+ sin(pitch)`
+under a comment asserting "positive pitch (looking down, in this
+project's own convention)". That convention claim was wrong: with the
+`"YXZ"` order the same function uses, `rotation.x = +0.5` gives forward
+`(0, +0.479, -0.878)` — positive pitch looks *up*. First person is the
+reference, so the orbit's vertical term was negated. `invertLook` itself
+was reviewed and needed no change; it is applied once in `InputManager`,
+so both modes always received the same input and the divergence was
+entirely downstream.
+
+**The body now follows the head.** Phase 9e's clamp meant the body did
+not move at all until the head reached ~79°, then was dragged 1:1 by the
+excess. Two behaviours sit in front of that now:
+
+- Past `BODY_FOLLOW_THRESHOLD` (35°), the body **eases** toward the head
+  continuously, settling so exactly 35° of free head-turn remains.
+- Walking **forward** brings it fully round at a brisker rate. Strafing
+  and walking backward deliberately do not — looking where you're going
+  while moving sideways is a real thing people do.
+
+`PLAYER_HEAD_YAW_MAX` survives as the hard backstop for a flick fast
+enough to outrun the ease.
+
+**The invariant any future change here must preserve:** every
+body-follow path moves `this.yaw` and reduces `_headYawOffset` by the
+*identical* amount, so `yaw + _headYawOffset` — the actual rendered view
+direction — never changes as a result. The body catches up to the
+player's aim; the aim never moves on its own.
+
+**The head's shadow is cast by a proxy, not by the head.** See
+`PlayerCharacterSystem._attachHeadShadowProxy()`. The short version:
+Three.js's shadow pass tests each object against the **scene** camera's
+layers, not the shadow camera's, so hiding the head from the
+first-person camera by layer also removed it from the shadow map — and
+Version 3 Phase 3b's `sun.shadow.camera.layers.enable(...)` could never
+have fixed that, however much its name suggests otherwise. An invisible
+proxy mesh on the default layer casts it instead.
 
 ### Body models: the same rig, different starting proportions
 

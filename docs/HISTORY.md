@@ -2824,4 +2824,149 @@ exercised, every joint world position and all 14 player pivots confirmed
 unchanged. See `docs/ROADMAP.md`'s own Phase 10d account for the full
 story.
 
+**Version 4, Phase 10e — The Visual Upgrade, Charter and Close-Out
+(v4.1.0e).** The last of Phase 10's five waves, and the one whose most
+important change came from playing the Workshop rather than measuring it.
+Vi, on the walls Wave 10b had introduced: "its a bit much and not the
+greatest looking, we want a warm cozy room feel." That identifies a
+failure this phase's verification approach structurally could not catch —
+every number in `plasterTexture()` was internally consistent, and 10b's
+own comment had explicitly defended the contrast as "correct for
+plaster." It was correct for plaster and wrong for this room. Rewritten
+around three changes: shadows warm rather than black (neutral speckle
+over a warm base desaturates toward grey, which is exactly how a wall
+reads as grubby rather than cosy), broad soft tonal drift replacing
+~16,800 hard speckles, and far lower contrast — 0.129 to **0.041** across
+the 1st–99th percentile, with relief from 2.4° to **0.57°**. Wall and
+ceiling colours warmed too. Verified through the real renderer at three
+lighting moods, since a wall that reads warm at noon can read grey at
+dusk: warmer than the old flat matte at every one. The **material
+charter** in `docs/VISUAL_IDENTITY.md` now gathers every rule the phase
+arrived at, with "being measurably right about the wrong target is still
+wrong" as its standing example. Also recorded there: every generator uses
+`Math.random()`, so measured tilts move ±0.3° between runs and wood
+legitimately appears as both 4.1° and 3.8° — no regression to hunt. Every
+graphics tier verified end to end: the whole Workshop (nine furniture
+pieces, 56 construction pieces, three Beings, the player rig) builds
+cleanly at low/medium/high with surface maps correctly following the
+tier, totalling 24,236 / 41,900 / 68,396 triangles across 403 meshes and
+35 textures. **Phase 10 closed** with its own account: the diagnosis held
+(zero surface maps anywhere, every edge razor-sharp — neither a
+geometry-budget problem); staying code-generated was answered
+deliberately rather than by default; nine genuine bugs and stale claims
+were found by reading; three pieces of the work were wrong and corrected
+before shipping; and two planned changes (architectural trim, capsule
+limbs for the player) were reversed on investigation and reported as
+reversals. Deliberately not done: authoring textures for the flat-colour
+materials, upholstery most visibly. See `docs/ROADMAP.md`'s own Phase 10e
+account and close-out for the full story.
+
+**Version 4, Phase 11 — The Player's Own Body (v4.1.1).** Six of Vi's
+post-`v4.1.0e` playtesting notes, all the same system, and all of it the
+mechanism Phase 9e introduced when it first bound the camera to the rig's
+head. Three turned out to be sign errors or no-ops with specific
+addresses, found by reading and confirmed by measurement before anything
+changed. **The rig's head pitch was inverted** because
+`PlayerAnimationSystem` added the camera's pitch raw while
+`PlayerCharacter.applyPose()` negates X and Z (compensating for the 180°
+root-orientation fix) — the corrections layer on after `applyPose()` and
+never got the same treatment; `+=` became `-=`, corroborated by yaw being
+the one axis Vi didn't report as wrong and the one axis `applyPose()`
+doesn't negate. **First and third person were genuinely inverted from
+each other**: the orbit added `sin(pitch)` to its height under a comment
+claiming "positive pitch (looking down, in this project's own
+convention)" — measured, positive pitch looks *up* (forward `(0, +0.479,
+-0.878)` at `rotation.x = +0.5`), so the orbit was the one disagreeing
+and its vertical term was negated. **The shadow head fix from Version 3
+Phase 3b never worked at all**: `sun.shadow.camera.layers.enable(...)` is
+a no-op, because Three.js's shadow pass tests `object.layers.test(
+camera.layers )` against the *scene* camera, not the shadow camera —
+verified by reading r164's source rather than trusting the property name.
+Replaced with a shadow-only proxy mesh sharing the head's geometry, on
+the default layer, drawing nothing (`colorWrite`/`depthWrite` off) but
+casting normally, since shadow rendering substitutes its own depth
+material. Three behavioural changes followed: the body now eases toward
+the head from exactly 35° (a different mechanism from the old
+79° hard clamp, which stays as a backstop), walking forward brings it
+fully round while strafing and reversing deliberately preserve the
+head-turn, and the third-person orbit now follows the head — reversing a
+Phase 9e decision that had left the camera reading as unresponsive. Every
+body-follow path moves `yaw` and `_headYawOffset` by identical amounts so
+the rendered view direction never shifts. One error of my own was caught
+by driving real input: the forward-snap first tested the wrong sign,
+inferring from a `multiplyScalar(-1)` on the forward basis vector that
+forward was negative, when a genuine `KeyW` event shows `moveVector.y ===
++1`. `invertLook` itself was reviewed and needed no change. Verified live
+with a full regression sweep and zero console errors. See
+`docs/ROADMAP.md`'s own Phase 11 account for the full story.
+
+**Version 4, Phase 12 — Animation Orientation, End to End (v4.1.2).**
+Root-causing Vi's note about imported models playing animations backwards
+or flipped, spawned imported Beings moving backwards, and player
+animations being "recorded backwards" — four symptoms across four
+separately-built subsystems. Run under the rule its own roadmap entry set:
+find the convention first, write it down, then make every path conform,
+rather than negating axes until each symptom stops. That rule mattered,
+because **the leading hypothesis was wrong.** `applyPose()` and
+`applyPoseToMappedSkeleton()` both negate a pose's X and Z — conjugation
+by a 180° Y rotation — to reconcile clips with the `+π` the *player's*
+root carries, and a Being's root carries no such `+π`, so a
+player-specific compensation applied to rigs that don't need it looked
+like an obvious cause. Measurement refuted it: applying every biped clip
+to both the player rig and a primitive Being and comparing each limb
+against its *own* forward direction gave **zero sign disagreements across
+144 comparisons**. The two flips cancel — the player's root carries `+π`
+and its forward is `−Z`; a Being's carries `0` and its forward is `+Z` —
+and both rigs face `+Z` underneath. Three working paths were left
+unchanged that the hypothesis would have broken. What was actually wrong:
+**imported models had no orientation correction of any kind.**
+`ModelLoader` parses and clones without normalisation and `BeingController`
+did `root.add(model)` untouched, so a `.glb` exported facing `−Z` — very
+common — walked backwards and animated mirrored, not because a sign was
+wrong but because the Workshop never asked which way the model faced.
+Fixed with a per-model `yawOffset` stored on `ModelLibrary` beside the
+cached `skeletonMap` (a fact about the model, so correcting it once fixes
+every Being using it), applied as a child transform at all three attach
+points including the imported *player* rig, set by the player in the Being
+Creator as four quarter-turns with a live preview, and deliberately not
+auto-detected. Defaults to `0`, so nothing previously imported changes and
+no migration is needed. The convention itself is now written into
+`docs/ANIMATION.md`. One wart named rather than fixed: clip data is stored
+pre-negated, so a clip's numbers are not the rotations you see — the
+likeliest explanation for "recorded backwards" — but unpicking it means
+re-authoring 14 built-in clips and migrating every player-made one, so it
+is recorded as deserving its own deliberate phase. See `docs/ROADMAP.md`'s
+own Phase 12 account for the full story.
+
+**Version 4, Phase 13 — Constellation Lines, Off By Default (v4.1.3).**
+The small quick win this project paces between bigger phases, and
+investigated/planned with Vi before any code changed. Two findings shaped
+it: the "brighter stars" ask was already half-built (a separate
+`constellationStars` object has existed since Phase 9 at `size: 2.4`
+against the background's `1.6` — but at identical opacity, with a comment
+stating differentiation "already comes from `size`"), and turning the
+lines off changes what those stars have to do, since they then carry the
+constellations alone out of a field of 320. A measurement then changed the
+design mid-phase: the first implementation used a `×1.35` opacity
+multiplier capped at 1, but the background field already sits at **0.82**
+on a clear night, so it clipped and delivered only **1.22×** — the
+difference compressing exactly when the sky is darkest. The comment
+written alongside claimed the cap prevented that; it didn't. Since opacity
+has no headroom and sprite size has no ceiling, the step up moved mostly
+into size (2.4 → 2.9), giving a measured effective prominence of about
+**4×** the background (3.3× area × 1.2× opacity) — deliberately not solved
+by dimming the background sky to make room. The lines themselves rose from
+`0.5×` to `0.75×` star opacity, since being timid about something a player
+deliberately switched on just makes it look broken. A new `atmosphere`
+settings category holds the preference rather than `graphics`, whose
+`update()` flips the performance preset to `"custom"` as a side effect and
+would have made that indicator lie; applied through
+`SettingsSystem._applyAtmosphere()` reusing the existing `getSystem()`
+lookup, so no new wiring. Defaults to `false` with no migration needed,
+and `.visible` is used rather than opacity-zero so leaving them off costs
+nothing. Stale UI copy ("nothing separate to override here either") was
+caught and rewritten in the same change. Verified by mounting the real
+Settings app and clicking the checkbox through to the live world. See
+`docs/ROADMAP.md`'s own Phase 13 account for the full story.
+
 </details>

@@ -299,6 +299,34 @@ of it.
   there was no discrete "effect" sound anywhere in the Workshop at all —
   the channel existed, stored and persisted, with nothing plugged into it.
 
+## The `atmosphere` category (Version 4, Phase 13)
+
+`SettingsStore` gained a fifth category alongside graphics/performance/
+display/controls/audio/phone: `atmosphere`, holding sky *preferences*.
+Today that is one field, `constellationLines` (default `false`) — see
+`docs/ATMOSPHERE.md` for what it does.
+
+**Why it isn't a graphics setting**, since that would have been the
+obvious home: `SettingsStore.update("graphics", …)` sets
+`performance.preset = "custom"` as a deliberate side effect, because any
+manual graphics edit genuinely does mean the player has departed from a
+preset. Preferring the constellation lines off says nothing at all about
+a device's rendering budget, so filing it there would make the preset
+indicator lie. It is not a `display` setting either — that is fov, UI
+scale and clock format.
+
+**The distinction this category encodes** is worth keeping in mind for
+anything added to it later: the Settings app's Atmosphere *tab* is
+mostly **live overrides** that drive `TimeOfDaySystem`/
+`EnvironmentSystem` directly and persist nothing (make it midnight, make
+it rain). This category is for the opposite thing — how a player likes
+their sky, remembered across sessions. If a new control belongs in the
+first group, it doesn't belong here.
+
+It is applied by `SettingsSystem._applyAtmosphere()`, the same
+"store holds data, this system knows what it means" split every other
+category already uses.
+
 ## Persistence
 
 `SettingsStore` is a normal `PersistenceSystem` provider (`"settings"`),

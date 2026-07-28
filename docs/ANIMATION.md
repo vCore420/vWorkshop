@@ -114,6 +114,75 @@ Pose Library needs to change for a new consumer to arrive — this is
 exactly "future systems should all consume this same animation
 architecture" made concrete.
 
+## The orientation convention (Version 4, Phase 12)
+
+Vi reported that "a lot of imported models play animations backwards or
+flipped, some player animations are recorded backwards, some spawned
+imported model beings move backwards — something just seems wired up
+wrong between all these systems." Four symptoms across four subsystems
+that were built separately. This section is the convention that
+investigation established, written down so the next change conforms to it
+rather than re-deriving it.
+
+**Every rig the Workshop builds itself faces `+Z` at zero rotation.**
+`BodyCompiler`-built Being bodies do. So does the player's rig —
+`PlayerCharacterSystem` sets `root.rotation.y = cam.yaw + Math.PI`, but
+that `+π` exists only because the *camera's* yaw convention puts forward
+at `−Z`; the rig underneath still faces `+Z`, and the two cancel.
+
+**Everything downstream assumes it.** `BeingController` sets facing with
+`root.rotation.y = atan2(look.x, look.z)` — which is `0` for a target at
+`+Z`. Every clip in `AnimationClips.js` is authored against it.
+
+**Clip data is stored pre-negated.** `applyPose()` and
+`applyPoseToMappedSkeleton()` both negate a pose's X and Z components
+before applying them (Y is applied as authored). Negating X and Z is
+exactly conjugation by a 180° Y rotation, which is what reconciles a clip
+with the player root's `+π`. The consequence worth knowing: **a clip's
+stored numbers are not the rotations you see.** Several built-in clips
+carry comments saying their values were "renegated from their original
+authoring" for precisely this reason. This is a genuine wart — see
+"Known simplifications" below.
+
+### What was measured, and what turned out to be fine
+
+The suspicion going in was that the shared negation was wrong for Beings,
+since their roots carry no `+π`. **It isn't.** Measured directly: apply
+each clip to both the player rig and a primitive Being, orient each as
+its own system does, and compare where each limb sits relative to *its
+own* forward direction. Across **144 comparisons** — every biped clip,
+three frames each, four limbs — there were **zero** sign disagreements.
+The two flips cancel: the player's root carries `+π` and its forward is
+`−Z`; a Being's root carries `0` and its forward is `+Z`.
+
+So the player path, the primitive-Being path, and the Animation Editor
+and Being Creator previews (which use the same functions) are all
+mutually consistent, and none of them were changed.
+
+### What was actually broken
+
+**Imported models had no orientation correction of any kind.**
+`ModelLoader` parses and clones; `BeingController` did `root.add(model)`
+with the model's own orientation untouched. Which way a `.glb` faces is
+entirely up to whoever exported it, and a great many character models
+face `−Z`. Such a model walked backwards and played every animation
+mirrored front-to-back — not because any sign was wrong in the Workshop,
+but because **the Workshop never asked which way the model faced.**
+
+The fix is a per-model `yawOffset` (see `ModelLibrary.setYawOffset()`),
+applied as a child transform at each of the three places a model is
+attached: `BeingController` (placed Beings), `PlayerCharacterSystem`
+(an imported player rig), and the Being Creator's preview. It is stored
+on the **model**, not the Being, because it is a fact about the model —
+correct it once and every Being using it is fixed. It is set by the
+player in the Being Creator ("Model faces": Forward / Right / Backward /
+Left), and deliberately **not** auto-detected: there is no reliable way
+to infer which way a mesh faces, and a wrong guess would silently break
+models that were previously correct.
+
+Default `0`, so every model imported before this existed behaves exactly
+as it did. No migration required.
+
 ## Retargeting
 
 "The Workshop should be capable of applying compatible animations across
@@ -649,6 +718,29 @@ points."
 
 ## Known simplifications (by design, for this phase)
 
+- **Clip data is stored pre-negated, so the numbers don't match the
+  pose** (named honestly in Version 4, Phase 12; see "The orientation
+  convention" above). `applyPose()` negates X and Z at playback, so every
+  authored value is the inverse of the rotation you actually see, on two
+  of three axes. Several built-in clips carry comments recording that
+  their values were "renegated from their original authoring" to
+  compensate. It is self-consistent and everything built on it works —
+  144 measured comparisons found no disagreement between any two paths —
+  but it is genuinely confusing to read, and it is the most likely
+  explanation for "some player animations are recorded backwards": the
+  data really is backwards, even though the playback is not.
+
+  **Left deliberately unfixed, and this is the honest reason.** Removing
+  the negation means re-authoring all 14 built-in clips *and* migrating
+  every clip a player has already made, to change something that is
+  currently working correctly end to end. That is a real regression risk
+  across the emote wheel, IK and every Being, taken on for readability
+  rather than behaviour. It should be a deliberate decision with its own
+  phase, not a side effect of a bug fix — raised here rather than done
+  quietly, so it stays visible.
+- **A model's forward axis is set by hand, not detected.** See "The
+  orientation convention" above for why guessing would be worse than
+  asking.
 - **All four of Phase 8's own pieces are now shipped** — walk-cycle foot
   placement (8a), hand placement/object interaction (8b), look-at
   targets (8c), and manual skeleton-mapping correction (8d, this one) —

@@ -28,16 +28,20 @@ Its purpose is to become somewhere worth returning to.
    project's deployment story. Three.js loads from a CDN via the import
    map in `index.html`.
 2. **Read the file before trusting your memory of it.** The codebase is
-   ~53,000 hand-written lines across ~265 files under `src/` alone (a
-   Version 3 close-out audit first measured this directly rather than
-   trusting the previous figure, which had already drifted; re-checked
-   and refreshed at the Version 4 Phase 9e handoff point — up from
-   ~50,000/~260 by then). Every previous version's closing retrospective
-   (in `docs/HISTORY.md`) names this as the single most important habit,
-   and all of them were right — including about this exact number
-   quietly going stale. It will drift again; re-run `find src -name
-   "*.js" | wc -l` and a line count before trusting it as fact in a
-   future session.
+   ~54,000 hand-written lines across ~267 files under `src/` alone
+   (re-measured directly at the Version 4 Phase 10e close; ~53,000/~265
+   at Phase 9e, ~50,000/~260 at the Version 3 close-out). Every previous
+   version's closing retrospective (in `docs/HISTORY.md`) names this as
+   the single most important habit, and all of them were right —
+   including about this exact number quietly going stale. It will drift
+   again; re-run `find src -name "*.js" | wc -l` and a line count before
+   trusting it as fact in a future session.
+
+   Phase 10 supplied a fresh example of exactly why, at a smaller scale:
+   the Construction Library was described as having "55 pieces" across
+   two consecutive waves, from a grep whose pattern missed one
+   differently-indented declaration. `CONSTRUCTION_PIECES.length` says
+   56. Measure the thing itself, not a proxy for it.
 3. **One implementation, several doors in.** Before building a second
    version of anything — a second form renderer, a second settings
    surface, a second way to browse a list — check whether an existing

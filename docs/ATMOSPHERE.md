@@ -191,6 +191,49 @@ catalogue was added afterward, in Version 4 Phase 9 — see
 this phase's `_starVisibility`/`clearFactor` cloud-cover pipeline exactly
 as-is, nothing about that mechanism needed to change for it.
 
+### Constellation lines are off by default (Version 4, Phase 13)
+
+The asterism lines joining each constellation's stars shipped always-on
+in Phase 9. They are now **off unless a player switches them on**, from
+the Atmosphere tab's own Stars section. The night sky should read as a
+sky; the lines are something you turn on to learn the shapes, not a
+permanent overlay drawn across them.
+
+`settings.atmosphere.constellationLines` is the first genuinely
+*persisted* setting that tab has ever had — everything else on it is a
+live override that drives `TimeOfDaySystem`/`EnvironmentSystem` directly
+and saves nothing. That distinction is the reason it needed its own
+settings category rather than joining `graphics` (where
+`update("graphics", …)` would flip the performance preset to `"custom"`
+as a side effect, which says nothing true about a device's rendering
+budget). Defaults to `false`, and `deepMerge` gives an older save the
+default automatically — **no migration.**
+
+`WorldEnvironmentSystem.setConstellationLinesVisible()` toggles `.visible`
+rather than driving opacity to zero, so a player who leaves them off pays
+nothing for them at all. Opacity is still recomputed on every sky change
+regardless, which costs two multiplications and means switching them on
+mid-scene shows them at the right brightness for the current sky
+immediately.
+
+**The catalogued stars had to get brighter to compensate**, since they
+now carry the constellations alone out of a field of 320 others. This is
+where a measurement changed the design: on a clear night the shared star
+opacity is already **0.82**, so a brightness *multiplier* clips against
+the material's 1.0 ceiling and delivers only 1.22× — the difference
+compresses exactly when the sky is darkest and the shapes most want to be
+findable. Opacity has almost no headroom up there. **Sprite size has no
+ceiling at all**, so the step up is taken mostly there (2.4 → 2.9,
+against the background field's 1.6), with the multiplier adding whatever
+opacity headroom genuinely exists on hazier or moonlit nights. Measured
+effective prominence is about **4×** the background field
+(3.3× area × 1.2× opacity).
+
+Deliberately *not* solved by dimming the background field to make room:
+nobody asked for a darker sky, and buying contrast by taking brightness
+away from 320 ordinary stars is a worse trade than taking it from a
+ceiling that wasn't being used.
+
 ## Season Foundations
 
 "Establish clean architectural foundations. Do not fully implement
