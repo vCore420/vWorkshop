@@ -472,6 +472,23 @@ export class BeingController {
       this.modelLoader.load(definition.modelId).then((model) => {
         if (!model || this._runtime.get(instance.id) !== runtime) return; // superseded (despawned, or a Replace Template already swapped it) before this resolved
         root.remove(runtime.modelMesh);
+        // Version 4, Phase 12 ("Animation Orientation, End to End") — the
+        // model's own forward axis, corrected. Every Workshop rig faces +Z
+        // at zero rotation and everything downstream assumes it (`root
+        // .rotation.y` is set from `atan2(look.x, look.z)` just above, and
+        // every clip is authored against that convention) — but an
+        // imported `.glb` makes no such promise, and plenty of character
+        // models face −Z. Until this line the model was added with its own
+        // orientation untouched, so such a model walked backwards and
+        // played every animation mirrored front-to-back.
+        //
+        // Applied to the *model*, not to `root`: `root` owns where the
+        // Being is facing and is written every frame by movement and
+        // awareness code, so a correction there would be overwritten
+        // immediately. As a child transform this composes with facing
+        // automatically, and sits above every bone, so retargeting is
+        // completely unaffected. See `ModelLibrary.setYawOffset()`.
+        model.rotation.y = this.modelLibrary?.get(definition.modelId)?.yawOffset ?? 0;
         root.add(model);
         runtime.modelMesh = model;
         runtime.skeleton = this._resolveSkeleton(definition.modelId, model);

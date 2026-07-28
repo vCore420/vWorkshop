@@ -36,15 +36,58 @@ import { EventBus } from "../core/EventBus.js";
 export class ModelLibrary {
   constructor() {
     this.events = new EventBus();
-    /** @type {Record<string, {id:string, name:string, format:string, addedAt:number, skeletonMap: Record<string,string>|null}>} */
+    /** @type {Record<string, {id:string, name:string, format:string, addedAt:number, skeletonMap: Record<string,string>|null, yawOffset:number}>} */
     this.models = {};
   }
 
   add(name, format) {
     const id = `model-${Date.now()}-${Math.round(Math.random() * 1000)}`;
-    this.models[id] = { id, name, format, addedAt: Date.now(), skeletonMap: null };
+    this.models[id] = { id, name, format, addedAt: Date.now(), skeletonMap: null, yawOffset: 0 };
     this._emitChanged();
     return id;
+  }
+
+  /**
+   * Version 4, Phase 12 ("Animation Orientation, End to End") — which way
+   * this particular model considers "forward", in radians of yaw.
+   *
+   * **Why this has to exist, and why it belongs on the model rather than
+   * on a Being.** The Workshop's own rigs all face **+Z** at zero
+   * rotation: `BodyCompiler`-built bodies do, and so does the player's
+   * (its root carries a `+π` only because the *camera's* yaw convention
+   * puts forward at −Z; the rig underneath still faces +Z). Everything
+   * downstream assumes it — `BeingController` sets facing with
+   * `root.rotation.y = atan2(look.x, look.z)`, and every animation clip
+   * is authored against it.
+   *
+   * An imported `.glb`/`.gltf` makes no such promise. Which way a model
+   * faces is entirely up to whoever exported it, and a great many
+   * character models face −Z. Until this phase the Workshop had **no
+   * correction of any kind** — `ModelLoader` parses and clones, and
+   * `BeingController` did `root.add(model)` with the model's own
+   * orientation untouched. A −Z-facing model therefore walked backwards
+   * and played every animation mirrored front-to-back, which is exactly
+   * what Vi reported ("a lot of imported models play animations backwards
+   * or flipped... some spawned imported model beings move backwards").
+   *
+   * It lives here, beside `skeletonMap`, because it is a fact about the
+   * *model* in exactly the same way: correct it once and every Being
+   * using that model is fixed, rather than every Being needing its own
+   * copy of the same correction. Defaults to `0`, so a model that already
+   * faces +Z — and every model imported before this field existed — is
+   * completely unaffected.
+   *
+   * Deliberately **not** auto-detected. There is no reliable way to infer
+   * which way a mesh "faces" (a nose is not a thing a bounding box can
+   * see), and guessing wrong would be worse than not guessing: it would
+   * silently break models that were previously correct. The player can
+   * see the answer instantly and set it in one click.
+   */
+  setYawOffset(id, radians) {
+    const model = this.models[id];
+    if (!model) return;
+    model.yawOffset = Number.isFinite(radians) ? radians : 0;
+    this._emitChanged();
   }
 
   rename(id, name) {
@@ -99,6 +142,10 @@ export class ModelLibrary {
     this.models = data.models ?? {};
     for (const model of Object.values(this.models)) {
       if (model.skeletonMap === undefined) model.skeletonMap = null; // a model saved before this phase existed
+      // Version 4, Phase 12 — same pattern, same reason: a model imported
+      // before `yawOffset` existed defaults to 0, which is exactly the
+      // uncorrected behaviour it already had. No migration needed.
+      if (typeof model.yawOffset !== "number") model.yawOffset = 0;
     }
     this.events.emit("library:changed");
   }

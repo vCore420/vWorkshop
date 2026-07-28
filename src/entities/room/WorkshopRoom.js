@@ -188,12 +188,12 @@ export function buildRoom(dimensions, windowDefs, doorDef) {
   // subtle — see `plasterTexture()`'s own comment) painted-plaster
   // surface. The ceiling is the same material at its own lighter tone
   // rather than a second, near-identical one.
-  const ceilingMat = Materials.plaster("#e7e2d6");
+  const ceilingMat = Materials.plaster("#efe6d4");
   const ceiling = box(width, 0.1, depth, ceilingMat);
   ceiling.position.set(0, height + 0.05, 0);
   root.add(ceiling);
 
-  const interiorWallMat = Materials.plaster("#cfc4ad");
+  const interiorWallMat = Materials.plaster("#d9cbb0");
   const exteriorWallMat = Materials.siding("#5a4a3d");
 
   // Wall centrelines, shifted outward by WALL_GROWTH so each wall's interior

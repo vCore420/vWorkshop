@@ -154,6 +154,14 @@ export function createBeingCreatorApp({ beingLibrary, modelLibrary, modelAssetSt
           object3D = modelLoader.buildPlaceholder();
         } else {
           const model = await modelLoader.load(draft.modelId);
+          // Version 4, Phase 12 — the same forward-axis correction a
+          // placed Being gets (`BeingController`) and an imported player
+          // rig gets (`PlayerCharacterSystem`). Applied here too so the
+          // "Model faces" buttons below show their effect immediately in
+          // this preview — otherwise the player would be choosing an
+          // orientation blind and only discovering the result after
+          // placing the Being in the world.
+          if (model) model.rotation.y = modelLibrary.get(draft.modelId)?.yawOffset ?? 0;
           // Version 4, Phase 8d — deliberately *not* resetting
           // `previewSkeleton`/`previewModelBoneNames` to blank before
           // this await resolves, unlike the primitives branch above:
@@ -997,6 +1005,51 @@ function buildModelSection(draft, modelLibrary, modelAssetStore, onChange, onPre
     });
     modelActions.append(renameBtn, deleteBtn);
     section.appendChild(modelActions);
+
+    // Version 4, Phase 12 ("Animation Orientation, End to End") — which
+    // way this model faces.
+    //
+    // Every rig the Workshop builds itself faces +Z at zero rotation, and
+    // everything downstream assumes it: facing is set from
+    // `atan2(look.x, look.z)`, and every animation clip is authored
+    // against that convention. An imported `.glb` makes no such promise —
+    // plenty of character models face −Z — and until this phase there was
+    // no correction anywhere, so those models walked backwards and played
+    // every animation mirrored front-to-back.
+    //
+    // Four quarter-turns rather than a free slider, deliberately: a model
+    // exported from any ordinary tool is square to an axis, so the answer
+    // is always one of these four, and four buttons you can click until it
+    // looks right is faster and less error-prone than a number to guess
+    // at. Stored on the *model* (see `ModelLibrary.setYawOffset()`), so
+    // correcting it once fixes every Being that uses it.
+    const facingRow = document.createElement("div");
+    facingRow.className = "builder-inline-row";
+    const facingLabel = document.createElement("label");
+    facingLabel.className = "builder-checkbox-label";
+    facingLabel.textContent = "Model faces";
+    facingRow.appendChild(facingLabel);
+    const currentOffset = currentModel?.yawOffset ?? 0;
+    for (const [label, radians] of [["Forward", 0], ["Right", Math.PI / 2], ["Backward", Math.PI], ["Left", -Math.PI / 2]]) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "builder-icon-button";
+      // Float comparison against a quarter-turn — the stored value only
+      // ever comes from this list, so an exact-ish match is safe here.
+      if (Math.abs(currentOffset - radians) < 0.01) btn.classList.add("active");
+      btn.textContent = label;
+      btn.addEventListener("click", () => {
+        modelLibrary.setYawOffset(draft.modelId, radians);
+        onPreviewChange();
+        onChange();
+      });
+      facingRow.appendChild(btn);
+    }
+    section.appendChild(facingRow);
+    const facingHint = document.createElement("p");
+    facingHint.className = "builder-hint";
+    facingHint.textContent = "If this model walks or animates backwards, its own forward direction differs from the Workshop's. Pick the option that makes it face away from you in the preview.";
+    section.appendChild(facingHint);
   }
 
   const importBtn = document.createElement("button");

@@ -383,9 +383,21 @@ export function createSettingsApp({ settingsStore, lightingSystem, timeOfDaySyst
         el.appendChild(sectionHeading("Stars"));
         el.appendChild(infoRow("Visibility", starsVisible ? "Visible \u2014 the sky is dark enough" : "Not visible \u2014 too much daylight"));
         el.appendChild(infoRow("Constellations", CONSTELLATIONS.map((c) => c.name).join(", ")));
+        // Version 4, Phase 13 ("Constellation Lines, Off By Default") \u2014
+        // the first genuinely *persisted* control on this tab. Everything
+        // else here is a live override that saves nothing (see
+        // `overrideSliderRow()`), so this one deliberately goes through
+        // `settingsStore` instead: it is a preference about how you like
+        // your sky, not a temporary "make it midnight right now."
+        el.appendChild(buildCheckboxRow("Constellation lines", settingsStore.get("atmosphere").constellationLines, (checked) => {
+          settingsStore.update("atmosphere", { constellationLines: checked });
+        }));
         const starsHint = document.createElement("p");
         starsHint.className = "app-subtitle";
-        starsHint.textContent = "Star visibility already follows Set Time above (how dark the sky currently is) \u2014 nothing separate to override here either.";
+        // Was: "...nothing separate to override here either." That stopped
+        // being true the moment the checkbox above existed \u2014 corrected in
+        // the same change rather than left to drift.
+        starsHint.textContent = "Star visibility itself already follows Set Time above (how dark the sky currently is). The lines joining each constellation are off by default \u2014 the catalogued stars are drawn a little brighter than the rest, so the shapes are there to find without them.";
         el.appendChild(starsHint);
         const constellationsHint = document.createElement("p");
         constellationsHint.className = "app-subtitle";
