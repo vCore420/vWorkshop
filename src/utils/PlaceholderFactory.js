@@ -137,19 +137,27 @@ export const Materials = {
    * meant every grained wooden object in the room was seen against a
    * backdrop carrying no surface information at all.
    *
-   * Strength 1.5 is measured, not chosen — it lands at ~2.4° typical
-   * normal tilt, against wood's ~4.1°. That relationship is the point: a
-   * wall should read as a real surface rather than a void, and stop well
-   * short of competing for attention with anything standing in front of
-   * it. The room is the backdrop, not the subject. (The first pass set
-   * this to 3, which measured at ~4.7° — *stronger* than the furniture it
-   * sits behind, exactly backwards. See `plasterTexture()`'s own comment
-   * for the measurements and for why this texture is formless rather than
-   * merely faint.)
+   * **Retuned twice, and the second time by playing it rather than
+   * measuring it.** The first pass set strength 3 against the original
+   * high-contrast texture, measuring ~4.7° typical tilt — *stronger* than
+   * the furniture standing in front of it, exactly backwards for a
+   * backdrop. Measurement caught that and brought it to ~2.4°. Then Vi
+   * played the room and said the walls were "a bit much and not the
+   * greatest looking, we want a warm cozy room feel" — a judgement no
+   * measurement here could have produced, because the numbers were
+   * internally consistent and aimed at the wrong target.
+   *
+   * `plasterTexture()` was rewritten warm and soft in response (see its
+   * own comment), and strength sits at 3 again — but against a texture
+   * with roughly a third the contrast, which now lands at **~0.57°
+   * typical tilt against wood's ~3.8°**. The wall is a whisper of surface
+   * rather than a texture competing for attention. Warmth comes from
+   * colour and light; the relief is only there so the plane isn't
+   * mathematically dead.
    */
-  plaster(color = "#cfc4ad") {
+  plaster(color = "#d5c8b0") {
     return cached(`plaster:${color}`, () => new THREE.MeshStandardMaterial({
-      ...surfaceSetFrom(plasterTexture(color, { size: textureQuality().textureSize }), { normalStrength: 1.5, roughnessRange: { min: 0.88, max: 1 } }),
+      ...surfaceSetFrom(plasterTexture(color, { size: textureQuality().textureSize }), { normalStrength: 3, roughnessRange: { min: 0.93, max: 1 } }),
       roughness: 0.95,
       metalness: 0,
     }));

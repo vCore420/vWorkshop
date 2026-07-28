@@ -86,57 +86,74 @@ export function corkTexture(base = "#c79a63") {
 }
 
 /**
- * Painted plaster, for the Workshop's own interior walls and ceiling —
- * Version 4, Phase 10b ("The Visual Upgrade — Furniture and Room").
+ * Softly painted plaster, for the Workshop's own interior walls and
+ * ceiling — Version 4, Phase 10b, **substantially rewritten in Phase
+ * 10e after Vi played it: "its a bit much and not the greatest looking,
+ * we want a warm cozy room feel."**
  *
- * These are, by area, the largest surfaces in the entire Workshop, and
- * until this wave they were the only major ones with **no texture at
- * all** — `Materials.matte()`, a completely flat colour. Every carefully
- * grained wooden object in the room was being seen against a backdrop
- * with no surface information whatsoever, which is a large part of why
- * the room read as a prototype however good the furniture got.
+ * That feedback is worth recording precisely, because it is the exact
+ * failure this file's own measurements could not have caught. The first
+ * version measured at 0.129 luminance contrast across the 1st-99th
+ * percentile, and the comment here defended that as "a real, visible
+ * tooth rather than a whisper — correct for plaster." It was correct
+ * *for plaster*, and wrong *for this room*. A workshop someone wants to
+ * spend time in has walls that recede; aggregate tooth reads as bare
+ * render or unfinished render coat, which is cold and busy rather than
+ * warm. Being measurably right about the wrong target is still wrong.
  *
- * **Deliberately non-directional and fine-grained**, for a reason
- * specific to how these walls are built rather than general restraint:
- * `buildWallWithOpenings()` slices a wall into box segments of *varying
- * sizes* around its windows and door, and a `BoxGeometry` face maps UV
- * 0..1 regardless of how large that face actually is — so a narrow pier
- * between two windows shows the same texture compressed into less space
- * than the broad wall beside it. Anything with visible direction or
- * structure (a grain, a board line, a weave) would make that density
- * difference read as an obvious seam between segments. Formless speckle
- * does not: it looks like the same plaster at any scale, which is what
- * makes the mismatch survivable without per-segment UV correction —
- * that would mean rebuilding how every wall segment is generated.
+ * **Three deliberate changes, all pushing the same direction:**
  *
- * **Measured, because the first version of this comment guessed and was
- * wrong.** It claimed the contrast was "a few percent luminance either
- * side of the base"; it is actually 0.129 across the 1st–99th percentile
- * (0.253 full range). That is a real, visible tooth rather than a
- * whisper — correct for plaster, and left as it is — but the reason it
- * doesn't produce seams is the *formlessness* described above, not
- * low contrast as originally claimed. `Materials.plaster()`'s own normal
- * strength was retuned down from 3 to 1.5 on the strength of the same
- * measurement, landing at ~2.4° typical tilt: clearly present, and
- * comfortably subordinate to wood's ~4.1°, which is the right
- * relationship for a backdrop.
+ *  1. **Shadows are warm, never black.** The single biggest cause of the
+ *     old version looking cold: neutral black speckle over a warm base
+ *     desaturates toward grey, which is exactly how a wall reads as
+ *     grubby rather than cosy. Every darkening tone here is a warm brown;
+ *     every lightening one is a warm cream. Nothing neutral, nothing
+ *     pure.
+ *  2. **Broad tonal drift does the work; fine grain barely appears.**
+ *     The old version's ~16,800 hard speckles at 512px are gone, replaced
+ *     by large soft gradients (the gentle unevenness of a hand-painted
+ *     wall catching light across its span) plus a trace of very fine,
+ *     very faint grain — present only to stop large flat gradients
+ *     banding, not to be seen as texture in its own right.
+ *  3. **Far lower contrast.** Target is roughly a third of the old
+ *     figure. The warmth should come from colour and light, not from
+ *     surface detail competing with the furniture in front of it.
+ *
+ * **Still deliberately formless**, and that part of the original
+ * reasoning stands unchanged: `buildWallWithOpenings()` slices a wall
+ * into box segments of *varying sizes* around its windows and door, and a
+ * `BoxGeometry` face maps UV 0..1 regardless of how large that face
+ * actually is — so a narrow pier between two windows shows the same
+ * texture compressed into less space than the broad wall beside it.
+ * Anything with visible direction or structure (a grain, a board line, a
+ * weave) would turn that density difference into an obvious seam.
+ * Formless, low-contrast drift does not, which is what makes the
+ * mismatch survivable without rebuilding how every wall segment is
+ * generated.
  */
-export function plasterTexture(base = "#cfc4ad", { size = 256 } = {}) {
+export function plasterTexture(base = "#d5c8b0", { size = 256 } = {}) {
   const canvas = makeCanvas(size);
   const ctx = canvas.getContext("2d");
   const scale = size / 256;
   ctx.fillStyle = base;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Broad roller/trowel variation first — a few very soft, very faint
-  // patches, so the wall isn't perfectly uniform across its span.
-  for (let i = 0; i < 18; i++) {
+  // Warm tones only — see this function's own comment. A warm cream to
+  // lift, a warm brown to settle; never white, never black.
+  const LIFT = "255,246,228";
+  const SETTLE = "126,101,74";
+
+  // Broad, soft tonal drift — deliberately *large* relative to the canvas
+  // (radius up to most of its width) so what reads is a gentle unevenness
+  // across the whole surface rather than discrete patches you could count.
+  for (let i = 0; i < 9; i++) {
     const x = Math.random() * canvas.width;
     const y = Math.random() * canvas.height;
-    const r = (30 + Math.random() * 60) * scale;
+    const r = (70 + Math.random() * 110) * scale;
     const gradient = ctx.createRadialGradient(x, y, 0, x, y, r);
-    const tone = Math.random() > 0.5 ? "255,255,255" : "0,0,0";
-    gradient.addColorStop(0, `rgba(${tone},0.035)`);
+    const tone = Math.random() > 0.45 ? LIFT : SETTLE;
+    gradient.addColorStop(0, `rgba(${tone},0.03)`);
+    gradient.addColorStop(0.55, `rgba(${tone},0.014)`);
     gradient.addColorStop(1, `rgba(${tone},0)`);
     ctx.fillStyle = gradient;
     ctx.beginPath();
@@ -144,12 +161,14 @@ export function plasterTexture(base = "#cfc4ad", { size = 256 } = {}) {
     ctx.fill();
   }
 
-  // Then the fine aggregate speckle that gives plaster its actual tooth —
-  // this is the part the normal map turns into real surface relief.
-  for (let i = 0; i < Math.round(4200 * scale * scale); i++) {
-    ctx.fillStyle = Math.random() > 0.5 ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)";
+  // A trace of fine grain. Present to break up banding in the smooth
+  // gradients above, not to be seen as texture — an order of magnitude
+  // fewer marks than the version this replaces, at a third the alpha,
+  // and warm rather than neutral.
+  for (let i = 0; i < Math.round(900 * scale * scale); i++) {
+    ctx.fillStyle = Math.random() > 0.5 ? `rgba(${LIFT},0.016)` : `rgba(${SETTLE},0.016)`;
     ctx.beginPath();
-    ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, (0.5 + Math.random() * 1.2) * scale, 0, Math.PI * 2);
+    ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, (0.5 + Math.random() * 0.9) * scale, 0, Math.PI * 2);
     ctx.fill();
   }
 
