@@ -60,6 +60,31 @@ const WEATHER_SKY_TINT = {
   storm: { color: "#454b53", strength: 0.75 }, // the darkest, coldest sky of any condition
 };
 const STAR_COUNT = 320;
+// Version 4, Phase 13 ("Constellation Lines, Off By Default") — how much
+// brighter a catalogued constellation star is than an ordinary background
+// one, as a multiplier on the shared star opacity.
+//
+// **This multiplier alone cannot carry the difference, and measuring is
+// what showed it.** On a fully dark, clear night the background field
+// already sits at 0.82 opacity, so a 1.35x multiply clips against the
+// material's own 1.0 ceiling and delivers 1.22 — the difference
+// compresses precisely when the sky is at its best and the constellations
+// most want to be findable. There is simply very little headroom left up
+// there. Raising it further buys nothing; the clip only gets harder.
+//
+// So the step up is taken mostly in **sprite size**, which has no ceiling
+// at all (see `_buildConstellationStars()`), with this multiplier adding
+// what opacity headroom genuinely exists — full effect on hazier or
+// moonlit nights, compressing gracefully toward the clearest ones rather
+// than being wrong anywhere. Deliberately *not* solved by dimming the
+// background field to make room: nobody asked for a darker sky, and
+// buying contrast by taking brightness away from 320 ordinary stars is a
+// worse trade than taking it from a ceiling that isn't being used.
+const CONSTELLATION_STAR_BRIGHTNESS = 1.35;
+// And how visible the asterism lines are, relative to the same star
+// opacity, once a player has switched them on. Was 0.5 when they were
+// always-on and unasked-for.
+const CONSTELLATION_LINE_OPACITY = 0.75;
 const CLOUD_COUNT = 12; // the low, denser layer — genuine weather-bearing cloud
 const HIGH_CLOUD_COUNT = 7; // a second, higher, thinner layer — cirrus-like, drifts faster, never fully opaque
 
@@ -198,12 +223,24 @@ export class WorldEnvironmentSystem {
    *  constellation catalogue (see `Astronomy.js`'s own `CONSTELLATIONS`).
    *  A second, separate `THREE.Points` object rather than appending into
    *  `_buildStars()`'s own random background buffer: it lets the
-   *  catalogued stars read as subtly brighter (real named stars mostly
-   *  are the brighter ones — `size: 2.4` vs. the background field's
-   *  `1.6`, a deliberate, modest step up, not a spotlight) without
-   *  touching that method at all, and keeps `_buildConstellationLines()`
-   *  simple — each edge just resolves its own endpoint positions directly
-   *  rather than tracking offsets into a shared buffer. */
+   *  catalogued stars read as brighter (real named stars mostly are the
+   *  brighter ones) without touching that method at all, and keeps
+   *  `_buildConstellationLines()` simple — each edge just resolves its
+   *  own endpoint positions directly rather than tracking offsets into a
+   *  shared buffer.
+   *
+   *  **Version 4, Phase 13 — `size` raised from 2.4 to 2.9** (against the
+   *  background field's 1.6). It was "a deliberate, modest step up, not a
+   *  spotlight" while the asterism lines were always on and doing the work
+   *  of showing where each shape was. With the lines now off by default,
+   *  these stars have to carry the constellations alone, out of a field of
+   *  320 others — and modest wasn't enough to find a shape by eye.
+   *
+   *  Size does most of that work rather than opacity because **size has no
+   *  ceiling and opacity does**: on a clear night the shared star opacity
+   *  is already at 0.82, so a brightness multiplier clips against 1.0
+   *  exactly when the sky is darkest. See
+   *  `CONSTELLATION_STAR_BRIGHTNESS`'s own comment for the measurements. */
   _buildConstellationStars() {
     const allStars = CONSTELLATIONS.flatMap((c) => c.stars);
     const positions = new Float32Array(allStars.length * 3);
@@ -218,7 +255,7 @@ export class WorldEnvironmentSystem {
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     const material = new THREE.PointsMaterial({
       map: starSpriteTexture(),
-      size: 2.4,
+      size: 2.9, // see this method's own comment — raised from 2.4 in Phase 13
       sizeAttenuation: false,
       transparent: true,
       opacity: 0,
@@ -259,7 +296,37 @@ export class WorldEnvironmentSystem {
       fog: false,
     });
     this.constellationLines = new THREE.LineSegments(geometry, material);
+    // Version 4, Phase 13 ("Constellation Lines, Off By Default") — off
+    // from the moment they're built, not merely off once settings have
+    // loaded. `SettingsSystem` applies the real preference during its own
+    // `init()`, but a save doesn't load until the `engine:ready` event at
+    // the end of `engine.init()` — so defaulting to visible here would
+    // show a frame or two of lines on every boot for a player who has
+    // them switched off. Defaulting to hidden costs the opposite case
+    // nothing: a player who wants them on gets them the moment their
+    // settings apply, which is still before the first rendered frame.
+    this.constellationLines.visible = false;
     this.engine.scene.add(this.constellationLines);
+  }
+
+  /**
+   * Version 4, Phase 13 — "by default the star constellations should only
+   * be the stars, with the lines toggleable from the pc settings."
+   *
+   * Uses `.visible` rather than driving opacity to zero: an invisible
+   * `LineSegments` is skipped entirely at render, so a player who leaves
+   * these off pays nothing for them at all. `_applyCelestialVisibility()`
+   * still computes their opacity every time the sky changes — harmless,
+   * a couple of multiplications, and it means switching them on mid-scene
+   * shows them at the correct brightness for the current sky immediately
+   * rather than after the next time-of-day or weather change.
+   *
+   * Called by `SettingsSystem._applyAtmosphere()` — see `SettingsStore`'s
+   * own `atmosphere` category for why this is a persisted preference
+   * rather than one of the Atmosphere tab's live overrides.
+   */
+  setConstellationLinesVisible(visible) {
+    if (this.constellationLines) this.constellationLines.visible = !!visible;
   }
 
   /** "Occasional shooting stars during clear nights... these effects
@@ -618,14 +685,30 @@ export class WorldEnvironmentSystem {
   _applyCelestialVisibility() {
     const clearFactor = 1 - this._cloudCoverage * 0.7;
     this.moonSprite.material.opacity = (0.25 + this._moonIllumBase * 0.65) * clearFactor;
-    this.stars.material.opacity = this._starVisibilityBase * 0.85 * clearFactor;
-    // The catalogued stars share the background field's own opacity
-    // ceiling (brightness differentiation already comes from `size`, not
-    // extra opacity budget); the lines connecting them sit at half that —
-    // "a subtle enhancement," per this file's own restraint principle,
-    // not a bold overlay on top of an already-restrained sky.
-    this.constellationStars.material.opacity = this._starVisibilityBase * 0.85 * clearFactor;
-    this.constellationLines.material.opacity = this._starVisibilityBase * 0.85 * clearFactor * 0.5;
+    const starOpacity = this._starVisibilityBase * 0.85 * clearFactor;
+    this.stars.material.opacity = starOpacity;
+    // Version 4, Phase 13 — the catalogued stars used to share the
+    // background field's exact opacity, on the reasoning that "brightness
+    // differentiation already comes from `size`, not extra opacity
+    // budget." That held while the lines were always on and doing the
+    // work of showing where each shape was. Now that the lines are off by
+    // default, these stars have to carry the constellations *alone* — and
+    // a 50%-larger sprite at identical opacity is not enough to pick a
+    // shape out of a field of 900 background stars by eye.
+    //
+    // A real step up, not a spotlight: real named stars genuinely are the
+    // brighter ones, so this is also the more honest sky. Capped at 1
+    // because `starOpacity` already approaches its own ceiling on the
+    // clearest nights, and an un-capped multiply would simply clip there
+    // and quietly erase the difference exactly when the sky is at its
+    // best — the one time it most wants to be visible.
+    this.constellationStars.material.opacity = Math.min(1, starOpacity * CONSTELLATION_STAR_BRIGHTNESS);
+    // The lines, when a player has switched them on. They used to sit at
+    // half the star opacity — deliberate restraint for something shown
+    // unasked. Switching them on is now a deliberate act, so being timid
+    // about it just makes the feature look broken; raised accordingly,
+    // while still sitting below the stars they connect.
+    this.constellationLines.material.opacity = starOpacity * CONSTELLATION_LINE_OPACITY;
     this._starVisibility = this._starVisibilityBase * clearFactor;
   }
 

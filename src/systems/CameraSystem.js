@@ -71,6 +71,32 @@ const THIRD_PERSON_LOOK_DROP = 0.35; // looks slightly down at the player rather
 // cone (0.4 rad) — matching Minecraft's own snappier feel for a player's
 // own look, not an NPC noticing something.
 const PLAYER_HEAD_YAW_MAX = Math.PI * 0.44;
+// Version 4, Phase 11 ("The Player's Own Body") — "the player's body needs
+// to start rotating when the head/camera gets to 35 degrees, not complete
+// 90 before the body turns."
+//
+// This is a *different mechanism* from the clamp above, not a smaller
+// value for it, and that distinction is the whole point. Before this
+// phase the body was completely still until the head hit its own limit
+// and was then dragged 1:1 by the excess — so an ordinary look-around
+// never turned the body at all, and going past the limit turned it
+// abruptly. Now the body begins easing toward the head the moment the
+// offset passes this threshold, continuously, and `PLAYER_HEAD_YAW_MAX`
+// stays as the hard backstop it always was for a fast flick that
+// outruns the ease.
+const BODY_FOLLOW_THRESHOLD = Math.PI * (35 / 180); // exactly the 35° asked for
+// How briskly the body catches up once past that threshold. Tuned to read
+// as "turning to follow where you're looking" rather than either a snap
+// or a drift — the same `damp()` helper every other easing in this file
+// uses, so it stays frame-rate independent.
+const BODY_FOLLOW_RATE = 6;
+// Version 4, Phase 11 — "when the player [is] moving forward the body
+// should snap back to the direction the camera is facing and start walking
+// that way." Deliberately faster than BODY_FOLLOW_RATE: this one is a
+// direct response to a movement input rather than ambient catch-up, so it
+// should feel immediate without being instantaneous (an instant snap makes
+// the whole world lurch sideways).
+const BODY_SNAP_ON_MOVE_RATE = 14;
 
 /**
  * CameraSystem
@@ -454,24 +480,48 @@ export class CameraSystem {
     // "Introduce vertical camera orbit... look upwards, look downwards,
     // orbit around the player smoothly." Reuses the exact same `pitch`
     // that already drives first-person looking, so third person always
-    // shows roughly the same direction the player is actually looking —
-    // positive pitch (looking down, in this project's own convention;
-    // see the "YXZ" Euler order just above) moves the camera higher and
-    // closer-in horizontally, orbiting over the top to look down at the
-    // player; negative pitch (looking up) moves it lower and closer-in
-    // the other way, orbiting underneath to look up. Ordinary spherical
-    // coordinates — cos(pitch) shrinks the horizontal distance as the
-    // camera swings toward directly overhead/underneath, sin(pitch)
-    // grows the vertical offset by the same amount, so the camera always
-    // stays the same true distance from the player regardless of pitch.
+    // shows roughly the same direction the player is actually looking.
+    // Ordinary spherical coordinates — cos(pitch) shrinks the horizontal
+    // distance as the camera swings toward directly overhead/underneath,
+    // sin(pitch) grows the vertical offset by the same amount, so the
+    // camera always stays the same true distance from the player
+    // regardless of pitch.
+    //
+    // **Version 4, Phase 11 — the vertical term is negated, fixing "1st
+    // person and 3rd person mouse/touch movements are inverted from each
+    // other."** This block used to add `+ sin(pitch)` and its comment
+    // asserted "positive pitch (looking down, in this project's own
+    // convention)". That convention claim was simply wrong, and measuring
+    // it settled the matter: with the `"YXZ"` Euler order used a few lines
+    // above, a camera at `rotation.x = +0.5` has a forward vector of
+    // `(0, +0.479, -0.878)` — positive pitch looks **up**. Meanwhile
+    // `+ sin(pitch)` raised the orbit camera for positive pitch, which
+    // frames the player from above, i.e. looking **down**. So the two view
+    // modes genuinely did respond to the same mouse movement in opposite
+    // vertical directions, exactly as reported. First person is the
+    // reference — it is what `invertLook` is tuned against and what a
+    // player spends most time in — so the orbit is what changes here.
     const orbitHorizontalDistance = THIRD_PERSON_DISTANCE * Math.cos(this.pitch);
-    const orbitVerticalOffset = THIRD_PERSON_HEIGHT + THIRD_PERSON_DISTANCE * Math.sin(this.pitch);
+    const orbitVerticalOffset = THIRD_PERSON_HEIGHT - THIRD_PERSON_DISTANCE * Math.sin(this.pitch);
+    // **Version 4, Phase 11 — the orbit now follows the head, not just the
+    // body:** "3rd person view needs to move with the head movement not
+    // the body movement, as done [with] the compass."
+    //
+    // This deliberately reverses a Phase 9e decision. That phase kept the
+    // orbit keyed to `this.yaw` alone and said so explicitly, reasoning
+    // that the camera position should be stable while only the head
+    // turned. In practice that means looking around in third person moves
+    // nothing until the body follows, which reads as an unresponsive
+    // camera rather than a stable one. The HUD compass already tracks the
+    // full look direction, which is why Vi's note names it as the
+    // reference — the orbit was the outlier, not the compass.
+    const orbitYaw = this.yaw + this._headYawOffset;
     // "Behind" the player is the opposite of _updateWalk's own forward
     // vector (Math.sin(yaw), 0, Math.cos(yaw)) rather than its negation.
     const desired = this._scratchThirdDesired.set(
-      this.position.x + Math.sin(this.yaw) * orbitHorizontalDistance,
+      this.position.x + Math.sin(orbitYaw) * orbitHorizontalDistance,
       this.position.y + orbitVerticalOffset,
-      this.position.z + Math.cos(this.yaw) * orbitHorizontalDistance
+      this.position.z + Math.cos(orbitYaw) * orbitHorizontalDistance
     );
     // A floor clamp the horizontal-only wall/furniture push-out below
     // doesn't provide on its own — orbiting steeply upward (looking far
@@ -523,7 +573,59 @@ export class CameraSystem {
       this.pitch = clamp(this.pitch, -MAX_PITCH, MAX_PITCH);
     }
 
+    // Version 4, Phase 11 — the body follows the head, in two ways that
+    // deliberately coexist rather than one replacing the other.
+    //
+    // Both work by moving `this.yaw` toward the head and reducing
+    // `_headYawOffset` by exactly the same amount, so the *rendered* view
+    // direction (`yaw + _headYawOffset`, see `_applyCameraTransform()`)
+    // never changes as a result. That invariant is what makes this feel
+    // like the body catching up rather than the camera being yanked: the
+    // player's aim stays exactly where they put it throughout.
+    const bodyFollow = (rate) => {
+      const eased = damp(this._headYawOffset, 0, rate, dt);
+      const applied = this._headYawOffset - eased;
+      this.yaw = wrapAngle(this.yaw + applied);
+      this._headYawOffset = eased;
+    };
+
     const move = input.moveVector; // x = strafe, y = forward
+
+    // Version 4, Phase 11 — apply the two body-follow behaviours before
+    // the movement basis below is computed from `this.yaw`, so walking
+    // forward genuinely goes where the camera is now pointing rather than
+    // lagging a frame behind it.
+    //
+    // Walking *forward* brings the body all the way round to the camera
+    // briskly. Strafing and walking backward deliberately do **not**:
+    // strafing with your head turned is a real thing people do to look
+    // where they're going while moving sideways, and force-turning the
+    // body would fight that rather than serve it.
+    //
+    // **`move.y` is POSITIVE for forward**, which is worth stating because
+    // the line below it reads as though the opposite were true: the
+    // forward *vector* carries a `multiplyScalar(-1)`, so it is the basis
+    // vector that is negated, not the input axis. This was written the
+    // wrong way round on the first pass and caught by driving a real
+    // `KeyW` event through `InputManager` and reading `moveVector.y`
+    // (it is `+1`) rather than by inferring the sign from the maths below.
+    const walkingForward = move.y > 0.01;
+    if (walkingForward) {
+      bodyFollow(BODY_SNAP_ON_MOVE_RATE);
+    } else if (Math.abs(this._headYawOffset) > BODY_FOLLOW_THRESHOLD) {
+      // Standing still (or strafing) and looking well off to one side: the
+      // body turns to follow, but only the part of the offset that exceeds
+      // the threshold — so the first 35° stays a free head-turn with the
+      // body completely still, exactly as asked for, and beyond that the
+      // body eases round until only 35° of head-turn is left.
+      const sign = Math.sign(this._headYawOffset);
+      const excess = Math.abs(this._headYawOffset) - BODY_FOLLOW_THRESHOLD;
+      const easedExcess = damp(excess, 0, BODY_FOLLOW_RATE, dt);
+      const applied = (excess - easedExcess) * sign;
+      this.yaw = wrapAngle(this.yaw + applied);
+      this._headYawOffset -= applied;
+    }
+
     const forward = this._scratchForward.set(Math.sin(this.yaw), 0, Math.cos(this.yaw)).multiplyScalar(-1);
     const right = this._scratchRight.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
     const wish = this._scratchWish.set(

@@ -102,9 +102,11 @@ export class PlayerCharacterSystem {
     // See FIRST_PERSON_HIDDEN_LAYER's own comment in PlayerCharacter.js —
     // safe no-op for an imported-model rig, which has no `meshes.head`.
     next.meshes?.head?.layers.set(FIRST_PERSON_HIDDEN_LAYER);
+    this._attachHeadShadowProxy(next);
 
     if (this._current) {
       this.engine.scene.remove(this._current.root);
+      this._disposeHeadShadowProxy(this._current); // before disposeCharacter — it shares the head's geometry
       disposeCharacter(this._current);
     }
     this._current = next;
@@ -117,9 +119,106 @@ export class PlayerCharacterSystem {
     }
   }
 
+  /**
+   * Version 4, Phase 11 ("The Player's Own Body") — "no player head in
+   * shadow... maybe we rework this system?"
+   *
+   * **Root cause, and it means the previous fix never worked at all.**
+   * Version 3 Phase 3b added `sun.shadow.camera.layers.enable(
+   * FIRST_PERSON_HIDDEN_LAYER)` in `LightingSystem.js` for exactly this
+   * symptom, and the name of that property makes it read as though it
+   * should work. It is a **no-op for this purpose**. Three.js's shadow
+   * pass tests each object against the *scene* camera's layers, not the
+   * shadow camera's — verified by reading r164's own source rather than
+   * from memory:
+   *
+   * ```js
+   * function renderObject( object, camera, shadowCamera, light, type ) {
+   *   if ( object.visible === false ) return;
+   *   const visible = object.layers.test( camera.layers );
+   * ```
+   *
+   * `camera` there is the camera passed to `WebGLShadowMap.render()` —
+   * the one actually rendering the frame. So while the player is in first
+   * person, `CameraSystem` disables `FIRST_PERSON_HIDDEN_LAYER` on the
+   * main camera to hide the head from the view, and that same disable
+   * silently removes the head from the shadow map too. The head was never
+   * going to cast a shadow in first person, whatever the shadow camera's
+   * own layers said.
+   *
+   * **The fix: a shadow-only proxy.** A second mesh sharing the real
+   * head's geometry, parented to the same pivot so it follows every
+   * animation and head-turn for free, which:
+   *
+   *   - stays on the **default layer**, so the main camera's layer test
+   *     passes and the shadow pass therefore includes it;
+   *   - draws nothing in any ordinary render pass (`colorWrite: false`,
+   *     `depthWrite: false`), so it is invisible to the first-person
+   *     camera, the mirror, and the third-person view alike;
+   *   - is the only head caster — the real head mesh has `castShadow`
+   *     turned off here, so the two can never both write to the shadow
+   *     map and fight over the same depth.
+   *
+   * Shadow rendering substitutes its own depth material for the object's,
+   * so `colorWrite`/`depthWrite` being off on this one never reaches the
+   * shadow pass — which is precisely what makes an invisible caster
+   * possible at all.
+   *
+   * The real head keeps its own layer assignment unchanged, so it remains
+   * visible in the mirror and in third person exactly as before. Nothing
+   * about `PlayerCharacter.buildCharacter()` changed either: the Wardrobe
+   * preview and Animation Editor build the same rig and simply never get
+   * a proxy, since neither casts a sun shadow.
+   */
+  _attachHeadShadowProxy(rig) {
+    const head = rig.meshes?.head;
+    if (!head) return; // imported-model rigs have no `meshes.head` — see above
+    head.castShadow = false;
+
+    const proxy = new THREE.Mesh(
+      head.geometry, // shared deliberately — disposed once, by the real head, via disposeCharacter()
+      new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false })
+    );
+    proxy.name = "head-shadow-proxy";
+    proxy.position.copy(head.position);
+    proxy.rotation.copy(head.rotation);
+    proxy.scale.copy(head.scale);
+    proxy.castShadow = true;
+    proxy.receiveShadow = false;
+    head.parent.add(proxy);
+    // Tracked so `_disposeHeadShadowProxy()` can free the one thing here
+    // that `disposeCharacter()` doesn't know about: this material. The
+    // geometry is the head's own and must NOT be disposed twice.
+    rig.headShadowProxy = proxy;
+  }
+
+  /** Frees the proxy's own material. Its geometry belongs to the real head
+   *  mesh and is disposed by `disposeCharacter()` — disposing it here too
+   *  would be a double free. */
+  _disposeHeadShadowProxy(rig) {
+    const proxy = rig?.headShadowProxy;
+    if (!proxy) return;
+    proxy.parent?.remove(proxy);
+    proxy.material.dispose();
+    rig.headShadowProxy = null;
+  }
+
   async _buildImportedModelRig(modelId) {
     const model = await this.modelLoader.load(modelId);
     if (!model) return null;
+    // Version 4, Phase 12 — the same per-model forward-axis correction
+    // `BeingController` applies, for the identical reason: an imported
+    // model faces whichever way its exporter chose, and the Workshop's own
+    // rigs all face +Z. Without this an imported *player* model walks
+    // backwards exactly as an imported Being does. Read through
+    // `modelLoader`, which already holds the library as a public field, so
+    // this needs no change to `main.js`'s wiring.
+    //
+    // Set before the bounding box is measured below: yaw rotation about
+    // the model's own origin can change its world-space X/Z extents, and
+    // the `box.min.y` used for foot-planting must be measured on the
+    // orientation actually being used.
+    model.rotation.y = this.modelLoader.modelLibrary?.get(modelId)?.yawOffset ?? 0;
     const box = new THREE.Box3().setFromObject(model);
     const height = box.max.y - box.min.y;
     const root = new THREE.Group();

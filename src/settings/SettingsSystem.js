@@ -55,9 +55,23 @@ export class SettingsSystem {
 
   _applyAll(settings) {
     this._applyGraphics(settings.graphics);
+    this._applyAtmosphere(settings.atmosphere);
     this._applyDisplay(settings.display);
     this._applyControls(settings.controls);
     this._applyAudio(settings.audio);
+  }
+
+  /** Version 4, Phase 13 ("Constellation Lines, Off By Default") — sky
+   *  preferences, as distinct from the Atmosphere tab's *live overrides*
+   *  (which drive `TimeOfDaySystem`/`EnvironmentSystem` directly and
+   *  persist nothing). Routed through here rather than letting the
+   *  Settings app reach `WorldEnvironmentSystem` itself, for exactly the
+   *  reason this file exists: the store holds data, this system knows
+   *  what it means. `_worldEnvironmentSystem` is already resolved in
+   *  `init()` and already driven for render distance — same door, no new
+   *  wiring in `main.js`. */
+  _applyAtmosphere(atmosphere) {
+    this._worldEnvironmentSystem?.setConstellationLinesVisible(atmosphere?.constellationLines ?? false);
   }
 
   _applyGraphics(graphics) {

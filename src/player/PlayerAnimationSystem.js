@@ -205,7 +205,26 @@ export class PlayerAnimationSystem {
     if (this.cameraSystem) {
       if (pivots.head) {
         pivots.head.rotation.y += this.cameraSystem.getHeadYawOffset();
-        pivots.head.rotation.x += this.cameraSystem.pitch;
+        // Version 4, Phase 11 ("The Player's Own Body") — **negated**,
+        // fixing "up and down camera movement doesn't match player
+        // model's head in mirror: looking down with the camera shows the
+        // player's head as up."
+        //
+        // Root cause, and it is a one-character bug with a specific
+        // address. `PlayerCharacter.applyPose()` deliberately negates the
+        // X and Z components of every rotation it applies, to compensate
+        // for `PlayerCharacterSystem`'s own 180° root-orientation fix (see
+        // that function's own comment for the full account). These two
+        // lines are layered on *after* `applyPose()` has run, so they are
+        // writing into the same rotated frame — but were never given the
+        // same compensation. Pitch therefore went on backwards.
+        //
+        // Corroborating detail worth keeping, because it is what makes
+        // this a confident fix rather than a plausible one: `applyPose()`
+        // negates X and Z but **not Y**, and yaw on the line above is
+        // likewise un-negated — and yaw is the one axis Vi did *not*
+        // report as wrong. The two facts agree, so only X needed changing.
+        pivots.head.rotation.x -= this.cameraSystem.pitch;
       }
       if (pivots.torso) pivots.torso.position.y = pivots.torso.userData.standingY - this.cameraSystem.getCrouchDrop();
     }

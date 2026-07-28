@@ -6,7 +6,9 @@ import { box, Materials } from "../utils/PlaceholderFactory.js";
 import { RoomLayoutSystem } from "./RoomLayoutSystem.js";
 import { FurnitureSystem } from "./FurnitureSystem.js";
 import { AudioSystem } from "./AudioSystem.js";
-import { FIRST_PERSON_HIDDEN_LAYER } from "../player/PlayerCharacter.js";
+// Version 4, Phase 11 — the `FIRST_PERSON_HIDDEN_LAYER` import that used
+// to live here went with the shadow-camera line further down that turned
+// out to be a no-op; see that line's own replacement comment.
 import { clamp } from "../utils/MathUtils.js";
 
 /**
@@ -109,19 +111,35 @@ export class LightingSystem {
     this.sun.shadow.radius = 2;
     this.sun.shadow.bias = -0.0006;
     this.sun.shadow.normalBias = 0.02;
-    // Version 3, Phase 3b (refinement) — "player shadow has no head."
-    // `PlayerCharacterSystem.js` moves the head mesh onto
-    // `FIRST_PERSON_HIDDEN_LAYER` exclusively (not additively — see that
-    // file's own comment) so the first-person camera can reliably exclude
-    // it at any crouch depth. Every camera that should still see the full
-    // character has to explicitly re-enable that layer — CameraSystem.js
-    // does it for third-person, ReflectionSystem.js does it for the mirror
-    // ("a reflection should always show the full character too") — but the
-    // sun's own shadow camera never got the same treatment, so the head
-    // was invisible to shadow-map rendering specifically, even though
-    // every body part (head included) has `castShadow = true`. Same fix,
-    // same reasoning, third camera.
-    this.sun.shadow.camera.layers.enable(FIRST_PERSON_HIDDEN_LAYER);
+    // Version 3, Phase 3b added `this.sun.shadow.camera.layers.enable(
+    // FIRST_PERSON_HIDDEN_LAYER)` here to fix "player shadow has no head",
+    // reasoning that since CameraSystem re-enables that layer for third
+    // person and ReflectionSystem does for the mirror, the sun's shadow
+    // camera needed the same treatment as "a third camera."
+    //
+    // **Version 4, Phase 11 — that line was removed, because it never did
+    // anything.** Vi reported the identical symptom still present two
+    // versions later, and reading Three.js r164's own source settled it:
+    // the shadow pass tests each object against the ***scene* camera's**
+    // layers, not the shadow camera's —
+    //
+    //   function renderObject( object, camera, shadowCamera, light, type ) {
+    //     if ( object.visible === false ) return;
+    //     const visible = object.layers.test( camera.layers );
+    //
+    // — where `camera` is the camera rendering the frame. `shadowCamera`
+    // is passed in separately and is used for the projection matrix, not
+    // for visibility. So while the player is in first person and
+    // CameraSystem has disabled that layer on the main camera to hide the
+    // head from view, the head is excluded from the shadow map by the
+    // same disable, and no property on `sun.shadow.camera` could have
+    // changed that.
+    //
+    // The head's shadow is now cast by a dedicated invisible proxy mesh on
+    // the default layer instead — see `PlayerCharacterSystem.
+    // _attachHeadShadowProxy()` for the full mechanism. The lesson worth
+    // keeping: a property whose *name* implies a behaviour is not evidence
+    // that it has that behaviour. Read the library's source.
     // Visual Identity phase — "the terrain correctly receives lighting but
     // no longer receives dynamic shadows... determine why shadow reception
     // was lost." The actual cause: every property set above

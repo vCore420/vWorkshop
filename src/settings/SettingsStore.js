@@ -28,6 +28,28 @@ export const DEFAULT_SETTINGS = {
   performance: {
     preset: "balanced", // "performance" | "balanced" | "quality" | "custom"
   },
+  // Version 4, Phase 13 ("Constellation Lines, Off By Default") — the
+  // first *persisted* setting the Settings app's own Atmosphere tab has
+  // ever had. Everything else on that tab drives `TimeOfDaySystem`/
+  // `EnvironmentSystem` directly as a live override rather than saving
+  // anything, which is right for "make it rain right now" but wrong for
+  // "I prefer my sky this way," and this is the latter.
+  //
+  // Deliberately its own category rather than folded into `graphics`:
+  // `update("graphics", ...)` flips `performance.preset` to `"custom"` as
+  // a side effect, which would be actively wrong here — preferring the
+  // constellation lines off says nothing about a device's rendering
+  // budget. Not `display` either, which is fov/uiScale/timeFormat.
+  //
+  // Not to be confused with `AtmosphereProfileStore` (persistence key
+  // `"atmosphereProfiles"`), which saves whole named weather/time
+  // presets. This is a plain preference; that is saved content.
+  atmosphere: {
+    // Off by default: the night sky should read as a sky. The lines are
+    // something you switch on to learn the shapes, not a permanent
+    // overlay across them — see docs/ATMOSPHERE.md.
+    constellationLines: false,
+  },
   display: {
     fov: 62,
     uiScale: 1,
